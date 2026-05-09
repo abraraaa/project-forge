@@ -235,26 +235,6 @@ export default function ForgeApp(){
 
   const [activeProfile,setActiveProfileState]=useState(()=>typeof window!=="undefined"?P.getActive():null);
   const [showProfiles,setShowProfiles]=useState(false);
-
-  // Hydrating state — blocks the home screen render while we pull the user's
-  // training data from blob storage. Critical because localStorage is
-  // per-context (PWA vs Safari are separate sandboxes on iOS), so a returning
-  // user opening the app on a different surface has empty localStorage until
-  // the blob round-trip completes. Without this, the UI flashes "no history"
-  // for ~500ms-2s before the data lands, which makes users think the app
-  // has lost their data and forces them to close-reopen.
-  //
-  // The state defaults to true when an activeProfile is already set on mount
-  // (returning user) and stays true until the activation effect's blob sync
-  // resolves. Brand-new claimers go through ProfileScreen first and hit
-  // hydrating from the moment activeProfile gets set.
-  const [hydrating,setHydrating]=useState(()=>{
-    if (typeof window === "undefined") return false;
-    // If we have an active profile cached in localStorage, we'll need to sync.
-    // Default to hydrating so the first paint shows the loading view, not
-    // empty-state home.
-    return P.getActive() !== null;
-  });
   const [streak,setStreak]=useState(0); // retained for compat — now derived from history, see useMemo below
   const [screen,setScreen]=useState(()=>{
     if (typeof window === "undefined") return "home";
@@ -374,7 +354,6 @@ export default function ForgeApp(){
 
     // BACKGROUND: Sync from blob, update state if remote has newer data
     const onSyncUpdate = ({ meta, history: remoteHistory }) => {
-      if (cancelled) return;
       // Blob had newer data — update React state silently
       if (meta.weights) setWWState(meta.weights);
       if (meta.reps) setWRState(meta.reps);
@@ -382,27 +361,9 @@ export default function ForgeApp(){
       if (meta.programmeBlock) setProgrammeBlock(meta.programmeBlock);
       if (remoteHistory?.length) setHistory(remoteHistory);
     };
-
-    // Cancellation flag — if this effect cleans up (e.g. user switches
-    // profiles before the sync resolves), we ignore the late callback to
-    // avoid setting state after unmount or polluting the new profile's view.
-    let cancelled = false;
-
-    // BLOCKING sync — set hydrating=true, await blob round-trip, then unblock.
-    // backgroundSync already returns a promise; we just need to await it
-    // before flipping hydrating to false. On error, still unblock — the user
-    // sees whatever's in localStorage (which may be empty for first-context
-    // users, but that's a recoverable error state, not a frozen UI).
-    setHydrating(true);
-    backgroundSync(activeProfile, { onUpdate: onSyncUpdate })
-      .then(() => {
-        if (!cancelled) setHydrating(false);
-      })
-      .catch((e) => {
-        console.error("[forge:hydrate]", e);
-        if (!cancelled) setHydrating(false);
-      });
-
+    
+    backgroundSync(activeProfile, { onUpdate: onSyncUpdate });
+    
     // Enable auto-sync on visibility change and online events
     enableAutoSync(activeProfile, onSyncUpdate);
 
@@ -446,10 +407,7 @@ export default function ForgeApp(){
       if (has) setPnStage("hidden");
     });
 
-    return () => {
-      cancelled = true;
-      disableAutoSync();
-    };
+    return () => disableAutoSync();
   },[activeProfile]);
 
   // Rest timer tick
@@ -1353,41 +1311,6 @@ const sProps={
   };
 
   const weeksOnBlock = weeksSince(programmeBlock.startDate);
-
-  // Hydrating gate — show "Restoring your training" while we await the blob
-  // round-trip on profile activation. Sits ABOVE all screen routing so users
-  // see a clear loading state instead of an empty home that fills in 1-2s
-  // later.
-  //
-  // Conditions for showing:
-  //   - hydrating === true (the activation effect is awaiting blob sync)
-  //   - activeProfile is set (otherwise user is on ProfileScreen)
-  //   - we're not on the onboarding screen (which renders before any profile)
-  //
-  // We deliberately don't show the hydrating view to brand-new users on the
-  // onboarding flow because they have no data to restore yet.
-  const showHydrating = hydrating && activeProfile && screen !== "onboarding";
-
-  if (showHydrating) {
-    return (
-      <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px"}}>
-        {/* Sage glow — same wellness/security tone as the passkey nudge */}
-        <div style={{position:"absolute",top:"30%",left:"50%",transform:"translateX(-50%)",width:400,height:300,background:`radial-gradient(ellipse,${T.sage}1A 0%,transparent 65%)`,pointerEvents:"none"}}/>
-        <div style={{position:"relative",textAlign:"center"}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:T.sage,margin:"0 auto 24px",animation:`pulse 1400ms ${T.ease} infinite`}}/>
-          <div style={{fontSize:11,fontWeight:500,color:T.sage,letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:14}}>
-            Restoring
-          </div>
-          <div style={{fontFamily:T.serif,fontSize:28,fontWeight:300,color:T.text1,lineHeight:1.2,marginBottom:10}}>
-            Welcome back, <span style={{fontStyle:"italic",color:T.sage}}>{activeProfile}</span>
-          </div>
-          <div style={{fontSize:13,color:T.text3,lineHeight:1.55}}>
-            Pulling your training history…
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
