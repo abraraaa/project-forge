@@ -39,39 +39,3 @@ input, button, textarea, select { font: inherit; }
   from { opacity: 0; transform: translateY(-12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-
-/* ─── Desktop ambient backdrop (≥768px) ────────────────────────────────────
-   The app is built mobile-first with maxWidth:430 on the screen containers.
-   On a desktop viewport, that creates a phone-sized column floating on a
-   flat background — visually reads as "stranded" or "broken responsive."
-
-   Rather than rebuild every screen for desktop layout (proper post-launch
-   work), this adds soft ambient context to the body — two warm radial
-   gradients off to the sides that give the centered column a sense of
-   "intentional centerpiece on a textured backdrop" without competing for
-   attention. Mobile is unaffected (media query gates it to ≥768px) and
-   the column itself is unchanged.
-
-   Tuned to be barely-perceptible on first glance but warm enough to read as
-   designed rather than empty. Coral and sage glows, low opacity, large
-   radius — sit in the design language without shouting. */
-
-@media (min-width: 768px) {
-  body {
-    background:
-      radial-gradient(ellipse 720px 520px at 18% 30%, rgba(224, 149, 106, 0.06) 0%, transparent 60%),
-      radial-gradient(ellipse 640px 480px at 82% 70%, rgba(139, 176, 154, 0.05) 0%, transparent 60%),
-      #131110;
-  }
-}
-
-/* On very wide screens (≥1280px), nudge the gradients further out so they
-   don't crowd the centered column */
-@media (min-width: 1280px) {
-  body {
-    background:
-      radial-gradient(ellipse 800px 580px at 12% 28%, rgba(224, 149, 106, 0.07) 0%, transparent 62%),
-      radial-gradient(ellipse 720px 540px at 88% 72%, rgba(139, 176, 154, 0.06) 0%, transparent 62%),
-      #131110;
-  }
-}

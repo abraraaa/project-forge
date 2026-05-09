@@ -287,12 +287,8 @@ function ConsistencyGrid({ grid }) {
   const H = 7 * (CELL + GAP);
   return (
     <div style={{display:"flex", gap:6, alignItems:"flex-start"}}>
-      {/* Day labels — share the SVG's coordinate origin so each label row
-          centres on its corresponding square row. The previous paddingTop:2
-          shifted labels 2px below the squares, which read as a row-level
-          misalignment to users (especially when the label "F" sat between
-          the Friday and Saturday squares visually). */}
-      <div style={{display:"flex", flexDirection:"column", gap:GAP}}>
+      {/* Day labels */}
+      <div style={{display:"flex", flexDirection:"column", gap:GAP, paddingTop:2}}>
         {["M","T","W","T","F","S","S"].map((d,i) => (
           <div key={i} style={{height:CELL, display:"flex", alignItems:"center", fontSize:9, color:T.text4, fontWeight:500}}>{d}</div>
         ))}
