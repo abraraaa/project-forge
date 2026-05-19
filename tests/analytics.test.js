@@ -1,6 +1,6 @@
 // tests/analytics.test.js
 // ────────────────────────────────────────────────────────────────────────────
-// Volume aggregation correctness.
+// Volume aggregation correctness + muscle-bucket vocabulary invariants.
 //
 // Coverage focus:
 //   1. per_db exercises double for volume (DB curl × 10kg × 10 reps both arms
@@ -8,12 +8,23 @@
 //      exercise is under-counted by half in per-muscle distribution charts.
 //   2. Non-per_db loadTypes don't double (1×).
 //   3. Legacy records without loadType default to 1× (don't retro-multiply).
+//   4. normaliseMuscle emits the 9-bucket DISPLAY_BUCKET vocabulary
+//      (Quads/Glutes/Hamstrings/Calves/Chest/Back/Shoulders/Arms/Core + Other).
+//   5. Every value normaliseMuscle can emit has a key in MUSCLE_COLOURS —
+//      the invariant that would have caught the Weekly Volume colour
+//      collision bug.
+//   6. The duplicated normaliser in storage.js stays in lockstep with the
+//      analytics.js copy.
 // ────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
 import { weeklyVolume, __test_p4__ } from "../lib/analytics.js";
+import { __test_storage__ } from "../lib/storage.js";
+import { DISPLAY_BUCKET } from "../lib/exercise-anatomy.js";
+import { MUSCLE_COLOURS } from "../lib/tokens.js";
 
-const { aggregateVolume } = __test_p4__;
+const { aggregateVolume, normaliseMuscle } = __test_p4__;
+const { _normaliseMuscle } = __test_storage__;
 
 function buildSet({ weight = 10, reps = 10, loadType = null, volume = null, effectiveLoad = null }) {
   return {
@@ -51,19 +62,19 @@ describe("aggregateVolume — per_db loadType doubles", () => {
       }],
     });
     const result = aggregateVolume([session]);
-    // 3 sets × (10kg × 10 reps × 2 hands) = 600
-    expect(result.byMuscle.Biceps).toBe(600);
+    // 3 sets × (10kg × 10 reps × 2 hands) = 600. Biceps now buckets to "Arms".
+    expect(result.byMuscle.Arms).toBe(600);
     expect(result.total).toBe(600);
   });
 
   it("doubles via exercise-level loadType when sets lack loadType (legacy records)", () => {
     // v1 records: per-set loadType absent; rely on exercise-level loadType.
-    // Use a muscle label that doesn't accidentally normalise to Back via the
-    // existing "lat" substring rule (e.g. "Lateral delt" → "Back").
+    // "Lateral delt" used to mis-bucket to Back via the substring rule; the
+    // new ordering (delt before lat) puts it in Shoulders.
     const session = buildSession({
       exercises: [{
         name: "Lateral Raise",
-        muscle: "Shoulders",
+        muscle: "Lateral delt",
         loadType: "per_db",
         sets: [
           buildSet({ weight: 8, reps: 15, loadType: null, volume: 120 }),
@@ -88,7 +99,7 @@ describe("aggregateVolume — per_db loadType doubles", () => {
       }],
     });
     const result = aggregateVolume([session]);
-    expect(result.byMuscle.Legs).toBe(500); // 1×
+    expect(result.byMuscle.Quads).toBe(500); // 1×
   });
 
   it("does NOT double for machine, total, loaded_bw, or bodyweight loadTypes", () => {
@@ -105,7 +116,9 @@ describe("aggregateVolume — per_db loadType doubles", () => {
       ],
     });
     const result = aggregateVolume([session]);
-    expect(result.byMuscle.Legs).toBe(1500); // 1000 + 500
+    // New vocabulary splits this: Quadriceps → Quads, Glutes → Glutes.
+    expect(result.byMuscle.Quads).toBe(1000);
+    expect(result.byMuscle.Glutes).toBe(500);
   });
 
   it("legacy records without any loadType default to 1× (no retro-multiplier)", () => {
@@ -136,7 +149,7 @@ describe("aggregateVolume — per_db loadType doubles", () => {
     });
     const result = aggregateVolume([session]);
     // 10 × 10 × 2 = 200
-    expect(result.byMuscle.Biceps).toBe(200);
+    expect(result.byMuscle.Arms).toBe(200);
   });
 });
 
@@ -158,7 +171,116 @@ describe("weeklyVolume — per_db loadType doubles", () => {
     const weeks = weeklyVolume([session]);
     expect(weeks.length).toBe(1);
     // 3 × 120 × 2 = 720
-    expect(weeks[0].byMuscle.Biceps.volume).toBe(720);
-    expect(weeks[0].byMuscle.Biceps.sets).toBe(3);
+    expect(weeks[0].byMuscle.Arms.volume).toBe(720);
+    expect(weeks[0].byMuscle.Arms.sets).toBe(3);
   });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Muscle-bucket vocabulary — the invariant that would have caught the
+// Weekly Volume colour-collision bug.
+// ────────────────────────────────────────────────────────────────────────────
+describe("MUSCLE_COLOURS invariant — every bucket has a colour", () => {
+  it("every value normaliseMuscle can emit has a key in MUSCLE_COLOURS", () => {
+    // The canonical bucket set = unique values of DISPLAY_BUCKET, plus the
+    // "Other" fallback the normaliser uses for unknown muscles.
+    const expectedBuckets = [...new Set(Object.values(DISPLAY_BUCKET)), "Other"];
+    for (const bucket of expectedBuckets) {
+      expect(MUSCLE_COLOURS[bucket], `MUSCLE_COLOURS missing key "${bucket}"`).toBeTruthy();
+    }
+  });
+
+  it("every MUSCLE_COLOURS value is a unique hex (no visual collisions)", () => {
+    const colours = Object.values(MUSCLE_COLOURS);
+    const unique  = new Set(colours);
+    expect(unique.size).toBe(colours.length);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// normaliseMuscle behaviour — locks in the bucketing rules.
+// ────────────────────────────────────────────────────────────────────────────
+describe("normaliseMuscle — DISPLAY_BUCKET vocabulary", () => {
+  // Fixture covers every raw muscle string shape that appears in programme.js
+  // (and a couple of synthetic edge cases). New-bucket expectations on the right.
+  const cases = [
+    // Leg family — granularity goal of the migration
+    ["Quadriceps",                       "Quads"],
+    ["Quads & Glutes",                   "Quads"],       // first-mentioned wins
+    ["Glutes",                           "Glutes"],
+    ["Glutes / Hams",                    "Glutes"],      // first-mentioned wins
+    ["Hamstrings",                       "Hamstrings"],
+    ["Calves",                           "Calves"],
+    ["Posterior chain",                  "Glutes"],      // hip-extension primary
+    ["Full body / explosive",            "Glutes"],      // Power Clean
+    ["Quads & Glutes / Adductors",       "Quads"],
+    ["Adductors",                        "Glutes"],      // closest functional bucket
+
+    // Upper body
+    ["Chest",                            "Chest"],
+    ["Upper chest",                      "Chest"],
+    ["Chest / medial",                   "Chest"],
+    ["Upper back",                       "Back"],
+    ["Mid back",                         "Back"],
+    ["Lats",                             "Back"],
+    ["Lats / Biceps",                    "Back"],        // lats before bicep
+    ["Lats / biceps",                    "Back"],
+
+    // Shoulders — note "Lateral delt" must NOT mis-bucket to Back
+    ["Shoulders",                        "Shoulders"],
+    ["Lateral delt",                     "Shoulders"],   // delt before lat
+    ["Rear delts / cuff",                "Shoulders"],
+    ["Side delts",                       "Shoulders"],
+    ["Front delts",                      "Shoulders"],
+
+    // Arms (biceps + triceps + forearms merge for chart simplicity)
+    ["Biceps",                           "Arms"],
+    ["Triceps",                          "Arms"],
+    ["Biceps & brachialis",              "Arms"],
+    ["Biceps & forearms",                "Arms"],
+    ["Triceps & chest",                  "Arms"],        // tricep checked first
+    ["Forearms",                         "Arms"],
+
+    // Core
+    ["Core",                             "Core"],
+    ["Core / Anti-rot",                  "Core"],
+    ["Adductors / Core",                 "Core"],        // core check wins
+
+    // Unknown / fallback
+    ["Vibes",                            "Other"],
+    ["",                                 null],
+    [null,                               null],
+    [undefined,                          null],
+  ];
+
+  for (const [input, expected] of cases) {
+    it(`"${input}" → ${JSON.stringify(expected)}`, () => {
+      expect(normaliseMuscle(input)).toBe(expected);
+    });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Equivalence — the duplicated _normaliseMuscle in storage.js must emit
+// identical results. Locks the two copies together so they can't drift.
+// ────────────────────────────────────────────────────────────────────────────
+describe("normaliseMuscle ≡ _normaliseMuscle (analytics vs storage)", () => {
+  const fixtures = [
+    "Quadriceps", "Quads & Glutes", "Glutes", "Glutes / Hams", "Hamstrings",
+    "Calves", "Posterior chain", "Full body / explosive",
+    "Quads & Glutes / Adductors", "Adductors",
+    "Chest", "Upper chest", "Chest / medial",
+    "Upper back", "Mid back", "Lats", "Lats / Biceps",
+    "Shoulders", "Lateral delt", "Rear delts / cuff",
+    "Biceps", "Triceps", "Biceps & brachialis", "Biceps & forearms",
+    "Triceps & chest", "Forearms",
+    "Core", "Core / Anti-rot", "Adductors / Core",
+    "Vibes", "", null, undefined,
+  ];
+
+  for (const input of fixtures) {
+    it(`agrees on ${JSON.stringify(input)}`, () => {
+      expect(_normaliseMuscle(input)).toBe(normaliseMuscle(input));
+    });
+  }
 });
