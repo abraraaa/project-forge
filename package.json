@@ -1,27 +1,27 @@
 {
   "name": "project-forge",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
-    "@vercel/blob": "^2.3.3",
+    "@vercel/blob": "^2.4.0",
     "@vercel/speed-insights": "^2.0.0",
-    "next": "15.5.18",
-    "react": "^18",
-    "react-dom": "^18"
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
-    "eslint": "^8.57.1",
-    "eslint-config-next": "15.5.18",
-    "vitest": "^4.1.5"
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.6",
+    "vitest": "^4.1.7"
   },
   "overrides": {
     "postcss": "^8.5.5"
