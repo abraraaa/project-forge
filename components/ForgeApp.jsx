@@ -155,8 +155,12 @@ function ScrollDrum({value,onChange,step=1.25,min=0,max=500,integer=false,label=
 function SyncStatusCard({ profile }) {
   const [status, setStatus] = useState(SyncStatus.get());
   const [retrying, setRetrying] = useState(false);
+  // Snapshot of "now" for the relative-time label. Refreshed whenever sync
+  // status changes (the only moment the label needs to move), so render stays
+  // pure — no Date.now() read mid-render.
+  const [now, setNow] = useState(() => Date.now());
 
-  useEffect(() => SyncStatus.subscribe(setStatus), []);
+  useEffect(() => SyncStatus.subscribe(s => { setStatus(s); setNow(Date.now()); }), []);
 
   const handleRetry = async () => {
     if (retrying) return;
@@ -169,7 +173,7 @@ function SyncStatusCard({ profile }) {
 
   const formatTime = (ts) => {
     if (!ts) return "never";
-    const diff = Date.now() - ts;
+    const diff = now - ts;
     if (diff < 60000) return "just now";
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
@@ -251,6 +255,8 @@ function SyncStatusCard({ profile }) {
 // ─── Root ──────────────────────────────────────────────────────────────────────
 export default function ForgeApp(){
   const [mounted,setMounted]=useState(false);
+  // Canonical SSR client-mount guard: fires once, no cascade. Intentional.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>setMounted(true),[]);
 
   const [activeProfile,setActiveProfileState]=useState(()=>typeof window!=="undefined"?P.getActive():null);
@@ -369,6 +375,10 @@ export default function ForgeApp(){
     
     // INSTANT: Load from localStorage (0ms, works offline)
     const local = getLocalProfile(activeProfile);
+    // Hydrating React state from the localStorage cache on profile change —
+    // synchronising with an external store, which is exactly what effects are
+    // for. The seed runs once per profile, no cascade. Intentional.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWWState(local.meta.weights || {});
     setWRState(local.meta.reps || {});
     setStreak(local.meta.streak?.count || 0);
@@ -466,6 +476,9 @@ export default function ForgeApp(){
   useEffect(()=>{
     if(!restActive) return;
     if(restRemain<=0){
+      // Countdown reached zero — stop the timer. State machine driven by the
+      // tick below; not a render-cascade. Intentional.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRestActive(false);
       // Haptic: Android fires; iOS Safari silently no-ops (returns false).
       // Wrapped defensively — some browsers throw on invocation without
@@ -511,6 +524,9 @@ export default function ForgeApp(){
 
   useEffect(()=>{
     if(!restTrigger) return;
+    // Start the rest timer in response to a trigger fired from set-logging
+    // handlers. Translating an external event into timer state. Intentional.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRestRemain(restTrigger.duration);
     setRestActive(true);
   },[restTrigger]);
@@ -745,6 +761,10 @@ export default function ForgeApp(){
   useEffect(()=>{
     if(screen==="done"&&activeProfile){
       const newStreak=bumpStreak(activeProfile);
+      // Session-finalise orchestration on the done-screen transition: persist
+      // the record, run the progression engine, then reflect results in state.
+      // Deliberate side-effect pipeline keyed off the screen change. Intentional.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStreak(newStreak);
       // Mark today as done in the week strip
       const dw=new Date().getDay();
@@ -1821,6 +1841,9 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
   useEffect(() => {
     const trimmed = name.trim();
     if (!trimmed || trimmed.length < 2) {
+      // Reset status while the debounced network check is pending — driving UI
+      // state off an async external (name-availability) check. Intentional.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAvailability("idle");
       clearTimeout(checkTimerRef.current);
       return;
@@ -2384,7 +2407,10 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 
 // ─── Home ──────────────────────────────────��──────────────────────────────────
 function HomeScreen({rhythm,profileName,onBegin,onProfile,weekDone={},onMarkDayDone,programmeBlock,weeksOnBlock,onRotate,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast}){
-  const dow      = new Date().getDay(); // 0=Sun
+  // Anchor "now" once at mount so render stays pure (no clock read mid-render)
+  // and the day-of-week / viewed-date maths derive from a single consistent point.
+  const [nowMs]  = useState(() => Date.now());
+  const dow      = new Date(nowMs).getDay(); // 0=Sun
   const weekMap  = [6,0,1,2,3,4,5];    // JS day → WEEK index (Mon=0 … Sun=6)
   const todayIdx = weekMap[dow];
 
@@ -2414,8 +2440,8 @@ function HomeScreen({rhythm,profileName,onBegin,onProfile,weekDone={},onMarkDayD
     ? "Yesterday"
     : DAY_NAMES[viewIdx];
 
-  // Actual date of the viewed day
-  const viewDate = new Date(Date.now() + diffDays * 86400000);
+  // Actual date of the viewed day (from the mount-time anchor above)
+  const viewDate = new Date(nowMs + diffDays * 86400000);
 
   return (
     <div style={{minHeight:"100vh",paddingBottom:48,position:"relative",overflow:"hidden"}}>
@@ -3761,10 +3787,15 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
 function BodyweightEditModal({open,onClose,currentKg,onSave}){
   const [kg,setKg]=useState(currentKg || 75);
 
-  // Update local state when modal opens with new value
-  useEffect(()=>{
+  // Reset the input to the latest value each time the modal opens. Done as a
+  // render-phase adjustment (tracking the previous `open`) rather than an
+  // effect — React applies the setState before paint, no extra render, and it
+  // sidesteps the cascading-render trap of syncing props to state in an effect.
+  const [wasOpen,setWasOpen]=useState(open);
+  if(open!==wasOpen){
+    setWasOpen(open);
     if(open) setKg(currentKg || 75);
-  },[open, currentKg]);
+  }
 
   if(!open) return null;
 
