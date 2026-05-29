@@ -15,15 +15,6 @@ const eslintConfig = [
       "react-hooks/rules-of-hooks": "error",
       // We use apostrophes in copy freely; escaping them hurts readability.
       "react/no-unescaped-entities": "off",
-
-      // React Compiler-era rules, newly bundled by eslint-config-next 16.
-      // They flag pre-existing patterns (render-time Date.now(), state synced
-      // in effects) across ForgeApp.jsx that predate these rules and aren't
-      // related to the dependency bump that surfaced them. Kept at "warn" so
-      // the signal stays visible for a dedicated hooks-hygiene pass, without
-      // blocking CI on a refactor of working, shipped UI code.
-      "react-hooks/purity": "warn",
-      "react-hooks/set-state-in-effect": "warn",
     },
   },
   {
