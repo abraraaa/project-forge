@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "audit:volume": "node scripts/volume-audit.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
