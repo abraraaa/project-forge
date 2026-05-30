@@ -3226,12 +3226,14 @@ function VideoEmbed({vid,name}){
         <span style={{fontSize:13,color:T.text3,fontStyle:"italic",fontFamily:T.serif}}>
           {!vid?"No demo video linked yet":"Video unavailable here"}
         </span>
-        {vid&&(
-          <a href={`https://www.youtube.com/watch?v=${vid}`} target="_blank" rel="noopener noreferrer"
-            style={{fontSize:12,color:T.coral,fontWeight:500,textDecoration:"none"}}>
-            Watch on YouTube ↗
-          </a>
-        )}
+        <a
+          href={vid
+            ? `https://www.youtube.com/watch?v=${vid}`
+            : `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} form`)}`}
+          target="_blank" rel="noopener noreferrer"
+          style={{fontSize:12,color:T.coral,fontWeight:500,textDecoration:"none"}}>
+          {vid?"Watch on YouTube ↗":"Search YouTube ↗"}
+        </a>
       </div>
     );
   }
