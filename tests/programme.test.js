@@ -38,11 +38,11 @@ describe("EXERCISE_POOLS pool[0] === SESSIONS default", () => {
 
   // Every pool's pool[0] must equal the SESSIONS default for that slot
   // across every field the engine reads: name, reps, weight, muscle, vid,
-  // loadType. Any drift makes the rotation engine present a different
-  // exercise on the first session of a new block than the home screen
-  // advertises, which silently invalidates muscle-anchor lookups and
+  // loadType, loadProfile. Any drift makes the rotation engine present a
+  // different exercise on the first session of a new block than the home
+  // screen advertises, which silently invalidates muscle-anchor lookups and
   // confuses users.
-  const fields = ["name", "reps", "weight", "muscle", "vid", "loadType"];
+  const fields = ["name", "reps", "weight", "muscle", "vid", "loadType", "loadProfile"];
 
   for (const [key, slot] of Object.entries(EXERCISE_POOLS)) {
     it(`${key} pool[0] matches SESSIONS default on every field`, () => {
@@ -113,6 +113,31 @@ describe("findRecentDays — local timezone handling", () => {
 
   it("daysBack=0 returns empty list", () => {
     expect(findRecentDays([], 0)).toEqual([]);
+  });
+});
+
+// ─── Load-profile invariants ────────────────────────────────────────────────
+describe("EXERCISE_POOLS loadProfile invariants", () => {
+  const VALID_PROFILES = new Set([
+    "heavy_low_rep", "moderate_mid_rep", "light_high_rep", "metabolic",
+  ]);
+
+  it("every slot declares a valid loadProfile", () => {
+    for (const [key, slot] of Object.entries(EXERCISE_POOLS)) {
+      expect(slot.loadProfile, `${key} missing loadProfile`).toBeTruthy();
+      expect(VALID_PROFILES.has(slot.loadProfile), `${key}.loadProfile invalid: ${slot.loadProfile}`).toBe(true);
+    }
+  });
+
+  it("every pool entry's loadProfile matches its slot's loadProfile", () => {
+    // This is the rotation-safety invariant: it prevents a heavy-low-rep
+    // movement from leaking into a finisher slot's pool (or vice versa), so
+    // future pool edits can't silently produce out-of-profile rotations.
+    for (const [key, slot] of Object.entries(EXERCISE_POOLS)) {
+      for (const ex of slot.pool) {
+        expect(ex.loadProfile, `${key} pool entry "${ex.name}" missing loadProfile`).toBe(slot.loadProfile);
+      }
+    }
   });
 });
 
