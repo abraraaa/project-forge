@@ -1042,6 +1042,13 @@ const sProps={
 
   const handleRotate = () => rotate(true);
 
+  // Reset rotation drift to SESSIONS defaults (preserves block number/start).
+  // Used by the "Reset accessories" link on home for users who've over-rotated.
+  const handleResetProgramme = () => {
+    const next = PB.reset();
+    setProgrammeBlock(next);
+  };
+
   const beginSession = () => {
     // Auto-rotate if we're past the threshold. Show summary card;
     // once acknowledged, readiness screen follows.
@@ -1464,7 +1471,7 @@ const sProps={
 
   return (
     <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
       {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
@@ -2409,7 +2416,23 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 }
 
 // ─── Home ──────────────────────────────────��──────────────────────────────────
-function HomeScreen({rhythm,profileName,onBegin,onProfile,weekDone={},onMarkDayDone,programmeBlock,weeksOnBlock,onRotate,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast}){
+function HomeScreen({rhythm,profileName,onBegin,onProfile,weekDone={},onMarkDayDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast}){
+  // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
+  const [resetArmed, setResetArmed] = useState(false);
+  const resetTimerRef = useRef(null);
+  const hasRotationDrift = Object.keys(programmeBlock?.config || {}).length > 0;
+  const handleResetTap = () => {
+    if (!resetArmed) {
+      setResetArmed(true);
+      clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = setTimeout(() => setResetArmed(false), 5000);
+      return;
+    }
+    clearTimeout(resetTimerRef.current);
+    setResetArmed(false);
+    onResetProgramme?.();
+  };
+  useEffect(() => () => clearTimeout(resetTimerRef.current), []);
   // Anchor "now" once at mount so render stays pure (no clock read mid-render)
   // and the day-of-week / viewed-date maths derive from a single consistent point.
   const [nowMs]  = useState(() => Date.now());
@@ -2908,6 +2931,19 @@ function HomeScreen({rhythm,profileName,onBegin,onProfile,weekDone={},onMarkDayD
             </div>
           </div>
         </Fade>
+      )}
+
+      {/* Reset accessories — quiet escape hatch for over-rotated users. Only
+          surfaces when there's actual rotation drift to undo. Two-tap confirm
+          inline, no modal, 5s auto-disarm. */}
+      {hasRotationDrift && (
+        <div style={{margin:"16px 24px 0",textAlign:"center"}}>
+          <button
+            onClick={handleResetTap}
+            style={{padding:"6px 10px",background:"none",border:"none",cursor:"pointer",fontSize:11,color:resetArmed?T.rose:T.text4,textDecoration:"underline",textUnderlineOffset:3,fontFamily:T.sans}}>
+            {resetArmed ? "Tap again to reset accessories to defaults" : "Reset accessories to defaults"}
+          </button>
+        </div>
       )}
 
       {/* Performance Lab entry — always visible, becomes active once data exists */}
