@@ -5,6 +5,7 @@ import {
   mainLiftTrend, weeklyVolume, consistencyGrid,
   readinessBreakdown, sessionCount, detectPlateaus,
 } from "@/lib/analytics";
+import { auditHistoryVolume } from "@/lib/volume-audit";
 import { T, MUSCLE_COLOURS } from "@/lib/tokens";
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -15,6 +16,7 @@ export default function PerformanceLab({ history, onBack }) {
   const readiness = useMemo(() => readinessBreakdown(history), [history]);
   const counts    = useMemo(() => sessionCount(history),       [history]);
   const plateaus  = useMemo(() => detectPlateaus(history),     [history]);
+  const volumeAudit = useMemo(() => auditHistoryVolume(history, { weeks: 4 }), [history]);
 
   const mainLifts = Object.keys(trends);
   const [selectedLift, setSelectedLift] = useState(null);
@@ -77,6 +79,13 @@ export default function PerformanceLab({ history, onBack }) {
           <Card title="Weekly volume" subtitle="Sets per muscle group · last 8 weeks">
             <VolumeChart weeks={volume.slice(-8)} />
             <VolumeLegend data={volume.slice(-8)} />
+          </Card>
+
+          {/* Volume vs MEV/MAV/MRV — actionable: which muscles are below the
+              productive floor or above the recoverable ceiling, based on the
+              last 4 weeks of ACTUAL training (not the static programme audit). */}
+          <Card title="Volume vs landmarks" subtitle="Last 4 weeks · MEV/MAV/MRV bands">
+            <VolumeStatusCard audit={volumeAudit} />
           </Card>
 
           {/* Consistency heatmap */}
@@ -275,6 +284,73 @@ function VolumeLegend({ data }) {
           <span style={{fontSize:10, color:T.text3, fontWeight:500}}>{m}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── Volume status card (MEV/MAV/MRV bands on actual training) ──────────────
+// Surfaces the muscles that need attention this block: below MEV (not driving
+// growth) or above MRV (junk volume / recovery cost). Hides for new users who
+// don't have enough recent sessions for the audit to mean anything.
+function VolumeStatusCard({ audit }) {
+  // Need at least ~2 weeks of training (≥4 sessions) before the audit is
+  // signal vs noise. Below that, encourage logging rather than fire warnings.
+  if (!audit || audit.sessionsAnalysed < 4) {
+    return (
+      <div style={{padding:"14px 0 2px", fontSize:13, color:T.text3, fontStyle:"italic", fontFamily:T.serif, lineHeight:1.5}}>
+        A few more logged sessions and this card will start flagging muscles below MEV or above MRV.
+      </div>
+    );
+  }
+
+  const under = audit.flags.filter(f => f.status === "under_mev");
+  const over  = audit.flags.filter(f => f.status === "over_mrv");
+
+  if (under.length === 0 && over.length === 0) {
+    return (
+      <div style={{padding:"14px 0 2px", fontSize:13, color:T.text2, lineHeight:1.5}}>
+        ✓ Every targeted muscle is within MEV..MRV this block. Keep the rhythm.
+      </div>
+    );
+  }
+
+  const Pill = ({ status, muscle, sets, target }) => {
+    const colour = status === "over_mrv" ? T.gold : T.rose;
+    const label  = status === "over_mrv" ? `${sets} > MRV ${target.mrv}` : `${sets} < MEV ${target.mev}`;
+    return (
+      <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:T.r.sm,background:T.bg3,border:`1px solid ${colour}44`}}>
+        <span style={{width:8,height:8,borderRadius:"50%",background:colour,display:"inline-block"}} aria-hidden="true"/>
+        <span style={{fontSize:12,color:T.text1,fontWeight:500}}>{muscle}</span>
+        <span style={{fontSize:11,color:T.text3,fontVariantNumeric:"tabular-nums"}}>{label}</span>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{padding:"4px 0 2px"}}>
+      {under.length > 0 && (
+        <div style={{marginBottom:over.length>0?14:0}}>
+          <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
+            Below MEV · won&apos;t drive growth
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {under.map(f => <Pill key={f.muscle} {...f}/>)}
+          </div>
+        </div>
+      )}
+      {over.length > 0 && (
+        <div>
+          <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
+            Above MRV · recovery cost
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {over.map(f => <Pill key={f.muscle} {...f}/>)}
+          </div>
+        </div>
+      )}
+      <div style={{marginTop:14,fontSize:11,color:T.text4,lineHeight:1.5}}>
+        Audited over {audit.weeksAnalysed} weeks · {audit.sessionsAnalysed} session{audit.sessionsAnalysed===1?"":"s"}
+      </div>
     </div>
   );
 }
