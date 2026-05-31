@@ -17,10 +17,14 @@ import {
   SESSIONS,
   EXERCISE_POOLS,
   SWAP_DB,
+  WEEK,
+  STRENGTH_DAY_SESSIONS,
   findRecentDays,
   rotateAccessories,
   pushHistoryBlock,
   computeRotationStimulusDelta,
+  deriveStrengthDaySessions,
+  sessionMetaForDate,
   ROTATION_MEMORY_BLOCKS,
   MAIN_LIFT_FUNCTIONAL_EQUIVALENTS,
 } from "../lib/programme.js";
@@ -381,5 +385,77 @@ describe("MAIN_LIFT_FUNCTIONAL_EQUIVALENTS ↔ SWAP_DB alignment", () => {
         expect(swapNames.has(n), `${lift} SWAP_DB regressed: contains lighter ${n}`).toBe(false);
       }
     }
+  });
+});
+
+// ─── User-editable weekly schedule (plumbing) ──────────────────────────────
+describe("deriveStrengthDaySessions", () => {
+  it("default WEEK derives to {0:0, 2:1, 4:2} (Mon=A, Wed=B, Fri=C)", () => {
+    expect(deriveStrengthDaySessions(WEEK)).toEqual(STRENGTH_DAY_SESSIONS);
+  });
+
+  it("custom week with strength on Thu/Fri/Sat maps in order to A/B/C", () => {
+    const w = [
+      { type: "zone2" },     // Mon
+      { type: "cardio" },    // Tue
+      { type: "hiit" },      // Wed
+      { type: "strength" },  // Thu
+      { type: "strength" },  // Fri
+      { type: "strength" },  // Sat
+      { type: "rest" },      // Sun
+    ];
+    expect(deriveStrengthDaySessions(w)).toEqual({ 3: 0, 4: 1, 5: 2 });
+  });
+
+  it("a 4th strength day cycles back to A (so heavy weeks still cover every session)", () => {
+    const w = [
+      { type: "strength" }, { type: "strength" }, { type: "strength" }, { type: "strength" },
+      { type: "rest" }, { type: "rest" }, { type: "rest" },
+    ];
+    expect(deriveStrengthDaySessions(w)).toEqual({ 0: 0, 1: 1, 2: 2, 3: 0 });
+  });
+
+  it("returns {} when no strength days", () => {
+    const w = [
+      { type: "zone2" }, { type: "cardio" }, { type: "rest" }, { type: "rest" },
+      { type: "rest" }, { type: "rest" }, { type: "rest" },
+    ];
+    expect(deriveStrengthDaySessions(w)).toEqual({});
+  });
+
+  it("guards against null / empty array (returns {})", () => {
+    expect(deriveStrengthDaySessions(null)).toEqual({});
+    expect(deriveStrengthDaySessions([])).toEqual({});
+  });
+
+  it("called with no argument defaults to the canonical WEEK", () => {
+    // Convenience default — same shape as the exported STRENGTH_DAY_SESSIONS.
+    expect(deriveStrengthDaySessions()).toEqual(STRENGTH_DAY_SESSIONS);
+  });
+});
+
+describe("sessionMetaForDate — custom week", () => {
+  // Pick a known Monday so the math is unambiguous in JS_DAY_TO_WEEK_INDEX.
+  const monday = "2026-05-25"; // Monday
+  const friday = "2026-05-29"; // Friday
+
+  it("default week: Mon → Strength A, Fri → Strength C (unchanged behaviour)", () => {
+    expect(sessionMetaForDate(monday)?.sessionName).toBe("Strength A");
+    expect(sessionMetaForDate(friday)?.sessionName).toBe("Strength C");
+  });
+
+  it("shifted week: Mon=Zone 2, Fri=Strength A → engine reads from the supplied week", () => {
+    const w = [
+      { type: "zone2" },     // Mon
+      { type: "cardio" },    // Tue
+      { type: "rest" },      // Wed
+      { type: "rest" },      // Thu
+      { type: "strength" },  // Fri  ← first strength day → A
+      { type: "strength" },  // Sat  ← B
+      { type: "strength" },  // Sun  ← C
+    ];
+    expect(sessionMetaForDate(monday, w)?.type).toBe("zone2");
+    expect(sessionMetaForDate(friday, w)?.type).toBe("strength");
+    expect(sessionMetaForDate(friday, w)?.sessionName).toBe("Strength A");
   });
 });
