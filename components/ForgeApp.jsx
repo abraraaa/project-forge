@@ -367,14 +367,23 @@ export default function ForgeApp(){
   // when there's actually something to fill. If the user trained every strength
   // day in the last 3, the link stays hidden and home stays calm. Recomputed
   // automatically as history grows.
-  // User-customised week (per-device). Null when the user hasn't edited it →
-  // engine functions fall back to the default WEEK from programme.js. The
-  // strength-day → SESSIONS index map is derived from whichever week is
-  // active so a custom schedule (e.g. Mon-Wed cardio → strength Thu-Sat)
-  // still maps each strength weekday to the right A/B/C session.
-  const userWeek = useMemo(() => W.get() || WEEK, []);
+  // User-customised week (per-device). useState so the editor sheet can
+  // commit a new week and have the home strip / retro / done screens reflow
+  // without a reload. Falls back to the default WEEK when nothing is stored.
+  const [userWeek, setUserWeek] = useState(() => W.get() || WEEK);
   const strengthDaySessions = useMemo(() => deriveStrengthDaySessions(userWeek), [userWeek]);
   const hasRetroGaps = useMemo(() => hasMissedStrength(history, 3, { week: userWeek }), [history, userWeek]);
+  const [weekEditorOpen, setWeekEditorOpen] = useState(false);
+  const handleSaveWeek = (newWeek) => {
+    W.save(newWeek);
+    setUserWeek(W.get() || WEEK); // re-read so state mirrors the persisted/normalised shape
+    setWeekEditorOpen(false);
+  };
+  const handleResetWeek = () => {
+    W.reset();
+    setUserWeek(WEEK);
+    setWeekEditorOpen(false);
+  };
 
   // Seed on profile change: instant load from localStorage, background sync from blob
   useEffect(()=>{
@@ -1478,7 +1487,7 @@ const sProps={
 
   return (
     <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
       {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
@@ -1488,6 +1497,15 @@ const sProps={
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {showIosInstall         && <IosInstallOverlay onDismiss={()=>{ LS.set("forge:iosInstallDismissed", true); setShowIosInstall(false); }}/>}
       <BodyweightEditModal open={bwEditOpen} onClose={()=>setBwEditOpen(false)} currentKg={bodyweight} onSave={updateBodyweight}/>
+      {weekEditorOpen && (
+        <WeekEditorSheet
+          initialWeek={userWeek}
+          isCustom={W.get() !== null}
+          onSave={handleSaveWeek}
+          onReset={handleResetWeek}
+          onCancel={()=>setWeekEditorOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -2423,7 +2441,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 }
 
 // ─── Home ──────────────────────────────────��──────────────────────────────────
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onBegin,onProfile,weekDone={},onMarkDayDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -2551,6 +2569,13 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onBegin,onP
             );
           })}
         </div>
+        {onEditWeek && (
+          <div style={{display:"flex",justifyContent:"center",marginTop:8}}>
+            <button onClick={onEditWeek} style={{padding:"4px 8px",background:"none",border:"none",cursor:"pointer",fontSize:10,color:T.text4,fontFamily:T.sans,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+              Edit week →
+            </button>
+          </div>
+        )}
       </Fade>
 
       {/* Day headline — driven by viewIdx */}
@@ -3354,6 +3379,102 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
 
 // ─── Rotation Summary Modal ───────────────────���───────────────────────────────
 // Shown when auto-rotation fires. Non-dismissible — you acknowledge, you continue.
+// ─── Week editor sheet ────────────────────────────────────────────────────────
+// Lets users customise their training week (e.g. "no gym Monday — shift the
+// strength days back to Thu/Fri/Sat"). Persists via W.save(); the engine reads
+// the new week and reflows home / retro / done screens. Validation is advisory
+// only — we surface a banner for "no strength days" / "missing sessions" but
+// don't block saving (some users may intentionally run a 4-strength week or
+// take a week off).
+const WEEK_DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEK_DAY_TYPES = [
+  { type: "strength", label: "Strength" },
+  { type: "zone2",    label: "Zone 2" },
+  { type: "cardio",   label: "Cardio" },
+  { type: "hiit",     label: "HIIT" },
+  { type: "rest",     label: "Rest" },
+];
+function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
+  // Local draft — only commits on Save. Holds the full {s, label, type} shape;
+  // the W.save validator will re-derive s/label from type on persist.
+  const [draft, setDraft] = useState(() =>
+    initialWeek.map((d, i) => ({
+      s:     d.s     || ["M","T","W","T","F","S","S"][i],
+      label: d.label || (WEEK_DAY_TYPES.find(t => t.type === d.type)?.label || "—"),
+      type:  d.type,
+    })),
+  );
+  const setDayType = (i, type) => {
+    setDraft(prev => prev.map((d, j) => j === i
+      ? { ...d, type, label: WEEK_DAY_TYPES.find(t => t.type === type)?.label || d.label }
+      : d,
+    ));
+  };
+  const strengthCount = draft.filter(d => d.type === "strength").length;
+  const warning =
+    strengthCount === 0 ? "No strength days — your programme won't progress." :
+    strengthCount < 3   ? `Only ${strengthCount} strength day${strengthCount===1?"":"s"} — sessions B/C won't be reached.` :
+    strengthCount > 3   ? `${strengthCount} strength days — A/B/C will cycle to fill (4th = A again).` :
+    null;
+  return (
+    <div onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column"}}>
+        <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+          Weekly schedule
+        </div>
+        <div style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.15,marginBottom:6}}>
+          Shape your week.
+        </div>
+        <p style={{fontSize:13,color:T.text3,marginBottom:18,lineHeight:1.5}}>
+          Pick what each day is. Strength days map to sessions A → B → C in order.
+        </p>
+
+        <div style={{flex:1,overflowY:"auto",marginRight:-8,paddingRight:8}}>
+          {draft.map((d, i) => (
+            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:i<6?`1px solid ${T.bg3}`:"none"}}>
+              <div style={{width:42,fontSize:12,fontWeight:500,color:T.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+                {WEEK_DAY_LABELS[i]}
+              </div>
+              <div style={{flex:1,display:"flex",flexWrap:"wrap",gap:4}}>
+                {WEEK_DAY_TYPES.map(opt => {
+                  const active = d.type === opt.type;
+                  const a = T[opt.type] || T.rest;
+                  return (
+                    <button key={opt.type} onClick={()=>setDayType(i, opt.type)}
+                      style={{padding:"5px 9px",background:active?a.main:T.bg3,border:`1px solid ${active?a.main:T.bg4}`,borderRadius:T.r.sm,cursor:"pointer",fontSize:11,fontWeight:500,color:active?T.bg0:T.text2,fontFamily:T.sans,transition:`all 160ms ${T.ease}`}}>
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {warning && (
+          <div style={{marginTop:14,padding:"10px 12px",background:`${T.gold}14`,border:`1px solid ${T.gold}44`,borderRadius:T.r.sm,fontSize:12,color:T.text2,lineHeight:1.5}}>
+            {warning}
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:8,marginTop:16}}>
+          <button onClick={onCancel} style={{flex:1,padding:"14px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",fontSize:13,color:T.text2,fontFamily:T.sans}}>
+            Cancel
+          </button>
+          <button onClick={()=>onSave(draft)} style={{flex:2,padding:"14px",background:T.gold,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:16,fontWeight:400,color:T.bg0}}>
+            Save week
+          </button>
+        </div>
+        {isCustom && (
+          <button onClick={onReset} style={{marginTop:10,padding:"6px",background:"none",border:"none",cursor:"pointer",fontSize:11,color:T.text4,textDecoration:"underline",textUnderlineOffset:3,fontFamily:T.sans,alignSelf:"center"}}>
+            Reset to default week (Mon/Wed/Fri strength)
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function RotationSummaryModal({summary,onContinue}){
   const {gold}=T;
   const count = summary.changes.length;
