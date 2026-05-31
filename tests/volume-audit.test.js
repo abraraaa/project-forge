@@ -11,6 +11,7 @@ import {
   computeWeeklyVolume,
   classifyVolume,
   auditVolume,
+  auditHistoryVolume,
   VOLUME_TARGETS,
 } from "../lib/volume-audit.js";
 import { MUSCLES } from "../lib/exercise-anatomy.js";
@@ -137,5 +138,116 @@ describe("invariant — targets stay in lockstep with MUSCLES", () => {
     for (const m of Object.keys(VOLUME_TARGETS)) {
       expect(valid.has(m), `${m} is not a MUSCLES value`).toBe(true);
     }
+  });
+});
+
+// ─── auditHistoryVolume (live training audit) ───────────────────────────────
+describe("auditHistoryVolume", () => {
+  // Helper: build a history record at a date with one named exercise + N sets
+  function rec(date, exercises) {
+    return { date, blocks: [{ exercises }] };
+  }
+  function setN(n, { weight = 50, reps = 5 } = {}) {
+    return Array.from({ length: n }, () => ({ weight, reps }));
+  }
+  const NOW = new Date("2026-05-31T12:00:00Z");
+
+  it("returns zero / empty for an empty history", () => {
+    const a = auditHistoryVolume([], { weeks: 4, now: NOW });
+    expect(a.sessionsAnalysed).toBe(0);
+    expect(a.weeksAnalysed).toBe(4);
+    for (const m of Object.keys(VOLUME_TARGETS)) {
+      expect(a.perMuscle[m].sets).toBe(0);
+    }
+  });
+
+  it("counts only sessions inside the trailing window", () => {
+    const inside = "2026-05-25"; // 6 days before NOW
+    const outside = "2026-04-01"; // way before
+    const history = [
+      rec(inside,  [{ name: "Barbell Back Squat", muscle: "Quadriceps", sets: setN(3) }]),
+      rec(outside, [{ name: "Barbell Back Squat", muscle: "Quadriceps", sets: setN(3) }]),
+    ];
+    const a = auditHistoryVolume(history, { weeks: 4, now: NOW });
+    expect(a.sessionsAnalysed).toBe(1);
+  });
+
+  it("averages cumulative-window sets across the requested weeks", () => {
+    // 1 session, 3 squat sets, audited over a 4-week window
+    // → 3/4 = 0.75 sets/wk for Quads from the primary, rounded to 0.8
+    const history = [
+      rec("2026-05-25", [{ name: "Barbell Back Squat", muscle: "Quadriceps", sets: setN(3) }]),
+    ];
+    const a = auditHistoryVolume(history, { weeks: 4, now: NOW });
+    expect(a.perMuscle.Quads.sets).toBeCloseTo(0.8, 1);
+  });
+
+  it("distributes sets across primary + secondary muscles via anatomy", () => {
+    // Squat anatomy: Quads primary 1.0, Glutes 0.5, Hams 0.25, Core 0.3, Calves 0.15
+    const history = [
+      rec("2026-05-25", [{ name: "Barbell Back Squat", muscle: "Quadriceps", sets: setN(4) }]),
+    ];
+    const a = auditHistoryVolume(history, { weeks: 4, now: NOW });
+    expect(a.perMuscle.Quads.sets).toBeGreaterThan(0);
+    expect(a.perMuscle.Glutes.sets).toBeGreaterThan(0);
+    expect(a.perMuscle.Hamstrings.sets).toBeGreaterThan(0);
+    expect(a.perMuscle.Quads.sets).toBeGreaterThan(a.perMuscle.Glutes.sets);
+  });
+
+  it("ignores sets where weight is null AND reps absent (matches chart counting)", () => {
+    const history = [
+      rec("2026-05-25", [{
+        name: "Hanging Leg Raise", muscle: "Core",
+        sets: [{ weight: null }, { weight: null, reps: 10 }, { weight: 5, reps: 8 }],
+      }]),
+    ];
+    const a = auditHistoryVolume(history, { weeks: 4, now: NOW });
+    // Only 2 of the 3 sets qualify (one is null/no-reps)
+    expect(a.perMuscle.Core.sets).toBeGreaterThan(0);
+    expect(a.perMuscle.Core.sets).toBeLessThan(2);
+  });
+
+  it("flags under_mev and over_mrv on the actual training", () => {
+    // 4 weeks of nothing but heavy squats → Quads through the roof, everything else zero
+    const history = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(NOW);
+      d.setDate(d.getDate() - i * 2);
+      history.push(rec(d.toISOString().slice(0, 10), [
+        { name: "Barbell Back Squat", muscle: "Quadriceps", sets: setN(10) },
+      ]));
+    }
+    const a = auditHistoryVolume(history, { weeks: 4, now: NOW });
+    // Quads getting massive volume — definitely not under MEV (would actually
+    // be over MRV here, which is its own flag; we just confirm it's NOT below).
+    expect(a.perMuscle.Quads.status).not.toBe("under_mev");
+    const underNames = a.flags.filter((f) => f.status === "under_mev").map((f) => f.muscle);
+    expect(underNames).toContain("Chest");
+    expect(underNames).toContain("Back");
+  });
+
+  it("respects custom weeks parameter", () => {
+    const history = [
+      rec("2026-05-25", [{ name: "Barbell Back Squat", muscle: "Quadriceps", sets: setN(8) }]),
+    ];
+    // Same cumulative volume → smaller window = higher per-week average
+    const a4 = auditHistoryVolume(history, { weeks: 4, now: NOW });
+    const a1 = auditHistoryVolume(history, { weeks: 1, now: NOW });
+    expect(a1.perMuscle.Quads.sets).toBeGreaterThan(a4.perMuscle.Quads.sets);
+    expect(a1.weeksAnalysed).toBe(1);
+    expect(a4.weeksAnalysed).toBe(4);
+  });
+
+  it("guards against missing dates / malformed records", () => {
+    const a = auditHistoryVolume([
+      null,
+      {},
+      { date: "2026-05-25" }, // no blocks
+      { date: "2026-05-25", blocks: [{}] }, // no exercises
+    ], { weeks: 4, now: NOW });
+    // null + {} are skipped (no date); the 2 dated-but-empty records count
+    // as "sessions in window" even though they contribute zero volume.
+    expect(a.sessionsAnalysed).toBe(2);
+    expect(a.perMuscle.Quads.sets).toBe(0);
   });
 });
