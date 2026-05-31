@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   WEEK, STRENGTH_DAY_SESSIONS, SESSIONS,
-  EXERCISE_POOLS, rotateAccessories, rotationDiff, pushHistoryBlock,
+  EXERCISE_POOLS, rotateAccessories, rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
   ROTATION_OPTIONAL, ROTATION_AUTO, ROTATION_FORCED,
   DAY_CONFIG, DAY_NAMES, SWAP_DB, EQ_COLOUR,
   // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
@@ -19,7 +19,7 @@ import {
   newDraftLog, logSet, finaliseDraft, scaleForReadiness, D, TS,
   inferLoadType, LOAD_TYPES, startingWeightForLift,
 } from "@/lib/storage";
-import { T } from "@/lib/tokens";
+import { T, MUSCLE_COLOURS } from "@/lib/tokens";
 import {
   computeNextPrescription,
   updateLiftStateFromSession,
@@ -1034,7 +1034,8 @@ const sProps={
     PB.save(next);
     if (showSummary) {
       const changes = rotationDiff(oldConfig, newConfig);
-      setRotationSummary({ blockNumber: next.number, changes });
+      const stimulusDelta = computeRotationStimulusDelta(oldConfig, newConfig);
+      setRotationSummary({ blockNumber: next.number, changes, stimulusDelta });
     }
     return next;
   };
@@ -3313,6 +3314,8 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
 function RotationSummaryModal({summary,onContinue}){
   const {gold}=T;
   const count = summary.changes.length;
+  // Top 4 by magnitude — enough to tell the story, not enough to overwhelm.
+  const topDeltas = (summary.stimulusDelta || []).slice(0, 4);
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.94)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column"}}>
@@ -3322,9 +3325,31 @@ function RotationSummaryModal({summary,onContinue}){
         <div style={{fontFamily:T.serif,fontSize:30,fontWeight:300,lineHeight:1.15,marginBottom:8}}>
           Your programme<br/><span style={{color:gold,fontStyle:"italic"}}>has rotated.</span>
         </div>
-        <p style={{fontSize:13,color:T.text2,marginBottom:20,lineHeight:1.6}}>
+        <p style={{fontSize:13,color:T.text2,marginBottom:topDeltas.length?14:20,lineHeight:1.6}}>
           {count} {count===1?"accessory":"accessories"} swapped to keep the stimulus fresh. Main lifts stay the same — progressive overload continues.
         </p>
+        {topDeltas.length > 0 && (
+          <div style={{marginBottom:20}}>
+            <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
+              This block · muscle stimulus
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {topDeltas.map(({bucket, delta}) => {
+                const positive = delta > 0;
+                const colour = MUSCLE_COLOURS[bucket] || MUSCLE_COLOURS.Other;
+                return (
+                  <div key={bucket} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:T.r.sm,background:T.bg3,border:`1px solid ${colour}66`}}>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:colour,display:"inline-block"}} aria-hidden="true"/>
+                    <span style={{fontSize:11,fontWeight:500,color:positive?colour:T.text3,fontVariantNumeric:"tabular-nums"}}>
+                      {positive?"+":""}{delta.toFixed(1)}
+                    </span>
+                    <span style={{fontSize:11,color:T.text2}}>{bucket}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <div style={{flex:1,overflowY:"auto",marginBottom:20,marginRight:-8,paddingRight:8}}>
           {count===0 && (
             <div style={{padding:"20px 0",fontSize:13,color:T.text3,fontStyle:"italic",fontFamily:T.serif,textAlign:"center"}}>
