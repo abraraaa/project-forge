@@ -1,137 +1,184 @@
-# forge-recovery-pack
+# Forge
 
-**Recovers the rebalance-pack changes that v0's PR #49 stale-base merge clobbered. Plus CI workflow + branch-protection setup so this can't recur.**
+**Evidence-based, autoregulated strength programme. Next.js PWA. Live at [theforged.fit](https://theforged.fit).**
 
-8 files. Drop in, push, configure branch protection in GitHub UI, you're done.
+A 3-day-a-week strength programme (A/B/C — Squat & Push, Hinge & Pull, Power & Volume) with a progression engine that responds to how hard the work felt, a per-muscle analytics surface that compares your training to evidence-based volume landmarks (MEV/MAV/MRV), and an accessory rotation engine that keeps the stimulus fresh without you having to think about it.
 
----
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Mon   Tue   Wed   Thu   Fri   Sat   Sun                    │
+│  ───   ───   ───   ───   ───   ───   ───                    │
+│  A     Z2    B     Mod   C     HIIT  Rest                   │
+│  Sq    60m   Hinge 35m   Pwr   8-10  ─                      │
+│  +Push       +Pull       +Vol  ×20s                         │
+└─────────────────────────────────────────────────────────────┘
+```
 
-## Why this exists
-
-PR #49 was opened from a base commit that pre-dated your rebalance-pack upload. When v0 merged it, the merge wiped:
-- **`rpeToRir` bug fix** — back to broken (only handles easy/hard/limit; "normal" and "cooked" return null → engine HOLDs silently → progression broken across the entire user base)
-- **Hydrating gate / Restoring view** — back to flash-empty UI on activate
-- **Day B finisher swap** — Tricep Pushdown gone, Copenhagen Plank back
-- **Day C css3 swap** — Skullcrusher gone, Tricep Dips back
-- **Heatmap visual alignment** — `paddingTop:2` offset back
-- **9-bucket muscle palette** — back to Legs/Biceps/Triceps keys
-- **Desktop ambient backdrop** — gone
-
-Plus v0 introduced a **new bug**: SESSIONS Day A finisher exB was set to Standing Calf Raise, but `EXERCISE_POOLS["afin-B"]` wasn't updated to match. So at week 8 when rotation fires, users get auto-rotated FROM Standing Calf Raise TO Dead Bug (the old core pool default). Net: calf training disappears at the first rotation. Fixed.
-
-What survived: cron job, vercel.json, deterministic blob paths in route.js, v0's anatomy expansion (which is genuinely good work — 166 exercises, conservative weights, some entries citing literature). **Anatomy file is NOT touched by this pack** — v0's version stays.
-
----
-
-## What's in the pack
-
-| File | Status | Change |
-|------|--------|--------|
-| `lib/storage.js` | Modified | **`rpeToRir` bug fix** — handle UI's `easy/normal/cooked` + legacy aliases |
-| `lib/programme.js` | Modified | Day B + Day C SESSIONS swaps; afin-B + bfin-A + css3-B pool updates |
-| `lib/tokens.js` | Modified | 9-bucket muscle palette |
-| `components/ForgeApp.jsx` | Modified | Hydrating gate + Restoring view + cancellation flag |
-| `components/PerformanceLab.jsx` | Modified | Heatmap alignment fix (`paddingTop:2` removed) |
-| `app/globals.css` | Modified | Desktop ambient backdrop (≥768px) |
-| `.github/workflows/ci.yml` | **NEW** | Lint + test + build on every push and PR |
-| `.github/BRANCH_PROTECTION.md` | **NEW** | One-time GitHub UI setup to kill the stale-base clobber pattern |
-
----
-
-## Deployment steps
-
-### 1. Extract and verify locally
+## Quickstart
 
 ```bash
-unzip forge-recovery-pack.zip -d /path/to/project-forge
-cd /path/to/project-forge
-
-# Sanity check the pack didn't break anything
-git diff --stat       # should show only the 8 expected files modified
-npm run build         # should succeed, ~47-48kB main route
-npm run test          # should pass (40 progression engine tests)
-npm run lint          # zero hook-ordering violations
+git clone https://github.com/wondabrar/project-forge.git
+cd project-forge
+npm install
+npm run dev           # http://localhost:3000
 ```
 
-### 2. Push
+Other scripts:
+- `npm test` — Vitest unit + invariant suite.
+- `npm run lint` — ESLint 9 flat config.
+- `npm run build` — Production build (`next build`).
+- `npm run audit:volume` — Print the programme's weekly weighted-set volume per muscle vs MEV/MAV/MRV bands.
+
+## Stack
+
+| Layer | Choice | Notes |
+|---|---|---|
+| Framework | Next.js 16 (App Router, Turbopack) | Single Page-router page, server API routes |
+| UI | React 19 | One main component (`ForgeApp.jsx`) + `PerformanceLab.jsx` |
+| Lint | ESLint 9 flat config | `react-hooks/purity` + `set-state-in-effect` on as errors |
+| Tests | Vitest 4 | ~240 invariant + correctness tests, no React Testing Library |
+| Storage | localStorage + Vercel Blob | Local = write-through cache; Blob = canonical |
+| Auth | WebAuthn (passkeys) via `@simplewebauthn/server` | Optional — claim a profile, sign in cross-device |
+| Hosting | Vercel | Daily cron + automatic preview deploys |
+
+Node 22 in CI. No CSS framework — design tokens in `lib/tokens.js` + inline styles.
+
+## Architecture
+
+```
+app/                       # Next.js routes
+├── page.jsx               # Single page mounts ForgeApp
+├── api/sync/route.js      # Blob pull/push for profile data
+├── api/cron/cleanup/      # Daily orphan-blob cleanup
+└── api/auth/*             # WebAuthn registration + verification
+
+components/
+├── ForgeApp.jsx           # Main client component (~4k lines, monolithic by design)
+└── PerformanceLab.jsx     # Analytics screen — trends, volume, consistency
+
+lib/
+├── programme.js           # SESSIONS, EXERCISE_POOLS, rotation engine
+├── progression.js         # Per-lift weight progression (RIR-aware)
+├── storage.js             # localStorage + Blob sync + RPE↔RIR
+├── analytics.js           # weeklyVolume, e1RM trends, plateau detection
+├── exercise-anatomy.js    # 166-exercise muscle distribution map
+├── lift-translations.js   # Per-lift cold-start translation (anchor, factor)
+├── volume-audit.js        # MEV/MAV/MRV audit (static programme + live history)
+├── tokens.js              # Design tokens + 9-bucket muscle colours
+└── webauthn.js            # Passkey ceremony helpers
+
+scripts/
+└── volume-audit.mjs       # CLI volume-audit runner (npm run audit:volume)
+```
+
+### Data flow — what happens when you log a session
+
+```
+┌──────────────┐   logSet     ┌──────────────┐  finaliseDraft ┌──────────────┐
+│  Set picker  │ ──────────▶  │  Draft log   │ ─────────────▶ │   History    │
+│  (RPE drum)  │              │  (in-memory  │                │ (localStorage│
+└──────────────┘              │   ref)       │                │  + Blob)     │
+                              └──────────────┘                └──────┬───────┘
+                                                                     │
+                                                                     ▼
+                              ┌──────────────────────────────────────────────┐
+                              │   Progression engine (lib/progression.js)    │
+                              │   - rpeToRir → effective RIR                 │
+                              │   - per-lift state updated                   │
+                              │   - next session's weight prescribed         │
+                              └──────────────────────────────────────────────┘
+```
+
+## Load-bearing design principles
+
+These are non-negotiable without explicit sign-off. They've each saved or unwound a real bug.
+
+1. **Ballerina-lean.** Incremental, monolithic, minimal. No speculative refactors. `ForgeApp.jsx` doesn't get split unless an extraction has a concrete reason (cross-screen reuse or genuine independence).
+2. **Two effort scales only.**
+   - Per-set effort = `easy / normal / cooked` (maps to RIR via `rpeToRir`).
+   - Per-day readiness = `fresh / normal / cooked`.
+   - The legacy `easy / hard / limit` scale **never appears in UI** — only as a legacy alias inside `rpeToRir`.
+3. **Movement-class rep bands.**
+   - Main lift = sub-6 reps heavy. A movement that can't be loaded heavy enough for sub-6 is NOT a main-lift candidate.
+   - Accessory = 8–12 reps.
+   - Finisher = 12–20 reps / metabolic.
+4. **`pool[0] === SESSIONS default`** for every rotation slot. Enforced by a Vitest invariant. Drift here means the home screen advertises one exercise and rotation serves another.
+5. **Grip-fatigue rule.** No two consecutive HIGH-grip exercises in a superset.
+6. **Gym-geography rule.** Superset pairs sit in the same equipment zone.
+7. **Evidence-based programming** (MEV/MAV/MRV from Israetel/Nuckols/Helms), not convention.
+8. **Stale-base discipline.** Branch from latest `main`, CI green + up-to-date base before merge.
+9. **Curated anatomy dataset.** `lib/exercise-anatomy.js` is not edited without a concrete reason.
+
+## Programme model
+
+`SESSIONS` (`lib/programme.js`) is the three-day template:
+
+| Day | Theme | Main lifts | Supersets | Finisher |
+|---|---|---|---|---|
+| **A** Mon | Squat & Push | Barbell Back Squat, Barbell Bench Press | Reverse Lunge + Chest-Supported Row · Hip Thrust + Landmine Press | Hanging Leg Raise + Standing Calf Raise |
+| **B** Wed | Hinge & Pull | Hex Bar Deadlift, Barbell OHP | Leg Press + Pull-Up · Bulgarian Split Squat + Hamstring Curl | Tricep Pushdown + Lateral Raise |
+| **C** Fri | Power & Volume | Power Clean | DB Walking Lunge + Cable Lateral Raise · Incline DB Press + Cable Row · DB Curl + Skullcrusher | Face Pull + Low-to-High Cable Crossover |
+
+Each accessory slot has an `EXERCISE_POOLS` entry — a pool of pre-vetted alternatives that rotation can substitute in. Pools declare a `loadProfile` (`heavy_low_rep`/`moderate_mid_rep`/`light_high_rep`/`metabolic`) so rotation never crosses profiles (a heavy-low-rep movement can't sneak into a finisher slot).
+
+Main lifts don't auto-rotate — `MAIN_LIFT_FUNCTIONAL_EQUIVALENTS` enumerates the doc-approved swap alternatives (e.g. Barbell Bench → Dumbbell Bench, Incline BB Press, Weighted Dips) the user can pick via the swap overlay.
+
+## Rotation engine
+
+Accessories rotate on a per-block cadence (`ROTATION_OPTIONAL = 4 weeks` → optional card, `ROTATION_AUTO = 8` → auto on next session, `ROTATION_FORCED = 12`). Each rotation:
+
+1. Pushes the about-to-be-replaced config onto `programmeBlock.history` — a per-slot **3-block memory** (`ROTATION_MEMORY_BLOCKS`) of recent picks. Kills the A→B→A ping-pong that single-block memory caused.
+2. For each slot, filters the pool by `loadProfile` first, then by recency exclusion. Falls back gracefully if a tight pool exhausts the exclusion list.
+3. Computes a **muscle-stimulus delta** between old and new configs (via `distributeAcrossMuscles` on each changed slot, weighted by that slot's `sets`), surfaces the top 4 buckets in the rotation summary card.
+
+## Progression engine
+
+`lib/progression.js` reads the last session's effort signal (via `rpeToRir`) and either advances weight, holds, or backs off. Per category:
+
+| Category | Step size | ADD threshold (RIR) |
+|---|---|---|
+| `lower_compound` (squat, DL, hip thrust) | 2.5 kg | ≥2 |
+| `upper_push` / `upper_pull` (bench, OHP, row) | 1.25 kg | ≥2 |
+| `power` (Olympic) | 2.5 kg | ≥3 |
+| `accessory_compound` | 1.0 kg | ≥2 |
+| `accessory_arm` / `accessory_isolation` | 0.5 kg | ≥2 |
+| `bw_progression` | 0 kg (progress reps) | n/a |
+
+Starting weights for new profiles are BW%-derived (Hex Bar DL 1.0×, Back Squat 0.75×, Bench 0.65×, OHP 0.40×, Power Clean 0.50×), rounded to 2.5 kg, floored at 20 kg for barbell lifts.
+
+## Volume audit (MEV/MAV/MRV)
+
+Two surfaces compare actual volume against evidence-based landmarks.
+
+**Static — programme template:** `npm run audit:volume` prints what the default programme delivers per muscle vs MEV/MAV/MRV. Use this when designing rebalances.
+
+**Live — your training:** Performance Lab's **"Volume vs landmarks"** card audits the trailing 4 weeks of your actual logged sessions. Flags muscles below MEV (won't drive growth) or above MRV (junk volume / recovery cost) with the specific shortfall ("Rear Delts · 4.9 < MEV 6"). Hidden until you've logged ≥4 sessions so new users don't get alarmed by an empty-data audit.
+
+Both surfaces operate at the **granular muscle level** (13 muscles — each delt head, biceps/triceps/forearms distinct), not the display-bucket level (9 groups). "Rear Delts under MEV" is more actionable than "Shoulders under MEV."
+
+## Testing
 
 ```bash
-git add .
-git commit -m "Recover rebalance pack changes clobbered by PR #49; add CI + branch protection
-
-- rpeToRir: handle UI 3-point scale (easy/normal/cooked) — was returning null
-  for normal/cooked, silently blocking progression for all users
-- ForgeApp: blocking blob hydration with Restoring view on activate
-- Programme: Day B/C accessory swaps restored; afin-B pool fixed to match
-  Standing Calf Raise SESSIONS default (v0 left this mismatched)
-- PerformanceLab: heatmap label/square 2px alignment offset removed
-- tokens: 9-bucket muscle palette restored
-- globals: desktop ambient backdrop (≥768px) restored
-- CI workflow + branch protection doc to prevent future stale-base clobbers"
-
-git push origin main
+npm test               # one-shot
+npm run test:watch     # watch mode
 ```
 
-### 3. Configure branch protection — the critical step
+The suite is ~240 tests strong, split across:
+- Programme invariants (`pool[0] === SESSIONS default`, loadProfile coverage, main-lift equivalents alignment).
+- Rotation engine (3-block exclusion, profile filter, history pushing, stimulus-delta math).
+- Volume audit (set counting, anatomy distribution, classification bands).
+- Live-history audit (window filtering, per-week averaging, malformed-record guards).
+- Analytics (`weeklyVolume`, `rpeToRir`/`rirToRpe` boundaries, edge cases).
+- Exercise library (no near-duplicate names, every programme exercise has anatomy or is allow-listed).
 
-Without this, the next v0 PR or any other stale-base PR will clobber things again. Estimated time: 60 seconds.
+When you add a new SESSIONS exercise, the pool/anatomy/canonical-name invariants will tell you what you forgot.
 
-Open `.github/BRANCH_PROTECTION.md` (included in this pack) and follow it. The single most important setting is:
+## Documentation
 
-> ☑ **Require branches to be up to date before merging**
+- **README** — this file: what Forge is, how to run it, design principles.
+- **CHANGELOG** — [CHANGELOG.md](./CHANGELOG.md): what changed and why, newest first.
+- **Code of Conduct** — [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
 
-This is what forces a rebase/merge resolution at PR time instead of silently overwriting recent commits.
+## License
 
-### 4. Watch the CI run
-
-The first push triggers the CI workflow. Should complete in 2-3 minutes:
-- Lint: zero violations expected
-- Test: 40 progression engine tests pass
-- Build: ~47-48kB main route, zero errors
-
-If anything fails, the push doesn't gate anything (branch protection isn't on yet) — just fix and re-push.
-
-After branch protection is enabled in step 3, future pushes/PRs will require CI green before merge.
-
----
-
-## Verification done in this pack
-
-- ✅ All 6 modified files parse clean (Babel)
-- ✅ 14 recovery integration tests pass (rpeToRir all UI values + round-trips + pool[0]/SESSIONS alignment for all 6 finisher/superset slots)
-- ✅ The `afin-B` pool/SESSIONS misalignment v0 introduced is fixed
-
-## Not done — your job
-
-- `npm run build` locally (the test harness here can't run the full Next.js build)
-- `git diff origin/main...HEAD` pre-push audit (the habit that catches everything)
-- Branch protection setup (60 seconds in GitHub UI)
-- Watching the first CI run go green
-
----
-
-## Net change footprint vs current main
-
-```
-MODIFIED
-  lib/storage.js          rpeToRir + rirToRpe (+40 lines, mostly comments)
-  lib/programme.js        SESSIONS + 3 pools rebuilt (+5 lines net)
-  lib/tokens.js           MUSCLE_COLOURS palette (+11 lines)
-  components/ForgeApp.jsx hydrating state + gate view (+40 lines)
-  components/PerformanceLab.jsx -1 line (paddingTop:2 removed)
-  app/globals.css         desktop @media blocks (+24 lines)
-
-NEW
-  .github/workflows/ci.yml          42 lines
-  .github/BRANCH_PROTECTION.md      36 lines
-```
-
-Bundle size delta: negligible (~+200 bytes, mostly the new hydrating screen JSX).
-
----
-
-## After this lands
-
-The rotation/focus questions from the previous turn are still open. Happy to come back to them properly with the strategic engagement they deserve — programme behaviour at 10-12 weeks, "all kit available" propagation through rotation, the "shared pain + personal variation" focus picker design. Just say the word.
-
-Eviction of v0 noted. For future greenfield contributions (like the anatomy expansion, which was genuinely valuable work), you can come to me directly in a session, or use Cursor/Claude Code on the actual codebase. The PR-based integration was the problem, not the underlying intelligence.
+See [LICENSE](./LICENSE).
