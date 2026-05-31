@@ -13,7 +13,14 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
-import { SESSIONS, EXERCISE_POOLS, findRecentDays } from "../lib/programme.js";
+import {
+  SESSIONS,
+  EXERCISE_POOLS,
+  findRecentDays,
+  rotateAccessories,
+  pushHistoryBlock,
+  ROTATION_MEMORY_BLOCKS,
+} from "../lib/programme.js";
 
 // ─── Pool[0] invariant ──────────────────────────────────────────────────────
 describe("EXERCISE_POOLS pool[0] === SESSIONS default", () => {
@@ -106,5 +113,98 @@ describe("findRecentDays — local timezone handling", () => {
 
   it("daysBack=0 returns empty list", () => {
     expect(findRecentDays([], 0)).toEqual([]);
+  });
+});
+
+// ─── Rotation memory (3-block exclusion) ────────────────────────────────────
+describe("rotation memory — 3-block exclusion", () => {
+  it("ROTATION_MEMORY_BLOCKS is 3 (the spec'd memory depth)", () => {
+    expect(ROTATION_MEMORY_BLOCKS).toBe(3);
+  });
+
+  it("excludes every name in the history array for a slot", () => {
+    // Pick a slot with a pool ≥ 4 so 3-block exclusion can't empty it
+    const slotKey = Object.entries(EXERCISE_POOLS).find(
+      ([, s]) => s.pool.length >= 4,
+    )?.[0];
+    expect(slotKey).toBeTruthy();
+    const pool = EXERCISE_POOLS[slotKey].pool;
+    const excluded = pool.slice(0, 3).map((p) => p.name);
+    const history = { [slotKey]: excluded };
+
+    // 30 trials — every pick must be outside the excluded set
+    for (let i = 0; i < 30; i++) {
+      const cfg = rotateAccessories(history);
+      expect(excluded).not.toContain(cfg[slotKey].name);
+    }
+  });
+
+  it("accepts legacy single-string history entries transparently", () => {
+    const slotKey = Object.keys(EXERCISE_POOLS)[0];
+    const pool = EXERCISE_POOLS[slotKey].pool;
+    const legacy = { [slotKey]: pool[0].name };
+    for (let i = 0; i < 20; i++) {
+      const cfg = rotateAccessories(legacy);
+      expect(cfg[slotKey].name).not.toBe(pool[0].name);
+    }
+  });
+
+  it("falls back to single-block exclusion when 3-block empties the pool", () => {
+    // 2-entry synthetic slot: forcing history of both should still yield a pick
+    // (relaxed fallback excludes only the most-recent name).
+    const slotKey = Object.keys(EXERCISE_POOLS)[0];
+    const pool = EXERCISE_POOLS[slotKey].pool;
+    // history claims EVERY name in the pool is recent → fallback kicks in,
+    // excludes only the most-recent name (recent[0])
+    const allNames = pool.map((p) => p.name);
+    const history = { [slotKey]: allNames };
+    for (let i = 0; i < 20; i++) {
+      const cfg = rotateAccessories(history);
+      expect(cfg[slotKey].name).not.toBe(allNames[0]); // most-recent still avoided
+      expect(allNames.slice(1)).toContain(cfg[slotKey].name);
+    }
+  });
+});
+
+describe("pushHistoryBlock", () => {
+  it("prepends the active config onto history, capped at ROTATION_MEMORY_BLOCKS", () => {
+    const prev = { "ass1-A": ["DB Reverse Lunge", "Reverse Lunge"] };
+    const active = { "ass1-A": { name: "Step-Up" } };
+    const next = pushHistoryBlock(prev, active);
+    expect(next["ass1-A"]).toEqual(["Step-Up", "DB Reverse Lunge", "Reverse Lunge"]);
+  });
+
+  it("evicts the oldest entry when history hits the cap", () => {
+    const prev = { "ass1-A": ["B", "C", "D"] };
+    const active = { "ass1-A": { name: "A" } };
+    const next = pushHistoryBlock(prev, active);
+    expect(next["ass1-A"]).toHaveLength(3);
+    expect(next["ass1-A"]).toEqual(["A", "B", "C"]); // "D" evicted
+  });
+
+  it("dedupes — if the active pick already appears in history, it isn't duplicated", () => {
+    const prev = { "ass1-A": ["A", "B"] };
+    const active = { "ass1-A": { name: "A" } };
+    const next = pushHistoryBlock(prev, active);
+    expect(next["ass1-A"]).toEqual(["A", "B"]); // "A" stays at front, not duplicated
+  });
+
+  it("accepts legacy single-string prev entries", () => {
+    const prev = { "ass1-A": "Reverse Lunge" };
+    const active = { "ass1-A": { name: "Step-Up" } };
+    const next = pushHistoryBlock(prev, active);
+    expect(next["ass1-A"]).toEqual(["Step-Up", "Reverse Lunge"]);
+  });
+
+  it("handles slots absent from prev history (first rotation)", () => {
+    const active = { "ass1-A": { name: "Step-Up" }, "ass1-B": { name: "Cable Row" } };
+    const next = pushHistoryBlock({}, active);
+    expect(next).toEqual({ "ass1-A": ["Step-Up"], "ass1-B": ["Cable Row"] });
+  });
+
+  it("skips slots with no name (defensive)", () => {
+    const active = { "ass1-A": null, "ass1-B": { name: "Cable Row" } };
+    const next = pushHistoryBlock({}, active);
+    expect(next).toEqual({ "ass1-B": ["Cable Row"] });
   });
 });

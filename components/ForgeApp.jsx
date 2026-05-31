@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   WEEK, STRENGTH_DAY_SESSIONS, SESSIONS,
-  EXERCISE_POOLS, rotateAccessories, rotationDiff,
+  EXERCISE_POOLS, rotateAccessories, rotationDiff, pushHistoryBlock,
   ROTATION_OPTIONAL, ROTATION_AUTO, ROTATION_FORCED,
   DAY_CONFIG, DAY_NAMES, SWAP_DB, EQ_COLOUR,
   // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
@@ -1017,16 +1017,18 @@ const sProps={
   const todaySessionIdx = STRENGTH_DAY_SESSIONS[todayIdx] ?? 0;
 
   // Actually rotate. Returns the new block so we can compute the diff.
+  // History carries the last ROTATION_MEMORY_BLOCKS selections per slot, so a
+  // freshly-rotated config avoids not just the immediately-prior pick but a
+  // window of recent ones (kills the A→B→A ping-pong single-block memory had).
   const rotate = (showSummary = false) => {
     const oldConfig = programmeBlock.config;
-    const history = {};
-    Object.entries(oldConfig).forEach(([k,ex])=>{ history[k]=ex.name; });
-    const newConfig = rotateAccessories(history);
+    const updatedHistory = pushHistoryBlock(programmeBlock.history, oldConfig);
+    const newConfig = rotateAccessories(updatedHistory);
     const next = {
       number: programmeBlock.number + 1,
       startDate: new Date().toISOString().slice(0,10),
       config: newConfig,
-      history,
+      history: updatedHistory,
     };
     setProgrammeBlock(next);
     PB.save(next);
