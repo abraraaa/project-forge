@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
-  WEEK, STRENGTH_DAY_SESSIONS, SESSIONS,
+  WEEK, SESSIONS, deriveStrengthDaySessions,
   EXERCISE_POOLS, rotateAccessories, rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
   ROTATION_OPTIONAL, ROTATION_AUTO, ROTATION_FORCED,
   DAY_CONFIG, DAY_NAMES, SWAP_DB, EQ_COLOUR,
@@ -10,7 +10,7 @@ import {
   sessionMetaForDate, findRecentDays, hasMissedStrength,
 } from "@/lib/programme";
 import {
-  LS, P, PB, H, BW, PN, bumpStreak,
+  LS, P, PB, W, H, BW, PN, bumpStreak,
   computeRhythm, detectRecoveryPattern,
   blobPush, flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
   enableAutoSync, disableAutoSync,
@@ -367,7 +367,14 @@ export default function ForgeApp(){
   // when there's actually something to fill. If the user trained every strength
   // day in the last 3, the link stays hidden and home stays calm. Recomputed
   // automatically as history grows.
-  const hasRetroGaps = useMemo(() => hasMissedStrength(history, 3), [history]);
+  // User-customised week (per-device). Null when the user hasn't edited it →
+  // engine functions fall back to the default WEEK from programme.js. The
+  // strength-day → SESSIONS index map is derived from whichever week is
+  // active so a custom schedule (e.g. Mon-Wed cardio → strength Thu-Sat)
+  // still maps each strength weekday to the right A/B/C session.
+  const userWeek = useMemo(() => W.get() || WEEK, []);
+  const strengthDaySessions = useMemo(() => deriveStrengthDaySessions(userWeek), [userWeek]);
+  const hasRetroGaps = useMemo(() => hasMissedStrength(history, 3, { week: userWeek }), [history, userWeek]);
 
   // Seed on profile change: instant load from localStorage, background sync from blob
   useEffect(()=>{
@@ -1014,7 +1021,7 @@ const sProps={
   const dow      = new Date().getDay();
   const weekMap  = [6,0,1,2,3,4,5];
   const todayIdx = weekMap[dow];
-  const todaySessionIdx = STRENGTH_DAY_SESSIONS[todayIdx] ?? 0;
+  const todaySessionIdx = strengthDaySessions[todayIdx] ?? 0;
 
   // Actually rotate. Returns the new block so we can compute the diff.
   // History carries the last ROTATION_MEMORY_BLOCKS selections per slot, so a
@@ -1199,7 +1206,7 @@ const sProps={
   // fires once per retrospective submission.
   const handleSubmitRetro = (payload) => {
     if (!activeProfile || !retroDate) return;
-    const meta = sessionMetaForDate(retroDate);
+    const meta = sessionMetaForDate(retroDate, userWeek);
     if (!meta || meta.type !== "strength") return;
 
     const sessionDef = SESSIONS[meta.sessionIdx];
@@ -1471,12 +1478,12 @@ const sProps={
 
   return (
     <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
-      {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
+      {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
       {screen==="performance" && <ErrorBoundary><PerformanceLab history={history} onBack={()=>setScreen("home")}/></ErrorBoundary>}
-      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
+      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} userWeek={userWeek} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet history={history} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {showIosInstall         && <IosInstallOverlay onDismiss={()=>{ LS.set("forge:iosInstallDismissed", true); setShowIosInstall(false); }}/>}
@@ -2416,7 +2423,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 }
 
 // ─── Home ──────────────────────────────────��──────────────────────────────────
-function HomeScreen({rhythm,profileName,onBegin,onProfile,weekDone={},onMarkDayDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onBegin,onProfile,weekDone={},onMarkDayDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -2442,13 +2449,13 @@ function HomeScreen({rhythm,profileName,onBegin,onProfile,weekDone={},onMarkDayD
 
   const [viewIdx, setViewIdx] = useState(todayIdx);
 
-  const viewDay        = WEEK[viewIdx];
+  const viewDay        = userWeek[viewIdx];
   const cfg            = DAY_CONFIG[viewDay.type] || DAY_CONFIG.rest;
   const accent         = T[viewDay.type] || T.rest;
   const isViewingToday = viewIdx === todayIdx;
 
   // Resolve which session to preview for the viewed day (null for non-strength days)
-  const viewSessionIdx = STRENGTH_DAY_SESSIONS[viewIdx];
+  const viewSessionIdx = strengthDaySessions[viewIdx];
   const viewSession    = viewSessionIdx !== undefined ? SESSIONS[viewSessionIdx] : null;
 
   // Dynamic headline/sub for strength days
@@ -2513,7 +2520,7 @@ function HomeScreen({rhythm,profileName,onBegin,onProfile,weekDone={},onMarkDayD
       {/* Week strip — tappable */}
       <Fade d={60}>
         <div style={{padding:"28px 24px 0",display:"flex",gap:8}}>
-          {WEEK.map((d,i)=>{
+          {userWeek.map((d,i)=>{
             const a       = T[d.type];
             const isToday = i === todayIdx;
             const isView  = i === viewIdx;
@@ -3528,8 +3535,8 @@ function RetroPickerSheet({history, pendingDraft, onPick, onClose}){
 // the selected date. Auto-fill across cells in a row; tap any cell to override
 // via the existing ScrollDrum overlay. Skip toggle per exercise. One RPE
 // applied to all sets in an exercise.
-function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingReps, onCancel, onSubmit}){
-  const meta = useMemo(() => sessionMetaForDate(date), [date]);
+function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingReps, userWeek=WEEK, onCancel, onSubmit}){
+  const meta = useMemo(() => sessionMetaForDate(date, userWeek), [date, userWeek]);
   const sessionDef = meta?.type === "strength" ? SESSIONS[meta.sessionIdx] : null;
 
   // Flatten blocks into a single exercise list, but keep a back-reference to
@@ -3917,7 +3924,7 @@ const NEXT_DAY_MSG = {
   strength:"Strength session next. Load up.",
 };
 
-function DoneScreen({session,profileName,workingWeights,onHome,deloadCompleted=false}){
+function DoneScreen({session,profileName,workingWeights,userWeek=WEEK,onHome,deloadCompleted=false}){
   const nudges = session.blocks.filter(b=>b.type==="main").map(b=>{
     const base    = b.ex.weight;
     const current = workingWeights[b.ex.name] ?? base;
@@ -3932,7 +3939,7 @@ function DoneScreen({session,profileName,workingWeights,onHome,deloadCompleted=f
   const weekMap = [6,0,1,2,3,4,5];
   const todayIdx= weekMap[dow];
   const nextIdx = (todayIdx+1) % 7;
-  const nextType= WEEK[nextIdx]?.type ?? "rest";
+  const nextType= userWeek[nextIdx]?.type ?? "rest";
   const nextMsg = NEXT_DAY_MSG[nextType] ?? "";
 
   // Sync status for confirmation line
