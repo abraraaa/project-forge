@@ -105,6 +105,11 @@ const PATTERN_MATCHED_ALLOWLIST = new Set([
   "Rope Tricep Pushdown",
   "Single-Arm Pushdown",
   "Smith Calf Raise",
+  // Main-lift functional swaps (Tier 2 #6) — resolved correctly by the
+  // pattern matcher (squat / press / dips → standard primaries).
+  "Front Squat",
+  "Incline BB Press",
+  "Weighted Dips",
 ]);
 
 describe("exercise library — programme coverage", () => {
