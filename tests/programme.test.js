@@ -19,6 +19,7 @@ import {
   findRecentDays,
   rotateAccessories,
   pushHistoryBlock,
+  computeRotationStimulusDelta,
   ROTATION_MEMORY_BLOCKS,
 } from "../lib/programme.js";
 
@@ -231,5 +232,87 @@ describe("pushHistoryBlock", () => {
     const active = { "ass1-A": null, "ass1-B": { name: "Cable Row" } };
     const next = pushHistoryBlock({}, active);
     expect(next).toEqual({ "ass1-B": ["Cable Row"] });
+  });
+});
+
+// ─── Anatomy-aware rotation summary ────────────────────────────────────────
+describe("computeRotationStimulusDelta", () => {
+  it("returns empty for empty/identical configs", () => {
+    expect(computeRotationStimulusDelta({}, {})).toEqual([]);
+    const same = { "ass1-A": EXERCISE_POOLS["ass1-A"].pool[0] };
+    expect(computeRotationStimulusDelta(same, same)).toEqual([]);
+  });
+
+  it("ignores slots where the exercise name didn't change", () => {
+    const ex = EXERCISE_POOLS["ass1-A"].pool[0];
+    const oldCfg = { "ass1-A": ex };
+    const newCfg = { "ass1-A": { ...ex } }; // same name, different object
+    expect(computeRotationStimulusDelta(oldCfg, newCfg)).toEqual([]);
+  });
+
+  it("nets gains and losses per display bucket, sorted by magnitude", () => {
+    // Build a config delta we can predict: swap css1-B (3 sets, light_high_rep
+    // slot, lateral-raise themed) from Cable Lateral Raise → Cable Rear Delt Fly.
+    // Both feed Shoulders bucket, but the contribution shifts (side-delt → rear-delt).
+    const slot = EXERCISE_POOLS["css1-B"];
+    const lateralRaise = slot.pool.find((p) => p.name === "Cable Lateral Raise");
+    const rearDeltFly = slot.pool.find((p) => p.name === "Cable Rear Delt Fly");
+    expect(lateralRaise).toBeTruthy();
+    expect(rearDeltFly).toBeTruthy();
+
+    const delta = computeRotationStimulusDelta(
+      { "css1-B": lateralRaise },
+      { "css1-B": rearDeltFly },
+    );
+
+    // Both contribute to Shoulders; Cable Rear Delt Fly also feeds Back via
+    // its 0.25 secondary, so Back should appear with a positive delta.
+    const bucketMap = Object.fromEntries(delta.map((d) => [d.bucket, d.delta]));
+    expect(bucketMap.Back).toBeGreaterThan(0);
+    // Sorted by absolute magnitude
+    for (let i = 1; i < delta.length; i++) {
+      expect(Math.abs(delta[i - 1].delta)).toBeGreaterThanOrEqual(Math.abs(delta[i].delta));
+    }
+  });
+
+  it("scales by the slot's sets count (3-set superset weighs 3× a 1-set change)", () => {
+    // Use the same slot (sets=3 for css1-B) — verify the delta magnitude is
+    // 3× what distributeAcrossMuscles would give for a single set.
+    const slot = EXERCISE_POOLS["css1-B"];
+    const lateralRaise = slot.pool.find((p) => p.name === "Cable Lateral Raise");
+    const rearDeltFly = slot.pool.find((p) => p.name === "Cable Rear Delt Fly");
+    const delta = computeRotationStimulusDelta(
+      { "css1-B": lateralRaise },
+      { "css1-B": rearDeltFly },
+    );
+    // css1-B has sets=3 in SESSIONS, so the back-bucket delta (rearDeltFly's
+    // 0.25 back secondary) should be ~3 * 0.25 = 0.75 (rounded to 1dp = 0.8 or 0.7).
+    const back = delta.find((d) => d.bucket === "Back");
+    expect(back.delta).toBeGreaterThanOrEqual(0.7);
+    expect(back.delta).toBeLessThanOrEqual(0.8);
+  });
+
+  it("falls back to pool[0] when a slot is missing in either config", () => {
+    // newConfig has the slot, oldConfig doesn't — should treat the missing
+    // side as the SESSIONS default (pool[0]).
+    const slot = EXERCISE_POOLS["css1-B"];
+    const rearDeltFly = slot.pool.find((p) => p.name === "Cable Rear Delt Fly");
+    const delta = computeRotationStimulusDelta({}, { "css1-B": rearDeltFly });
+    // pool[0] is Cable Lateral Raise (per the rebalance), so this is the
+    // lateralRaise → rearDeltFly delta — should report a non-empty change.
+    expect(delta.length).toBeGreaterThan(0);
+  });
+
+  it("rounds deltas to 1 decimal place", () => {
+    const oldCfg = {};
+    for (const [k, slot] of Object.entries(EXERCISE_POOLS)) oldCfg[k] = slot.pool[0];
+    const newCfg = { ...oldCfg };
+    // Force one change so the function does work
+    const slot = EXERCISE_POOLS["css1-B"];
+    newCfg["css1-B"] = slot.pool[1];
+    const delta = computeRotationStimulusDelta(oldCfg, newCfg);
+    for (const d of delta) {
+      expect(d.delta).toBe(Math.round(d.delta * 10) / 10);
+    }
   });
 });
