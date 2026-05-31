@@ -16,11 +16,13 @@ import { describe, it, expect } from "vitest";
 import {
   SESSIONS,
   EXERCISE_POOLS,
+  SWAP_DB,
   findRecentDays,
   rotateAccessories,
   pushHistoryBlock,
   computeRotationStimulusDelta,
   ROTATION_MEMORY_BLOCKS,
+  MAIN_LIFT_FUNCTIONAL_EQUIVALENTS,
 } from "../lib/programme.js";
 
 // ─── Pool[0] invariant ──────────────────────────────────────────────────────
@@ -313,6 +315,71 @@ describe("computeRotationStimulusDelta", () => {
     const delta = computeRotationStimulusDelta(oldCfg, newCfg);
     for (const d of delta) {
       expect(d.delta).toBe(Math.round(d.delta * 10) / 10);
+    }
+  });
+});
+
+// ─── Main-lift functional equivalents ───────────────────────────────────────
+describe("MAIN_LIFT_FUNCTIONAL_EQUIVALENTS ↔ SWAP_DB alignment", () => {
+  // Every main lift in MAIN_LIFT_FUNCTIONAL_EQUIVALENTS must correspond to an
+  // actual SESSIONS main-lift block.
+  it("every main-lift key is a current SESSIONS main lift", () => {
+    const sessionMains = new Set();
+    for (const sess of SESSIONS) {
+      for (const block of sess.blocks) {
+        if (block.type === "main" && block.ex?.name) sessionMains.add(block.ex.name);
+      }
+    }
+    for (const lift of Object.keys(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS)) {
+      expect(sessionMains.has(lift), `${lift} not a SESSIONS main lift`).toBe(true);
+    }
+  });
+
+  // Every functional equivalent listed must appear in SWAP_DB for that lift,
+  // so users can actually pick it from the swap overlay.
+  it("every equivalent appears in SWAP_DB[lift]", () => {
+    for (const [lift, equivalents] of Object.entries(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS)) {
+      const swapNames = new Set((SWAP_DB[lift] || []).map((s) => s.name));
+      expect(SWAP_DB[lift], `SWAP_DB missing entry for ${lift}`).toBeTruthy();
+      for (const eq of equivalents) {
+        expect(swapNames.has(eq), `${lift} SWAP_DB missing ${eq}`).toBe(true);
+      }
+    }
+  });
+
+  // No drift the other way: SWAP_DB for a main lift shouldn't contain
+  // alternatives that aren't in the approved equivalents list (would mean a
+  // lighter substitute leaked in, breaking the load-profile principle).
+  it("SWAP_DB[main-lift] contains ONLY approved equivalents", () => {
+    for (const [lift, equivalents] of Object.entries(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS)) {
+      const approved = new Set(equivalents);
+      for (const swap of SWAP_DB[lift] || []) {
+        expect(approved.has(swap.name), `${lift} SWAP_DB has unapproved alt ${swap.name}`).toBe(true);
+      }
+    }
+  });
+
+  // Doc-specified explicit prohibition: Kettlebell Swing must never appear
+  // as a Power Clean substitute (it's a finisher, wrong load profile).
+  it("Kettlebell Swing is NOT a Power Clean substitute", () => {
+    const powerCleanSwaps = (SWAP_DB["Power Clean"] || []).map((s) => s.name);
+    expect(powerCleanSwaps).not.toContain("Kettlebell Swing");
+    expect(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS["Power Clean"]).not.toContain("Kettlebell Swing");
+  });
+
+  // Documented load-profile lighter-substitutes that historically lived in
+  // main-lift swap pools must NOT return — regression guard.
+  it("known lighter substitutes are not in main-lift swap pools", () => {
+    const forbidden = {
+      "Barbell Back Squat":  ["Goblet Squat", "Bulgarian Split Squat", "Leg Press"],
+      "Barbell Bench Press": ["Push-Up"],
+      "Hex Bar Deadlift":    ["Dumbbell Deadlift"],
+    };
+    for (const [lift, names] of Object.entries(forbidden)) {
+      const swapNames = new Set((SWAP_DB[lift] || []).map((s) => s.name));
+      for (const n of names) {
+        expect(swapNames.has(n), `${lift} SWAP_DB regressed: contains lighter ${n}`).toBe(false);
+      }
     }
   });
 });
