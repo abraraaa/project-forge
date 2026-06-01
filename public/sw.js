@@ -1,30 +1,131 @@
-// Forge service worker — PR-A scaffold.
+// Forge service worker — PR-B: app-shell precache + runtime caching.
 //
-// This is intentionally MINIMAL: it installs and activates so the SW
-// lifecycle is wired up, but it does NOT register a `fetch` event handler,
-// so it does not intercept any requests yet. The app behaves identically
-// to a no-SW build. Future PRs layer caching, IndexedDB queueing, and
-// background sync on top of this foundation.
+// What this PR adds on top of PR-A's scaffold:
+//   - Precache the tiny set of always-needed static assets at install
+//     (manifest.json + the two icons).
+//   - Cache-first for /_next/static/* (content-hashed, immutable).
+//   - Cache-first for binary static assets at the root (.png, .ico, fonts).
+//   - Network-first with cache fallback for HTML / navigation requests, so
+//     the app shell still loads on a flaky gym wifi.
+//   - Network-only for /api/* — auth/sync must never see stale responses.
+//   - Cache versioning + cleanup of stale forge-* caches on activate.
 //
-// Versioning: bump SW_VERSION on every meaningful change. The activate
-// handler currently does nothing with it, but cache-prefixing future
-// stores by version is how we'll handle clean upgrades.
+// What this PR DOES NOT do (future PRs):
+//   - IndexedDB queue for offline session logs (PR-D).
+//   - Background-sync flush on reconnect (PR-E).
+//   - Update-prompt UI when a new SW activates (PR-F).
+//
+// Bump SW_VERSION on every meaningful change so the activate handler cleans
+// up older caches. Old caches are deleted by prefix match on every activate.
 
-const SW_VERSION = "0.1.0-scaffold";
+const SW_VERSION  = "0.2.0-shell-cache";
+const STATIC_CACHE = `forge-static-${SW_VERSION}`;
+const HTML_CACHE   = `forge-html-${SW_VERSION}`;
 
-self.addEventListener("install", () => {
-  // skipWaiting so a freshly-installed SW takes control immediately on
-  // first deploy, rather than waiting for every tab to close.
+// Precache list — must stay tiny. Anything else is added at runtime.
+const PRECACHE_URLS = [
+  "/manifest.json",
+  "/icon-192.png",
+  "/icon-512.png",
+];
+
+self.addEventListener("install", (event) => {
   self.skipWaiting();
+  event.waitUntil(
+    caches.open(STATIC_CACHE)
+      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .catch((err) => {
+        // Don't block install if a precache asset 404s on this deploy —
+        // runtime caching will still pick it up on first request.
+        console.warn("[sw] precache failed:", err);
+      }),
+  );
 });
 
 self.addEventListener("activate", (event) => {
-  // clients.claim() makes the SW control all open tabs immediately on
-  // activation. Without it, the SW only controls tabs opened AFTER
-  // activation, which makes incremental work harder to verify.
-  event.waitUntil(self.clients.claim());
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    const stale = keys.filter((k) => k.startsWith("forge-") && k !== STATIC_CACHE && k !== HTML_CACHE);
+    await Promise.all(stale.map((k) => caches.delete(k)));
+    await self.clients.claim();
+  })());
 });
 
-// NO fetch handler yet. The SW is installed and active, but every fetch
-// goes directly to the network — same as before. PR-B adds the first
-// caching strategy (app-shell precache).
+// ─── Strategy: cache-first ─────────────────────────────────────────────────
+// Use for immutable assets (content-hashed bundles, icons). Returns cache
+// hit immediately; populates cache on miss; falls through to network error
+// if both cache and network fail.
+async function cacheFirst(req, cacheName) {
+  const cache  = await caches.open(cacheName);
+  const cached = await cache.match(req);
+  if (cached) return cached;
+  const res = await fetch(req);
+  if (res.ok) {
+    // Clone before consuming — Response bodies are single-use.
+    cache.put(req, res.clone()).catch(() => { /* quota errors are non-fatal */ });
+  }
+  return res;
+}
+
+// ─── Strategy: network-first with cache fallback ───────────────────────────
+// Use for HTML / navigation. Online users always get the freshest shell;
+// offline users get the last-cached version so the PWA still opens at the
+// gym when wifi is flaky.
+async function networkFirst(req, cacheName) {
+  const cache = await caches.open(cacheName);
+  try {
+    const res = await fetch(req);
+    if (res.ok) {
+      cache.put(req, res.clone()).catch(() => { /* quota errors are non-fatal */ });
+    }
+    return res;
+  } catch (err) {
+    const cached = await cache.match(req);
+    if (cached) return cached;
+    throw err;
+  }
+}
+
+// ─── Fetch router ──────────────────────────────────────────────────────────
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+
+  // Only handle GET — POST/PUT/DELETE go straight to network.
+  if (req.method !== "GET") return;
+
+  const url = new URL(req.url);
+
+  // Only handle same-origin — cross-origin (Vercel blob, analytics, etc.)
+  // is left to the browser cache.
+  if (url.origin !== self.location.origin) return;
+
+  // API routes: never cache. Auth + sync must always see fresh server state.
+  if (url.pathname.startsWith("/api/")) return;
+
+  // Content-hashed Next bundles: cache-first, immutable.
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(cacheFirst(req, STATIC_CACHE));
+    return;
+  }
+
+  // Root-level static binaries (icons, favicon, fonts). Path-based test
+  // covers PWA assets that aren't fingerprinted.
+  if (/\.(png|jpe?g|svg|webp|gif|ico|woff2?|otf|ttf)$/i.test(url.pathname)) {
+    event.respondWith(cacheFirst(req, STATIC_CACHE));
+    return;
+  }
+
+  // Manifest: cache-first so PWA installability survives offline.
+  if (url.pathname === "/manifest.json") {
+    event.respondWith(cacheFirst(req, STATIC_CACHE));
+    return;
+  }
+
+  // HTML / navigation: network-first.
+  if (req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html")) {
+    event.respondWith(networkFirst(req, HTML_CACHE));
+    return;
+  }
+
+  // Anything else (Next data fetches, server actions, etc.) — pass through.
+});
