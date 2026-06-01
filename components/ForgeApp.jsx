@@ -6,6 +6,7 @@ import {
   EXERCISE_POOLS, rotateAccessories, rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
   ROTATION_OPTIONAL, ROTATION_AUTO, ROTATION_FORCED,
   DAY_CONFIG, DAY_NAMES, SWAP_DB, EQ_COLOUR,
+  bonusForDay,
   // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
   sessionMetaForDate, findRecentDays, hasMissedStrength,
 } from "@/lib/programme";
@@ -357,6 +358,7 @@ export default function ForgeApp(){
   const [sessionSwaps,setSessionSwaps]=useState({});
   const [programmeBlock,setProgrammeBlock]=useState(()=>PB.get());
   const [weekDone,setWeekDone]=useState({});
+  const [bonusDone,setBonusDone]=useState({});
   const [blockIdx,setBlockIdx]=useState(0);
   const [setNum,setSetNum]=useState(1);
   const [phase,setPhase]=useState("A");
@@ -472,6 +474,7 @@ export default function ForgeApp(){
     setStreak(local.meta.streak?.count || 0);
     setProgrammeBlock(local.meta.programmeBlock || PB.get());
     setWeekDone(P.getWeekDone(activeProfile));
+    setBonusDone(P.getBonusDone(activeProfile));
     setHistory(local.history || []);
 
     // Retry any failed pushes from previous sessions
@@ -1069,6 +1072,16 @@ export default function ForgeApp(){
     setStreak(newStreak);
   },[activeProfile]);
 
+  // Mark today's optional cardio bonus complete. Separate store from weekDone;
+  // deliberately does NOT bump the streak — bonuses are extras, not adherence.
+  const handleMarkBonusDone = useCallback(()=>{
+    if(!activeProfile) return;
+    const dw=new Date().getDay();
+    const wm=[6,0,1,2,3,4,5];
+    const idx=wm[dw];
+    setBonusDone(P.markBonusDone(activeProfile,idx));
+  },[activeProfile]);
+
   if(!mounted) return null;
 
   // Onboarding — first-time intro, shown before ProfileScreen
@@ -1559,7 +1572,7 @@ const sProps={
 
   return (
     <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
       {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
@@ -2516,7 +2529,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 }
 
 // ─── Home ──────────────────────────────────��──────────────────────────────────
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -2546,6 +2559,14 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const cfg            = DAY_CONFIG[viewDay.type] || DAY_CONFIG.rest;
   const accent         = T[viewDay.type] || T.rest;
   const isViewingToday = viewIdx === todayIdx;
+
+  // Optional cardio-day bonus for the VIEWED day. bonusForDay returns null for
+  // ineligible day types (everything except cardio/hiit), so this is the only
+  // guard needed. Local date string (not toISOString — avoids the UTC day-shift).
+  const _vd = new Date(nowMs);
+  _vd.setDate(_vd.getDate() + (viewIdx - todayIdx));
+  const viewDateStr = `${_vd.getFullYear()}-${String(_vd.getMonth()+1).padStart(2,"0")}-${String(_vd.getDate()).padStart(2,"0")}`;
+  const dayBonus   = bonusForDay(viewDateStr, viewDay.type);
 
   // Resolve which session to preview for the viewed day (null for non-strength days)
   const viewSessionIdx = strengthDaySessions[viewIdx];
@@ -2798,6 +2819,43 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               <span style={{fontSize:16,color:accent.main}}>✓</span>
             </button>
           )}
+        </Fade>
+      )}
+
+      {/* Today's bonus — optional capacity finisher on cardio/HIIT days only.
+          Clearly framed as a bonus, never homework. Completion is tracked in a
+          separate store with zero streak impact. */}
+      {dayBonus && isViewingToday && (
+        <Fade d={260}>
+          <Card style={{margin:"16px 24px 0",padding:"18px 20px 20px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:500,color:accent.main,letterSpacing:"0.12em",textTransform:"uppercase"}}>
+                Today&apos;s bonus · optional
+              </div>
+              <div style={{fontSize:10,color:T.text4,letterSpacing:"0.06em",textTransform:"uppercase"}}>~5 min</div>
+            </div>
+            <div style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:T.text1,lineHeight:1.2,marginBottom:4}}>
+              {dayBonus.name}
+            </div>
+            <div style={{fontSize:13,color:T.text2,lineHeight:1.5,marginBottom:16}}>
+              {dayBonus.detail}
+            </div>
+            {bonusDone[todayIdx] ? (
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:16,color:accent.main}}>✓</span>
+                <span style={{fontFamily:T.serif,fontSize:15,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Bonus banked. Animal.</span>
+              </div>
+            ) : (
+              <button onClick={onMarkBonusDone} aria-label="Mark bonus complete" style={{
+                width:"100%",padding:"12px 16px",background:"transparent",
+                border:`1px solid ${accent.main}66`,borderRadius:T.r.md,cursor:"pointer",
+                display:"flex",alignItems:"center",justifyContent:"space-between",
+              }}>
+                <span style={{fontSize:14,fontWeight:500,color:accent.main}}>Mark bonus done</span>
+                <span style={{fontSize:14,color:accent.main}}>+</span>
+              </button>
+            )}
+          </Card>
         </Fade>
       )}
 

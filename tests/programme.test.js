@@ -27,6 +27,9 @@ import {
   sessionMetaForDate,
   ROTATION_MEMORY_BLOCKS,
   MAIN_LIFT_FUNCTIONAL_EQUIVALENTS,
+  bonusForDay,
+  CARDIO_BONUS_POOL,
+  BONUS_ELIGIBLE_DAY_TYPES,
 } from "../lib/programme.js";
 
 // ─── Pool[0] invariant ──────────────────────────────────────────────────────
@@ -457,5 +460,56 @@ describe("sessionMetaForDate — custom week", () => {
     expect(sessionMetaForDate(monday, w)?.type).toBe("zone2");
     expect(sessionMetaForDate(friday, w)?.type).toBe("strength");
     expect(sessionMetaForDate(friday, w)?.sessionName).toBe("Strength A");
+  });
+});
+
+// ─── Cardio-day bonus challenges ────────────────────────────────────────────
+describe("bonusForDay", () => {
+  it("returns a bonus only for cardio + hiit day types", () => {
+    expect(bonusForDay("2026-06-02", "cardio")).toBeTruthy();
+    expect(bonusForDay("2026-06-02", "hiit")).toBeTruthy();
+  });
+
+  it("returns null for Z2, rest, strength (recovery / wrong context)", () => {
+    expect(bonusForDay("2026-06-02", "zone2")).toBe(null);
+    expect(bonusForDay("2026-06-02", "rest")).toBe(null);
+    expect(bonusForDay("2026-06-02", "strength")).toBe(null);
+  });
+
+  it("BONUS_ELIGIBLE_DAY_TYPES is exactly {cardio, hiit}", () => {
+    expect([...BONUS_ELIGIBLE_DAY_TYPES].sort()).toEqual(["cardio", "hiit"]);
+  });
+
+  it("is deterministic for a given date (stable within a day)", () => {
+    const a = bonusForDay("2026-06-02", "cardio");
+    const b = bonusForDay("2026-06-02", "cardio");
+    expect(a).toEqual(b);
+  });
+
+  it("varies across dates (not a constant)", () => {
+    const picks = new Set();
+    for (let d = 1; d <= 20; d++) {
+      picks.add(bonusForDay(`2026-06-${String(d).padStart(2, "0")}`, "cardio").name);
+    }
+    expect(picks.size).toBeGreaterThan(1);
+  });
+
+  it("always returns a pool member with name + detail", () => {
+    const names = new Set(CARDIO_BONUS_POOL.map((b) => b.name));
+    const pick = bonusForDay("2026-06-10", "hiit");
+    expect(names.has(pick.name)).toBe(true);
+    expect(typeof pick.detail).toBe("string");
+    expect(pick.detail.length).toBeGreaterThan(0);
+  });
+
+  it("guards against missing / malformed date", () => {
+    expect(bonusForDay(null, "cardio")).toBe(null);
+    expect(bonusForDay(undefined, "cardio")).toBe(null);
+    expect(bonusForDay(123, "cardio")).toBe(null);
+  });
+
+  it("pool entries are unique by name", () => {
+    const names = CARDIO_BONUS_POOL.map((b) => b.name);
+    expect(new Set(names).size).toBe(names.length);
   });
 });
