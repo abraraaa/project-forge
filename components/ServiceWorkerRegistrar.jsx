@@ -6,6 +6,12 @@
 // Escape hatch: append `?nosw=1` to any URL to unregister all service
 // workers + clear caches. Useful while iterating, and as a panic button if
 // a future SW deploy gets stuck on a user's device.
+//
+// Silent update: when a NEW service worker takes control of an existing tab
+// (i.e. the user already had a previous SW, and we just shipped a new build),
+// we schedule a `window.location.reload()` for the next moment the tab is
+// hidden. Users never see a reload flash — when they next look at the tab,
+// it's just on the new version. No popups, no banners.
 
 import { useEffect } from "react";
 
@@ -31,6 +37,35 @@ export default function ServiceWorkerRegistrar() {
       return;
     }
 
+    // Snapshot whether a SW already controls this page BEFORE registering.
+    // If null, this is a first-time install — the upcoming controllerchange
+    // fire is the first-claim, not an upgrade, and we should NOT reload.
+    // If non-null, the user already had our SW; any future controllerchange
+    // means a new build has activated and we should silently refresh.
+    const hadControllerAtStart = navigator.serviceWorker.controller !== null;
+    let reloadScheduled = false;
+
+    const onControllerChange = () => {
+      if (!hadControllerAtStart) return; // first install — not an upgrade
+      if (reloadScheduled) return;
+      reloadScheduled = true;
+
+      const reloadIfHidden = () => {
+        if (document.visibilityState !== "hidden") return;
+        document.removeEventListener("visibilitychange", reloadIfHidden);
+        window.location.reload();
+      };
+
+      if (document.visibilityState === "hidden") {
+        // Already backgrounded — reload now, user sees fresh on return.
+        window.location.reload();
+      } else {
+        // Visible — wait for the next backgrounding event, then reload silently.
+        document.addEventListener("visibilitychange", reloadIfHidden);
+      }
+    };
+    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+
     navigator.serviceWorker
       .register(SW_PATH, { scope: "/" })
       .then((reg) => {
@@ -43,7 +78,12 @@ export default function ServiceWorkerRegistrar() {
         // the SW. Surface it in the console for diagnostics.
         console.warn("[sw] registration failed:", err);
       });
+
+    return () => {
+      navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+    };
   }, []);
 
   return null;
 }
+
