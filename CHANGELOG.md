@@ -8,6 +8,9 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 Items in flight on `main` but not yet tagged. Tagged releases will move them into a dated section below.
 
+### Added
+- **Service-worker scaffold (PR-A of N).** Wires up the SW lifecycle — `public/sw.js` installs and activates, `<ServiceWorkerRegistrar/>` registers it from the layout. No fetch interception, no caching yet — zero behavioural change. Foundation for the incremental offline-PWA work (app-shell precache → API strategy → IndexedDB session-log queue → background sync → update prompt). Escape hatch: `?nosw=1` on any URL unregisters all SWs + clears caches.
+
 ### Changed
 - **Licensing clarified — AGPL-3.0 + commercial dual-licence path.** Added an explicit copyright preamble to `LICENSE`, set `"license": "AGPL-3.0-only"` in `package.json`, and added `LICENSING.md` documenting the dual-licence terms. The underlying AGPL-3.0 text is unchanged — what changed is *attribution* (copyright is now explicitly held by wondabrar) and *commercial reservation* (a paid licence is available for use cases AGPL-3.0 doesn't cover: closed-source SaaS, white-label, proprietary integrations).
 
