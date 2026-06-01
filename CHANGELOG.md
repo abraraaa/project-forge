@@ -8,6 +8,9 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 Items in flight on `main` but not yet tagged. Tagged releases will move them into a dated section below.
 
+### Changed
+- **Licensing clarified — AGPL-3.0 + commercial dual-licence path.** Added an explicit copyright preamble to `LICENSE`, set `"license": "AGPL-3.0-only"` in `package.json`, and added `LICENSING.md` documenting the dual-licence terms. The underlying AGPL-3.0 text is unchanged — what changed is *attribution* (copyright is now explicitly held by wondabrar) and *commercial reservation* (a paid licence is available for use cases AGPL-3.0 doesn't cover: closed-source SaaS, white-label, proprietary integrations).
+
 ---
 
 ## Tier 2 — programme intelligence
