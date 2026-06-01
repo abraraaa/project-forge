@@ -67,6 +67,78 @@ function formatAgo(ms) {
   return "a while ago";
 }
 
+// ─── Modal a11y hook ─────────────────────────────────────────────────────────
+// Cross-cutting accessibility behaviour shared by every bottom-sheet / modal:
+//   - role="dialog" + aria-modal="true" + aria-labelledby on the container
+//     (callers supply tabIndex={-1} so the container can take focus).
+//   - Auto-focus the container on open; restore focus to the prior element
+//     (usually the trigger button) on unmount.
+//   - Escape key closes via onClose.
+//   - Tab / Shift+Tab focus trap keeps focus inside the modal so screen-reader
+//     and keyboard users can't tab into the page underneath.
+//
+// Usage:
+//   const { containerRef, onKeyDown } = useModalA11y(onClose);
+//   return <div onKeyDown={onKeyDown} onClick={onClose}>
+//     <div ref={containerRef} role="dialog" aria-modal="true"
+//          aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}>
+//       <h2 id={titleId}>…</h2>
+//     </div>
+//   </div>
+function useModalA11y(onClose) {
+  const containerRef    = useRef(null);
+  const prevFocusRef    = useRef(null);
+
+  useEffect(() => {
+    prevFocusRef.current = typeof document !== "undefined" ? document.activeElement : null;
+    // Focus on next tick so the container is laid out before we measure.
+    const id = setTimeout(() => {
+      if (containerRef.current && typeof containerRef.current.focus === "function") {
+        try { containerRef.current.focus({ preventScroll: true }); } catch { /* noop */ }
+      }
+    }, 0);
+    return () => {
+      clearTimeout(id);
+      const prev = prevFocusRef.current;
+      if (prev && typeof prev.focus === "function" && document.contains(prev)) {
+        try { prev.focus({ preventScroll: true }); } catch { /* noop */ }
+      }
+    };
+  }, []);
+
+  const onKeyDown = useCallback((e) => {
+    if (e.key === "Escape") {
+      if (onClose) {
+        e.stopPropagation();
+        onClose();
+      }
+      return;
+    }
+    if (e.key === "Tab" && containerRef.current) {
+      const focusables = containerRef.current.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) {
+        e.preventDefault();
+        containerRef.current.focus();
+        return;
+      }
+      const first = focusables[0];
+      const last  = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === containerRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }, [onClose]);
+
+  return { containerRef, onKeyDown };
+}
+
 // ─── Shared helper: resolve load type for an exercise ────────────────────────
 // Used by both the session-finalise logger (in pushSetToDraft) and the session
 // screen render. Centralises the "honour ex.loadType if set, otherwise infer
@@ -1544,6 +1616,9 @@ function TakenNameModal({ name, webAuthnSupported, onClose, onActivate, passkeyB
     setPasskeyBusy(false);
   };
 
+  const { containerRef, onKeyDown } = useModalA11y(onClose);
+  const titleId = "taken-name-title";
+
   if (authSuccess) {
     return (
       <div style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1559,14 +1634,14 @@ function TakenNameModal({ name, webAuthnSupported, onClose, onActivate, passkeyB
   }
 
   return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",maxWidth:430,borderTop:`1px solid ${T.coral}33`,animation:`slideUp 260ms ${T.ease}`,maxHeight:"92vh",overflowY:"auto",boxSizing:"border-box",position:"relative"}}>
+    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",maxWidth:430,borderTop:`1px solid ${T.coral}33`,animation:`slideUp 260ms ${T.ease}`,maxHeight:"92vh",overflowY:"auto",boxSizing:"border-box",position:"relative",outline:"none"}}>
         <button onClick={onClose} aria-label="Close" style={{position:"absolute",top:14,right:14,background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,width:30,height:30,cursor:"pointer",color:T.text2,fontSize:13,padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
 
         <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8,paddingRight:40}}>
           Is this you?
         </div>
-        <div style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.2,marginBottom:12}}>
+        <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.2,marginBottom:12}}>
           {hasProfilePasskey === null ? "Checking..." : hasProfilePasskey ? "Sign in with passkey" : "Signing in on a new device"}
         </div>
 
@@ -3338,15 +3413,17 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
     });
     onClose();
   };
+  const { containerRef, onKeyDown } = useModalA11y(onClose);
+  const titleId = "swap-overlay-title";
   return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px 36px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`}}>
+    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px 36px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
           <div>
             <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Swap exercise</div>
-            <div style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:T.text2,fontStyle:"italic"}}>{activeEx?.name}</div>
+            <div id={titleId} style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:T.text2,fontStyle:"italic"}}>{activeEx?.name}</div>
           </div>
-          <button onClick={onClose} style={{background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,padding:"6px 10px",cursor:"pointer",color:T.text2,fontSize:13}}>✕</button>
+          <button onClick={onClose} aria-label="Close" style={{background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,padding:"6px 10px",cursor:"pointer",color:T.text2,fontSize:13}}>✕</button>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10,margin:"14px 0",padding:"10px 14px",background:T.bg3,borderRadius:T.r.md,cursor:"pointer"}} onClick={()=>setTravel(p=>!p)}>
           <div style={{width:32,height:18,borderRadius:9,background:travel?T.coral:T.bg4,position:"relative",transition:`background 200ms ${T.ease}`,flexShrink:0}}>
@@ -3416,13 +3493,15 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
     strengthCount < 3   ? `Only ${strengthCount} strength day${strengthCount===1?"":"s"} — sessions B/C won't be reached.` :
     strengthCount > 3   ? `${strengthCount} strength days — A/B/C will cycle to fill (4th = A again).` :
     null;
+  const { containerRef, onKeyDown } = useModalA11y(onCancel);
+  const titleId = "week-editor-title";
   return (
-    <div onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column"}}>
+    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
           Weekly schedule
         </div>
-        <div style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.15,marginBottom:6}}>
+        <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.15,marginBottom:6}}>
           Shape your week.
         </div>
         <p style={{fontSize:13,color:T.text3,marginBottom:18,lineHeight:1.5}}>
@@ -3480,13 +3559,17 @@ function RotationSummaryModal({summary,onContinue}){
   const count = summary.changes.length;
   // Top 4 by magnitude — enough to tell the story, not enough to overwhelm.
   const topDeltas = (summary.stimulusDelta || []).slice(0, 4);
+  // Auto-rotation summary is non-dismissible (user must Continue) — no onClose
+  // wired to the a11y hook; Escape is intentionally inert here.
+  const { containerRef, onKeyDown } = useModalA11y(null);
+  const titleId = "rotation-summary-title";
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.94)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column"}}>
+    <div onKeyDown={onKeyDown} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.94)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:10,fontWeight:500,color:gold,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
           New block · {summary.blockNumber}
         </div>
-        <div style={{fontFamily:T.serif,fontSize:30,fontWeight:300,lineHeight:1.15,marginBottom:8}}>
+        <div id={titleId} style={{fontFamily:T.serif,fontSize:30,fontWeight:300,lineHeight:1.15,marginBottom:8}}>
           Your programme<br/><span style={{color:gold,fontStyle:"italic"}}>has rotated.</span>
         </div>
         <p style={{fontSize:13,color:T.text2,marginBottom:topDeltas.length?14:20,lineHeight:1.6}}>
@@ -3548,13 +3631,15 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
   const [kg,setKg]    =useState(initKg);
   const [reps,setReps]=useState(initReps);
   const hasWeight=ex?.weight!==null&&ex?.weight!==undefined;
+  const { containerRef, onKeyDown } = useModalA11y(onClose);
+  const titleId = "drum-edit-title";
   return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`}}>
+    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
-          <div><div style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>{target.exName}</div>
+          <div><div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>{target.exName}</div>
           <div style={{fontSize:12,color:T.text3,marginTop:4}}>Scroll to adjust</div></div>
-          <button onClick={onClose} style={{background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,padding:"6px 10px",cursor:"pointer",color:T.text2,fontSize:13}}>✕</button>
+          <button onClick={onClose} aria-label="Close" style={{background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,padding:"6px 10px",cursor:"pointer",color:T.text2,fontSize:13}}>✕</button>
         </div>
         <div style={{display:"flex",gap:16,justifyContent:hasWeight?"space-between":"center"}}>
           {hasWeight&&<ScrollDrum value={kg} onChange={setKg} step={1.25} min={0} max={400} label="kg"/>}
@@ -3588,14 +3673,16 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
 function RetroPickerSheet({history, pendingDraft, onPick, onClose}){
   const rows = useMemo(() => findRecentDays(history, 3), [history]);
   const draftBlocks = !!pendingDraft;
+  const { containerRef, onKeyDown } = useModalA11y(onClose);
+  const titleId = "retro-picker-title";
 
   return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",maxWidth:430,borderTop:`1px solid ${T.sage}28`,animation:`slideUp 260ms ${T.ease}`}}>
+    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",maxWidth:430,borderTop:`1px solid ${T.sage}28`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
 
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
           <div>
-            <div style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>Recent days</div>
+            <div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>Recent days</div>
             <div style={{fontSize:12,color:T.text3,marginTop:4,lineHeight:1.5}}>
               {draftBlocks ? "Finish your live session first" : "Tap a missed strength day to log it"}
             </div>
@@ -3997,15 +4084,21 @@ function BodyweightEditModal({open,onClose,currentKg,onSave}){
   // Same editorial family, different density to match the moment.
   const isFirstTime = currentKg === null || currentKg === undefined;
 
+  return <BodyweightEditModalInner kg={kg} setKg={setKg} onClose={onClose} onSave={onSave} isFirstTime={isFirstTime}/>;
+}
+
+function BodyweightEditModalInner({kg, setKg, onClose, onSave, isFirstTime}){
+  const { containerRef, onKeyDown } = useModalA11y(onClose);
+  const titleId = "bw-edit-title";
   return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",maxWidth:430,borderTop:`1px solid ${T.sage}28`,animation:`slideUp 260ms ${T.ease}`}}>
+    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",maxWidth:430,borderTop:`1px solid ${T.sage}28`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
 
         {/* Header — tightened to match DrumEditOverlay pattern. ✕ close
             sits top-right rather than a separate Cancel button at the bottom. */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
           <div>
-            <div style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>Bodyweight</div>
+            <div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>Bodyweight</div>
             <div style={{fontSize:12,color:T.text3,marginTop:4,lineHeight:1.5,maxWidth:280}}>
               {isFirstTime
                 ? "Used for loaded pull-ups, dips, and other weighted bodyweight movements."
@@ -4142,18 +4235,22 @@ function DoneScreen({session,profileName,workingWeights,userWeek=WEEK,onHome,del
 // through the native "Add to Home Screen" flow ourselves. Triggered after
 // first completed session, dismissable, remembered via localStorage.
 function IosInstallOverlay({ onDismiss }) {
+  const { containerRef, onKeyDown } = useModalA11y(onDismiss);
+  const titleId = "ios-install-title";
   return (
     <div
       onClick={onDismiss}
+      onKeyDown={onKeyDown}
       style={{
         position:"fixed",inset:0,background:"rgba(10,9,8,0.90)",zIndex:500,
         display:"flex",alignItems:"flex-end",justifyContent:"center",
         animation:`fadeIn 220ms ${T.ease}`,
       }}>
-      <div onClick={e => e.stopPropagation()}
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e => e.stopPropagation()}
         style={{
           background:T.bg2,
           borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,
+          outline:"none",
           padding:"24px 24px calc(24px + env(safe-area-inset-bottom))",
           width:"100%",maxWidth:430,
           maxHeight:"92vh",overflowY:"auto",
@@ -4168,7 +4265,7 @@ function IosInstallOverlay({ onDismiss }) {
         <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8,paddingRight:40}}>
           Live on your home screen
         </div>
-        <div style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.2,marginBottom:10}}>
+        <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.2,marginBottom:10}}>
           Install <span style={{fontStyle:"italic",color:T.coral}}>Forge</span>
         </div>
         <p style={{fontSize:13,color:T.text2,marginBottom:20,lineHeight:1.6}}>
