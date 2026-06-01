@@ -9,6 +9,7 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
 Items in flight on `main` but not yet tagged. Tagged releases will move them into a dated section below.
 
 ### Added
+- **Service-worker app-shell cache (PR-B of N).** The SW now precaches the small static set (manifest + icons) at install, and applies per-path runtime caching: cache-first for `/_next/static/*` (immutable, content-hashed) and root binary assets (icons / fonts), network-first with cache fallback for HTML / navigation (online users get fresh, offline users get the last cached shell), network-only for `/api/*` (auth + sync must never see stale responses). Cache versioning via `SW_VERSION` — `activate` cleans up older `forge-*` caches automatically.
 - **Service-worker scaffold (PR-A of N).** Wires up the SW lifecycle — `public/sw.js` installs and activates, `<ServiceWorkerRegistrar/>` registers it from the layout. No fetch interception, no caching yet — zero behavioural change. Foundation for the incremental offline-PWA work (app-shell precache → API strategy → IndexedDB session-log queue → background sync → update prompt). Escape hatch: `?nosw=1` on any URL unregisters all SWs + clears caches.
 
 ### Changed
