@@ -1598,7 +1598,7 @@ const sProps={
 
   return (
     <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
       {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
@@ -2579,7 +2579,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 }
 
 // ─── Home ──────────────────────────────────��──────────────────────────────────
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -2596,6 +2596,20 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
     onResetProgramme?.();
   };
   useEffect(() => () => clearTimeout(resetTimerRef.current), []);
+
+  // Rotation choice modal — at ROTATION_AUTO weeks the rotate prompt
+  // becomes a fork: refresh exercises within the current focus, or change
+  // focus (which itself re-rotates). Pre-AUTO weeks, tap → straight rotate.
+  const [rotateChoiceOpen, setRotateChoiceOpen] = useState(false);
+  const offerRotationChoice = weeksOnBlock >= ROTATION_AUTO;
+  const handleRotateTap = () => {
+    if (offerRotationChoice && onEditFocus) {
+      setRotateChoiceOpen(true);
+    } else {
+      onRotate?.();
+    }
+  };
+
   // Anchor "now" once at mount so render stays pure (no clock read mid-render)
   // and the day-of-week / viewed-date maths derive from a single consistent point.
   const [nowMs]  = useState(() => Date.now());
@@ -3137,11 +3151,13 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                   Time to rotate accessories
                 </div>
                 <div style={{fontSize:12,color:T.text3,lineHeight:1.5}}>
-                  Your body has adapted. New exercises, same muscle targets.
+                  {offerRotationChoice
+                    ? "You've earned a re-think. Refresh exercises, or change your focus altogether."
+                    : "Your body has adapted. New exercises, same muscle targets."}
                 </div>
               </div>
-              <button onClick={onRotate} style={{flexShrink:0,marginTop:2,padding:"10px 16px",background:T.gold,border:"none",borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.bg0}}>
-                Rotate →
+              <button onClick={handleRotateTap} style={{flexShrink:0,marginTop:2,padding:"10px 16px",background:T.gold,border:"none",borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.bg0}}>
+                {offerRotationChoice ? "Choose →" : "Rotate →"}
               </button>
             </div>
           </div>
@@ -3185,6 +3201,60 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           </div>
         </div>
       </Fade>
+
+      {rotateChoiceOpen && (
+        <RotationChoiceModal
+          weeksOnBlock={weeksOnBlock}
+          currentFocus={userFocus}
+          onRefresh={() => { setRotateChoiceOpen(false); onRotate?.(); }}
+          onChangeFocus={() => { setRotateChoiceOpen(false); onEditFocus?.(); }}
+          onCancel={() => setRotateChoiceOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Rotation choice modal ─────────────────────────────────────────────────
+// Shown when the user taps "Choose →" on the rotate card at ≥ ROTATION_AUTO
+// weeks. Two paths: refresh the accessory picks within the current focus,
+// or change focus altogether (which re-rotates automatically as a side
+// effect of the focus-save handler). Pre-AUTO weeks, the rotate card calls
+// onRotate directly and this modal never opens.
+function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFocus, onCancel }) {
+  const { containerRef, onKeyDown } = useModalA11y(onCancel);
+  const titleId = "rotation-choice-title";
+  return (
+    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
+        style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        <div style={{fontSize:10,fontWeight:500,color:T.gold,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+          {weeksOnBlock} weeks on this block
+        </div>
+        <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.15,marginBottom:6}}>
+          Time to rotate.<br/><span style={{color:T.gold,fontStyle:"italic"}}>What do you want to do?</span>
+        </div>
+        <p style={{fontSize:13,color:T.text3,marginBottom:18,lineHeight:1.5}}>
+          You&apos;re on <strong style={{color:T.text2}}>{currentFocus}</strong>. Refresh the accessory picks within it, or rethink the whole focus.
+        </p>
+
+        <button onClick={onRefresh}
+          style={{padding:"16px 18px",background:`${T.gold}14`,border:`1px solid ${T.gold}`,borderRadius:T.r.md,cursor:"pointer",textAlign:"left",marginBottom:10,transition:`all 160ms ${T.ease}`}}>
+          <div style={{fontFamily:T.serif,fontSize:17,fontWeight:300,color:T.gold,marginBottom:4}}>1. Refresh exercises</div>
+          <div style={{fontSize:12,color:T.text2,lineHeight:1.5}}>New picks within your current focus. Same muscle targets, fresh stimulus.</div>
+        </button>
+
+        <button onClick={onChangeFocus}
+          style={{padding:"16px 18px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.md,cursor:"pointer",textAlign:"left",transition:`all 160ms ${T.ease}`}}>
+          <div style={{fontFamily:T.serif,fontSize:17,fontWeight:300,color:T.text1,marginBottom:4}}>2. Change focus</div>
+          <div style={{fontSize:12,color:T.text2,lineHeight:1.5}}>Switch to a different goal — Forged / Strong / Sculpt. Accessories re-rotate with the new bias.</div>
+        </button>
+
+        <button onClick={onCancel}
+          style={{marginTop:16,padding:"10px",background:"none",border:"none",cursor:"pointer",fontSize:12,color:T.text3,fontFamily:T.sans,alignSelf:"center"}}>
+          Not now
+        </button>
+      </div>
     </div>
   );
 }
