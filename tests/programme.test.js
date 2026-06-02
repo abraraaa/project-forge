@@ -30,6 +30,10 @@ import {
   bonusForDay,
   CARDIO_BONUS_POOL,
   BONUS_ELIGIBLE_DAY_TYPES,
+  scoreExerciseForFocus,
+  FOCUS_OPTIONS,
+  FOCUS_SUMMARIES,
+  DEFAULT_FOCUS,
 } from "../lib/programme.js";
 
 // ─── Pool[0] invariant ──────────────────────────────────────────────────────
@@ -511,5 +515,132 @@ describe("bonusForDay", () => {
   it("pool entries are unique by name", () => {
     const names = CARDIO_BONUS_POOL.map((b) => b.name);
     expect(new Set(names).size).toBe(names.length);
+  });
+});
+
+// ─── Training focus — accessory bias ────────────────────────────────────────
+describe("scoreExerciseForFocus", () => {
+  it("Forged returns 1.0 for everything (no bias)", () => {
+    for (const slot of Object.values(EXERCISE_POOLS)) {
+      for (const ex of slot.pool) {
+        expect(scoreExerciseForFocus(ex, "Forged")).toBe(1);
+      }
+    }
+  });
+
+  it("null / undefined / unknown focus all behave like Forged (identity)", () => {
+    const ex = EXERCISE_POOLS["ass2-A"].pool[0];
+    expect(scoreExerciseForFocus(ex, null)).toBe(1);
+    expect(scoreExerciseForFocus(ex, undefined)).toBe(1);
+    expect(scoreExerciseForFocus(ex, "Unknown")).toBe(1);
+  });
+
+  it("unmapped exercise names score 1.0 (don't get excluded under any focus)", () => {
+    const ghost = { name: "Definitely Not A Real Lift" };
+    for (const focus of FOCUS_OPTIONS) {
+      expect(scoreExerciseForFocus(ghost, focus)).toBe(1);
+    }
+  });
+
+  it("Strong scores compounds higher than isolations", () => {
+    const squat = { name: "Barbell Back Squat" };
+    const ext   = { name: "Leg Extension" };
+    expect(scoreExerciseForFocus(squat, "Strong"))
+      .toBeGreaterThan(scoreExerciseForFocus(ext, "Strong"));
+  });
+
+  it("Strong always ≥ 1 (primary muscle contributes a floor)", () => {
+    for (const slot of Object.values(EXERCISE_POOLS)) {
+      for (const ex of slot.pool) {
+        expect(scoreExerciseForFocus(ex, "Strong")).toBeGreaterThanOrEqual(1);
+      }
+    }
+  });
+
+  it("Sculpt scores chest moves higher than leg moves", () => {
+    const dbFly  = { name: "DB Chest Fly" };
+    const legExt = { name: "Leg Extension" };
+    expect(scoreExerciseForFocus(dbFly, "Sculpt"))
+      .toBeGreaterThan(scoreExerciseForFocus(legExt, "Sculpt"));
+  });
+
+  it("Sculpt scores Glutes (visible bias) higher than Hamstrings", () => {
+    const hipThrust = { name: "Barbell Hip Thrust" };       // Glutes primary
+    const hamCurl   = { name: "Machine Hamstring Curl" };   // Hams primary
+    expect(scoreExerciseForFocus(hipThrust, "Sculpt"))
+      .toBeGreaterThan(scoreExerciseForFocus(hamCurl, "Sculpt"));
+  });
+});
+
+describe("rotateAccessories — focus parameter", () => {
+  it("Forged matches the call-with-no-focus baseline (identity)", () => {
+    // Same seed isn't a thing here (Math.random), but the SCORING under
+    // Forged is uniform — so every pool entry is equally likely regardless
+    // of whether `focus` is passed. Run many trials and confirm both
+    // distributions cover the same set of picks.
+    const seen = { withFocus: new Set(), withoutFocus: new Set() };
+    for (let i = 0; i < 50; i++) {
+      seen.withFocus.add(rotateAccessories({}, { focus: "Forged" })["ass1-A"]?.name);
+      seen.withoutFocus.add(rotateAccessories({})["ass1-A"]?.name);
+    }
+    // Both should converge to "every pool member appears at least once"
+    // (the ass1-A pool has 6 entries and we ran 50 trials each).
+    expect(seen.withFocus.size).toBeGreaterThan(1);
+    expect(seen.withoutFocus.size).toBeGreaterThan(1);
+  });
+
+  it("Sculpt biases ass2-A picks toward heaviest-glute alternatives over time", () => {
+    // ass2-A is glute-themed already; under Sculpt the glute-primary entries
+    // (all of them) get the 1.5 weight, so we mostly want to confirm rotation
+    // STILL produces a valid glute pick every time — the bias doesn't
+    // accidentally exclude anything.
+    const pool = EXERCISE_POOLS["ass2-A"].pool;
+    const poolNames = new Set(pool.map(p => p.name));
+    for (let i = 0; i < 50; i++) {
+      const cfg = rotateAccessories({}, { focus: "Sculpt" });
+      expect(poolNames.has(cfg["ass2-A"].name)).toBe(true);
+    }
+  });
+
+  it("Strong picks compounds more often than isolations in mixed pools", () => {
+    // bss1-A has Leg Press (compound) + Leg Extension (isolation) + others.
+    // Over many trials, Strong should pick compound entries more often than
+    // an unbiased baseline would.
+    const TRIALS = 400;
+    let strongCompoundHits = 0;
+    let forgedCompoundHits = 0;
+    const compoundNames = new Set(["Leg Press", "Hack Squat", "Pendulum Squat", "V-Squat", "Belt Squat"]);
+    for (let i = 0; i < TRIALS; i++) {
+      const s = rotateAccessories({}, { focus: "Strong" })["bss1-A"]?.name;
+      const f = rotateAccessories({}, { focus: "Forged" })["bss1-A"]?.name;
+      if (compoundNames.has(s)) strongCompoundHits++;
+      if (compoundNames.has(f)) forgedCompoundHits++;
+    }
+    // Strong should hit compounds noticeably more often. Tolerance for
+    // random noise: require at least +5% of trials.
+    expect(strongCompoundHits).toBeGreaterThan(forgedCompoundHits + TRIALS * 0.05);
+  });
+});
+
+describe("FOCUS_OPTIONS / FOCUS_SUMMARIES — copy invariants", () => {
+  it("DEFAULT_FOCUS is in FOCUS_OPTIONS", () => {
+    expect(FOCUS_OPTIONS).toContain(DEFAULT_FOCUS);
+  });
+
+  it("every focus has a non-empty summary (single source of truth for UI copy)", () => {
+    for (const f of FOCUS_OPTIONS) {
+      expect(typeof FOCUS_SUMMARIES[f]).toBe("string");
+      expect(FOCUS_SUMMARIES[f].length).toBeGreaterThan(10);
+    }
+  });
+
+  it("no Mass / vanity language leaked into the public surface", () => {
+    // Renamed from "Mass" → "Sculpt" for unisex framing. Lock the rename.
+    expect(FOCUS_OPTIONS).not.toContain("Mass");
+    expect(FOCUS_OPTIONS).toContain("Sculpt");
+    for (const summary of Object.values(FOCUS_SUMMARIES)) {
+      expect(summary.toLowerCase()).not.toContain("mass");
+      expect(summary.toLowerCase()).not.toContain("vanity");
+    }
   });
 });

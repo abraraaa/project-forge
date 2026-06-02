@@ -7,11 +7,12 @@ import {
   ROTATION_OPTIONAL, ROTATION_AUTO, ROTATION_FORCED,
   DAY_CONFIG, DAY_NAMES, SWAP_DB, EQ_COLOUR,
   bonusForDay,
+  FOCUS_OPTIONS, DEFAULT_FOCUS, FOCUS_SUMMARIES,
   // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
   sessionMetaForDate, findRecentDays, hasMissedStrength,
 } from "@/lib/programme";
 import {
-  LS, P, PB, W, H, BW, PN, bumpStreak,
+  LS, P, PB, W, F, H, BW, PN, bumpStreak,
   computeRhythm, detectRecoveryPattern,
   blobPush, flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
   enableAutoSync, disableAutoSync,
@@ -359,6 +360,8 @@ export default function ForgeApp(){
   const [programmeBlock,setProgrammeBlock]=useState(()=>PB.get());
   const [weekDone,setWeekDone]=useState({});
   const [bonusDone,setBonusDone]=useState({});
+  const [userFocus,setUserFocus]=useState(DEFAULT_FOCUS);
+  const [focusPickerOpen,setFocusPickerOpen]=useState(false);
   const [blockIdx,setBlockIdx]=useState(0);
   const [setNum,setSetNum]=useState(1);
   const [phase,setPhase]=useState("A");
@@ -475,6 +478,7 @@ export default function ForgeApp(){
     setProgrammeBlock(local.meta.programmeBlock || PB.get());
     setWeekDone(P.getWeekDone(activeProfile));
     setBonusDone(P.getBonusDone(activeProfile));
+    setUserFocus(F.get(activeProfile));
     setHistory(local.history || []);
 
     // Retry any failed pushes from previous sessions
@@ -1082,6 +1086,28 @@ export default function ForgeApp(){
     setBonusDone(P.markBonusDone(activeProfile,idx));
   },[activeProfile]);
 
+  // Save the user's training focus + re-rotate accessories IMMEDIATELY with the
+  // new bias. Keeps block number and startDate (the change is a re-pick, not
+  // a new training block); workingWeights carry forward via existing storage,
+  // so progressive overload context isn't lost. Closes the picker on save.
+  const handleSaveFocus = (focus) => {
+    if (!activeProfile) return;
+    F.save(activeProfile, focus);
+    setUserFocus(focus);
+    // Re-rotate within the same block, keep history as-is so future blocks
+    // still benefit from the 3-block exclusion memory.
+    const oldConfig = programmeBlock.config;
+    const newConfig = rotateAccessories(programmeBlock.history, { focus });
+    const next = { ...programmeBlock, config: newConfig };
+    setProgrammeBlock(next);
+    PB.save(next);
+    // Surface what changed so the user can see the bias kicked in.
+    const changes = rotationDiff(oldConfig, newConfig);
+    const stimulusDelta = computeRotationStimulusDelta(oldConfig, newConfig);
+    setRotationSummary({ blockNumber: programmeBlock.number, changes, stimulusDelta });
+    setFocusPickerOpen(false);
+  };
+
   if(!mounted) return null;
 
   // Onboarding — first-time intro, shown before ProfileScreen
@@ -1093,7 +1119,7 @@ export default function ForgeApp(){
   }
 
   if(!activeProfile||showProfiles){
-  return <ProfileScreen existing={P.list()} current={activeProfile} onActivate={activateProfile} onCancel={showProfiles?()=>setShowProfiles(false):null} bodyweight={bodyweight} bwEditOpen={bwEditOpen} setBwEditOpen={setBwEditOpen} updateBodyweight={updateBodyweight}/>;
+  return <ProfileScreen existing={P.list()} current={activeProfile} onActivate={activateProfile} onCancel={showProfiles?()=>setShowProfiles(false):null} bodyweight={bodyweight} bwEditOpen={bwEditOpen} setBwEditOpen={setBwEditOpen} updateBodyweight={updateBodyweight} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)}/>;
   }
 
 const sProps={
@@ -1124,7 +1150,7 @@ const sProps={
   const rotate = (showSummary = false) => {
     const oldConfig = programmeBlock.config;
     const updatedHistory = pushHistoryBlock(programmeBlock.history, oldConfig);
-    const newConfig = rotateAccessories(updatedHistory);
+    const newConfig = rotateAccessories(updatedHistory, { focus: userFocus });
     const next = {
       number: programmeBlock.number + 1,
       startDate: new Date().toISOString().slice(0,10),
@@ -1591,6 +1617,13 @@ const sProps={
           onCancel={()=>setWeekEditorOpen(false)}
         />
       )}
+      {focusPickerOpen && (
+        <FocusPickerSheet
+          current={userFocus}
+          onSave={handleSaveFocus}
+          onCancel={()=>setFocusPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1824,7 +1857,7 @@ function PromiseLine({ accent, kicker, body }) {
 }
 
 // ─── Profile Screen ────────────────────────────────────────────────────────────
-function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight}){
+function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus}){
   const [name,setName]=useState("");
   const [confirmWipe,setConfirmWipe]=useState(null);
   const [showTakenHelp,setShowTakenHelp]=useState(false);
@@ -2345,6 +2378,23 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
                     return `${bodyweight} kg${agoStr ? ` · updated ${agoStr}` : ""}`;
                   })()
                 ) : "Not set — add one ↗"}
+              </div>
+            </div>
+            <span style={{fontSize:14,color:T.text3}}>↗</span>
+          </div>
+        </Fade>
+      )}
+
+      {/* Training focus row — tappable to open the focus picker. Biases
+          accessory rotation toward the chosen goal. Default = Forged (balanced). */}
+      {current && onEditFocus && (
+        <Fade d={270}>
+          <div onClick={onEditFocus}
+            style={{marginTop:12,padding:"14px 18px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Training focus</div>
+              <div style={{fontSize:11,color:T.text3,marginTop:2}}>
+                {userFocus} · {FOCUS_SUMMARIES[userFocus] || FOCUS_SUMMARIES.Forged}
               </div>
             </div>
             <span style={{fontSize:14,color:T.text3}}>↗</span>
@@ -3529,6 +3579,68 @@ const WEEK_DAY_TYPES = [
   { type: "hiit",     label: "HIIT" },
   { type: "rest",     label: "Rest" },
 ];
+// ─── Focus picker sheet ──────────────────────────────────────────────────────
+// Lets users tune the accessory bias (Forged / Strong / Sculpt). Tap a focus
+// pill to preview its summary, then Save to apply. Save triggers an immediate
+// re-rotation with the new bias — the rotation-summary modal that follows
+// shows the user exactly what shifted in their accessories.
+function FocusPickerSheet({ current, onSave, onCancel }) {
+  const [draft, setDraft] = useState(current || DEFAULT_FOCUS);
+  const { containerRef, onKeyDown } = useModalA11y(onCancel);
+  const titleId = "focus-picker-title";
+  const changed = draft !== current;
+  return (
+    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
+        style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+          Training focus
+        </div>
+        <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.15,marginBottom:6}}>
+          What are you training for?
+        </div>
+        <p style={{fontSize:13,color:T.text3,marginBottom:18,lineHeight:1.5}}>
+          Every focus still trains your whole body — this just biases <em>which alternatives</em> rotation favours within each accessory slot. Main lifts never change.
+        </p>
+
+        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+          {FOCUS_OPTIONS.map(f => {
+            const active = draft === f;
+            return (
+              <button key={f} onClick={()=>setDraft(f)}
+                aria-pressed={active}
+                style={{padding:"14px 16px",background:active?`${T.gold}14`:T.bg3,border:`1px solid ${active?T.gold:T.bg4}`,borderRadius:T.r.md,cursor:"pointer",textAlign:"left",transition:`all 160ms ${T.ease}`}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontFamily:T.serif,fontSize:18,fontWeight:300,color:active?T.gold:T.text1,fontStyle:active?"italic":"normal"}}>{f}</span>
+                  {active && <span style={{fontSize:13,color:T.gold}}>✓</span>}
+                </div>
+                <div style={{fontSize:12,color:T.text2,lineHeight:1.5}}>{FOCUS_SUMMARIES[f]}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {changed && (
+          <div style={{marginBottom:14,padding:"10px 12px",background:`${T.gold}10`,border:`1px solid ${T.gold}33`,borderRadius:T.r.sm,fontSize:12,color:T.text2,lineHeight:1.5}}>
+            Saving will re-rotate your accessories now to reflect the new focus.
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={onCancel}
+            style={{flex:1,padding:"14px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",fontSize:13,color:T.text2,fontFamily:T.sans}}>
+            Cancel
+          </button>
+          <button onClick={()=>onSave(draft)} disabled={!changed}
+            style={{flex:2,padding:"14px",background:changed?T.gold:T.bg3,border:"none",borderRadius:T.r.lg,cursor:changed?"pointer":"default",fontFamily:T.serif,fontSize:16,fontWeight:400,color:changed?T.bg0:T.text3,opacity:changed?1:0.6}}>
+            Save focus
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
   // Local draft — only commits on Save. Holds the full {s, label, type} shape;
   // the W.save validator will re-derive s/label from type on persist.
