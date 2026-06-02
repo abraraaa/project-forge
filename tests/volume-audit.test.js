@@ -14,6 +14,7 @@ import {
   auditHistoryVolume,
   VOLUME_TARGETS,
 } from "../lib/volume-audit.js";
+import { SESSIONS, EXERCISE_POOLS } from "../lib/programme.js";
 import { MUSCLES } from "../lib/exercise-anatomy.js";
 
 // Names chosen so they resolve to NO anatomy entry and NO movement pattern —
@@ -249,5 +250,58 @@ describe("auditHistoryVolume", () => {
     // as "sessions in window" even though they contribute zero volume.
     expect(a.sessionsAnalysed).toBe(2);
     expect(a.perMuscle.Quads.sets).toBe(0);
+  });
+});
+
+// ─── focus-aware audit (PR-D) ───────────────────────────────────────────────
+describe("computeWeeklyVolume / auditVolume — focus parameter", () => {
+  // Build a default config = pool[0] of every slot. Real-world equivalent of
+  // a freshly-started block with no rotations applied yet.
+  const defaultConfig = {};
+  for (const [key, slot] of Object.entries(EXERCISE_POOLS)) {
+    defaultConfig[key] = slot.pool[0];
+  }
+
+  it("Forged returns identical volume to omitted-focus call", () => {
+    const a = computeWeeklyVolume(SESSIONS);
+    const b = computeWeeklyVolume(SESSIONS, { focus: "Forged" });
+    expect(b).toEqual(a);
+  });
+
+  it("Strong reduces total accessory volume — Biceps + Triceps drop under MEV", () => {
+    const baseAudit   = auditVolume(SESSIONS, { focus: "Forged" });
+    const strongAudit = auditVolume(SESSIONS, { focus: "Strong" });
+    // Glutes drop (Hip Thrust gone via ass2)
+    expect(strongAudit.perMuscle.Glutes.sets).toBeLessThan(baseAudit.perMuscle.Glutes.sets);
+    // Biceps + Triceps drop substantially (css3 = DB Curl + Skullcrusher dropped)
+    expect(strongAudit.perMuscle.Biceps.sets).toBeLessThan(baseAudit.perMuscle.Biceps.sets);
+    expect(strongAudit.perMuscle.Triceps.sets).toBeLessThan(baseAudit.perMuscle.Triceps.sets);
+    // The trade-off the user explicitly accepts: arm volume goes under MEV
+    const armFlags = strongAudit.flags.filter(f => f.muscle === "Biceps" || f.muscle === "Triceps");
+    expect(armFlags.length).toBe(2);
+    expect(armFlags.every(f => f.status === "under_mev")).toBe(true);
+  });
+
+  it("Sculpt with default config raises visible-muscle volume above baseline", () => {
+    const baseAudit   = auditVolume(SESSIONS, { focus: "Forged" });
+    const sculptAudit = auditVolume(SESSIONS, { focus: "Sculpt", config: defaultConfig });
+    // Aligned primaries should all increase: chest, front+side delts, biceps, triceps, glutes
+    expect(sculptAudit.perMuscle.Chest.sets).toBeGreaterThan(baseAudit.perMuscle.Chest.sets);
+    expect(sculptAudit.perMuscle["Front Delts"].sets).toBeGreaterThan(baseAudit.perMuscle["Front Delts"].sets);
+    expect(sculptAudit.perMuscle["Side Delts"].sets).toBeGreaterThan(baseAudit.perMuscle["Side Delts"].sets);
+    expect(sculptAudit.perMuscle.Biceps.sets).toBeGreaterThan(baseAudit.perMuscle.Biceps.sets);
+    expect(sculptAudit.perMuscle.Triceps.sets).toBeGreaterThan(baseAudit.perMuscle.Triceps.sets);
+    expect(sculptAudit.perMuscle.Glutes.sets).toBeGreaterThan(baseAudit.perMuscle.Glutes.sets);
+  });
+
+  it("Sculpt keeps the programme inside MEV..MRV (no new flags introduced)", () => {
+    const sculptAudit = auditVolume(SESSIONS, { focus: "Sculpt", config: defaultConfig });
+    expect(sculptAudit.flags).toEqual([]);
+  });
+
+  it("Sculpt with empty config = no slots aligned = no bumps = Forged-equivalent", () => {
+    const a = computeWeeklyVolume(SESSIONS, { focus: "Forged" });
+    const b = computeWeeklyVolume(SESSIONS, { focus: "Sculpt", config: {} });
+    expect(b).toEqual(a);
   });
 });
