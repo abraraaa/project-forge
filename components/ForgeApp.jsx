@@ -7,7 +7,7 @@ import {
   ROTATION_OPTIONAL, ROTATION_AUTO, ROTATION_FORCED,
   DAY_CONFIG, DAY_NAMES, SWAP_DB, EQ_COLOUR,
   bonusForDay,
-  FOCUS_OPTIONS, DEFAULT_FOCUS, FOCUS_SUMMARIES,
+  FOCUS_OPTIONS, DEFAULT_FOCUS, FOCUS_SUMMARIES, applyFocusToSession,
   // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
   sessionMetaForDate, findRecentDays, hasMissedStrength,
 } from "@/lib/programme";
@@ -696,11 +696,18 @@ export default function ForgeApp(){
     return { ok: true };
   };
 
-  // Scale session by readiness (cooked = 85% weight on mains, -1 set supersets, no finishers)
+  // Scale session by readiness (cooked = 85% weight on mains, -1 set supersets, no finishers).
+  // First apply training-focus programming (Strong drops a superset + shifts
+  // accessory reps; Sculpt bumps aligned slots + shifts those reps); THEN
+  // readiness scaling. Focus reshapes the programme; readiness reshapes today.
   const rawSession = SESSIONS[activeSessionIdx];
+  const focusedSession = useMemo(
+    () => applyFocusToSession(rawSession, userFocus, programmeBlock?.config),
+    [rawSession, userFocus, programmeBlock?.config]
+  );
   const activeSession = useMemo(
-    () => scaleForReadiness(rawSession, readiness),
-    [rawSession, readiness]
+    () => scaleForReadiness(focusedSession, readiness),
+    [focusedSession, readiness]
   );
   const block    = activeSession.blocks[blockIdx];
   const isSS     = block.type==="superset"||block.type==="finisher";
@@ -2634,7 +2641,11 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 
   // Resolve which session to preview for the viewed day (null for non-strength days)
   const viewSessionIdx = strengthDaySessions[viewIdx];
-  const viewSession    = viewSessionIdx !== undefined ? SESSIONS[viewSessionIdx] : null;
+  // Apply training-focus programming so the upcoming-session preview shows
+  // the user's real plan: Strong's dropped superset doesn't appear, Sculpt's
+  // bumped sets surface here, etc.
+  const rawViewSession = viewSessionIdx !== undefined ? SESSIONS[viewSessionIdx] : null;
+  const viewSession    = rawViewSession ? applyFocusToSession(rawViewSession, userFocus, programmeBlock?.config) : null;
 
   // Dynamic headline/sub for strength days
   const headline2 = viewSession ? viewSession.subtitle : cfg.headline[1];

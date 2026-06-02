@@ -34,6 +34,9 @@ import {
   FOCUS_OPTIONS,
   FOCUS_SUMMARIES,
   DEFAULT_FOCUS,
+  applyFocusToSession,
+  applyFocusToSessions,
+  SCULPT_ALIGNED_PRIMARIES,
 } from "../lib/programme.js";
 
 // ─── Pool[0] invariant ──────────────────────────────────────────────────────
@@ -642,5 +645,155 @@ describe("FOCUS_OPTIONS / FOCUS_SUMMARIES — copy invariants", () => {
       expect(summary.toLowerCase()).not.toContain("mass");
       expect(summary.toLowerCase()).not.toContain("vanity");
     }
+  });
+});
+
+// ─── PR-D: focus programming (drops + reps + set bumps) ─────────────────────
+describe("applyFocusToSession", () => {
+  it("Forged is identity — input session passes through unchanged", () => {
+    for (const s of SESSIONS) {
+      const out = applyFocusToSession(s, "Forged");
+      expect(out).toBe(s); // same reference under Forged
+    }
+  });
+
+  it("null / undefined / unknown focus all behave like Forged (identity)", () => {
+    expect(applyFocusToSession(SESSIONS[0], null)).toBe(SESSIONS[0]);
+    expect(applyFocusToSession(SESSIONS[0], undefined)).toBe(SESSIONS[0]);
+    expect(applyFocusToSession(SESSIONS[0], "WhoKnows")).toBe(SESSIONS[0]);
+  });
+
+  it("handles malformed input defensively", () => {
+    expect(applyFocusToSession(null, "Strong")).toBe(null);
+    expect(applyFocusToSession({}, "Strong")).toEqual({});
+  });
+
+  describe("Strong", () => {
+    it("drops ass2 on Day A; keeps a1 / a2 / ass1 / afin", () => {
+      const out = applyFocusToSession(SESSIONS[0], "Strong");
+      const ids = out.blocks.map(b => b.id);
+      expect(ids).toEqual(["a1", "a2", "ass1", "afin"]);
+      expect(ids).not.toContain("ass2");
+    });
+
+    it("drops bss2 on Day B; keeps b1 / b2 / bss1 / bfin", () => {
+      const out = applyFocusToSession(SESSIONS[1], "Strong");
+      const ids = out.blocks.map(b => b.id);
+      expect(ids).toEqual(["b1", "b2", "bss1", "bfin"]);
+      expect(ids).not.toContain("bss2");
+    });
+
+    it("drops css3 on Day C; keeps c1 / css1 / css2 / cfin", () => {
+      const out = applyFocusToSession(SESSIONS[2], "Strong");
+      const ids = out.blocks.map(b => b.id);
+      expect(ids).toEqual(["c1", "css1", "css2", "cfin"]);
+      expect(ids).not.toContain("css3");
+    });
+
+    it("shifts surviving accessory reps to '6-8'; mains + finishers untouched", () => {
+      const out = applyFocusToSession(SESSIONS[0], "Strong");
+      const main = out.blocks.find(b => b.id === "a1");
+      const ssvg = out.blocks.find(b => b.id === "ass1");
+      const fin  = out.blocks.find(b => b.id === "afin");
+      // Mains unchanged (reps:5 stays)
+      expect(main.ex.reps).toBe(SESSIONS[0].blocks.find(b => b.id === "a1").ex.reps);
+      // Accessory superset shifts both sides to 6-8
+      expect(ssvg.exA.reps).toBe("6-8");
+      expect(ssvg.exB.reps).toBe("6-8");
+      // Finisher reps unchanged
+      const finBefore = SESSIONS[0].blocks.find(b => b.id === "afin");
+      expect(fin.exA.reps).toBe(finBefore.exA.reps);
+      expect(fin.exB.reps).toBe(finBefore.exB.reps);
+    });
+
+    it("is pure — input session is not mutated", () => {
+      const before = JSON.parse(JSON.stringify(SESSIONS[0]));
+      applyFocusToSession(SESSIONS[0], "Strong");
+      expect(SESSIONS[0]).toEqual(before);
+    });
+  });
+
+  describe("Sculpt", () => {
+    // Build a config of every slot's pool[0] — the SESSIONS defaults — so the
+    // alignment check has a deterministic input to score.
+    const defaultConfig = {};
+    for (const [key, slot] of Object.entries(EXERCISE_POOLS)) {
+      defaultConfig[key] = slot.pool[0];
+    }
+
+    it("SCULPT_ALIGNED_PRIMARIES contains exactly the visible-muscle set", () => {
+      expect(new Set(SCULPT_ALIGNED_PRIMARIES)).toEqual(new Set([
+        "Chest", "Front Delts", "Side Delts", "Biceps", "Triceps", "Glutes",
+      ]));
+    });
+
+    it("bumps Day A ass2 (Hip Thrust + Landmine Press — both aligned) by +1 set", () => {
+      const out = applyFocusToSession(SESSIONS[0], "Sculpt", defaultConfig);
+      const ass2Before = SESSIONS[0].blocks.find(b => b.id === "ass2");
+      const ass2After  = out.blocks.find(b => b.id === "ass2");
+      expect(ass2After.sets).toBe(ass2Before.sets + 1);
+    });
+
+    it("does NOT bump Day B bss2 (Bulgarian SS + Hamstring Curl — neither primary aligned)", () => {
+      const out = applyFocusToSession(SESSIONS[1], "Sculpt", defaultConfig);
+      const before = SESSIONS[1].blocks.find(b => b.id === "bss2");
+      const after  = out.blocks.find(b => b.id === "bss2");
+      expect(after.sets).toBe(before.sets);
+    });
+
+    it("shifts reps on aligned sides only — not on the non-aligned side of a mixed superset", () => {
+      // ass1: Reverse Lunge (Quads primary — NOT aligned) + Chest-Supported DB Row
+      //       (Back primary — NOT aligned). Neither aligned → no bump, no reps change.
+      const out = applyFocusToSession(SESSIONS[0], "Sculpt", defaultConfig);
+      const ass1Before = SESSIONS[0].blocks.find(b => b.id === "ass1");
+      const ass1After  = out.blocks.find(b => b.id === "ass1");
+      expect(ass1After.sets).toBe(ass1Before.sets);
+      expect(ass1After.exA.reps).toBe(ass1Before.exA.reps);
+      expect(ass1After.exB.reps).toBe(ass1Before.exB.reps);
+    });
+
+    it("aligned sides take '12-15' rep range; non-aligned untouched", () => {
+      // Day C css3 default: DB Curl (Biceps primary, aligned) + Skullcrusher
+      // (Triceps primary, aligned). Both sides aligned → both get 12-15.
+      const out = applyFocusToSession(SESSIONS[2], "Sculpt", defaultConfig);
+      const css3 = out.blocks.find(b => b.id === "css3");
+      expect(css3.exA.reps).toBe("12-15");
+      expect(css3.exB.reps).toBe("12-15");
+    });
+
+    it("does not touch mains or finishers under Sculpt", () => {
+      const out = applyFocusToSession(SESSIONS[0], "Sculpt", defaultConfig);
+      const mainBefore = SESSIONS[0].blocks.find(b => b.id === "a1");
+      const mainAfter  = out.blocks.find(b => b.id === "a1");
+      expect(mainAfter).toEqual(mainBefore);
+      const finBefore = SESSIONS[0].blocks.find(b => b.id === "afin");
+      const finAfter  = out.blocks.find(b => b.id === "afin");
+      expect(finAfter).toEqual(finBefore);
+    });
+
+    it("with empty config, no slots are aligned → output equals input shape", () => {
+      const out = applyFocusToSession(SESSIONS[0], "Sculpt", {});
+      // Same blocks count, same sets per block
+      expect(out.blocks.length).toBe(SESSIONS[0].blocks.length);
+      for (let i = 0; i < SESSIONS[0].blocks.length; i++) {
+        expect(out.blocks[i].sets).toBe(SESSIONS[0].blocks[i].sets);
+      }
+    });
+  });
+});
+
+describe("applyFocusToSessions (programme-level wrapper)", () => {
+  it("maps applyFocusToSession across every session in the array", () => {
+    const out = applyFocusToSessions(SESSIONS, "Strong");
+    expect(out).toHaveLength(SESSIONS.length);
+    // Day A / B / C all drop their respective superset
+    expect(out[0].blocks.map(b => b.id)).not.toContain("ass2");
+    expect(out[1].blocks.map(b => b.id)).not.toContain("bss2");
+    expect(out[2].blocks.map(b => b.id)).not.toContain("css3");
+  });
+
+  it("Forged is identity at the programme level too", () => {
+    const out = applyFocusToSessions(SESSIONS, "Forged");
+    expect(out).toEqual(SESSIONS);
   });
 });
