@@ -365,6 +365,10 @@ export default function ForgeApp(){
   const [blockIdx,setBlockIdx]=useState(0);
   const [setNum,setSetNum]=useState(1);
   const [phase,setPhase]=useState("A");
+  // Session overview — lets users jump between blocks when gym constraints
+  // dictate a different order than the prescribed flow. Auto-advance still
+  // happens; this is the escape hatch.
+  const [sessionOverviewOpen,setSessionOverviewOpen]=useState(false);
   const [readiness,setReadiness]=useState(null);
   const [readinessReason,setReadinessReason]=useState(null);
   const [showVid,setShowVid]=useState(false);
@@ -378,6 +382,20 @@ export default function ForgeApp(){
   const [restTrigger,setRestTrigger]=useState(null);
   // Append-only session log built during an active session
   const draftLogRef = useRef(null);
+  // Snapshot of workingWeights at SESSION START. State (not ref) because the
+  // DoneScreen consumes it during render. Set in handleReadinessStart /
+  // handleResumeDraft. Without this, the Done summary compared the user's
+  // current (post-progression) weight against the static SESSIONS template
+  // default — so a user training at 100kg Bench for weeks saw "50 → 100kg"
+  // every session ("base" = template default 50kg). Now base = what the
+  // user lifted at the start of this session; if the engine bumped weight
+  // after the session, the diff is real.
+  const [sessionStartWeights, setSessionStartWeights] = useState({});
+  // Snapshot of the in-progress draft log, captured when the overview sheet
+  // opens. State (not ref) for the same render-time-readability reason — the
+  // sheet displays "sets done per block" at open time; subsequent set-logs
+  // while the sheet is open don't need to live-update (user is mid-jump).
+  const [overviewDraftSnapshot, setOverviewDraftSnapshot] = useState(null);
   // Shown when auto-rotation fires — acknowledge before starting session
   const [rotationSummary,setRotationSummary]=useState(null);
   // Full session history — loaded from localStorage, merged from blob
@@ -848,11 +866,36 @@ export default function ForgeApp(){
     setAwaitRpe(true);
   },[block,blockIdx,isSS,phase,setNum,activeSession,resolveExFn,pushSetToDraft]);
 
+  // Jump to a specific block in the active session. Used by the session
+  // overview sheet when a busy gym means the user needs to do exercises in
+  // a different order than prescribed. Resumes setNum from the draft log so
+  // a partially-completed block picks up at the right next set.
+  const handleJumpToBlock = (targetIdx) => {
+    if (typeof targetIdx !== "number" || targetIdx < 0) return;
+    if (!activeSession?.blocks?.[targetIdx]) return;
+    const targetBlock = activeSession.blocks[targetIdx];
+    // Count completed sets across the target block's logged exercises.
+    // For supersets we log both sides together, so pairs done = the max
+    // sets count across either side (matches resume-draft maths).
+    const saved = draftLogRef.current?.blocks?.[targetBlock.id];
+    const pairs = saved?.exercises
+      ? Math.max(0, ...Object.values(saved.exercises).map(ex => (ex.sets || []).length))
+      : 0;
+    setBlockIdx(targetIdx);
+    setSetNum(Math.min(pairs + 1, targetBlock.sets));
+    setPhase("A");
+    setAwaitRpe(false);
+    setSsRoundDone(false);
+    setRestActive(false);
+    setSessionOverviewOpen(false);
+  };
+
   const reset=()=>{
     setBlockIdx(0);setSetNum(1);setPhase("A");setReadiness(null);setReadinessReason(null);
     setAwaitRpe(false);setSsRoundDone(false);
     setRestActive(false);setRestRemain(180);setRestTrigger(null);
     setSessionSwaps({});
+    setSessionOverviewOpen(false);
     draftLogRef.current = null;
     // If the user explicitly quits, the pending-draft card should go too.
     D.clear(activeProfile);
@@ -1139,6 +1182,13 @@ const sProps={
   awaitRpe,ssRoundDone,
   restActive,restRemain,setRestActive,setRestRemain,
   onCommit:commitLog,onLog:handleLog,onQuit:reset,
+  // Snapshot the draft log at sheet-open so the overview reads from a stable
+  // value (no render-time ref access). Subsequent set logs while the sheet
+  // is open don't live-update — user is mid-jump, that's fine.
+  onShowOverview: () => {
+    setOverviewDraftSnapshot(draftLogRef.current);
+    setSessionOverviewOpen(true);
+  },
   bodyweight,
   // Phase 3 — when active, SessionScreen renders "deload · day N of M" subtitle below prescribed weight.
   deloadDayTag: activeDeload ? deloadDayLabel(activeDeload) : null,
@@ -1205,6 +1255,7 @@ const sProps={
 
   // Readiness screen's "start" initialises the draft log and enters session
   const handleReadinessStart = () => {
+    setSessionStartWeights({ ...workingWeights });
     draftLogRef.current = newDraftLog({
       profileName: activeProfile,
       session: ["strength-a","strength-b","strength-c"][activeSessionIdx],
@@ -1255,6 +1306,13 @@ const sProps={
 
     // Hydrate React state and re-attach the draft ref
     draftLogRef.current = draft;
+    // Resume preserves the session-start snapshot too. Use the current working
+    // weights as the best available baseline (we don't store the original
+    // pre-session snapshot on the draft); if the user adjusted in the previous
+    // run, that adjustment carries forward as "base" for the diff. Acceptable
+    // — the resumed user is mid-session, so "what was today's starting weight"
+    // is fuzzy anyway.
+    setSessionStartWeights({ ...workingWeights });
     setActiveSessionIdx(idx);
     setReadiness(draft.readiness);
     setReadinessReason(draft.readinessReason);
@@ -1608,7 +1666,7 @@ const sProps={
       {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
-      {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
+      {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} sessionStartWeights={sessionStartWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
       {screen==="performance" && <ErrorBoundary><PerformanceLab history={history} onBack={()=>setScreen("home")}/></ErrorBoundary>}
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} userWeek={userWeek} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet history={history} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onClose={()=>setRetroPickerOpen(false)}/>}
@@ -1629,6 +1687,15 @@ const sProps={
           current={userFocus}
           onSave={handleSaveFocus}
           onCancel={()=>setFocusPickerOpen(false)}
+        />
+      )}
+      {sessionOverviewOpen && screen === "session" && (
+        <SessionOverviewSheet
+          session={activeSession}
+          currentBlockIdx={blockIdx}
+          draftLog={overviewDraftSnapshot}
+          onJumpToBlock={handleJumpToBlock}
+          onCancel={()=>setSessionOverviewOpen(false)}
         />
       )}
     </div>
@@ -2742,7 +2809,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         </div>
         {onEditWeek && (
           <div style={{display:"flex",justifyContent:"center",marginTop:8}}>
-            <button onClick={onEditWeek} style={{padding:"4px 8px",background:"none",border:"none",cursor:"pointer",fontSize:10,color:T.text4,fontFamily:T.sans,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+            <button onClick={onEditWeek} style={{padding:"4px 8px",background:"none",border:"none",cursor:"pointer",fontSize:10,color:T.sage,fontFamily:T.sans,letterSpacing:"0.06em",textTransform:"uppercase"}}>
               Edit week →
             </button>
           </div>
@@ -3232,6 +3299,101 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 // or change focus altogether (which re-rotates automatically as a side
 // effect of the focus-save handler). Pre-AUTO weeks, the rotate card calls
 // onRotate directly and this modal never opens.
+// ─── Session overview sheet ──────────────────────────────────────────────────
+// Mid-session escape hatch: list every block in today's session, show which
+// is current / done / not started, and let the user jump to any of them.
+// Useful when a busy gym means the prescribed order isn't practical — pick
+// up the bench you can get to first, come back to squats when the rack frees.
+// Auto-flow is unchanged for users who don't open this surface.
+function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJumpToBlock, onCancel }) {
+  const { containerRef, onKeyDown } = useModalA11y(onCancel);
+  const titleId = "session-overview-title";
+
+  // For each block, derive its state from the draft log. "pairs done" mirrors
+  // the resume-draft maths in handleResumeDraft — for non-superset blocks
+  // there's one exercise so pairs = its set count; for supersets we log
+  // both sides together so pairs = max(setsA, setsB).
+  const blockState = session.blocks.map((b, i) => {
+    const saved = draftLog?.blocks?.[b.id];
+    const pairs = saved?.exercises
+      ? Math.max(0, ...Object.values(saved.exercises).map(ex => (ex.sets || []).length))
+      : 0;
+    const total = b.sets || 0;
+    let state = "upcoming";
+    if (i === currentBlockIdx) state = "current";
+    else if (pairs >= total && total > 0) state = "done";
+    else if (pairs > 0) state = "partial";
+    // Exercise summary — main blocks have `ex`, others have exA/exB
+    const exNames = [b.ex?.name, b.exA?.name, b.exB?.name].filter(Boolean);
+    return { i, b, pairs, total, state, exNames };
+  });
+
+  const stateStyle = {
+    current:  { dot: T.coral, border: T.coral,           label: "Current",   labelColor: T.coral },
+    done:     { dot: T.sage,  border: `${T.sage}66`,     label: "Done",      labelColor: T.sage  },
+    partial:  { dot: T.gold,  border: `${T.gold}66`,     label: "Partial",   labelColor: T.gold  },
+    upcoming: { dot: T.text4, border: T.bg3,             label: "Up next",   labelColor: T.text3 },
+  };
+
+  return (
+    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
+        style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+          {session.name}
+        </div>
+        <div id={titleId} style={{fontFamily:T.serif,fontSize:24,fontWeight:300,lineHeight:1.2,marginBottom:6}}>
+          Pick where to <span style={{color:T.coral,fontStyle:"italic"}}>train next.</span>
+        </div>
+        <p style={{fontSize:12,color:T.text3,marginBottom:18,lineHeight:1.5}}>
+          Auto-advance still happens — this is for when the gym dictates a different order.
+        </p>
+
+        <div style={{flex:1,overflowY:"auto",marginRight:-8,paddingRight:8}}>
+          {blockState.map(({ i, b, pairs, total, state, exNames }) => {
+            const s = stateStyle[state];
+            return (
+              <button key={b.id} onClick={() => onJumpToBlock(i)}
+                disabled={state === "current"}
+                aria-current={state === "current" ? "step" : undefined}
+                style={{
+                  display:"block",width:"100%",textAlign:"left",
+                  padding:"12px 14px",marginBottom:8,
+                  background: state === "current" ? `${T.coral}10` : T.bg3,
+                  border: `1px solid ${s.border}`,borderRadius:T.r.md,
+                  cursor: state === "current" ? "default" : "pointer",
+                  opacity: state === "current" ? 0.85 : 1,
+                  transition:`all 160ms ${T.ease}`,
+                }}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:s.dot,display:"inline-block"}} aria-hidden="true"/>
+                    <span style={{fontSize:11,fontWeight:500,color:s.labelColor,letterSpacing:"0.08em",textTransform:"uppercase"}}>{s.label}</span>
+                  </div>
+                  <span style={{fontSize:10,color:T.text4,fontVariantNumeric:"tabular-nums"}}>
+                    {pairs}/{total} {b.type === "superset" ? "rounds" : "sets"}
+                  </span>
+                </div>
+                <div style={{fontSize:10,color:T.text4,letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>
+                  {b.label}
+                </div>
+                <div style={{fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.text1,lineHeight:1.3}}>
+                  {exNames.join(" + ") || "—"}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <button onClick={onCancel}
+          style={{marginTop:10,padding:"12px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.md,cursor:"pointer",fontSize:13,color:T.text2,fontFamily:T.sans}}>
+          Back to current set
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFocus, onCancel }) {
   const { containerRef, onKeyDown } = useModalA11y(onCancel);
   const titleId = "rotation-choice-title";
@@ -3377,7 +3539,7 @@ function RpeCard({onPick,label="How was that set?"}){
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,bodyweight,deloadDayTag=null}){
+function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,deloadDayTag=null}){
   const {strength:s}=T;
   const [swapEx,setSwapEx]=useState(null);
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
@@ -3415,10 +3577,14 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
       </div>
       <div style={{padding:"16px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <button onClick={onQuit} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:12,color:T.text3,fontFamily:T.sans}}>← Quit</button>
-        <div style={{textAlign:"right"}}>
-          <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.1em",textTransform:"uppercase"}}>{session.name}</div>
+        <button onClick={onShowOverview} aria-label="Open session overview"
+          style={{background:"none",border:"none",padding:0,cursor:"pointer",textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end"}}>
+          <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.1em",textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>
+            {session.name}
+            <span style={{fontSize:9,opacity:0.7}}>▾</span>
+          </div>
           <div style={{fontSize:10,color:T.text3,fontStyle:"italic",fontFamily:T.serif,marginTop:1}}>{block.label}</div>
-        </div>
+        </button>
       </div>
       <div style={{padding:"14px 20px 0",display:"flex",gap:8,flexWrap:"wrap"}}>
         <Tag color={block.type==="main"?T.coral:block.type==="superset"?T.sage:T.gold}>{typeLabel}</Tag>
@@ -4389,11 +4555,16 @@ const NEXT_DAY_MSG = {
   strength:"Strength session next. Load up.",
 };
 
-function DoneScreen({session,profileName,workingWeights,userWeek=WEEK,onHome,deloadCompleted=false}){
+function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},userWeek=WEEK,onHome,deloadCompleted=false}){
+  // `base` = what the user lifted at SESSION START (snapshotted in
+  // sessionStartWeightsRef on handleReadinessStart). Falls back to the
+  // current working weight if no snapshot (e.g. very first session) — that
+  // produces a no-change rendering, not a misleading "template → current"
+  // diff against the SESSIONS template's seeded starting weight.
   const nudges = session.blocks.filter(b=>b.type==="main").map(b=>{
-    const base    = b.ex.weight;
-    const current = workingWeights[b.ex.name] ?? base;
-    return { ex:b.ex.name, base, current, changed:current!==base };
+    const current = workingWeights[b.ex.name] ?? b.ex.weight;
+    const base    = sessionStartWeights[b.ex.name] ?? current;
+    return { ex:b.ex.name, base, current, changed: current !== base };
   });
 
   // Pick a random headline pair, stable for this render
