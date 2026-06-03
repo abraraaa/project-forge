@@ -2731,9 +2731,16 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const rawViewSession = viewSessionIdx !== undefined ? SESSIONS[viewSessionIdx] : null;
   const viewSession    = rawViewSession ? applyFocusToSession(rawViewSession, userFocus, programmeBlock?.config) : null;
 
-  // Dynamic headline/sub for strength days
+  // Dynamic headline/sub. On strength days, headline2 IS viewSession.subtitle
+  // (e.g. "Squat & Push"), and surfacing it AGAIN as the small descriptor
+  // below was visible-on-screen duplication. Instead, fill that slot with
+  // useful context — block number + the user's training focus — which is
+  // genuinely informative and unique to the user's state. Non-strength days
+  // keep their existing cfg.sub copy ("60 min at conversational pace…").
   const headline2 = viewSession ? viewSession.subtitle : cfg.headline[1];
-  const subText   = viewSession ? viewSession.subtitle : cfg.sub;
+  const subText   = viewSession
+    ? `Block ${programmeBlock?.number ?? 1} · ${userFocus}`
+    : cfg.sub;
 
   // Negative diff = earlier this week, positive = later this week
   const diffDays = viewIdx - todayIdx;
