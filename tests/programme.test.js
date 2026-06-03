@@ -36,6 +36,7 @@ import {
   DEFAULT_FOCUS,
   applyFocusToSession,
   applyFocusToSessions,
+  applyRotationToSession,
   SCULPT_ALIGNED_PRIMARIES,
 } from "../lib/programme.js";
 
@@ -795,5 +796,64 @@ describe("applyFocusToSessions (programme-level wrapper)", () => {
   it("Forged is identity at the programme level too", () => {
     const out = applyFocusToSessions(SESSIONS, "Forged");
     expect(out).toEqual(SESSIONS);
+  });
+});
+
+// ─── applyRotationToSession (PR after focus-volume-reps) ──────────────────
+describe("applyRotationToSession", () => {
+  it("empty config is identity — same session reference returned", () => {
+    expect(applyRotationToSession(SESSIONS[0], {})).toBe(SESSIONS[0]);
+    expect(applyRotationToSession(SESSIONS[0])).toBe(SESSIONS[0]);
+  });
+
+  it("malformed input is handled defensively", () => {
+    expect(applyRotationToSession(null, { foo: { name: "Bar" } })).toBe(null);
+    expect(applyRotationToSession({}, { foo: { name: "Bar" } })).toEqual({});
+  });
+
+  it("substitutes the exB of a superset slot from config", () => {
+    // Day A ass2: { exA: Barbell Hip Thrust, exB: Landmine Press }
+    // Simulate rotation picking Single-Leg Hip Thrust for ass2-A and
+    // Arnold Press for ass2-B (made-up swap).
+    const fakeArnold = { name: "Arnold Press", reps: 10, weight: 14, muscle: "Shoulders" };
+    const fakeSLHT   = { name: "Single-Leg Hip Thrust", reps: 10, weight: 45, muscle: "Glutes" };
+    const config = { "ass2-A": fakeSLHT, "ass2-B": fakeArnold };
+    const out = applyRotationToSession(SESSIONS[0], config);
+    const ass2 = out.blocks.find((b) => b.id === "ass2");
+    expect(ass2.exA.name).toBe("Single-Leg Hip Thrust");
+    expect(ass2.exB.name).toBe("Arnold Press");
+    // Other slots untouched
+    const ass1 = out.blocks.find((b) => b.id === "ass1");
+    expect(ass1.exA.name).toBe(SESSIONS[0].blocks.find(b=>b.id==="ass1").exA.name);
+  });
+
+  it("is pure — input session is not mutated", () => {
+    const before = JSON.parse(JSON.stringify(SESSIONS[0]));
+    const fake = { name: "Some Lift", reps: 5, weight: 99, muscle: "X" };
+    applyRotationToSession(SESSIONS[0], { "ass2-A": fake });
+    expect(SESSIONS[0]).toEqual(before);
+  });
+
+  it("idempotent — applying twice with the same config = applying once", () => {
+    const fake = { name: "Test", reps: 8, weight: 20, muscle: "Glutes" };
+    const config = { "ass2-A": fake };
+    const once  = applyRotationToSession(SESSIONS[0], config);
+    const twice = applyRotationToSession(once, config);
+    // Names match, no exception
+    const a1 = once.blocks.find(b=>b.id==="ass2").exA.name;
+    const a2 = twice.blocks.find(b=>b.id==="ass2").exA.name;
+    expect(a1).toBe(a2);
+    expect(a1).toBe("Test");
+  });
+
+  it("doesn't touch slots not present in config", () => {
+    const out = applyRotationToSession(SESSIONS[0], { "css1-B": { name: "Other" } });
+    // Day A blocks unchanged — config key css1-B is for Day C
+    for (const b of out.blocks) {
+      const orig = SESSIONS[0].blocks.find(x => x.id === b.id);
+      if (b.ex)  expect(b.ex.name).toBe(orig.ex.name);
+      if (b.exA) expect(b.exA.name).toBe(orig.exA.name);
+      if (b.exB) expect(b.exB.name).toBe(orig.exB.name);
+    }
   });
 });
