@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import GrainOverlay from "@/components/GrainOverlay";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -57,6 +58,10 @@ export default function RootLayout({ children }) {
         <ErrorBoundary>
           {children}
         </ErrorBoundary>
+        {/* Kodak Portra-flavour grain texture. Mounted last in the body so
+            it composites on top via mix-blend overlay; pointer-events none
+            and zIndex 1 keep it strictly cosmetic. */}
+        <GrainOverlay />
         <Analytics />
         <SpeedInsights />
       </body>
