@@ -1169,7 +1169,24 @@ export default function ForgeApp(){
   }
 
   if(!activeProfile||showProfiles){
-  return <ProfileScreen existing={P.list()} current={activeProfile} onActivate={activateProfile} onCancel={showProfiles?()=>setShowProfiles(false):null} bodyweight={bodyweight} bwEditOpen={bwEditOpen} setBwEditOpen={setBwEditOpen} updateBodyweight={updateBodyweight} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)}/>;
+  return (
+    <>
+      <ProfileScreen existing={P.list()} current={activeProfile} onActivate={activateProfile} onCancel={showProfiles?()=>setShowProfiles(false):null} bodyweight={bodyweight} bwEditOpen={bwEditOpen} setBwEditOpen={setBwEditOpen} updateBodyweight={updateBodyweight} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)}/>
+      {/* Modals triggerable from ProfileScreen must mount here too — the
+          early return above bypasses the main JSX where these live, so
+          without this Fragment, tapping "Edit focus" in Profile sets state
+          but the sheet doesn't appear until the user backs out of Profile.
+          BodyweightEditModal is fine because it lives inside ProfileScreen. */}
+      {focusPickerOpen && (
+        <FocusPickerSheet
+          current={userFocus}
+          onSave={handleSaveFocus}
+          onCancel={()=>setFocusPickerOpen(false)}
+        />
+      )}
+      {rotationSummary && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
+    </>
+  );
   }
 
 const sProps={
@@ -2714,9 +2731,16 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const rawViewSession = viewSessionIdx !== undefined ? SESSIONS[viewSessionIdx] : null;
   const viewSession    = rawViewSession ? applyFocusToSession(rawViewSession, userFocus, programmeBlock?.config) : null;
 
-  // Dynamic headline/sub for strength days
+  // Dynamic headline/sub. On strength days, headline2 IS viewSession.subtitle
+  // (e.g. "Squat & Push"), and surfacing it AGAIN as the small descriptor
+  // below was visible-on-screen duplication. Instead, fill that slot with
+  // useful context — block number + the user's training focus — which is
+  // genuinely informative and unique to the user's state. Non-strength days
+  // keep their existing cfg.sub copy ("60 min at conversational pace…").
   const headline2 = viewSession ? viewSession.subtitle : cfg.headline[1];
-  const subText   = viewSession ? viewSession.subtitle : cfg.sub;
+  const subText   = viewSession
+    ? `Block ${programmeBlock?.number ?? 1} · ${userFocus}`
+    : cfg.sub;
 
   // Negative diff = earlier this week, positive = later this week
   const diffDays = viewIdx - todayIdx;
@@ -2886,9 +2910,17 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               </span>
             )}
           </div>
-          <div style={{fontSize:14,color:T.text2,marginTop:10,lineHeight:1.5}}>
-            {viewSession ? viewSession.subtitle : cfg.sub}
-          </div>
+          {/* Render the smaller descriptor only when it adds info beyond
+              the headline. On strength days, headline2 IS viewSession.subtitle
+              (e.g. "Squat & Push"), so showing it again here is duplicative
+              clutter — the small line is intentionally suppressed. On non-
+              strength days, cfg.sub carries the modality detail
+              ("60 min at conversational pace…") which is distinct. */}
+          {subText && subText !== headline2 && (
+            <div style={{fontSize:14,color:T.text2,marginTop:10,lineHeight:1.5}}>
+              {subText}
+            </div>
+          )}
         </div>
       </Fade>
 
