@@ -2756,13 +2756,53 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // Actual date of the viewed day (from the mount-time anchor above)
   const viewDate = new Date(nowMs + diffDays * 86400000);
 
+  // Focus accent (per-user identity). Forms a secondary rim glow + colours
+  // the italic flourish on the headline. Quiet by design — never competes
+  // with the day-type accent, just layers a "you-are-here" hint underneath.
+  const focusAccent = T.focusAccent[userFocus] || T.focusAccent.Forged;
+
+  // Per-day rim position for the secondary glow. Each day type's secondary
+  // sits in a different corner to give the backdrop a sense of movement and
+  // depth as the user scrubs through the week — strength leads from top-right
+  // (intense), Z2 drifts from bottom-left (settled), HIIT counterbalances top-
+  // left (sharp), cardio sits mid-right (sustained), rest near-invisible.
+  const dayRim = ({
+    strength: { top: -120, right: -80,    width: 360, height: 320 },
+    zone2:    { bottom: -120, left: -80,  width: 420, height: 360 },
+    hiit:     { top: -120, left: -80,     width: 320, height: 280 },
+    cardio:   { top: "30%", right: -120,  width: 360, height: 320 },
+    rest:     { top: "40%", left: "20%",  width: 280, height: 240 },
+  })[viewDay.type] || { top: -120, right: -80, width: 360, height: 320 };
+
   return (
     <div style={{minHeight:"100vh",paddingBottom:48,position:"relative",overflow:"hidden"}}>
-      {/* Ambient glow — colour transitions with the viewed day */}
+      {/* Primary ambient glow — top-centre, day-typed. The dominant signal. */}
       <div style={{
         position:"absolute",top:-180,left:"50%",transform:"translateX(-50%)",
         width:600,height:500,
         background:`radial-gradient(ellipse,${accent.glow} 0%,transparent 65%)`,
+        pointerEvents:"none",
+        transition:`background 400ms ${T.ease}`,
+      }}/>
+      {/* Per-day rim glow — gives the backdrop dimensional depth without
+          adding chrome. Position varies by day; colour matches the day's
+          accent at lower intensity so it reads as "second light source"
+          not "second voice". */}
+      <div style={{
+        position:"absolute",...dayRim,
+        background:`radial-gradient(circle,${accent.glow} 0%,transparent 70%)`,
+        opacity:0.55,
+        pointerEvents:"none",
+        transition:`all 500ms ${T.ease}`,
+      }}/>
+      {/* Focus-accent rim glow — quiet "you-are-here" layer in the user's
+          chosen identity colour. Bottom-right by convention; opacity low so
+          it never competes with the day-type signal above. */}
+      <div style={{
+        position:"absolute",bottom:-100,right:-60,
+        width:340,height:280,
+        background:`radial-gradient(ellipse,${focusAccent.glow} 0%,transparent 70%)`,
+        opacity:0.7,
         pointerEvents:"none",
         transition:`background 400ms ${T.ease}`,
       }}/>
@@ -2861,7 +2901,11 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <div style={{fontFamily:T.serif,fontSize:42,fontWeight:300,lineHeight:1.1}}>
             {cfg.headline[0]}<br/>
             {headline2 && (
-              <span style={{color:accent.main,fontStyle:"italic",transition:`color 300ms ${T.ease}`}}>
+              // Italic flourish takes the user's focus-accent colour, giving
+              // a quiet identity signal in the editorial typography itself —
+              // Sculpt's mauve, Strong's deeper coral, Forged's gold. The day-
+              // type accent remains the dominant visual via the rim glows.
+              <span style={{color:focusAccent.main,fontStyle:"italic",transition:`color 300ms ${T.ease}`}}>
                 {headline2}
               </span>
             )}
@@ -4616,7 +4660,13 @@ function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},u
 
   return (
     <div style={{minHeight:"100vh",padding:"72px 24px 0",position:"relative",overflow:"hidden"}}>
-      <div style={{position:"absolute",top:-120,left:"50%",transform:"translateX(-50%)",width:420,height:380,background:`radial-gradient(circle,${T.strength.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
+      {/* Victory gradient — warm peach wash from top-centre down. A small
+          non-patronising triumph beat at the moment the user has just put
+          the work in. Two stacked layers: a tight glow above the headline +
+          a broader linear wash so the warmth extends down without competing
+          with the body copy. */}
+      <div style={{position:"absolute",top:-120,left:"50%",transform:"translateX(-50%)",width:540,height:460,background:`radial-gradient(circle,${T.strength.glow} 0%,transparent 60%)`,pointerEvents:"none",opacity:1.15}}/>
+      <div style={{position:"absolute",inset:0,background:`linear-gradient(180deg, rgba(224,149,106,0.12) 0%, rgba(224,149,106,0.04) 22%, transparent 45%)`,pointerEvents:"none"}}/>
       <Fade d={0}>
         <div style={{fontFamily:T.serif,fontSize:13,fontWeight:300,fontStyle:"italic",color:T.text3,marginBottom:12}}>
           {profileName} · {session.name}

@@ -9,6 +9,11 @@ The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.
 Items in flight on `main` but not yet tagged. Tagged releases will move them into a dated section below.
 
 ### Added
+- **Visual polish — focus-aware accents, per-day rim glows, victory gradient, Kodak Portra grain.** Four small touches that add depth without breaking the editorial restraint:
+  - **Focus-aware accent.** New `T.focusAccent` palette (Forged = gold, Strong = deeper coral, Sculpt = soft mauve-rose). Surfaces as a third backdrop rim glow on home + the italic flourish colour on the home headline ("Squat & Push" italic now reads in the user's identity colour). Day-type accent stays dominant — focus is the quieter "you-are-here" layer.
+  - **Per-day rim lighting.** Each day type's secondary glow now sits in a different corner with a different size — strength leads from top-right (intense), Z2 drifts from bottom-left (settled), HIIT counterbalances top-left (sharp), cardio sits mid-right (sustained), rest near-invisible. Backdrop gains dimensional depth without adding chrome.
+  - **DoneScreen victory gradient.** Tighter warm-peach radial above the headline + a broader linear wash extending down. Lands a small triumph beat at the moment the user has just put the work in — non-patronising, on-brand.
+  - **Kodak Portra grain.** New `<GrainOverlay/>` component mounted once in `app/layout.jsx`. Inline SVG `feTurbulence` noise, warm-tinted via colour matrix, ~5% opacity, `mix-blend-mode: overlay`. Adds a lived-in tactility to every surface without competing with any content. Pure CSS / no asset to ship.
 - **Session overview sheet — jump to any block mid-session.** Tap the session-name area in the SessionScreen header (now with a small `▾` indicator) to open a bottom-sheet listing every block in today's session with its state (Current · Done · Partial · Up next) and `pairs/total sets` progress. Tap any block to jump to it; the engine resumes `setNum` from the draft log so a partially-completed block picks up at the right next set. Auto-advance still happens for users who don't open this surface — it's an escape hatch for busy gyms, not a default-flow change.
 
 ### Fixed
