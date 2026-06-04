@@ -7,7 +7,7 @@ import {
   ROTATION_OPTIONAL, ROTATION_AUTO, ROTATION_FORCED,
   DAY_CONFIG, DAY_NAMES, SWAP_DB, EQ_COLOUR,
   bonusForDay,
-  FOCUS_OPTIONS, DEFAULT_FOCUS, FOCUS_SUMMARIES, applyFocusToSession,
+  FOCUS_OPTIONS, DEFAULT_FOCUS, FOCUS_SUMMARIES, applyFocusToSession, applyRotationToSession,
   // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
   sessionMetaForDate, findRecentDays, hasMissedStrength,
 } from "@/lib/programme";
@@ -715,13 +715,21 @@ export default function ForgeApp(){
   };
 
   // Scale session by readiness (cooked = 85% weight on mains, -1 set supersets, no finishers).
-  // First apply training-focus programming (Strong drops a superset + shifts
-  // accessory reps; Sculpt bumps aligned slots + shifts those reps); THEN
-  // readiness scaling. Focus reshapes the programme; readiness reshapes today.
+  // Three-step derivation: rotation config (substitutes the user's currently-
+  // active accessory exercise per slot) → focus programming (Strong drops a
+  // superset + shifts accessory reps; Sculpt bumps aligned slots + shifts
+  // those reps) → readiness scaling (cooked = 85% weight, -1 superset set,
+  // no finishers). Order matters: rotation first so focus/readiness operate
+  // on the user's actual exercises; readiness last so it reshapes only
+  // today's instance.
   const rawSession = SESSIONS[activeSessionIdx];
+  const rotatedSession = useMemo(
+    () => applyRotationToSession(rawSession, programmeBlock?.config),
+    [rawSession, programmeBlock?.config]
+  );
   const focusedSession = useMemo(
-    () => applyFocusToSession(rawSession, userFocus, programmeBlock?.config),
-    [rawSession, userFocus, programmeBlock?.config]
+    () => applyFocusToSession(rotatedSession, userFocus, programmeBlock?.config),
+    [rotatedSession, userFocus, programmeBlock?.config]
   );
   const activeSession = useMemo(
     () => scaleForReadiness(focusedSession, readiness),
@@ -2729,17 +2737,28 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // the user's real plan: Strong's dropped superset doesn't appear, Sculpt's
   // bumped sets surface here, etc.
   const rawViewSession = viewSessionIdx !== undefined ? SESSIONS[viewSessionIdx] : null;
-  const viewSession    = rawViewSession ? applyFocusToSession(rawViewSession, userFocus, programmeBlock?.config) : null;
+  // Chain rotation → focus so the home preview shows the user's actual
+  // accessories (not the template defaults). Was the source of "rotation
+  // happened but home still shows Skullcrusher" — preview was reading
+  // straight from SESSIONS without consulting programmeBlock.config.
+  const rotatedViewSession = rawViewSession ? applyRotationToSession(rawViewSession, programmeBlock?.config) : null;
+  const viewSession    = rotatedViewSession ? applyFocusToSession(rotatedViewSession, userFocus, programmeBlock?.config) : null;
 
   // Dynamic headline/sub. On strength days, headline2 IS viewSession.subtitle
   // (e.g. "Squat & Push"), and surfacing it AGAIN as the small descriptor
   // below was visible-on-screen duplication. Instead, fill that slot with
-  // useful context — block number + the user's training focus — which is
-  // genuinely informative and unique to the user's state. Non-strength days
-  // keep their existing cfg.sub copy ("60 min at conversational pace…").
+  // useful state — the user's focus + how long they've been on this block.
+  // "Block N" was internal jargon ("what's a block?"); time-since-rotation
+  // is the intuitive read. Editorial copy:
+  //   week 0 (fresh rotation):  "Forged · fresh block"
+  //   week 1+:                  "Forged · N week(s) in"
+  // Non-strength days keep their existing cfg.sub modality detail.
   const headline2 = viewSession ? viewSession.subtitle : cfg.headline[1];
+  const blockTenureCopy = weeksOnBlock >= 1
+    ? `${weeksOnBlock} week${weeksOnBlock === 1 ? "" : "s"} in`
+    : "fresh block";
   const subText   = viewSession
-    ? `Block ${programmeBlock?.number ?? 1} · ${userFocus}`
+    ? `${userFocus} · ${blockTenureCopy}`
     : cfg.sub;
 
   // Negative diff = earlier this week, positive = later this week
@@ -3919,7 +3938,7 @@ function FocusPickerSheet({ current, onSave, onCancel }) {
         <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
           Training focus
         </div>
-        <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.15,marginBottom:6}}>
+        <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.15,marginBottom:6,color:T.text1}}>
           What are you training for?
         </div>
         <p style={{fontSize:13,color:T.text3,marginBottom:18,lineHeight:1.5}}>

@@ -127,14 +127,17 @@ describe("exercise library — programme coverage", () => {
     expect(stale).toEqual([]);
   });
 
-  it("the seven canonicalised names resolve in both anatomy and profiles", () => {
+  it("the canonicalised names resolve in both anatomy and profiles", () => {
     // Locks in the duplicate cleanup: the canonical spellings exist and the
-    // aliases are gone.
+    // aliases are gone. (DB Kickback removed as a canonical entry — both
+    // kickback variants were dropped from the library as "remarkably
+    // ineffective" per programming feedback. The duplicate-aliases assertion
+    // below still protects the original cleanup fix on the remaining names.)
     const anatomySet = new Set(anatomyKeys);
     const profileSet = new Set(profileKeys);
     const canonical = [
       "DB Floor Press", "Skullcrusher", "Tricep Pushdown", "Hammer Curl",
-      "DB Kickback", "Incline DB Press", "Bulgarian Split Squat",
+      "Incline DB Press", "Bulgarian Split Squat",
     ];
     for (const name of canonical) {
       expect(anatomySet.has(name), `anatomy missing "${name}"`).toBe(true);
