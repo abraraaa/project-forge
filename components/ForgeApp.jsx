@@ -45,7 +45,11 @@ import {
   registerPasskey, authenticatePasskey, hasPasskey,
 } from "@/lib/webauthn";
 import { track } from "@vercel/analytics";
-import { computeVolumeAggregates, recentForExercise } from "@/lib/analytics";
+import {
+  computeVolumeAggregates, recentForExercise,
+  totalTonnage, pendingTonnageMilestone, formatTonnage,
+} from "@/lib/analytics";
+import { useModalA11y } from "@/lib/a11y";
 import PerformanceLab from "@/components/PerformanceLab";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
@@ -67,78 +71,6 @@ function formatAgo(ms) {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h} hr ago`;
   return "a while ago";
-}
-
-// ─── Modal a11y hook ─────────────────────────────────────────────────────────
-// Cross-cutting accessibility behaviour shared by every bottom-sheet / modal:
-//   - role="dialog" + aria-modal="true" + aria-labelledby on the container
-//     (callers supply tabIndex={-1} so the container can take focus).
-//   - Auto-focus the container on open; restore focus to the prior element
-//     (usually the trigger button) on unmount.
-//   - Escape key closes via onClose.
-//   - Tab / Shift+Tab focus trap keeps focus inside the modal so screen-reader
-//     and keyboard users can't tab into the page underneath.
-//
-// Usage:
-//   const { containerRef, onKeyDown } = useModalA11y(onClose);
-//   return <div onKeyDown={onKeyDown} onClick={onClose}>
-//     <div ref={containerRef} role="dialog" aria-modal="true"
-//          aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}>
-//       <h2 id={titleId}>…</h2>
-//     </div>
-//   </div>
-function useModalA11y(onClose) {
-  const containerRef    = useRef(null);
-  const prevFocusRef    = useRef(null);
-
-  useEffect(() => {
-    prevFocusRef.current = typeof document !== "undefined" ? document.activeElement : null;
-    // Focus on next tick so the container is laid out before we measure.
-    const id = setTimeout(() => {
-      if (containerRef.current && typeof containerRef.current.focus === "function") {
-        try { containerRef.current.focus({ preventScroll: true }); } catch { /* noop */ }
-      }
-    }, 0);
-    return () => {
-      clearTimeout(id);
-      const prev = prevFocusRef.current;
-      if (prev && typeof prev.focus === "function" && document.contains(prev)) {
-        try { prev.focus({ preventScroll: true }); } catch { /* noop */ }
-      }
-    };
-  }, []);
-
-  const onKeyDown = useCallback((e) => {
-    if (e.key === "Escape") {
-      if (onClose) {
-        e.stopPropagation();
-        onClose();
-      }
-      return;
-    }
-    if (e.key === "Tab" && containerRef.current) {
-      const focusables = containerRef.current.querySelectorAll(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      if (focusables.length === 0) {
-        e.preventDefault();
-        containerRef.current.focus();
-        return;
-      }
-      const first = focusables[0];
-      const last  = focusables[focusables.length - 1];
-      const active = document.activeElement;
-      if (e.shiftKey && (active === first || active === containerRef.current)) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  }, [onClose]);
-
-  return { containerRef, onKeyDown };
 }
 
 // ─── Shared helper: resolve load type for an exercise ────────────────────────
@@ -398,6 +330,11 @@ export default function ForgeApp(){
   const [overviewDraftSnapshot, setOverviewDraftSnapshot] = useState(null);
   // Shown when auto-rotation fires — acknowledge before starting session
   const [rotationSummary,setRotationSummary]=useState(null);
+  // Preview-before-commit for user-initiated rotation. Holds the candidate
+  // computed by computeRotationPreview(); null = sheet closed. Re-rolling
+  // replaces the candidate; confirm commits it; cancel drops it (engine
+  // state stays untouched because computeRotationPreview never mutates).
+  const [rotationPreview,setRotationPreview]=useState(null);
   // Full session history — loaded from localStorage, merged from blob
   const [history,setHistory]=useState([]);
   // Anti-dysmorphia: dismiss-once-per-render for recovery nudge
@@ -457,6 +394,27 @@ export default function ForgeApp(){
     () => (recoveryDismissed ? null : detectRecoveryPattern(history)),
     [history, recoveryDismissed]
   );
+
+  // Lifetime-tonnage milestone. Recomputes on every history change (cheap — O(n)
+  // over sessions). When the user crosses a new milestone, a small card surfaces
+  // on home as a once-per-threshold celebration. Tap dismisses, persists the
+  // milestone so it doesn't reappear. No backfill — the first time we see a
+  // user above a threshold, that threshold becomes their "highest seen" and the
+  // next one upwards is the next surprise.
+  const [tonnageMilestoneSeen, setTonnageMilestoneSeen] = useState(0);
+  useEffect(() => {
+    setTonnageMilestoneSeen(LS.get("forge:tonnageMilestoneSeen", 0));
+  }, []);
+  const totalKg = useMemo(() => totalTonnage(history), [history]);
+  const pendingMilestone = useMemo(
+    () => pendingTonnageMilestone(totalKg, tonnageMilestoneSeen),
+    [totalKg, tonnageMilestoneSeen]
+  );
+  const handleDismissTonnageMilestone = () => {
+    if (!pendingMilestone) return;
+    LS.set("forge:tonnageMilestoneSeen", pendingMilestone);
+    setTonnageMilestoneSeen(pendingMilestone);
+  };
 
   // Retro discoverability — only surface the "Log past session" link on home
   // when there's actually something to fill. If the user trained every strength
@@ -1229,31 +1187,64 @@ const sProps={
   const todayIdx = weekMap[dow];
   const todaySessionIdx = strengthDaySessions[todayIdx] ?? 0;
 
-  // Actually rotate. Returns the new block so we can compute the diff.
-  // History carries the last ROTATION_MEMORY_BLOCKS selections per slot, so a
-  // freshly-rotated config avoids not just the immediately-prior pick but a
-  // window of recent ones (kills the A→B→A ping-pong single-block memory had).
-  const rotate = (showSummary = false) => {
+  // Pure rotation preview — computes a candidate config without touching
+  // state. Used by the preview sheet so users can see the proposed picks
+  // (and re-roll if they don't like them) before anything commits. Each call
+  // burns one weighted-random draw; rolling again is just calling again.
+  // No-op on engine state — programmeBlock.history is unchanged.
+  const computeRotationPreview = () => {
     const oldConfig = programmeBlock.config;
     const updatedHistory = pushHistoryBlock(programmeBlock.history, oldConfig);
     const newConfig = rotateAccessories(updatedHistory, { focus: userFocus });
+    return {
+      oldConfig,
+      newConfig,
+      updatedHistory,
+      changes: rotationDiff(oldConfig, newConfig),
+      stimulusDelta: computeRotationStimulusDelta(oldConfig, newConfig),
+    };
+  };
+
+  // Commit a previously-computed preview. Bumps block number + startDate,
+  // persists, and optionally surfaces the existing rotation summary modal.
+  const commitRotationPreview = (preview, showSummary = true) => {
     const next = {
       number: programmeBlock.number + 1,
       startDate: new Date().toISOString().slice(0,10),
-      config: newConfig,
-      history: updatedHistory,
+      config: preview.newConfig,
+      history: preview.updatedHistory,
     };
     setProgrammeBlock(next);
     PB.save(next);
     if (showSummary) {
-      const changes = rotationDiff(oldConfig, newConfig);
-      const stimulusDelta = computeRotationStimulusDelta(oldConfig, newConfig);
-      setRotationSummary({ blockNumber: next.number, changes, stimulusDelta });
+      setRotationSummary({
+        blockNumber: next.number,
+        changes: preview.changes,
+        stimulusDelta: preview.stimulusDelta,
+      });
     }
     return next;
   };
 
-  const handleRotate = () => rotate(true);
+  // Combined preview + commit for the auto-rotate path (beginSession at
+  // ROTATION_AUTO weeks). Auto-rotation skips the preview sheet — it's a
+  // programmatic trigger, not a user-initiated choice, so the existing
+  // post-rotation summary is enough.
+  const rotate = (showSummary = false) => commitRotationPreview(computeRotationPreview(), showSummary);
+
+  // User-initiated rotation: open the preview sheet instead of committing.
+  // Was previously committing-then-showing-summary, which surprised users who
+  // tapped "Rotate" expecting "show me what I'd get" and got force-committed.
+  const handleRotate = () => setRotationPreview(computeRotationPreview());
+
+  // Sheet actions
+  const handleRotationReroll = () => setRotationPreview(computeRotationPreview());
+  const handleRotationConfirm = () => {
+    if (!rotationPreview) return;
+    commitRotationPreview(rotationPreview, true);
+    setRotationPreview(null);
+  };
+  const handleRotationCancel = () => setRotationPreview(null);
 
   // Reset rotation drift to SESSIONS defaults (preserves block number/start).
   // Used by the "Reset accessories" link on home for users who've over-rotated.
@@ -1692,7 +1683,7 @@ const sProps={
 
   return (
     <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
       {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} sessionStartWeights={sessionStartWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
@@ -1700,6 +1691,7 @@ const sProps={
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} userWeek={userWeek} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet history={history} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
+      {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}
       {showIosInstall         && <IosInstallOverlay onDismiss={()=>{ LS.set("forge:iosInstallDismissed", true); setShowIosInstall(false); }}/>}
       <BodyweightEditModal open={bwEditOpen} onClose={()=>setBwEditOpen(false)} currentKg={bodyweight} onSave={updateBodyweight}/>
       {weekEditorOpen && (
@@ -2682,7 +2674,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 }
 
 // ─── Home ──────────────────────────────────��──────────────────────────────────
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -3188,6 +3180,25 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           </Fade>
         );
       })()}
+
+      {/* Lifetime-tonnage milestone — surfaces ONCE when the user crosses a
+          new threshold (1t, 5t, 10t, 25t…). Tap-anywhere dismisses; the new
+          ceiling persists so it doesn't reappear. Editorial restraint — it's
+          a small celebration beat, not a permanent counter. */}
+      {tonnageMilestone && (
+        <Fade d={200}>
+          <button onClick={onDismissTonnageMilestone}
+            aria-label={`Milestone: ${formatTonnage(tonnageMilestone)} moved — tap to dismiss`}
+            style={{display:"block",width:"calc(100% - 48px)",margin:"20px 24px 0",padding:"16px 20px",background:`${T.gold}0F`,border:`1px solid ${T.gold}3A`,borderRadius:T.r.lg,textAlign:"left",cursor:"pointer",fontFamily:"inherit"}}>
+            <div style={{fontSize:11,fontWeight:500,color:T.gold,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>
+              Milestone · {formatTonnage(tonnageMilestone)}
+            </div>
+            <div style={{fontFamily:T.serif,fontSize:18,fontWeight:300,color:T.text1,lineHeight:1.4}}>
+              You&apos;ve moved <span style={{color:T.gold,fontStyle:"italic"}}>{formatTonnage(tonnageTotalKg)}</span> since you started with Forge.
+            </div>
+          </button>
+        </Fade>
+      )}
 
       {/* Honest recovery nudge — surfaces when the last 2 sessions were cooked.
           Non-pushy. Dismisses in-memory for this session. */}
@@ -4171,6 +4182,99 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
             Reset to default week (Mon/Wed/Fri strength)
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Rotation preview sheet (pre-commit) ────────────────────────────────────
+// Surfaces the candidate rotation before anything saves. Three actions:
+//   Confirm    — commit the preview, bump block, persist, show summary.
+//   Roll again — recompute the candidate (fresh weighted-random draw).
+//   Cancel     — drop the preview, no engine state change. Same as never
+//                tapping rotate. Escape / backdrop tap also cancel.
+//
+// Re-rolls are unlimited — the engine is biased-probabilistic, not
+// authoritative; the trainer is the user. The button hierarchy still nudges
+// toward confirming the first reasonable preview (Confirm is primary gold,
+// Roll again is secondary outlined).
+function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
+  const { gold } = T;
+  const { changes = [], stimulusDelta = [] } = preview || {};
+  const count = changes.length;
+  const topDeltas = stimulusDelta.slice(0, 4);
+  const { containerRef, onKeyDown } = useModalA11y(onCancel);
+  const titleId = "rotation-preview-title";
+
+  return (
+    <div onKeyDown={onKeyDown} onClick={onCancel}
+      style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
+        style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        <div style={{fontSize:10,fontWeight:500,color:gold,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+          Rotation preview
+        </div>
+        <div id={titleId} style={{fontFamily:T.serif,fontSize:30,fontWeight:300,lineHeight:1.15,marginBottom:8,color:T.text1}}>
+          New picks<br/><span style={{color:gold,fontStyle:"italic"}}>for next block.</span>
+        </div>
+        <p style={{fontSize:13,color:T.text2,marginBottom:topDeltas.length?14:20,lineHeight:1.6}}>
+          {count === 0
+            ? "Same picks came up this roll. Roll again or confirm to start the block fresh anyway."
+            : `${count} ${count === 1 ? "accessory" : "accessories"} would swap. Nothing's saved until you confirm.`}
+        </p>
+
+        {topDeltas.length > 0 && (
+          <div style={{marginBottom:18}}>
+            <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
+              Would shift stimulus toward
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {topDeltas.map(({ bucket, delta }) => {
+                const positive = delta > 0;
+                const colour = MUSCLE_COLOURS[bucket] || MUSCLE_COLOURS.Other;
+                return (
+                  <div key={bucket} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:T.r.sm,background:T.bg3,border:`1px solid ${colour}66`}}>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:colour,display:"inline-block"}} aria-hidden="true"/>
+                    <span style={{fontSize:11,fontWeight:500,color:positive?colour:T.text3,fontVariantNumeric:"tabular-nums"}}>
+                      {positive?"+":""}{delta.toFixed(1)}
+                    </span>
+                    <span style={{fontSize:11,color:T.text2}}>{bucket}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div style={{flex:1,overflowY:"auto",marginBottom:18,marginRight:-8,paddingRight:8}}>
+          {changes.map((c, i) => (
+            <div key={c.slot} style={{padding:"12px 0",borderBottom:i<count-1?`1px solid ${T.bg3}`:"none"}}>
+              <div style={{fontSize:10,fontWeight:500,color:T.text4,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4}}>{c.slot}</div>
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span style={{fontFamily:T.serif,fontSize:14,fontWeight:300,color:T.text3,textDecoration:"line-through",textDecorationColor:T.text4}}>{c.from}</span>
+                <span style={{fontSize:12,color:gold}}>→</span>
+                <span style={{fontFamily:T.serif,fontSize:15,fontWeight:400,color:T.text1}}>{c.to}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <button onClick={onConfirm}
+            style={{width:"100%",padding:"16px 24px",background:gold,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:18,fontWeight:400,color:T.bg0,boxShadow:`0 12px 36px ${gold}33`}}>
+            Confirm rotation
+          </button>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={onReroll}
+              style={{flex:1,padding:"12px",background:"none",border:`1px solid ${gold}66`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.sans,fontSize:13,fontWeight:500,color:gold}}>
+              ↻ Roll again
+            </button>
+            <button onClick={onCancel}
+              style={{flex:1,padding:"12px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.sans,fontSize:13,color:T.text3}}>
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

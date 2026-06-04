@@ -2,26 +2,33 @@
 
 import { useMemo, useState } from "react";
 import {
-  mainLiftTrend, weeklyVolume, consistencyGrid,
+  mainLiftTrend, weeklyVolumeByMuscle, consistencyGrid,
   readinessBreakdown, sessionCount, detectPlateaus,
 } from "@/lib/analytics";
-import { auditHistoryVolume } from "@/lib/volume-audit";
-import { T, MUSCLE_COLOURS } from "@/lib/tokens";
+import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
+import { T } from "@/lib/tokens";
+import GlossarySheet, { GlossaryTrigger } from "@/components/GlossarySheet";
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 export default function PerformanceLab({ history, onBack }) {
   const trends  = useMemo(() => mainLiftTrend(history),   [history]);
-  const volume  = useMemo(() => weeklyVolume(history),    [history]);
   const grid    = useMemo(() => consistencyGrid(history, 12), [history]);
   const readiness = useMemo(() => readinessBreakdown(history), [history]);
   const counts    = useMemo(() => sessionCount(history),       [history]);
   const plateaus  = useMemo(() => detectPlateaus(history),     [history]);
-  const volumeAudit = useMemo(() => auditHistoryVolume(history, { weeks: 4 }), [history]);
+  const volumeAudit  = useMemo(() => auditHistoryVolume(history, { weeks: 4 }), [history]);
+  const volumeTrend  = useMemo(() => weeklyVolumeByMuscle(history, { weeks: 8 }), [history]);
 
   const mainLifts = Object.keys(trends);
   const [selectedLift, setSelectedLift] = useState(null);
   // Default to first lift once data arrives
   const activeLift = selectedLift || mainLifts[0] || null;
+
+  // Glossary sheet — opened by ⓘ triggers throughout the lab. `glossaryAnchor`
+  // = null  → sheet closed; "" → open, no scroll anchor; term-id → scroll to it.
+  const [glossaryAnchor, setGlossaryAnchor] = useState(null);
+  const openGlossary = (anchor = "") => setGlossaryAnchor(anchor);
+  const closeGlossary = () => setGlossaryAnchor(null);
 
   const isEmpty = counts.total === 0;
 
@@ -37,8 +44,11 @@ export default function PerformanceLab({ history, onBack }) {
       </div>
 
       <div style={{padding:"32px 24px 0"}}>
-        <div style={{fontSize:11, fontWeight:500, color:T.text3, letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:10}}>
-          Performance lab
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+          <div style={{fontSize:11, fontWeight:500, color:T.text3, letterSpacing:"0.12em", textTransform:"uppercase"}}>
+            Performance lab
+          </div>
+          <GlossaryTrigger onOpen={openGlossary} label="Open glossary"/>
         </div>
         <div style={{fontFamily:T.serif, fontSize:42, fontWeight:300, lineHeight:1.1}}>
           Your<br/><span style={{color:T.gold, fontStyle:"italic"}}>progress.</span>
@@ -75,17 +85,17 @@ export default function PerformanceLab({ history, onBack }) {
             </Card>
           )}
 
-          {/* Weekly volume */}
-          <Card title="Weekly volume" subtitle="Sets per muscle group · last 8 weeks">
-            <VolumeChart weeks={volume.slice(-8)} />
-            <VolumeLegend data={volume.slice(-8)} />
-          </Card>
-
-          {/* Volume vs MEV/MAV/MRV — actionable: which muscles are below the
-              productive floor or above the recoverable ceiling, based on the
-              last 4 weeks of ACTUAL training (not the static programme audit). */}
-          <Card title="Volume vs landmarks" subtitle="Last 4 weeks · MEV/MAV/MRV bands">
-            <VolumeStatusCard audit={volumeAudit} />
+          {/* Per-muscle volume landscape — merges the old "Weekly volume"
+              stacked-bar chart and "Volume vs landmarks" status card into one
+              row-per-muscle view. Each row shows the 8-week sparkline + the
+              4-week-trailing sets/wk classified against MEV/MAV/MRV bands.
+              Sorted by deviation severity so the actionable muscles surface
+              first (under MEV, then over MRV, then in-band). */}
+          <Card
+            title="Volume per muscle"
+            subtitle={<>Last 8 weeks · sets/wk vs MEV/MAV/MRV<GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/></>}
+          >
+            <VolumeLandscape trend={volumeTrend} audit={volumeAudit} />
           </Card>
 
           {/* Consistency heatmap */}
@@ -98,6 +108,10 @@ export default function PerformanceLab({ history, onBack }) {
             <ReadinessBar readiness={readiness} />
           </Card>
         </>
+      )}
+
+      {glossaryAnchor !== null && (
+        <GlossarySheet anchorTerm={glossaryAnchor || null} onCancel={closeGlossary}/>
       )}
     </div>
   );
@@ -224,134 +238,153 @@ function LineChart({ series }) {
   );
 }
 
-// ─── Volume chart (stacked bars per week) ────────────────────────────────────
-function VolumeChart({ weeks }) {
-  const W = 320, H = 160, PAD_X = 8, PAD_Y = 16;
-  if (!weeks || weeks.length === 0) {
-    return <div style={{padding:"28px 0", fontSize:13, color:T.text3, fontFamily:T.serif, fontStyle:"italic", textAlign:"center"}}>No weeks to show</div>;
-  }
+// ─── Volume landscape (per-muscle row with sparkline + MEV/MAV/MRV band) ───
+// Replaces the stacked-bar Weekly Volume chart and the Volume vs Landmarks
+// status card. The old stacked bars rendered four leg muscles in the same
+// warm-earth palette — unreadable at small heights — and didn't tell you the
+// only thing you actually want to know: am I training each muscle in its
+// productive band, and is the trend up or down.
+//
+// Each row = one muscle. Left: name + current sets/wk + band label. Right:
+// 8-week sparkline with MEV/MAV/MRV bands rendered behind the line. Sorted
+// by deviation severity so under-MEV muscles surface first.
+//
+// Vocabulary: granular (13 muscles via lib/volume-audit.js#AUDIT_MUSCLE_ORDER)
+// — Front/Side/Rear delts split, Biceps/Triceps split. The audit landmarks
+// only make sense at that resolution.
+const BAND_COLOUR = {
+  under_mev:  T.rose,   // alarm: not driving growth, raise it
+  low:        T.gold,   // productive but room to add (MEV..MAV)
+  optimal:    T.sage,   // sweet spot (MAV..MRV)
+  over_mrv:   T.coral,  // recovery cost (above MRV)
+  untargeted: T.text4,  // tracked, no landmark (e.g. Forearms)
+};
+const BAND_LABEL = {
+  under_mev:  "under MEV",
+  low:        "in productive band",
+  optimal:    "in sweet spot",
+  over_mrv:   "over MRV",
+  untargeted: "untargeted",
+};
+// Sort order for muscle rows — actionable first, then sweet spot, then
+// background (untargeted). Within each tier, AUDIT_MUSCLE_ORDER preserves
+// the editorial muscle ordering (legs → torso → arms → core).
+const SEVERITY = { under_mev: 0, over_mrv: 1, low: 2, optimal: 3, untargeted: 4 };
 
-  // Build totals per muscle per week, then find max stack for y-scale
-  const muscles = new Set();
-  weeks.forEach(w => Object.keys(w.byMuscle).forEach(m => muscles.add(m)));
-  const orderedMuscles = Array.from(muscles);
-
-  const weekTotals = weeks.map(w =>
-    orderedMuscles.reduce((sum, m) => sum + (w.byMuscle[m]?.sets || 0), 0)
-  );
-  const maxTotal = Math.max(...weekTotals, 1);
-
-  const barWidth = (W - 2*PAD_X) / weeks.length - 4;
-  const chartH = H - 2*PAD_Y;
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:"auto", display:"block"}}>
-      {weeks.map((w, wi) => {
-        let yOffset = H - PAD_Y;
-        const x = PAD_X + wi * ((W - 2*PAD_X) / weeks.length) + 2;
-        return (
-          <g key={wi}>
-            {orderedMuscles.map((m, mi) => {
-              const sets = w.byMuscle[m]?.sets || 0;
-              if (!sets) return null;
-              const h = (sets / maxTotal) * chartH;
-              yOffset -= h;
-              const colour = MUSCLE_COLOURS[m] || T.text3;
-              return (
-                <rect key={m} x={x} y={yOffset} width={barWidth} height={h}
-                  fill={colour} fillOpacity="0.85"
-                  rx={mi === 0 ? 2 : 0}
-                />
-              );
-            })}
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function VolumeLegend({ data }) {
-  const muscles = new Set();
-  (data || []).forEach(w => Object.keys(w.byMuscle).forEach(m => muscles.add(m)));
-  const list = Array.from(muscles);
-  if (list.length === 0) return null;
-  return (
-    <div style={{display:"flex", flexWrap:"wrap", gap:"6px 12px", marginTop:12}}>
-      {list.map(m => (
-        <div key={m} style={{display:"flex", alignItems:"center", gap:6}}>
-          <div style={{width:8, height:8, borderRadius:2, background: MUSCLE_COLOURS[m] || T.text3}}/>
-          <span style={{fontSize:10, color:T.text3, fontWeight:500}}>{m}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Volume status card (MEV/MAV/MRV bands on actual training) ──────────────
-// Surfaces the muscles that need attention this block: below MEV (not driving
-// growth) or above MRV (junk volume / recovery cost). Hides for new users who
-// don't have enough recent sessions for the audit to mean anything.
-function VolumeStatusCard({ audit }) {
-  // Need at least ~2 weeks of training (≥4 sessions) before the audit is
-  // signal vs noise. Below that, encourage logging rather than fire warnings.
+function VolumeLandscape({ trend, audit }) {
+  // Need ≥4 sessions in the trailing 4-week window before the audit is
+  // meaningful. Below that, encourage logging rather than render a wall of
+  // "under MEV" alarms for a new user.
   if (!audit || audit.sessionsAnalysed < 4) {
     return (
       <div style={{padding:"14px 0 2px", fontSize:13, color:T.text3, fontStyle:"italic", fontFamily:T.serif, lineHeight:1.5}}>
-        A few more logged sessions and this card will start flagging muscles below MEV or above MRV.
+        A few more logged sessions and this card will start flagging the muscles below MEV or above MRV.
       </div>
     );
   }
 
-  const under = audit.flags.filter(f => f.status === "under_mev");
-  const over  = audit.flags.filter(f => f.status === "over_mrv");
+  // Build the union of muscles to render: anything in AUDIT_MUSCLE_ORDER
+  // (so missed muscles surface as under-MEV) plus anything trained that
+  // doesn't have a landmark (e.g. Forearms).
+  const muscles = [
+    ...AUDIT_MUSCLE_ORDER,
+    ...Object.keys(trend?.byMuscle || {}).filter(m => !AUDIT_MUSCLE_ORDER.includes(m)),
+  ];
 
-  if (under.length === 0 && over.length === 0) {
-    return (
-      <div style={{padding:"14px 0 2px", fontSize:13, color:T.text2, lineHeight:1.5}}>
-        ✓ Every targeted muscle is within MEV..MRV this block. Keep the rhythm.
-      </div>
-    );
-  }
-
-  const Pill = ({ status, muscle, sets, target }) => {
-    const colour = status === "over_mrv" ? T.gold : T.rose;
-    const label  = status === "over_mrv" ? `${sets} > MRV ${target.mrv}` : `${sets} < MEV ${target.mev}`;
-    return (
-      <div style={{display:"inline-flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:T.r.sm,background:T.bg3,border:`1px solid ${colour}44`}}>
-        <span style={{width:8,height:8,borderRadius:"50%",background:colour,display:"inline-block"}} aria-hidden="true"/>
-        <span style={{fontSize:12,color:T.text1,fontWeight:500}}>{muscle}</span>
-        <span style={{fontSize:11,color:T.text3,fontVariantNumeric:"tabular-nums"}}>{label}</span>
-      </div>
-    );
-  };
+  const rows = muscles.map(muscle => {
+    const a = audit.perMuscle[muscle] || { sets: 0, target: null, status: "untargeted" };
+    const series = trend?.byMuscle?.[muscle] || [];
+    return { muscle, sets: a.sets, target: a.target, status: a.status, series };
+  });
+  // Drop rows that have neither a landmark nor any trained sets — nothing
+  // useful to say about them.
+  const visible = rows.filter(r => r.target || r.sets > 0 || r.series.some(v => v > 0));
+  visible.sort((a, b) => {
+    const sa = SEVERITY[a.status] ?? 99;
+    const sb = SEVERITY[b.status] ?? 99;
+    return sa - sb;
+  });
 
   return (
-    <div style={{padding:"4px 0 2px"}}>
-      {under.length > 0 && (
-        <div style={{marginBottom:over.length>0?14:0}}>
-          <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
-            Below MEV · won&apos;t drive growth
-          </div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-            {under.map(f => <Pill key={f.muscle} {...f}/>)}
-          </div>
-        </div>
-      )}
-      {over.length > 0 && (
-        <div>
-          <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
-            Above MRV · recovery cost
-          </div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-            {over.map(f => <Pill key={f.muscle} {...f}/>)}
-          </div>
-        </div>
-      )}
+    <div style={{padding:"2px 0 0"}}>
+      {visible.map(row => <MuscleRow key={row.muscle} {...row} />)}
       <div style={{marginTop:14,fontSize:11,color:T.text4,lineHeight:1.5}}>
-        Audited over {audit.weeksAnalysed} weeks · {audit.sessionsAnalysed} session{audit.sessionsAnalysed===1?"":"s"}
+        Sparklines = last 8 weeks · band & sets/wk = trailing {audit.weeksAnalysed} weeks · {audit.sessionsAnalysed} session{audit.sessionsAnalysed===1?"":"s"}
       </div>
     </div>
+  );
+}
+
+function MuscleRow({ muscle, sets, target, status, series }) {
+  const colour = BAND_COLOUR[status] || T.text4;
+  const bandLabel = BAND_LABEL[status] || "";
+  // Right side: sparkline. Reference bands (MEV/MAV/MRV) drawn behind the
+  // line in low-opacity tints so eye picks up "you're below the floor" or
+  // "you're over the ceiling" without needing tick labels.
+  return (
+    <div style={{
+      display:"grid",
+      gridTemplateColumns:"minmax(0, 1fr) 140px",
+      alignItems:"center",
+      gap:14,
+      padding:"12px 0",
+      borderTop:`1px solid ${T.bg3}`,
+    }}>
+      <div style={{minWidth:0}}>
+        <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:3}}>
+          <span style={{width:8,height:8,borderRadius:"50%",background:colour,display:"inline-block",flexShrink:0}} aria-hidden="true"/>
+          <span style={{fontSize:13,fontWeight:500,color:T.text1,letterSpacing:"0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{muscle}</span>
+          <span style={{fontSize:12,color:T.text3,fontVariantNumeric:"tabular-nums",marginLeft:"auto",flexShrink:0}}>
+            {sets}<span style={{color:T.text4}}> /wk</span>
+          </span>
+        </div>
+        <div style={{fontSize:10,color:colour,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:500}}>
+          {target
+            ? `${bandLabel} · MEV ${target.mev} · MRV ${target.mrv}`
+            : bandLabel}
+        </div>
+      </div>
+      <Sparkline series={series} target={target} colour={colour} />
+    </div>
+  );
+}
+
+function Sparkline({ series, target, colour }) {
+  const W = 140, H = 40, PAD_X = 2, PAD_Y = 4;
+  if (!series || series.length === 0) {
+    return <div style={{width:W,height:H,opacity:0.3,fontSize:10,color:T.text4,display:"flex",alignItems:"center",justifyContent:"flex-end",fontStyle:"italic",fontFamily:T.serif}}>—</div>;
+  }
+  // Y scale = max of (series max, MRV * 1.1). Pinning to MRV ensures the
+  // bands render at consistent heights across the card (so a muscle near
+  // MEV looks "near the floor", not "near the top of its own chart").
+  const maxVal = Math.max(...series, target ? target.mrv * 1.1 : 1, 1);
+  const xAt = (i) => PAD_X + (W - 2*PAD_X) * (i / Math.max(series.length - 1, 1));
+  const yAt = (v) => PAD_Y + (H - 2*PAD_Y) * (1 - v / maxVal);
+
+  // Band rectangles (rendered behind the line)
+  const bands = [];
+  if (target) {
+    // Under-MEV zone (alarm) — from 0 to MEV
+    bands.push({ y0: yAt(0), y1: yAt(target.mev), fill: T.rose, opacity: 0.06 });
+    // Optimal MAV..MRV zone — the sweet spot
+    bands.push({ y0: yAt(target.mav), y1: yAt(target.mrv), fill: T.sage, opacity: 0.07 });
+    // Over-MRV zone
+    bands.push({ y0: yAt(maxVal), y1: yAt(target.mrv), fill: T.coral, opacity: 0.05 });
+  }
+
+  const pathD = series.map((v, i) => `${i===0 ? "M" : "L"} ${xAt(i).toFixed(2)} ${yAt(v).toFixed(2)}`).join(" ");
+  const areaD = `${pathD} L ${xAt(series.length-1).toFixed(2)} ${H-PAD_Y} L ${xAt(0).toFixed(2)} ${H-PAD_Y} Z`;
+  const last = series[series.length - 1];
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:H,display:"block"}} aria-hidden="true">
+      {bands.map((b, i) => (
+        <rect key={i} x={0} y={Math.min(b.y0, b.y1)} width={W} height={Math.abs(b.y1 - b.y0)} fill={b.fill} fillOpacity={b.opacity}/>
+      ))}
+      <path d={areaD} fill={colour} fillOpacity="0.10"/>
+      <path d={pathD} stroke={colour} strokeWidth="1.25" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
+      <circle cx={xAt(series.length - 1)} cy={yAt(last)} r={2.4} fill={colour} stroke={T.bg2} strokeWidth="1.2"/>
+    </svg>
   );
 }
 
