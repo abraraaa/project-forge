@@ -18,7 +18,7 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
-import { weeklyVolume, __test_p4__ } from "../lib/analytics.js";
+import { weeklyVolume, recentForExercise, __test_p4__ } from "../lib/analytics.js";
 import { __test_storage__ } from "../lib/storage.js";
 import { DISPLAY_BUCKET } from "../lib/exercise-anatomy.js";
 import { MUSCLE_COLOURS } from "../lib/tokens.js";
@@ -283,4 +283,178 @@ describe("normaliseMuscle ≡ _normaliseMuscle (analytics vs storage)", () => {
       expect(_normaliseMuscle(input)).toBe(normaliseMuscle(input));
     });
   }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// recentForExercise — powers the in-session "Recent" sanity-check sheet.
+// ────────────────────────────────────────────────────────────────────────────
+function buildHistorySession(date, exercises) {
+  return { v: 2, id: `${date}T10:00:00.000Z`, date, blocks: [{ id: "x", type: "main", exercises }] };
+}
+
+describe("recentForExercise", () => {
+  it("returns [] for empty history", () => {
+    expect(recentForExercise([], "Back Squat")).toEqual([]);
+    expect(recentForExercise(null, "Back Squat")).toEqual([]);
+    expect(recentForExercise(undefined, "Back Squat")).toEqual([]);
+  });
+
+  it("returns [] when exerciseName is missing", () => {
+    const h = [buildHistorySession("2026-05-01", [{ name: "Back Squat", sets: [{ weight: 100, reps: 5 }] }])];
+    expect(recentForExercise(h, "")).toEqual([]);
+    expect(recentForExercise(h, null)).toEqual([]);
+    expect(recentForExercise(h, undefined)).toEqual([]);
+  });
+
+  it("returns [] when no session contains the exercise", () => {
+    const h = [
+      buildHistorySession("2026-05-01", [{ name: "Bench Press", sets: [{ weight: 80, reps: 5 }] }]),
+      buildHistorySession("2026-04-28", [{ name: "Deadlift",    sets: [{ weight: 140, reps: 5 }] }]),
+    ];
+    expect(recentForExercise(h, "Back Squat")).toEqual([]);
+  });
+
+  it("orders results newest-first regardless of input order", () => {
+    const mk = (d) => buildHistorySession(d, [{ name: "Back Squat", sets: [{ weight: 100, reps: 5 }] }]);
+    const h = [mk("2026-04-01"), mk("2026-05-01"), mk("2026-03-15")];
+    const out = recentForExercise(h, "Back Squat");
+    expect(out.map(r => r.date)).toEqual(["2026-05-01", "2026-04-01", "2026-03-15"]);
+  });
+
+  it("limits to n entries (default 3)", () => {
+    const mk = (d) => buildHistorySession(d, [{ name: "Back Squat", sets: [{ weight: 100, reps: 5 }] }]);
+    const h = [mk("2026-05-05"), mk("2026-05-01"), mk("2026-04-28"), mk("2026-04-25"), mk("2026-04-20")];
+    expect(recentForExercise(h, "Back Squat")).toHaveLength(3);
+    expect(recentForExercise(h, "Back Squat", 5)).toHaveLength(5);
+    expect(recentForExercise(h, "Back Squat", 1)).toHaveLength(1);
+  });
+
+  it("picks max-weight set as the top set", () => {
+    const h = [buildHistorySession("2026-05-01", [{
+      name: "Back Squat",
+      sets: [
+        { weight: 100, reps: 5 },
+        { weight: 110, reps: 3 },
+        { weight: 90,  reps: 8 },
+      ],
+    }])];
+    const [r] = recentForExercise(h, "Back Squat");
+    expect(r.topSet.weight).toBe(110);
+    expect(r.topSet.reps).toBe(3);
+  });
+
+  it("breaks weight ties by max reps", () => {
+    const h = [buildHistorySession("2026-05-01", [{
+      name: "Back Squat",
+      sets: [
+        { weight: 100, reps: 5 },
+        { weight: 100, reps: 8 },
+        { weight: 100, reps: 6 },
+      ],
+    }])];
+    const [r] = recentForExercise(h, "Back Squat");
+    expect(r.topSet.reps).toBe(8);
+  });
+
+  it("flags allEqual when sets are uniform", () => {
+    const h = [buildHistorySession("2026-05-01", [{
+      name: "Back Squat",
+      sets: [
+        { weight: 100, reps: 5 },
+        { weight: 100, reps: 5 },
+        { weight: 100, reps: 5 },
+      ],
+    }])];
+    const [r] = recentForExercise(h, "Back Squat");
+    expect(r.allEqual).toBe(true);
+  });
+
+  it("flags allEqual=false when sets vary", () => {
+    const h = [buildHistorySession("2026-05-01", [{
+      name: "Back Squat",
+      sets: [
+        { weight: 100, reps: 5 },
+        { weight: 100, reps: 4 },
+      ],
+    }])];
+    const [r] = recentForExercise(h, "Back Squat");
+    expect(r.allEqual).toBe(false);
+  });
+
+  it("exposes effort from topSet rpe if present, else falls back to any set rpe", () => {
+    const h = [buildHistorySession("2026-05-01", [{
+      name: "Back Squat",
+      sets: [
+        { weight: 90,  reps: 5 },                  // no rpe
+        { weight: 110, reps: 3, rpe: "hard" },     // top set has rpe
+        { weight: 100, reps: 5, rpe: "normal" },
+      ],
+    }])];
+    const [r] = recentForExercise(h, "Back Squat");
+    expect(r.effort).toBe("hard");
+
+    const h2 = [buildHistorySession("2026-05-01", [{
+      name: "Back Squat",
+      sets: [
+        { weight: 110, reps: 3 },                  // top set no rpe
+        { weight: 100, reps: 5, rpe: "normal" },
+      ],
+    }])];
+    const [r2] = recentForExercise(h2, "Back Squat");
+    expect(r2.effort).toBe("normal");
+  });
+
+  it("returns null effort when no set has rpe", () => {
+    const h = [buildHistorySession("2026-05-01", [{
+      name: "Back Squat", sets: [{ weight: 100, reps: 5 }],
+    }])];
+    const [r] = recentForExercise(h, "Back Squat");
+    expect(r.effort).toBeNull();
+  });
+
+  it("skips sessions where the exercise has only empty/invalid sets", () => {
+    const h = [
+      buildHistorySession("2026-05-05", [{ name: "Back Squat", sets: [] }]),
+      buildHistorySession("2026-05-01", [{ name: "Back Squat", sets: [{ weight: null }] }]),
+      buildHistorySession("2026-04-28", [{ name: "Back Squat", sets: [{ weight: 100, reps: 5 }] }]),
+    ];
+    const out = recentForExercise(h, "Back Squat");
+    expect(out).toHaveLength(1);
+    expect(out[0].date).toBe("2026-04-28");
+  });
+
+  it("requires exact name match (case-sensitive)", () => {
+    const h = [buildHistorySession("2026-05-01", [{ name: "Back Squat", sets: [{ weight: 100, reps: 5 }] }])];
+    expect(recentForExercise(h, "back squat")).toEqual([]);
+    expect(recentForExercise(h, "Back Squat")).toHaveLength(1);
+  });
+
+  it("searches across all blocks within a session", () => {
+    const h = [{
+      v: 2, date: "2026-05-01",
+      blocks: [
+        { id: "a", type: "main",     exercises: [{ name: "Bench Press", sets: [{ weight: 80, reps: 5 }] }] },
+        { id: "b", type: "finisher", exercises: [{ name: "Back Squat",  sets: [{ weight: 100, reps: 5 }] }] },
+      ],
+    }];
+    const out = recentForExercise(h, "Back Squat");
+    expect(out).toHaveLength(1);
+    expect(out[0].topSet.weight).toBe(100);
+  });
+
+  it("tolerates malformed records without crashing", () => {
+    const h = [
+      null,
+      {},
+      { date: "2026-05-01" },                                              // no blocks
+      { date: "2026-04-28", blocks: null },                                // null blocks
+      { date: "2026-04-25", blocks: [{ exercises: null }] },               // null exercises
+      { date: "2026-04-20", blocks: [{ exercises: [null, undefined] }] },  // null exercises in list
+      { blocks: [{ exercises: [{ name: "Back Squat", sets: [{ weight: 100, reps: 5 }] }] }] }, // missing date
+      buildHistorySession("2026-04-15", [{ name: "Back Squat", sets: [{ weight: 100, reps: 5 }] }]),
+    ];
+    const out = recentForExercise(h, "Back Squat");
+    expect(out).toHaveLength(1);
+    expect(out[0].date).toBe("2026-04-15");
+  });
 });

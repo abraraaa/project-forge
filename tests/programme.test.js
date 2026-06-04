@@ -814,14 +814,14 @@ describe("applyRotationToSession", () => {
   it("substitutes the exB of a superset slot from config", () => {
     // Day A ass2: { exA: Barbell Hip Thrust, exB: Landmine Press }
     // Simulate rotation picking Single-Leg Hip Thrust for ass2-A and
-    // Arnold Press for ass2-B (made-up swap).
-    const fakeArnold = { name: "Arnold Press", reps: 10, weight: 14, muscle: "Shoulders" };
-    const fakeSLHT   = { name: "Single-Leg Hip Thrust", reps: 10, weight: 45, muscle: "Glutes" };
-    const config = { "ass2-A": fakeSLHT, "ass2-B": fakeArnold };
+    // Single-Arm Landmine Press for ass2-B — both real pool members.
+    const slhT  = { name: "Single-Leg Hip Thrust",    reps: 10, weight: 45, muscle: "Glutes"      };
+    const salmp = { name: "Single-Arm Landmine Press", reps: 10, weight: 22, muscle: "Upper chest" };
+    const config = { "ass2-A": slhT, "ass2-B": salmp };
     const out = applyRotationToSession(SESSIONS[0], config);
     const ass2 = out.blocks.find((b) => b.id === "ass2");
     expect(ass2.exA.name).toBe("Single-Leg Hip Thrust");
-    expect(ass2.exB.name).toBe("Arnold Press");
+    expect(ass2.exB.name).toBe("Single-Arm Landmine Press");
     // Other slots untouched
     const ass1 = out.blocks.find((b) => b.id === "ass1");
     expect(ass1.exA.name).toBe(SESSIONS[0].blocks.find(b=>b.id==="ass1").exA.name);
@@ -829,31 +829,59 @@ describe("applyRotationToSession", () => {
 
   it("is pure — input session is not mutated", () => {
     const before = JSON.parse(JSON.stringify(SESSIONS[0]));
-    const fake = { name: "Some Lift", reps: 5, weight: 99, muscle: "X" };
-    applyRotationToSession(SESSIONS[0], { "ass2-A": fake });
+    const realPick = { name: "Single-Leg Hip Thrust", reps: 10, weight: 45, muscle: "Glutes" };
+    applyRotationToSession(SESSIONS[0], { "ass2-A": realPick });
     expect(SESSIONS[0]).toEqual(before);
   });
 
   it("idempotent — applying twice with the same config = applying once", () => {
-    const fake = { name: "Test", reps: 8, weight: 20, muscle: "Glutes" };
-    const config = { "ass2-A": fake };
+    const realPick = { name: "Single-Leg Hip Thrust", reps: 10, weight: 45, muscle: "Glutes" };
+    const config = { "ass2-A": realPick };
     const once  = applyRotationToSession(SESSIONS[0], config);
     const twice = applyRotationToSession(once, config);
-    // Names match, no exception
     const a1 = once.blocks.find(b=>b.id==="ass2").exA.name;
     const a2 = twice.blocks.find(b=>b.id==="ass2").exA.name;
     expect(a1).toBe(a2);
-    expect(a1).toBe("Test");
+    expect(a1).toBe("Single-Leg Hip Thrust");
   });
 
   it("doesn't touch slots not present in config", () => {
-    const out = applyRotationToSession(SESSIONS[0], { "css1-B": { name: "Other" } });
-    // Day A blocks unchanged — config key css1-B is for Day C
+    const realPick = { name: "Skullcrusher", reps: 12, weight: 18, muscle: "Triceps" };
+    const out = applyRotationToSession(SESSIONS[0], { "css3-B": realPick });
+    // Day A blocks unchanged — config key css3-B is for Day C
     for (const b of out.blocks) {
       const orig = SESSIONS[0].blocks.find(x => x.id === b.id);
       if (b.ex)  expect(b.ex.name).toBe(orig.ex.name);
       if (b.exA) expect(b.exA.name).toBe(orig.exA.name);
       if (b.exB) expect(b.exB.name).toBe(orig.exB.name);
     }
+  });
+
+  // Self-healing for pool deletions — ghost picks (config entries whose name
+  // is no longer in the slot pool) get silently ignored. The user falls back
+  // to the SESSIONS default instead of staring at a culled exercise forever.
+  // Caught a real-world bug post-PR-#96 where DB Kickback was removed from
+  // css3-B but users who had rolled into it stayed locked on it.
+  it("silently ignores config entries whose name is no longer in the slot pool", () => {
+    // Day C css3-B currently has Skullcrusher / Overhead Tricep Extension /
+    // Close-Grip Push-Up. "DB Kickback" is a stale name from before PR #96.
+    const dayC = SESSIONS.find(s => s.blocks.some(b => b.id === "css3"));
+    const ghost = { name: "DB Kickback", reps: 12, weight: 8, muscle: "Triceps" };
+    const out = applyRotationToSession(dayC, { "css3-B": ghost });
+    const css3 = out.blocks.find(b => b.id === "css3");
+    const defaultExB = dayC.blocks.find(b => b.id === "css3").exB.name;
+    expect(css3.exB.name).toBe(defaultExB);
+    expect(css3.exB.name).not.toBe("DB Kickback");
+  });
+
+  it("self-heals one slot but still applies valid config on sibling slots", () => {
+    const dayC = SESSIONS.find(s => s.blocks.some(b => b.id === "css3"));
+    const ghost     = { name: "DB Kickback", reps: 12, weight: 8, muscle: "Triceps" };
+    const realPickA = { name: "Hammer Curl", reps: 12, weight: 10, muscle: "Biceps & brachialis" };
+    const out = applyRotationToSession(dayC, { "css3-A": realPickA, "css3-B": ghost });
+    const css3 = out.blocks.find(b => b.id === "css3");
+    expect(css3.exA.name).toBe("Hammer Curl");                  // valid → applied
+    const defaultExB = dayC.blocks.find(b => b.id === "css3").exB.name;
+    expect(css3.exB.name).toBe(defaultExB);                     // ghost → fallback
   });
 });

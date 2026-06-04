@@ -45,7 +45,7 @@ import {
   registerPasskey, authenticatePasskey, hasPasskey,
 } from "@/lib/webauthn";
 import { track } from "@vercel/analytics";
-import { computeVolumeAggregates } from "@/lib/analytics";
+import { computeVolumeAggregates, recentForExercise } from "@/lib/analytics";
 import PerformanceLab from "@/components/PerformanceLab";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
@@ -1204,6 +1204,10 @@ const sProps={
   swapKey,onSwap,
   showVid,setShowVid,getW,getR,editTarget,setEditTarget,
   workingWeights,setWW,workingReps,setWR,
+  // History feeds the in-session "Recent" sanity-check sheet so the user
+  // can compare today's prescribed weight against their last 3 performances
+  // of the active exercise.
+  history,
   awaitRpe,ssRoundDone,
   restActive,restRemain,setRestActive,setRestRemain,
   onCommit:commitLog,onLog:handleLog,onQuit:reset,
@@ -3489,6 +3493,90 @@ function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJumpToBloc
   );
 }
 
+// ─── Recent-history sanity-check sheet ──────────────────────────────────────
+// In-session helper: shows the last N performances of the active exercise so
+// the user can sanity-check the engine's recommended weight against what they
+// actually did last time. Read-only; tapping outside / Escape / "Close"
+// dismisses. Empty state is handled by hiding the link itself, so this sheet
+// renders only when there's at least one prior entry to show.
+function RecentHistorySheet({ exerciseName, recent, onCancel }) {
+  const { containerRef, onKeyDown } = useModalA11y(onCancel);
+  const titleId = "recent-history-title";
+
+  // Editorial relative date — keeps the visual restraint consistent with
+  // the rest of the app. Anything > ~3 months falls back to month count.
+  const fmt = (dateStr) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr + "T12:00:00");
+    if (isNaN(d.getTime())) return dateStr;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diff = Math.floor((today - d) / 86400000);
+    if (diff <= 0) return "today";
+    if (diff === 1) return "yesterday";
+    if (diff < 7)   return `${diff} days ago`;
+    if (diff < 14)  return "1 week ago";
+    if (diff < 28)  return `${Math.floor(diff/7)} weeks ago`;
+    const months = Math.floor(diff / 30);
+    if (months === 1) return "1 month ago";
+    return `${months} months ago`;
+  };
+  // Effort chip colour mirrors the RPE→RIR vocabulary the rest of the app uses.
+  const effortColour = (e) => {
+    if (!e) return T.text4;
+    if (e === "easy")   return T.sage;
+    if (e === "normal") return T.gold;
+    if (e === "hard")   return T.coral;        // legacy
+    if (e === "cooked" || e === "limit") return T.coral;
+    return T.text4;
+  };
+
+  return (
+    <div onKeyDown={onKeyDown} onClick={onCancel}
+      style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
+        style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+          Recent history
+        </div>
+        <div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.2,marginBottom:14,color:T.text1}}>
+          {exerciseName}
+        </div>
+
+        <div style={{flex:1,overflowY:"auto",marginRight:-8,paddingRight:8}}>
+          {recent.map((r, i) => {
+            const w  = r.topSet?.weight;
+            const wr = w == null ? null : Number.isInteger(w) ? `${w}` : `${w}`;
+            const reps = r.topSet?.reps;
+            const summary = r.allEqual
+              ? `${r.sets.length}×${reps ?? "?"}${w == null ? "" : ` @ ${wr} kg`}`
+              : `top: ${wr ?? "?"}${w == null ? "" : " kg"} × ${reps ?? "?"}`;
+            return (
+              <div key={r.date + "_" + i}
+                style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:i<recent.length-1?`1px solid ${T.bg3}`:"none"}}>
+                <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                  <span style={{fontSize:11,color:T.text3,letterSpacing:"0.06em",textTransform:"uppercase"}}>{fmt(r.date)}</span>
+                  <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:T.text1}}>{summary}</span>
+                </div>
+                {r.effort && (
+                  <span aria-label={`Effort: ${r.effort}`}
+                    style={{padding:"4px 9px",borderRadius:T.r.sm,border:`1px solid ${effortColour(r.effort)}55`,fontSize:10,fontWeight:500,color:effortColour(r.effort),letterSpacing:"0.06em",textTransform:"uppercase"}}>
+                    {r.effort}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <button onClick={onCancel}
+          style={{marginTop:14,padding:"12px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.md,cursor:"pointer",fontSize:13,color:T.text2,fontFamily:T.sans}}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFocus, onCancel }) {
   const { containerRef, onKeyDown } = useModalA11y(onCancel);
   const titleId = "rotation-choice-title";
@@ -3634,7 +3722,7 @@ function RpeCard({onPick,label="How was that set?"}){
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,deloadDayTag=null}){
+function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,deloadDayTag=null}){
   const {strength:s}=T;
   const [swapEx,setSwapEx]=useState(null);
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
@@ -3643,6 +3731,14 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
   const nameFz   =Math.min(38,Math.max(24,300/(activeEx?.name?.length||10)));
   const typeLabel={main:"Main lift",superset:"Superset",finisher:"Finisher"}[block.type];
   const currentW =getW(activeEx);
+  // Recent-history sanity-check ribbon. Pulls the user's last 3 sessions
+  // where activeEx was logged, opens a bottom sheet on tap. The link only
+  // shows when there's at least one prior performance to display.
+  const [historyOpen,setHistoryOpen]=useState(false);
+  const recent = useMemo(
+    () => recentForExercise(history, activeEx?.name, 3),
+    [history, activeEx?.name]
+  );
   const showRestHint=!isSS;
   const restMins =Math.floor(restRemain/60),restSecs=restRemain%60;
   const restStr  =`${restMins}:${String(restSecs).padStart(2,"0")}`;
@@ -3711,6 +3807,13 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
           <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase"}}>Set {setNum} of {block.sets}</div>
           {loadTypeSubtitle && (
             <span style={{fontSize:10,color:T.sage,fontWeight:500,letterSpacing:"0.08em",textTransform:"uppercase"}}>{loadTypeSubtitle}</span>
+          )}
+          {recent.length > 0 && (
+            <button onClick={()=>setHistoryOpen(true)}
+              aria-label={`Recent history for ${activeEx?.name}`}
+              style={{marginLeft:"auto",padding:"3px 8px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.sm,cursor:"pointer",fontSize:10,color:T.text3,fontFamily:T.sans,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+              Recent ↗
+            </button>
           )}
         </div>
         {showWeightPicker && currentW!==null&&(
@@ -3805,6 +3908,13 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
             <VideoEmbed vid={vidEx.vid} name={vidEx.name}/>
           </div>
         </div>
+      )}
+      {historyOpen && (
+        <RecentHistorySheet
+          exerciseName={activeEx?.name}
+          recent={recent}
+          onCancel={()=>setHistoryOpen(false)}
+        />
       )}
     </div>
   );
