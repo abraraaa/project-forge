@@ -13,18 +13,19 @@
 //   5. Every value normaliseMuscle can emit has a key in MUSCLE_COLOURS —
 //      the invariant that would have caught the Weekly Volume colour
 //      collision bug.
-//   6. The duplicated normaliser in storage.js stays in lockstep with the
-//      analytics.js copy.
+//   6. recentForExercise / totalTonnage / weeklyVolumeByMuscle behaviour.
 // ────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
-import { weeklyVolume, recentForExercise, __test_p4__ } from "../lib/analytics.js";
-import { __test_storage__ } from "../lib/storage.js";
+import {
+  weeklyVolume, recentForExercise,
+  weeklyVolumeByMuscle, totalTonnage, pendingTonnageMilestone,
+  formatTonnage, TONNAGE_MILESTONES_KG, __test_p4__,
+} from "../lib/analytics.js";
 import { DISPLAY_BUCKET } from "../lib/exercise-anatomy.js";
 import { MUSCLE_COLOURS } from "../lib/tokens.js";
 
 const { aggregateVolume, normaliseMuscle } = __test_p4__;
-const { _normaliseMuscle } = __test_storage__;
 
 function buildSet({ weight = 10, reps = 10, loadType = null, volume = null, effectiveLoad = null }) {
   return {
@@ -261,31 +262,6 @@ describe("normaliseMuscle — DISPLAY_BUCKET vocabulary", () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// Equivalence — the duplicated _normaliseMuscle in storage.js must emit
-// identical results. Locks the two copies together so they can't drift.
-// ────────────────────────────────────────────────────────────────────────────
-describe("normaliseMuscle ≡ _normaliseMuscle (analytics vs storage)", () => {
-  const fixtures = [
-    "Quadriceps", "Quads & Glutes", "Glutes", "Glutes / Hams", "Hamstrings",
-    "Calves", "Posterior chain", "Full body / explosive",
-    "Quads & Glutes / Adductors", "Adductors",
-    "Chest", "Upper chest", "Chest / medial",
-    "Upper back", "Mid back", "Lats", "Lats / Biceps",
-    "Shoulders", "Lateral delt", "Rear delts / cuff",
-    "Biceps", "Triceps", "Biceps & brachialis", "Biceps & forearms",
-    "Triceps & chest", "Forearms",
-    "Core", "Core / Anti-rot", "Adductors / Core",
-    "Vibes", "", null, undefined,
-  ];
-
-  for (const input of fixtures) {
-    it(`agrees on ${JSON.stringify(input)}`, () => {
-      expect(_normaliseMuscle(input)).toBe(normaliseMuscle(input));
-    });
-  }
-});
-
-// ────────────────────────────────────────────────────────────────────────────
 // recentForExercise — powers the in-session "Recent" sanity-check sheet.
 // ────────────────────────────────────────────────────────────────────────────
 function buildHistorySession(date, exercises) {
@@ -456,5 +432,178 @@ describe("recentForExercise", () => {
     const out = recentForExercise(h, "Back Squat");
     expect(out).toHaveLength(1);
     expect(out[0].date).toBe("2026-04-15");
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// weeklyVolumeByMuscle — per-muscle granular sparkline data for Performance Lab.
+// ────────────────────────────────────────────────────────────────────────────
+describe("weeklyVolumeByMuscle", () => {
+  it("returns the requested number of week columns", () => {
+    const out = weeklyVolumeByMuscle([], { weeks: 8, now: new Date("2026-05-15T12:00:00Z") });
+    expect(out.weeks).toHaveLength(8);
+    expect(out.byMuscle).toEqual({});
+  });
+
+  it("week columns are ordered oldest → newest (Mondays)", () => {
+    const out = weeklyVolumeByMuscle([], { weeks: 4, now: new Date("2026-05-13T12:00:00Z") });
+    const sorted = [...out.weeks].sort();
+    expect(out.weeks).toEqual(sorted);
+    // Each entry is a YYYY-MM-DD on a Monday
+    for (const w of out.weeks) {
+      expect(/^\d{4}-\d{2}-\d{2}$/.test(w)).toBe(true);
+      const day = new Date(w + "T12:00:00Z").getUTCDay();
+      // Constructed via mondayOfWeek which uses local-time day calc;
+      // accept Sun(0) or Mon(1) to cover the rare TZ edge.
+      expect([0, 1]).toContain(day);
+    }
+  });
+
+  it("credits a logged session to its week and distributes by anatomy", () => {
+    // Back Squat — anatomy gives Quads primary + Glutes/Hams/Core/Calves
+    // secondary. 1 completed set means Quads gets 1.0, others fractional.
+    const h = [{
+      date: "2026-05-11",  // Monday
+      blocks: [{ id: "x", type: "main", exercises: [{
+        name: "Barbell Back Squat", muscle: "Quadriceps",
+        sets: [{ weight: 100, reps: 5 }],
+      }]}],
+    }];
+    const out = weeklyVolumeByMuscle(h, { weeks: 4, now: new Date("2026-05-13T12:00:00Z") });
+    // Quads should appear and be >= 1 (primary credit), Glutes/Hams should be
+    // present at fractional values. Exact distribution lives in anatomy table.
+    expect(out.byMuscle.Quads).toBeDefined();
+    expect(out.byMuscle.Quads[out.weeks.length - 1]).toBeGreaterThanOrEqual(1);
+    expect(out.byMuscle.Glutes).toBeDefined();
+    expect(out.byMuscle.Glutes[out.weeks.length - 1]).toBeGreaterThan(0);
+  });
+
+  it("excludes sets that are not completed (weight null AND reps absent)", () => {
+    const h = [{
+      date: "2026-05-11",
+      blocks: [{ id: "x", type: "main", exercises: [{
+        name: "Back Squat", muscle: "Quads",
+        sets: [{ weight: null }, { reps: null, weight: null }],
+      }]}],
+    }];
+    const out = weeklyVolumeByMuscle(h, { weeks: 4, now: new Date("2026-05-13T12:00:00Z") });
+    expect(out.byMuscle.Quads).toBeUndefined();
+  });
+
+  it("ignores records outside the trailing N-week window", () => {
+    // Way-old record should not appear in the 4-week window.
+    const h = [{
+      date: "2025-12-01",
+      blocks: [{ id: "x", type: "main", exercises: [{
+        name: "Barbell Back Squat", muscle: "Quads",
+        sets: [{ weight: 100, reps: 5 }],
+      }]}],
+    }];
+    const out = weeklyVolumeByMuscle(h, { weeks: 4, now: new Date("2026-05-13T12:00:00Z") });
+    expect(out.byMuscle.Quads).toBeUndefined();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// totalTonnage / milestones — lifetime-counter helpers for the Home card.
+// ────────────────────────────────────────────────────────────────────────────
+describe("totalTonnage", () => {
+  it("returns 0 for empty/null history", () => {
+    expect(totalTonnage([])).toBe(0);
+    expect(totalTonnage(null)).toBe(0);
+    expect(totalTonnage(undefined)).toBe(0);
+  });
+
+  it("sums weight × reps across all sets", () => {
+    const h = [{
+      date: "2026-05-01",
+      blocks: [{ exercises: [{
+        name: "Bench Press",
+        sets: [
+          { weight: 100, reps: 5 },
+          { weight: 100, reps: 5 },
+          { weight: 100, reps: 5 },
+        ],
+      }]}],
+    }];
+    expect(totalTonnage(h)).toBe(1500);  // 3 × 100 × 5
+  });
+
+  it("prefers cached set.volume when present", () => {
+    const h = [{
+      date: "2026-05-01",
+      blocks: [{ exercises: [{
+        name: "Squat",
+        sets: [{ weight: 50, reps: 1, volume: 999 }],  // cached overrides raw
+      }]}],
+    }];
+    expect(totalTonnage(h)).toBe(999);
+  });
+
+  it("doubles per-DB sets (both arms contribute to systemic load)", () => {
+    const h = [{
+      date: "2026-05-01",
+      blocks: [{ exercises: [{
+        name: "DB Curl",
+        sets: [{ weight: 10, reps: 10, loadType: "per_db" }],
+      }]}],
+    }];
+    expect(totalTonnage(h)).toBe(200);  // 10 × 10 × 2
+  });
+
+  it("does not double non-per-DB sets", () => {
+    const h = [{
+      date: "2026-05-01",
+      blocks: [{ exercises: [{
+        name: "Squat",
+        sets: [{ weight: 100, reps: 5, loadType: "barbell" }],
+      }]}],
+    }];
+    expect(totalTonnage(h)).toBe(500);
+  });
+});
+
+describe("pendingTonnageMilestone", () => {
+  it("returns null when no milestone crossed yet", () => {
+    expect(pendingTonnageMilestone(500, 0)).toBeNull();
+  });
+
+  it("returns the lowest unseen milestone the user has crossed", () => {
+    expect(pendingTonnageMilestone(1200, 0)).toBe(1000);
+    expect(pendingTonnageMilestone(7000, 1000)).toBe(5000);
+    expect(pendingTonnageMilestone(7000, 5000)).toBeNull();
+  });
+
+  it("skips milestones already acknowledged", () => {
+    expect(pendingTonnageMilestone(11000, 10000)).toBeNull();
+    expect(pendingTonnageMilestone(26000, 10000)).toBe(25000);
+  });
+
+  it("milestones are sorted ascending", () => {
+    const sorted = [...TONNAGE_MILESTONES_KG].sort((a, b) => a - b);
+    expect(TONNAGE_MILESTONES_KG).toEqual(sorted);
+  });
+});
+
+describe("formatTonnage", () => {
+  it("renders sub-tonne as kg", () => {
+    expect(formatTonnage(500)).toBe("500 kg");
+    expect(formatTonnage(999)).toBe("999 kg");
+  });
+
+  it("renders 1–9.99t with 2dp", () => {
+    expect(formatTonnage(1000)).toBe("1.00 t");
+    expect(formatTonnage(1234)).toBe("1.23 t");
+    expect(formatTonnage(5000)).toBe("5.00 t");
+  });
+
+  it("renders 10–99.9t with 1dp", () => {
+    expect(formatTonnage(10000)).toBe("10.0 t");
+    expect(formatTonnage(50000)).toBe("50.0 t");
+  });
+
+  it("renders >=100t as whole tonnes", () => {
+    expect(formatTonnage(100000)).toBe("100 t");
+    expect(formatTonnage(250000)).toBe("250 t");
   });
 });
