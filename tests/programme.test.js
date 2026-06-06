@@ -137,6 +137,35 @@ describe("findRecentDays — local timezone handling", () => {
   it("daysBack=0 returns empty list", () => {
     expect(findRecentDays([], 0)).toEqual([]);
   });
+
+  // Regression: the retro picker used to call findRecentDays without the
+  // user's edited schedule, so it would label day-types from the default
+  // WEEK constant — strength shown on Mon for a user whose strength day was
+  // moved to Tue, the actual Tue strength day labelled "rest", retro form
+  // empty when picks didn't match. Confirm a custom week flows through.
+  it("honours a custom week override (regression: retro picker)", () => {
+    // Custom week: rest Mon, strength Tue, everything else rest. So
+    // yesterday-or-earlier may include either a "rest" Mon or a "strength"
+    // Tue depending on the calendar — we just assert the function uses the
+    // custom labels, not the default WEEK.
+    const customWeek = [
+      { type: "rest",     label: "Rest",     s: "Mo" },  // idx 0 = Mon
+      { type: "strength", label: "Strength", s: "Tu" },  // idx 1 = Tue
+      { type: "rest",     label: "Rest",     s: "We" },
+      { type: "rest",     label: "Rest",     s: "Th" },
+      { type: "rest",     label: "Rest",     s: "Fr" },
+      { type: "rest",     label: "Rest",     s: "Sa" },
+      { type: "rest",     label: "Rest",     s: "Su" },
+    ];
+    const rows = findRecentDays([], 7, { week: customWeek });
+    // Across the last 7 days, exactly one should be Tuesday-strength, the
+    // rest should be Rest. With the bug (default WEEK), strength would land
+    // on a different day and the count would diverge.
+    const strengthRows = rows.filter(r => r.type === "strength");
+    expect(strengthRows.length).toBe(1);
+    const restRows = rows.filter(r => r.type === "rest");
+    expect(restRows.length).toBe(6);
+  });
 });
 
 // ─── Load-profile invariants ────────────────────────────────────────────────
