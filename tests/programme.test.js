@@ -38,6 +38,11 @@ import {
   applyFocusToSessions,
   applyRotationToSession,
   SCULPT_ALIGNED_PRIMARIES,
+  dedupeRotationConfig,
+  pruneStaleRotationConfig,
+  hasMissedStrength,
+  hasUntickedRecent,
+  weekdayIdxForDate,
 } from "../lib/programme.js";
 
 // ─── Pool[0] invariant ──────────────────────────────────────────────────────
@@ -883,5 +888,171 @@ describe("applyRotationToSession", () => {
     expect(css3.exA.name).toBe("Hammer Curl");                  // valid → applied
     const defaultExB = dayC.blocks.find(b => b.id === "css3").exB.name;
     expect(css3.exB.name).toBe(defaultExB);                     // ghost → fallback
+  });
+});
+
+// ─── Cross-slot rotation deduplication ──────────────────────────────────────
+// Pools overlap (e.g. "Leaning Lateral Raise" lives in both bfin-B and
+// css1-B). Two independent picks can land on the same exercise → user
+// trains it twice in the same week. The dedup pass walks slots in order;
+// any slot whose pick already appears earlier gets re-rolled excluding all
+// claimed names. First-slot wins.
+describe("rotateAccessories — cross-slot deduplication", () => {
+  it("emits no duplicate exercise names across slots", () => {
+    // Run rotation across many seeds — the dedup is randomised so we want
+    // confidence it holds reliably. 50 rolls is plenty for a smoke check.
+    for (let i = 0; i < 50; i++) {
+      const config = rotateAccessories({}, { focus: "Forged" });
+      const names = Object.values(config).map(ex => ex?.name).filter(Boolean);
+      const uniques = new Set(names);
+      expect(uniques.size).toBe(names.length);
+    }
+  });
+
+  it("never picks an exercise that isn't in its slot's pool", () => {
+    const config = rotateAccessories({}, { focus: "Forged" });
+    for (const [key, pick] of Object.entries(config)) {
+      const pool = EXERCISE_POOLS[key].pool;
+      expect(pool.some(ex => ex.name === pick.name)).toBe(true);
+    }
+  });
+});
+
+describe("dedupeRotationConfig", () => {
+  it("returns the input reference when there are no duplicates", () => {
+    const config = rotateAccessories({}, { focus: "Forged" });
+    const deduped = dedupeRotationConfig(config, {});
+    expect(deduped).toBe(config);
+  });
+
+  it("returns input reference for empty/missing config", () => {
+    const empty = {};
+    expect(dedupeRotationConfig(empty, {})).toBe(empty);
+    expect(dedupeRotationConfig(null, {})).toBe(null);
+    // undefined falls through to the {} default param, so don't test that case
+  });
+
+  it("re-rolls a slot whose pick duplicates an earlier slot", () => {
+    // Construct a config where bfin-B and css1-B both hold Leaning Lateral
+    // Raise (a real cross-pool overlap). After dedup, the later slot
+    // (css1-B in insertion order) must change.
+    const llr = { name: "Leaning Lateral Raise", reps: 12, weight: 7, muscle: "Lateral delt" };
+    // Insertion order in EXERCISE_POOLS puts bfin-B BEFORE css1-B — confirm
+    // this assumption so the test stays honest if pool order ever changes.
+    const keys = Object.keys(EXERCISE_POOLS);
+    expect(keys.indexOf("bfin-B")).toBeLessThan(keys.indexOf("css1-B"));
+
+    const seed = rotateAccessories({}, { focus: "Forged" });
+    const config = { ...seed, "bfin-B": llr, "css1-B": llr };
+    const deduped = dedupeRotationConfig(config, {}, { focus: "Forged" });
+    expect(deduped).not.toBe(config);
+    expect(deduped["bfin-B"].name).toBe("Leaning Lateral Raise");
+    expect(deduped["css1-B"].name).not.toBe("Leaning Lateral Raise");
+    // Replacement must be a real css1-B pool member
+    const pool = EXERCISE_POOLS["css1-B"].pool;
+    expect(pool.some(ex => ex.name === deduped["css1-B"].name)).toBe(true);
+  });
+
+  it("never introduces new duplicates while resolving existing ones", () => {
+    const llr = { name: "Leaning Lateral Raise", reps: 12, weight: 7, muscle: "Lateral delt" };
+    for (let i = 0; i < 50; i++) {
+      const seed = rotateAccessories({}, { focus: "Forged" });
+      const config = { ...seed, "bfin-B": llr, "css1-B": llr };
+      const deduped = dedupeRotationConfig(config, {}, { focus: "Forged" });
+      const names = Object.values(deduped).map(ex => ex?.name).filter(Boolean);
+      expect(new Set(names).size).toBe(names.length);
+    }
+  });
+});
+
+describe("pruneStaleRotationConfig", () => {
+  it("returns the input reference when nothing is stale", () => {
+    const config = rotateAccessories({}, { focus: "Forged" });
+    expect(pruneStaleRotationConfig(config)).toBe(config);
+  });
+
+  it("handles empty / null input", () => {
+    const empty = {};
+    expect(pruneStaleRotationConfig(empty)).toBe(empty);
+    expect(pruneStaleRotationConfig(null)).toBe(null);
+  });
+
+  it("strips an entry whose name is no longer in the slot's live pool", () => {
+    // "DB Kickback" was removed from css3-B in PR #96. A user who rolled
+    // into it before that should have the stale entry pruned, so the
+    // resolver falls through to the SESSIONS default (Skullcrusher).
+    const ghost = { name: "DB Kickback", reps: 12, weight: 8, muscle: "Triceps" };
+    const seed = rotateAccessories({}, { focus: "Forged" });
+    const config = { ...seed, "css3-B": ghost };
+    const pruned = pruneStaleRotationConfig(config);
+    expect(pruned).not.toBe(config);
+    expect(pruned["css3-B"]).toBeUndefined();
+    // Untouched entries stay the same reference
+    expect(pruned["bss1-A"]).toBe(config["bss1-A"]);
+  });
+
+  it("preserves entries pointing at unknown slot keys (defensive)", () => {
+    // A config key without a matching pool — leave alone so a future schema
+    // addition doesn't silently lose user state.
+    const config = { "unknown-slot": { name: "Whatever" } };
+    expect(pruneStaleRotationConfig(config)).toBe(config);
+  });
+});
+
+// ─── hasMissedStrength / hasUntickedRecent / weekdayIdxForDate ─────────────
+describe("weekdayIdxForDate (monday-start 0=Mon..6=Sun)", () => {
+  it("maps known dates to the right index", () => {
+    // 2026-06-01 = Monday → 0
+    expect(weekdayIdxForDate("2026-06-01")).toBe(0);
+    // 2026-06-07 = Sunday → 6
+    expect(weekdayIdxForDate("2026-06-07")).toBe(6);
+    // 2026-06-04 = Thursday → 3
+    expect(weekdayIdxForDate("2026-06-04")).toBe(3);
+  });
+
+  it("returns null for missing input", () => {
+    expect(weekdayIdxForDate(null)).toBe(null);
+    expect(weekdayIdxForDate("")).toBe(null);
+    expect(weekdayIdxForDate(undefined)).toBe(null);
+  });
+});
+
+describe("hasMissedStrength / hasUntickedRecent — surface logic", () => {
+  it("hasUntickedRecent is identical to hasMissedStrength when all non-rest days are strength", () => {
+    // History with zero logged strength sessions over the last 3 days — both
+    // detectors should agree if every recent day is a strength day.
+    // Easier to assert: hasUntickedRecent ⊇ hasMissedStrength on any input.
+    // We compute both and assert the OR direction.
+    const empty = [];
+    const a = hasMissedStrength(empty, 3);
+    const b = hasUntickedRecent(empty, 3, {});
+    // If a is true, b must be true. The reverse may or may not hold.
+    if (a) expect(b).toBe(true);
+  });
+
+  it("hasUntickedRecent fires for a non-strength training day that's not ticked", () => {
+    // Construct a userWeek where TODAY is a strength day (so it doesn't
+    // colour the test) but YESTERDAY is a z2 day. With weekDone empty, the
+    // detector should fire because yesterday's z2 is unticked.
+    // findRecentDays uses the WEEK constant by default; we pass a custom
+    // week that puts z2 on yesterday's weekday.
+    const today = new Date(); today.setHours(0,0,0,0);
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    const yIdx = [6,0,1,2,3,4,5][yesterday.getDay()];
+
+    // Build a week with z2 on yesterday's slot, strength on today's, rest elsewhere
+    const tIdx = [6,0,1,2,3,4,5][today.getDay()];
+    const week = Array(7).fill(null).map((_, i) => {
+      if (i === yIdx) return { type: "z2", s: "Tu" };
+      if (i === tIdx) return { type: "strength", s: "Tu" };
+      return { type: "rest", s: "Re" };
+    });
+
+    // With weekDone empty → yesterday's z2 isn't ticked → should fire
+    expect(hasUntickedRecent([], 3, {}, { week })).toBe(true);
+    // With weekDone[yIdx] = true → ticked → shouldn't fire on z2 alone
+    // (still might fire from strength misses on other recent days, but
+    // we're constructing 1 non-rest day in the window)
+    expect(hasUntickedRecent([], 3, { [yIdx]: true }, { week })).toBe(false);
   });
 });

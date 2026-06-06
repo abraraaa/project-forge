@@ -4,12 +4,13 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   WEEK, SESSIONS, deriveStrengthDaySessions,
   EXERCISE_POOLS, rotateAccessories, rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
+  dedupeRotationConfig, pruneStaleRotationConfig,
   ROTATION_OPTIONAL, ROTATION_AUTO, ROTATION_FORCED,
   DAY_CONFIG, DAY_NAMES, SWAP_DB, EQ_COLOUR,
   bonusForDay,
   FOCUS_OPTIONS, DEFAULT_FOCUS, FOCUS_SUMMARIES, applyFocusToSession, applyRotationToSession,
   // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
-  sessionMetaForDate, findRecentDays, hasMissedStrength,
+  sessionMetaForDate, findRecentDays, hasMissedStrength, hasUntickedRecent, weekdayIdxForDate,
 } from "@/lib/programme";
 import {
   LS, P, PB, W, F, H, BW, PN, bumpStreak,
@@ -39,7 +40,7 @@ import {
   deloadCardCopy,
   deloadDayLabel,
 } from "@/lib/progression";
-import { getLiftProfile } from "@/lib/lift-translations";
+import { getLiftProfile, sanitiseWorkingWeights } from "@/lib/lift-translations";
 import {
   isWebAuthnSupported, isPlatformAuthenticatorAvailable,
   registerPasskey, authenticatePasskey, hasPasskey,
@@ -81,6 +82,18 @@ function getLoadType(ex) {
   return ex?.loadType || inferLoadType(ex?.name);
 }
 
+// Real-world implement increments per loadType. Dumbbells rarely come in
+// fractional kg — most racks step in whole kg from 2-30kg then 2.5kg above.
+// Cable stacks are typically pinned at 2.5kg per plate. Barbells take micro-
+// plates as small as 1.25kg. Bodyweight has no scale. Used by every drum that
+// edits a weight so the scroll feels honest to what you can actually load.
+function weightStepForLoadType(lt) {
+  if (lt === "per_db")            return 1;     // most DB racks step in whole kg
+  if (lt === "cable" || lt === "total") return 2.5;  // pin-loaded stacks
+  if (lt === "bodyweight" || lt === "loaded_bodyweight" || lt === "assisted_bodyweight") return 1.25;
+  return 1.25;  // barbell / external default
+}
+
 // ─── loadType → caption ──────────────────────────────────────────────────────
 // What does the number the user types represent? Resolves the per-DB vs
 // total-load ambiguity the picker has historically left implicit. Two
@@ -101,6 +114,10 @@ const WEIGHT_CAPTIONS = {
 };
 
 // ─── ScrollDrum ────────────────────────────────────────────────────────────────
+// Native scroll-snap picker. Designed to feel like a weighted physical drum:
+// items magnify + brighten as they approach the centre band, dim and shrink
+// as they fall away. Cubic-bezier easing on every item transition adds the
+// "settle" beat after a flick stops. Tap-to-jump still works for fine control.
 function ScrollDrum({value,onChange,step=1.25,min=0,max=500,integer=false,label="",unit=null}){
   const ITEM_H=52,VISIBLE=5,half=Math.floor(VISIBLE/2);
   const values=useMemo(()=>{
@@ -114,15 +131,23 @@ function ScrollDrum({value,onChange,step=1.25,min=0,max=500,integer=false,label=
   const ref=useRef(null);
   const scrolling=useRef(false);
   const timer=useRef(null);
+  // Track the live scroll offset so the magnification can smoothly follow a
+  // flick (not just snap targets). visibleIdx is a fractional index that
+  // tracks the centre of the viewport during scroll; items compute their
+  // distance from it for opacity/scale ramps.
+  const [visibleIdx,setVisibleIdx]=useState(selectedIdx);
   useEffect(()=>{
     if(!ref.current||scrolling.current) return;
     const raf=requestAnimationFrame(()=>{ if(ref.current) ref.current.scrollTop=selectedIdx*ITEM_H; });
+    setVisibleIdx(selectedIdx);
     return()=>cancelAnimationFrame(raf);
   },[selectedIdx]);
   const onScroll=useCallback(()=>{
     if(!ref.current) return;
     scrolling.current=true;
-    const idx=Math.min(Math.round(ref.current.scrollTop/ITEM_H),values.length-1);
+    const frac=ref.current.scrollTop/ITEM_H;
+    setVisibleIdx(frac);
+    const idx=Math.min(Math.round(frac),values.length-1);
     const next=values[Math.max(0,idx)];
     if(next!==undefined&&Math.abs(next-current)>(integer?0.1:0.01)) onChange(next);
     clearTimeout(timer.current);
@@ -133,20 +158,38 @@ function ScrollDrum({value,onChange,step=1.25,min=0,max=500,integer=false,label=
     const n=Math.round(v*100)/100;
     return Number.isInteger(n)?String(n):n.toFixed(2).replace(/0+$/,"").replace(/\.$/,"");
   };
+  // Inertia easing — cubic-bezier matches T.ease but with a softer overshoot
+  // so the magnify-on-arrival reads as a "settle" rather than a hard snap.
+  const drumEase = `cubic-bezier(0.18, 0.95, 0.30, 1.05)`;
   return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}>
       {label&&<div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>{label}</div>}
       <div style={{position:"relative",height:ITEM_H*VISIBLE,width:"100%",overflow:"hidden"}}>
-        <div style={{position:"absolute",top:"50%",left:0,right:0,height:ITEM_H,transform:"translateY(-50%)",background:`${T.coral}14`,borderTop:`1px solid ${T.coral}33`,borderBottom:`1px solid ${T.coral}33`,pointerEvents:"none",zIndex:1,borderRadius:T.r.sm}}/>
-        <div style={{position:"absolute",top:0,left:0,right:0,height:ITEM_H*1.8,background:`linear-gradient(to bottom,${T.bg2} 30%,transparent)`,pointerEvents:"none",zIndex:2}}/>
-        <div style={{position:"absolute",bottom:0,left:0,right:0,height:ITEM_H*1.8,background:`linear-gradient(to top,${T.bg2} 30%,transparent)`,pointerEvents:"none",zIndex:2}}/>
+        {/* Selected-row band — soft inner shadow + warm tint give the picker
+            a "pressed window" depth. Coral lip at top/bottom keeps the focus
+            ring while the inner-shadow + rounded corners read as recessed. */}
+        <div style={{position:"absolute",top:"50%",left:0,right:0,height:ITEM_H,transform:"translateY(-50%)",background:`${T.coral}18`,borderTop:`1px solid ${T.coral}40`,borderBottom:`1px solid ${T.coral}40`,boxShadow:`inset 0 6px 14px -10px ${T.coral}66, inset 0 -6px 14px -10px ${T.coral}66`,pointerEvents:"none",zIndex:1,borderRadius:T.r.sm}}/>
+        <div style={{position:"absolute",top:0,left:0,right:0,height:ITEM_H*1.8,background:`linear-gradient(to bottom,${T.bg2} 24%,transparent)`,pointerEvents:"none",zIndex:2}}/>
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:ITEM_H*1.8,background:`linear-gradient(to top,${T.bg2} 24%,transparent)`,pointerEvents:"none",zIndex:2}}/>
         <div ref={ref} onScroll={onScroll} style={{height:"100%",overflowY:"scroll",scrollSnapType:"y mandatory",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",paddingTop:ITEM_H*half,paddingBottom:ITEM_H*half,boxSizing:"content-box"}}>
           <style>{`*::-webkit-scrollbar{display:none}`}</style>
           {values.map((v,i)=>{
-            const sel=i===selectedIdx;
+            // Continuous distance from the live viewport centre. While
+            // settled, this equals integer distance from selectedIdx; mid-
+            // scroll it ramps smoothly so the drum reads as a single piece
+            // of material rolling past, not 5 discrete snap-stops.
+            const dist=Math.abs(i-visibleIdx);
+            const clamped=Math.min(dist,2.2);
+            // Selected → 1.0 / 30px. ±1 row → ~0.86 / ~25px. ±2 row → ~0.7 / ~19px.
+            const scale=Math.max(0.66,1-clamped*0.16);
+            const fontSize=Math.round(30-clamped*5.5);
+            const opacity=Math.max(0.28,1-clamped*0.36);
+            const colour=dist<0.6?T.text1:dist<1.4?T.text2:T.text4;
+            const weight=dist<0.6?400:300;
+            const textShadow=dist<0.4?`0 1px 14px ${T.coral}26`:"none";
             return(
               <div key={i} onClick={()=>onChange(v)} style={{height:ITEM_H,scrollSnapAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
-                <span style={{fontFamily:T.serif,fontSize:sel?30:20,fontWeight:sel?400:300,color:sel?T.text1:T.text4,transition:`all 140ms ${T.ease}`,userSelect:"none"}}>{fmt(v)}</span>
+                <span style={{fontFamily:T.serif,fontSize,fontWeight:weight,color:colour,opacity,transform:`scale(${scale})`,textShadow,transition:`font-size 220ms ${drumEase}, color 200ms ${drumEase}, opacity 200ms ${drumEase}, transform 220ms ${drumEase}, text-shadow 240ms ${drumEase}`,userSelect:"none",willChange:"transform"}}>{fmt(v)}</span>
               </div>
             );
           })}
@@ -395,6 +438,29 @@ export default function ForgeApp(){
     [history, recoveryDismissed]
   );
 
+  // Silent migration for rotation config corruption. Two passes, both pure:
+  //   1. Prune entries whose exercise name is no longer in its slot's live
+  //      pool — e.g. the "DB Kickback" the user had rolled before PR #96
+  //      removed it from css3-B. The home preview self-heals via
+  //      applyRotationToSession, but the in-session resolveExFn reads
+  //      config directly, so the ghost shows in the active session.
+  //      Pruning here makes every downstream consumer see clean state.
+  //   2. Dedupe cross-slot duplicates — pools overlap (Leaning Lateral
+  //      Raise lives in both bfin-B and css1-B) so two independent picks
+  //      could land on the same exercise. Re-roll the later slot from its
+  //      pool excluding the claimed name.
+  // Both helpers return the input reference when no change is needed —
+  // cheap identity check guards this effect from re-running uselessly.
+  useEffect(() => {
+    if (!activeProfile || !programmeBlock?.config) return;
+    const pruned   = pruneStaleRotationConfig(programmeBlock.config);
+    const deduped  = dedupeRotationConfig(pruned, programmeBlock.history, { focus: userFocus });
+    if (deduped === programmeBlock.config) return;
+    const next = { ...programmeBlock, config: deduped };
+    setProgrammeBlock(next);
+    PB.save(next);
+  }, [activeProfile, programmeBlock, userFocus]);
+
   // Lifetime-tonnage milestone. Recomputes on every history change (cheap — O(n)
   // over sessions). When the user crosses a new milestone, a small card surfaces
   // on home as a once-per-threshold celebration. Tap dismisses, persists the
@@ -425,7 +491,14 @@ export default function ForgeApp(){
   // without a reload. Falls back to the default WEEK when nothing is stored.
   const [userWeek, setUserWeek] = useState(() => W.get() || WEEK);
   const strengthDaySessions = useMemo(() => deriveStrengthDaySessions(userWeek), [userWeek]);
-  const hasRetroGaps = useMemo(() => hasMissedStrength(history, 3, { week: userWeek }), [history, userWeek]);
+  // Catch-up link surfaces when there's any unrecorded recent training day —
+  // missed strength session (logged via retro picker) OR untickered current-
+  // week non-strength day (zone-2 / HIIT / cardio, ticked via weekDone).
+  // hasMissedStrength stays in use for paths that want strength-only signal.
+  const hasRetroGaps = useMemo(
+    () => hasUntickedRecent(history, 3, weekDone, { week: userWeek }),
+    [history, weekDone, userWeek]
+  );
   const [weekEditorOpen, setWeekEditorOpen] = useState(false);
   const handleSaveWeek = (newWeek) => {
     W.save(newWeek);
@@ -448,7 +521,15 @@ export default function ForgeApp(){
     // synchronising with an external store, which is exactly what effects are
     // for. The seed runs once per profile, no cascade. Intentional.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setWWState(local.meta.weights || {});
+    // Sanity-clamp wildly-out-of-range workingWeights at load (defensive
+    // against corruption from earlier bugs — e.g. 110kg recommendation for
+    // an isolation movement). Only clamps values > 1.5× category cap.
+    const rawWeights = local.meta.weights || {};
+    const sanitisedWeights = sanitiseWorkingWeights(rawWeights);
+    if (sanitisedWeights !== rawWeights) {
+      P.saveWeights(activeProfile, sanitisedWeights);
+    }
+    setWWState(sanitisedWeights);
     setWRState(local.meta.reps || {});
     setStreak(local.meta.streak?.count || 0);
     setProgrammeBlock(local.meta.programmeBlock || PB.get());
@@ -476,8 +557,13 @@ export default function ForgeApp(){
     // BACKGROUND: Sync from blob, update state if remote has newer data
     const onSyncUpdate = ({ meta, history: remoteHistory }) => {
       if (cancelled) return;
-      // Blob had newer data — update React state silently
-      if (meta.weights) setWWState(meta.weights);
+      // Blob had newer data — update React state silently (clamping any
+      // wildly-out-of-range weights along the way; see sanitiseWorkingWeights)
+      if (meta.weights) {
+        const sanitised = sanitiseWorkingWeights(meta.weights);
+        if (sanitised !== meta.weights) P.saveWeights(activeProfile, sanitised);
+        setWWState(sanitised);
+      }
       if (meta.reps) setWRState(meta.reps);
       if (meta.streak?.count) setStreak(meta.streak.count);
       if (meta.programmeBlock) setProgrammeBlock(meta.programmeBlock);
@@ -1080,16 +1166,23 @@ export default function ForgeApp(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[screen==="done"]);
 
-  // Mark a non-strength day complete (zone 2, cardio, HIIT, rest)
-  const handleMarkDayDone = useCallback(()=>{
+  // Mark a non-strength day complete (zone 2, cardio, HIIT, rest). Defaults
+  // to today; pass an explicit weekday index (0=Mon..6=Sun, monday-start) to
+  // tick a past day from the retro-catch-up picker. Streak only bumps when
+  // marking today — backfilling past days shouldn't count toward "today's
+  // streak", that's gaming the metric.
+  const handleMarkDayDone = useCallback((idx)=>{
     if(!activeProfile) return;
-    const dw=new Date().getDay();
-    const wm=[6,0,1,2,3,4,5];
-    const idx=wm[dw];
-    const updated=P.markDayDone(activeProfile,idx);
+    let dayIdx = idx;
+    const todayDow = new Date().getDay();
+    const todayMondayIdx = [6,0,1,2,3,4,5][todayDow];
+    if (dayIdx === undefined || dayIdx === null) dayIdx = todayMondayIdx;
+    const updated=P.markDayDone(activeProfile,dayIdx);
     setWeekDone(updated);
-    const newStreak=bumpStreak(activeProfile);
-    setStreak(newStreak);
+    if (dayIdx === todayMondayIdx) {
+      const newStreak=bumpStreak(activeProfile);
+      setStreak(newStreak);
+    }
   },[activeProfile]);
 
   // Mark today's optional cardio bonus complete. Separate store from weekDone;
@@ -1689,7 +1782,7 @@ const sProps={
       {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} sessionStartWeights={sessionStartWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
       {screen==="performance" && <ErrorBoundary><PerformanceLab history={history} onBack={()=>setScreen("home")}/></ErrorBoundary>}
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} userWeek={userWeek} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
-      {retroPickerOpen        && <RetroPickerSheet history={history} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onClose={()=>setRetroPickerOpen(false)}/>}
+      {retroPickerOpen        && <RetroPickerSheet history={history} pendingDraft={pendingDraft} weekDone={weekDone} onPick={handlePickRetroDate} onTickDay={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}
       {showIosInstall         && <IosInstallOverlay onDismiss={()=>{ LS.set("forge:iosInstallDismissed", true); setShowIosInstall(false); }}/>}
@@ -3352,19 +3445,6 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         </Fade>
       )}
 
-      {/* Reset accessories — quiet escape hatch for over-rotated users. Only
-          surfaces when there's actual rotation drift to undo. Two-tap confirm
-          inline, no modal, 5s auto-disarm. */}
-      {hasRotationDrift && (
-        <div style={{margin:"16px 24px 0",textAlign:"center"}}>
-          <button
-            onClick={handleResetTap}
-            style={{padding:"6px 10px",background:"none",border:"none",cursor:"pointer",fontSize:11,color:resetArmed?T.rose:T.text4,textDecoration:"underline",textUnderlineOffset:3,fontFamily:T.sans}}>
-            {resetArmed ? "Tap again to reset accessories to defaults" : "Reset accessories to defaults"}
-          </button>
-        </div>
-      )}
-
       {/* Performance Lab entry — always visible, becomes active once data exists */}
       <Fade d={260}>
         <div onClick={onPerformance}
@@ -3389,6 +3469,21 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           </div>
         </div>
       </Fade>
+
+      {/* Reset accessories — quiet escape hatch for over-rotated users. Lives
+          below the Performance Lab card now so it doesn't compete for attention
+          with the day's session card. Only surfaces when there's actual
+          rotation drift to undo. Two-tap confirm inline, no modal, 5s
+          auto-disarm. */}
+      {hasRotationDrift && (
+        <div style={{margin:"16px 24px 0",textAlign:"center"}}>
+          <button
+            onClick={handleResetTap}
+            style={{padding:"6px 10px",background:"none",border:"none",cursor:"pointer",fontSize:11,color:resetArmed?T.rose:T.text4,textDecoration:"underline",textUnderlineOffset:3,fontFamily:T.sans}}>
+            {resetArmed ? "Tap again to reset accessories to defaults" : "Reset accessories to defaults"}
+          </button>
+        </div>
+      )}
 
       {rotateChoiceOpen && (
         <RotationChoiceModal
@@ -3732,6 +3827,23 @@ function RpeCard({onPick,label="How was that set?"}){
   );
 }
 
+// ─── Rest progress line ──────────────────────────────────────────────────────
+// Thin bone-coloured strip under the rest timer that drains in sync with the
+// remaining seconds. Visually unobtrusive — dim track + slightly brighter
+// fill — but gives the user a continuous "you're partway through" cue
+// between the once-per-second text ticks. CSS transition does the smoothing
+// so the line slides continuously even though `remain` only updates per
+// integer second.
+function RestProgressLine({ active, remain, total }) {
+  if (!active || !total || total <= 0) return null;
+  const pct = Math.max(0, Math.min(1, remain / total)) * 100;
+  return (
+    <div style={{marginTop:8,height:1,width:"100%",background:`${T.text2}22`,borderRadius:999,overflow:"hidden"}}>
+      <div style={{height:"100%",width:`${pct}%`,background:T.text2,opacity:0.7,transition:"width 1000ms linear"}}/>
+    </div>
+  );
+}
+
 // ─── Session ──────────────────────────────────────────────────────────────────
 function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,deloadDayTag=null}){
   const {strength:s}=T;
@@ -3862,22 +3974,28 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
       {!blocking&&(
         <>
           {showRestHint&&(
-            <div style={{padding:"12px 20px 0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <span style={{fontSize:12,color:restActive?T.coral:T.text4,fontStyle:"italic",fontFamily:T.serif,transition:`color 300ms ${T.ease}`}}>
-                {restActive?`Resting — ${restStr}`:`~${Math.round(block.rest/60)} min rest`}
-              </span>
-              <button onClick={()=>{if(restActive){setRestActive(false);setRestRemain(block.rest);}else{setRestRemain(block.rest);setRestActive(true);}}}
-                style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.sm,padding:"4px 10px",cursor:"pointer",fontSize:11,color:restActive?T.coral:T.text3,transition:`all 180ms ${T.ease}`}}>
-                {restActive?"Skip":"Start timer"}
-              </button>
+            <div style={{padding:"12px 20px 0"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span style={{fontSize:12,color:restActive?T.coral:T.text4,fontStyle:"italic",fontFamily:T.serif,transition:`color 300ms ${T.ease}`}}>
+                  {restActive?`Resting — ${restStr}`:`~${Math.round(block.rest/60)} min rest`}
+                </span>
+                <button onClick={()=>{if(restActive){setRestActive(false);setRestRemain(block.rest);}else{setRestRemain(block.rest);setRestActive(true);}}}
+                  style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.sm,padding:"4px 10px",cursor:"pointer",fontSize:11,color:restActive?T.coral:T.text3,transition:`all 180ms ${T.ease}`}}>
+                  {restActive?"Skip":"Start timer"}
+                </button>
+              </div>
+              <RestProgressLine active={restActive} remain={restRemain} total={block.rest} />
             </div>
           )}
           {isSS&&phase==="A"&&(
             restActive
               ?(
-                <div style={{padding:"12px 20px 0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <span style={{fontSize:12,color:T.coral,fontStyle:"italic",fontFamily:T.serif}}>Resting — {restStr}</span>
-                  <button onClick={()=>{setRestActive(false);setRestRemain(block.rest);}} style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.sm,padding:"4px 10px",cursor:"pointer",fontSize:11,color:T.coral}}>Skip</button>
+                <div style={{padding:"12px 20px 0"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <span style={{fontSize:12,color:T.coral,fontStyle:"italic",fontFamily:T.serif}}>Resting — {restStr}</span>
+                    <button onClick={()=>{setRestActive(false);setRestRemain(block.rest);}} style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.sm,padding:"4px 10px",cursor:"pointer",fontSize:11,color:T.coral}}>Skip</button>
+                  </div>
+                  <RestProgressLine active={restActive} remain={restRemain} total={block.rest} />
                 </div>
               ):(
                 <div style={{padding:"8px 20px 0",fontSize:12,color:T.text3,fontStyle:"italic",fontFamily:T.serif}}>
@@ -4359,6 +4477,12 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
   const hasWeight=ex?.weight!==null&&ex?.weight!==undefined;
   const { containerRef, onKeyDown } = useModalA11y(onClose);
   const titleId = "drum-edit-title";
+  // Step size honours real-world implement increments: dumbbells come in
+  // whole-kg jumps (rarely 0.5kg, never 1.25), barbells take 1.25kg micro-
+  // plates, cables move in fixed-stack increments (usually 2.5kg). Default
+  // 1.25 stays for unknown / explicitly micro-loadable lifts.
+  const lt = getLoadType(ex);
+  const weightStep = weightStepForLoadType(lt);
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
@@ -4368,7 +4492,7 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
           <button onClick={onClose} aria-label="Close" style={{background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,padding:"6px 10px",cursor:"pointer",color:T.text2,fontSize:13}}>✕</button>
         </div>
         <div style={{display:"flex",gap:16,justifyContent:hasWeight?"space-between":"center"}}>
-          {hasWeight&&<ScrollDrum value={kg} onChange={setKg} step={1.25} min={0} max={400} label="kg"/>}
+          {hasWeight&&<ScrollDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
           <ScrollDrum value={reps} onChange={setReps} step={1} min={1} max={30} integer label="reps"/>
         </div>
         <button onClick={()=>{
@@ -4396,11 +4520,32 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
 // ═════════════════════════════════════════════════════════════════════════════
 
 // ─── Retro Picker Sheet ────────────────────────────────────────────────────────
-function RetroPickerSheet({history, pendingDraft, onPick, onClose}){
+function RetroPickerSheet({history, pendingDraft, weekDone={}, onPick, onTickDay, onClose}){
   const rows = useMemo(() => findRecentDays(history, 3), [history]);
   const draftBlocks = !!pendingDraft;
   const { containerRef, onKeyDown } = useModalA11y(onClose);
   const titleId = "retro-picker-title";
+
+  // For non-strength rows, "ticked" = the day's weekday-idx is in weekDone.
+  // Past-week days can't be ticked (weekDone is current-week-scoped) — we
+  // mark those as non-actionable in the UI so users don't tap fruitlessly.
+  const todayMonday = (() => {
+    const d = new Date(); d.setHours(0,0,0,0);
+    const dow = d.getDay();
+    const delta = dow === 0 ? -6 : 1 - dow;
+    d.setDate(d.getDate() + delta);
+    const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${day}`;
+  })();
+  const sameWeekAsToday = (dateStr) => {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const date = new Date(y, m-1, d);
+    const dow = date.getDay();
+    const delta = dow === 0 ? -6 : 1 - dow;
+    date.setDate(date.getDate() + delta);
+    const yy = date.getFullYear(), mm = String(date.getMonth()+1).padStart(2,"0"), dd = String(date.getDate()).padStart(2,"0");
+    return `${yy}-${mm}-${dd}` === todayMonday;
+  };
 
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
@@ -4410,7 +4555,7 @@ function RetroPickerSheet({history, pendingDraft, onPick, onClose}){
           <div>
             <div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>Recent days</div>
             <div style={{fontSize:12,color:T.text3,marginTop:4,lineHeight:1.5}}>
-              {draftBlocks ? "Finish your live session first" : "Tap a missed strength day to log it"}
+              {draftBlocks ? "Finish your live session first" : "Log a missed session or tick off a non-strength day"}
             </div>
           </div>
           <button onClick={onClose} aria-label="Close" style={{background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,padding:"6px 10px",cursor:"pointer",color:T.text2,fontSize:13,flexShrink:0}}>✕</button>
@@ -4418,18 +4563,45 @@ function RetroPickerSheet({history, pendingDraft, onPick, onClose}){
 
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {rows.map((row) => {
-            const isStrength    = row.type === "strength";
-            const tappable      = isStrength && !row.logged && !draftBlocks;
-            const accentColor   = isStrength ? (row.logged ? T.text4 : T.coral) : T.text4;
-            const opacity       = draftBlocks ? 0.4 : (row.logged || !isStrength ? 0.55 : 1);
+            const isStrength = row.type === "strength";
+            const isRest     = row.type === "rest";
+            // Non-strength check: is this day ticked already? Pull the
+            // weekday-idx, look it up in weekDone. Past-week days can't be
+            // ticked (different week storage) — surfaced as informational only.
+            const weekdayIdx = weekdayIdxForDate(row.date);
+            const inThisWeek = sameWeekAsToday(row.date);
+            const ticked     = !isStrength && !isRest && inThisWeek && !!weekDone[weekdayIdx];
+            const tappableStrength    = isStrength && !row.logged && !draftBlocks;
+            const tappableNonStrength = !isStrength && !isRest && inThisWeek && !ticked && !draftBlocks;
+            const tappable = tappableStrength || tappableNonStrength;
+            const accentColor = isStrength
+              ? (row.logged ? T.text4 : T.coral)
+              : (ticked ? T.sage : (tappableNonStrength ? T.sage : T.text4));
+            const opacity = draftBlocks ? 0.4
+              : isRest ? 0.55
+              : (row.logged || ticked) ? 0.7
+              : (!isStrength && !inThisWeek) ? 0.55
+              : 1;
+            const bg = tappableStrength    ? `${T.coral}0A`
+                     : tappableNonStrength ? `${T.sage}0A`
+                     : T.bg3;
+            const borderColor = tappableStrength    ? `${T.coral}33`
+                              : tappableNonStrength ? `${T.sage}33`
+                              : T.bg4;
+
+            const onTap = tappableStrength
+              ? () => onPick(row.date)
+              : tappableNonStrength
+                ? () => { onTickDay?.(weekdayIdx); }
+                : undefined;
 
             return (
               <div key={row.date}
-                onClick={tappable ? () => onPick(row.date) : undefined}
+                onClick={onTap}
                 style={{
                   padding:"14px 16px",
-                  background: tappable ? `${T.coral}0A` : T.bg3,
-                  border: `1px solid ${tappable ? T.coral+"33" : T.bg4}`,
+                  background: bg,
+                  border: `1px solid ${borderColor}`,
                   borderRadius: T.r.md,
                   cursor: tappable ? "pointer" : "default",
                   display:"flex",alignItems:"center",justifyContent:"space-between",
@@ -4445,12 +4617,14 @@ function RetroPickerSheet({history, pendingDraft, onPick, onClose}){
                     <span style={{fontSize:11,color:T.text3,letterSpacing:"0.04em"}}>
                       {row.sessionName}
                       {row.logged && " · logged"}
+                      {ticked && " · ticked"}
                     </span>
                   </div>
                 </div>
-                {tappable && <span style={{fontSize:18,color:T.coral}}>→</span>}
-                {!isStrength && <span style={{fontSize:10,color:T.text4,fontStyle:"italic",fontFamily:T.serif}}>{row.type === "rest" ? "rest" : "non-strength"}</span>}
-                {row.logged && <span style={{fontSize:11,color:T.sage,fontWeight:500,letterSpacing:"0.06em",textTransform:"uppercase"}}>✓</span>}
+                {tappableStrength    && <span style={{fontSize:18,color:T.coral}}>→</span>}
+                {tappableNonStrength && <span style={{fontSize:13,fontWeight:500,color:T.sage,letterSpacing:"0.04em"}}>Mark ✓</span>}
+                {isRest              && <span style={{fontSize:10,color:T.text4,fontStyle:"italic",fontFamily:T.serif}}>rest</span>}
+                {(row.logged || ticked) && <span style={{fontSize:11,color:T.sage,fontWeight:500,letterSpacing:"0.06em",textTransform:"uppercase"}}>✓</span>}
               </div>
             );
           })}
@@ -4765,7 +4939,7 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
                 <ScrollDrum
                   value={numericValue}
                   onChange={(v) => updateCell(editor.exIdx, editor.cellIdx, editor.kind, v)}
-                  step={isWeight ? 1.25 : 1}
+                  step={isWeight ? weightStepForLoadType(entry.loadType) : 1}
                   min={isWeight ? 0 : 1}
                   max={isWeight ? 400 : 30}
                   integer={!isWeight}

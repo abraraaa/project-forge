@@ -35,6 +35,9 @@ import {
   __test_p3__,
 } from "../lib/progression.js";
 import { startingWeightForLift, roundToHalfPlate } from "../lib/storage.js";
+import {
+  coldStartFromAnchor, sanitiseWorkingWeights, CATEGORY_COLD_START_MAX_KG,
+} from "../lib/lift-translations.js";
 
 // ─── Test helpers ───────────────────────────────────────────────────────────
 function buildSet({ weight = 100, reps = 5, rir = 2, effectiveLoad = null, volume = null }) {
@@ -860,5 +863,79 @@ describe("startingWeightForLift — BW% seeded starts", () => {
     expect(roundToHalfPlate(52.5)).toBe(52.5);
     expect(roundToHalfPlate(53.74)).toBe(52.5);
     expect(roundToHalfPlate(53.76)).toBe(55);
+  });
+});
+
+// ─── Cold-start sanity cap ──────────────────────────────────────────────────
+// Real-world bug: user reported 110kg recommendation for Leaning Lateral
+// Raise (an isolation movement; sensible working weight ~7-15kg). The cap
+// in CATEGORY_COLD_START_MAX_KG prevents an inflated muscleAnchor from
+// producing absurd cold-start recommendations.
+describe("coldStartFromAnchor — sanity cap", () => {
+  it("clamps absurd anchor-derived cold-start to the category cap", () => {
+    // Construct a shoulder anchor that would translate to ~108kg cold-start
+    // for Leaning Lateral Raise (factor 0.12): 1200 × 0.75 × 0.12 = 108.
+    // The accessory_isolation cap is 25kg, so output should be ≤25.
+    const inflatedAnchor = { bestE1RM: 1200, bestE1RMLift: "Phantom", bestE1RMDate: null };
+    const out = coldStartFromAnchor("Leaning Lateral Raise", inflatedAnchor);
+    expect(out).toBeLessThanOrEqual(CATEGORY_COLD_START_MAX_KG.accessory_isolation);
+    expect(out).toBeGreaterThan(0);
+  });
+
+  it("leaves a realistic cold-start untouched", () => {
+    // OHP at 60kg × 5 → e1RM 70 → for Leaning Lateral Raise (factor 0.12)
+    // gives 70 × 0.75 × 0.12 = 6.3 → rounds to 6.5kg. Well under cap.
+    const realisticAnchor = { bestE1RM: 70, bestE1RMLift: "Barbell Overhead Press" };
+    const out = coldStartFromAnchor("Leaning Lateral Raise", realisticAnchor);
+    expect(out).toBeGreaterThanOrEqual(5);
+    expect(out).toBeLessThanOrEqual(10);
+  });
+
+  it("returns null for BW-progression lifts (no anchor weight)", () => {
+    const anchor = { bestE1RM: 100 };
+    expect(coldStartFromAnchor("Pike Push-Up", anchor)).toBeNull();
+  });
+});
+
+describe("sanitiseWorkingWeights", () => {
+  it("returns the input reference when nothing needs clamping", () => {
+    const weights = {
+      "Leaning Lateral Raise": 8,
+      "Barbell Back Squat": 100,
+      "Bench Press": 80,
+    };
+    expect(sanitiseWorkingWeights(weights)).toBe(weights);
+  });
+
+  it("clamps an obviously-corrupt isolation weight back to the cap", () => {
+    const weights = { "Leaning Lateral Raise": 110 };  // ~5× cap of 25
+    const out = sanitiseWorkingWeights(weights);
+    expect(out).not.toBe(weights);
+    expect(out["Leaning Lateral Raise"]).toBe(CATEGORY_COLD_START_MAX_KG.accessory_isolation);
+  });
+
+  it("leaves slightly-above-cap values alone (likely legitimate progression)", () => {
+    // Isolation cap = 25; 1.5× buffer = 37.5. 30kg is above cap but below
+    // buffer, should be preserved (a strong lifter might legitimately do
+    // lateral raises at this weight).
+    const weights = { "Lateral Raise": 30 };
+    expect(sanitiseWorkingWeights(weights)).toBe(weights);
+  });
+
+  it("ignores BW-progression lifts (no weight cap applies)", () => {
+    const weights = { "Pike Push-Up": 999 };  // nonsensical but BW has no cap
+    expect(sanitiseWorkingWeights(weights)).toBe(weights);
+  });
+
+  it("ignores non-numeric or invalid entries", () => {
+    const weights = { "Bench Press": null, "Lateral Raise": "twenty", "Other": Infinity };
+    expect(sanitiseWorkingWeights(weights)).toBe(weights);
+  });
+
+  it("handles null/empty input safely", () => {
+    expect(sanitiseWorkingWeights(null)).toBe(null);
+    expect(sanitiseWorkingWeights(undefined)).toBe(undefined);
+    const empty = {};
+    expect(sanitiseWorkingWeights(empty)).toBe(empty);
   });
 });
