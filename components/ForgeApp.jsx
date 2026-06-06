@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   WEEK, SESSIONS, deriveStrengthDaySessions,
   EXERCISE_POOLS, rotateAccessories, rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
-  dedupeRotationConfig,
+  dedupeRotationConfig, pruneStaleRotationConfig,
   ROTATION_OPTIONAL, ROTATION_AUTO, ROTATION_FORCED,
   DAY_CONFIG, DAY_NAMES, SWAP_DB, EQ_COLOUR,
   bonusForDay,
@@ -438,16 +438,23 @@ export default function ForgeApp(){
     [history, recoveryDismissed]
   );
 
-  // Silent migration for cross-slot duplicate rotation picks. Pools overlap
-  // (e.g. "Leaning Lateral Raise" lives in both bfin-B and css1-B), so older
-  // configs rolled before the dedup pass could land the same exercise on two
-  // strength days in the same week. Walks the config; if any slot duplicates
-  // an earlier slot, re-rolls it from its pool excluding the claimed name.
-  // dedupeRotationConfig returns the input reference when no changes are
-  // needed — cheap identity check guards the effect from looping.
+  // Silent migration for rotation config corruption. Two passes, both pure:
+  //   1. Prune entries whose exercise name is no longer in its slot's live
+  //      pool — e.g. the "DB Kickback" the user had rolled before PR #96
+  //      removed it from css3-B. The home preview self-heals via
+  //      applyRotationToSession, but the in-session resolveExFn reads
+  //      config directly, so the ghost shows in the active session.
+  //      Pruning here makes every downstream consumer see clean state.
+  //   2. Dedupe cross-slot duplicates — pools overlap (Leaning Lateral
+  //      Raise lives in both bfin-B and css1-B) so two independent picks
+  //      could land on the same exercise. Re-roll the later slot from its
+  //      pool excluding the claimed name.
+  // Both helpers return the input reference when no change is needed —
+  // cheap identity check guards this effect from re-running uselessly.
   useEffect(() => {
     if (!activeProfile || !programmeBlock?.config) return;
-    const deduped = dedupeRotationConfig(programmeBlock.config, programmeBlock.history, { focus: userFocus });
+    const pruned   = pruneStaleRotationConfig(programmeBlock.config);
+    const deduped  = dedupeRotationConfig(pruned, programmeBlock.history, { focus: userFocus });
     if (deduped === programmeBlock.config) return;
     const next = { ...programmeBlock, config: deduped };
     setProgrammeBlock(next);
@@ -3820,6 +3827,23 @@ function RpeCard({onPick,label="How was that set?"}){
   );
 }
 
+// ─── Rest progress line ──────────────────────────────────────────────────────
+// Thin bone-coloured strip under the rest timer that drains in sync with the
+// remaining seconds. Visually unobtrusive — dim track + slightly brighter
+// fill — but gives the user a continuous "you're partway through" cue
+// between the once-per-second text ticks. CSS transition does the smoothing
+// so the line slides continuously even though `remain` only updates per
+// integer second.
+function RestProgressLine({ active, remain, total }) {
+  if (!active || !total || total <= 0) return null;
+  const pct = Math.max(0, Math.min(1, remain / total)) * 100;
+  return (
+    <div style={{marginTop:8,height:1,width:"100%",background:`${T.text2}22`,borderRadius:999,overflow:"hidden"}}>
+      <div style={{height:"100%",width:`${pct}%`,background:T.text2,opacity:0.7,transition:"width 1000ms linear"}}/>
+    </div>
+  );
+}
+
 // ─── Session ──────────────────────────────────────────────────────────────────
 function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,deloadDayTag=null}){
   const {strength:s}=T;
@@ -3950,22 +3974,28 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
       {!blocking&&(
         <>
           {showRestHint&&(
-            <div style={{padding:"12px 20px 0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <span style={{fontSize:12,color:restActive?T.coral:T.text4,fontStyle:"italic",fontFamily:T.serif,transition:`color 300ms ${T.ease}`}}>
-                {restActive?`Resting — ${restStr}`:`~${Math.round(block.rest/60)} min rest`}
-              </span>
-              <button onClick={()=>{if(restActive){setRestActive(false);setRestRemain(block.rest);}else{setRestRemain(block.rest);setRestActive(true);}}}
-                style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.sm,padding:"4px 10px",cursor:"pointer",fontSize:11,color:restActive?T.coral:T.text3,transition:`all 180ms ${T.ease}`}}>
-                {restActive?"Skip":"Start timer"}
-              </button>
+            <div style={{padding:"12px 20px 0"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span style={{fontSize:12,color:restActive?T.coral:T.text4,fontStyle:"italic",fontFamily:T.serif,transition:`color 300ms ${T.ease}`}}>
+                  {restActive?`Resting — ${restStr}`:`~${Math.round(block.rest/60)} min rest`}
+                </span>
+                <button onClick={()=>{if(restActive){setRestActive(false);setRestRemain(block.rest);}else{setRestRemain(block.rest);setRestActive(true);}}}
+                  style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.sm,padding:"4px 10px",cursor:"pointer",fontSize:11,color:restActive?T.coral:T.text3,transition:`all 180ms ${T.ease}`}}>
+                  {restActive?"Skip":"Start timer"}
+                </button>
+              </div>
+              <RestProgressLine active={restActive} remain={restRemain} total={block.rest} />
             </div>
           )}
           {isSS&&phase==="A"&&(
             restActive
               ?(
-                <div style={{padding:"12px 20px 0",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <span style={{fontSize:12,color:T.coral,fontStyle:"italic",fontFamily:T.serif}}>Resting — {restStr}</span>
-                  <button onClick={()=>{setRestActive(false);setRestRemain(block.rest);}} style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.sm,padding:"4px 10px",cursor:"pointer",fontSize:11,color:T.coral}}>Skip</button>
+                <div style={{padding:"12px 20px 0"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <span style={{fontSize:12,color:T.coral,fontStyle:"italic",fontFamily:T.serif}}>Resting — {restStr}</span>
+                    <button onClick={()=>{setRestActive(false);setRestRemain(block.rest);}} style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.sm,padding:"4px 10px",cursor:"pointer",fontSize:11,color:T.coral}}>Skip</button>
+                  </div>
+                  <RestProgressLine active={restActive} remain={restRemain} total={block.rest} />
                 </div>
               ):(
                 <div style={{padding:"8px 20px 0",fontSize:12,color:T.text3,fontStyle:"italic",fontFamily:T.serif}}>

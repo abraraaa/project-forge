@@ -39,6 +39,7 @@ import {
   applyRotationToSession,
   SCULPT_ALIGNED_PRIMARIES,
   dedupeRotationConfig,
+  pruneStaleRotationConfig,
   hasMissedStrength,
   hasUntickedRecent,
   weekdayIdxForDate,
@@ -961,6 +962,40 @@ describe("dedupeRotationConfig", () => {
       const names = Object.values(deduped).map(ex => ex?.name).filter(Boolean);
       expect(new Set(names).size).toBe(names.length);
     }
+  });
+});
+
+describe("pruneStaleRotationConfig", () => {
+  it("returns the input reference when nothing is stale", () => {
+    const config = rotateAccessories({}, { focus: "Forged" });
+    expect(pruneStaleRotationConfig(config)).toBe(config);
+  });
+
+  it("handles empty / null input", () => {
+    const empty = {};
+    expect(pruneStaleRotationConfig(empty)).toBe(empty);
+    expect(pruneStaleRotationConfig(null)).toBe(null);
+  });
+
+  it("strips an entry whose name is no longer in the slot's live pool", () => {
+    // "DB Kickback" was removed from css3-B in PR #96. A user who rolled
+    // into it before that should have the stale entry pruned, so the
+    // resolver falls through to the SESSIONS default (Skullcrusher).
+    const ghost = { name: "DB Kickback", reps: 12, weight: 8, muscle: "Triceps" };
+    const seed = rotateAccessories({}, { focus: "Forged" });
+    const config = { ...seed, "css3-B": ghost };
+    const pruned = pruneStaleRotationConfig(config);
+    expect(pruned).not.toBe(config);
+    expect(pruned["css3-B"]).toBeUndefined();
+    // Untouched entries stay the same reference
+    expect(pruned["bss1-A"]).toBe(config["bss1-A"]);
+  });
+
+  it("preserves entries pointing at unknown slot keys (defensive)", () => {
+    // A config key without a matching pool — leave alone so a future schema
+    // addition doesn't silently lose user state.
+    const config = { "unknown-slot": { name: "Whatever" } };
+    expect(pruneStaleRotationConfig(config)).toBe(config);
   });
 });
 
