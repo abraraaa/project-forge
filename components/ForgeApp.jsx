@@ -1782,7 +1782,7 @@ const sProps={
       {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} sessionStartWeights={sessionStartWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
       {screen==="performance" && <ErrorBoundary><PerformanceLab history={history} onBack={()=>setScreen("home")}/></ErrorBoundary>}
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} userWeek={userWeek} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
-      {retroPickerOpen        && <RetroPickerSheet history={history} pendingDraft={pendingDraft} weekDone={weekDone} onPick={handlePickRetroDate} onTickDay={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
+      {retroPickerOpen        && <RetroPickerSheet history={history} pendingDraft={pendingDraft} weekDone={weekDone} userWeek={userWeek} onPick={handlePickRetroDate} onTickDay={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}
       {showIosInstall         && <IosInstallOverlay onDismiss={()=>{ LS.set("forge:iosInstallDismissed", true); setShowIosInstall(false); }}/>}
@@ -4520,8 +4520,16 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
 // ═════════════════════════════════════════════════════════════════════════════
 
 // ─── Retro Picker Sheet ────────────────────────────────────────────────────────
-function RetroPickerSheet({history, pendingDraft, weekDone={}, onPick, onTickDay, onClose}){
-  const rows = useMemo(() => findRecentDays(history, 3), [history]);
+function RetroPickerSheet({history, pendingDraft, weekDone={}, userWeek=WEEK, onPick, onTickDay, onClose}){
+  // findRecentDays consults the WEEK schedule to label each recent day's type
+  // (strength / Z2 / HIIT / cardio / rest). Without userWeek threaded in, it
+  // falls back to the default WEEK constant — so users with edited schedules
+  // saw the "traditional" layout in the picker (strength labelled on the
+  // wrong days, picker un-tappable on the user's actual strength days, and
+  // RetrospectiveSessionSheet rendering an empty form when picks didn't
+  // match the user's schedule). Pass userWeek through so day-type labels
+  // and tappability match what RetrospectiveSessionSheet will see.
+  const rows = useMemo(() => findRecentDays(history, 3, { week: userWeek }), [history, userWeek]);
   const draftBlocks = !!pendingDraft;
   const { containerRef, onKeyDown } = useModalA11y(onClose);
   const titleId = "retro-picker-title";
