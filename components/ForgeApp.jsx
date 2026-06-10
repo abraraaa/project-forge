@@ -4,11 +4,11 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   WEEK, SESSIONS, deriveStrengthDaySessions,
   EXERCISE_POOLS, rotateAccessories, rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
-  dedupeRotationConfig, pruneStaleRotationConfig,
+  dedupeRotationConfig,
   ROTATION_OPTIONAL, ROTATION_AUTO, ROTATION_FORCED,
   DAY_CONFIG, DAY_NAMES, SWAP_DB, EQ_COLOUR,
   bonusForDay,
-  FOCUS_OPTIONS, DEFAULT_FOCUS, FOCUS_SUMMARIES, applyFocusToSession, applyRotationToSession,
+  FOCUS_OPTIONS, DEFAULT_FOCUS, FOCUS_SUMMARIES, applyFocusToSession, applyRotationToSession, applySwapsToSession,
   // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
   sessionMetaForDate, findRecentDays, hasMissedStrength, hasUntickedRecent, weekdayIdxForDate,
 } from "@/lib/programme";
@@ -438,23 +438,20 @@ export default function ForgeApp(){
     [history, recoveryDismissed]
   );
 
-  // Silent migration for rotation config corruption. Two passes, both pure:
-  //   1. Prune entries whose exercise name is no longer in its slot's live
-  //      pool — e.g. the "DB Kickback" the user had rolled before PR #96
-  //      removed it from css3-B. The home preview self-heals via
-  //      applyRotationToSession, but the in-session resolveExFn reads
-  //      config directly, so the ghost shows in the active session.
-  //      Pruning here makes every downstream consumer see clean state.
-  //   2. Dedupe cross-slot duplicates — pools overlap (Leaning Lateral
-  //      Raise lives in both bfin-B and css1-B) so two independent picks
-  //      could land on the same exercise. Re-roll the later slot from its
-  //      pool excluding the claimed name.
-  // Both helpers return the input reference when no change is needed —
-  // cheap identity check guards this effect from re-running uselessly.
+  // Silent migration for cross-slot duplicate rotation picks. Pools overlap
+  // (Leaning Lateral Raise lives in both bfin-B and css1-B) so two
+  // independent picks could land on the same exercise — re-rolls the later
+  // slot from its pool excluding the claimed name. Returns input reference
+  // when nothing needs changing; cheap guard keeps this from looping.
+  //
+  // The stale-name prune (pruneStaleRotationConfig) was retired here: the
+  // session derivation chain (rawSession → applyRotationToSession → ...)
+  // self-heals at read time so the ghost-pick problem is solved without
+  // mutating storage. Prune is still exported for callers that want clean
+  // persisted state, just no longer wired here.
   useEffect(() => {
     if (!activeProfile || !programmeBlock?.config) return;
-    const pruned   = pruneStaleRotationConfig(programmeBlock.config);
-    const deduped  = dedupeRotationConfig(pruned, programmeBlock.history, { focus: userFocus });
+    const deduped = dedupeRotationConfig(programmeBlock.config, programmeBlock.history, { focus: userFocus });
     if (deduped === programmeBlock.config) return;
     const next = { ...programmeBlock, config: deduped };
     setProgrammeBlock(next);
@@ -766,14 +763,27 @@ export default function ForgeApp(){
   // no finishers). Order matters: rotation first so focus/readiness operate
   // on the user's actual exercises; readiness last so it reshapes only
   // today's instance.
+  // Single derivation chain. Order matters:
+  //   raw template → rotation pick (with pool self-heal) → in-session swap →
+  //   focus reshape → readiness scale.
+  // SessionScreen and every other consumer read exercises straight off
+  // `activeSession.blocks[i]` — the substitution has already happened. This
+  // is the fix for the historical split-brain where the home overview saw
+  // the resolved exercise but the in-session resolver re-resolved from raw
+  // config and could pick up stale entries (DB Kickback ghost) or skip
+  // pool validation.
   const rawSession = SESSIONS[activeSessionIdx];
   const rotatedSession = useMemo(
     () => applyRotationToSession(rawSession, programmeBlock?.config),
     [rawSession, programmeBlock?.config]
   );
+  const swappedSession = useMemo(
+    () => applySwapsToSession(rotatedSession, sessionSwaps),
+    [rotatedSession, sessionSwaps]
+  );
   const focusedSession = useMemo(
-    () => applyFocusToSession(rotatedSession, userFocus, programmeBlock?.config),
-    [rotatedSession, userFocus, programmeBlock?.config]
+    () => applyFocusToSession(swappedSession, userFocus, programmeBlock?.config),
+    [swappedSession, userFocus, programmeBlock?.config]
   );
   const activeSession = useMemo(
     () => scaleForReadiness(focusedSession, readiness),
@@ -783,18 +793,24 @@ export default function ForgeApp(){
   const isSS     = block.type==="superset"||block.type==="finisher";
   const swapKey  = isSS ? `${block.id}-${phase}` : block.id;
 
-  // Single source of truth for exercise resolution:
-  // manual in-session swap → rotation config → programme default
+  // resolveExFn reads from the already-resolved activeSession instead of
+  // re-walking sessionSwaps + programmeBlock.config. Same callsites, single
+  // truth — drift between overview and session is no longer possible.
+  // Still parameterised by blockId/phase so legacy callers (pushSetToDraft,
+  // rest-timer setup, finisher pushes) keep their signatures.
   const resolveExFn = useCallback((blockId, ph, defaultEx) => {
-    const key = ph ? `${blockId}-${ph}` : blockId;
-    return sessionSwaps[key] ?? programmeBlock.config[key] ?? defaultEx;
-  }, [sessionSwaps, programmeBlock]);
+    const b = activeSession.blocks.find(x => x.id === blockId);
+    if (!b) return defaultEx;
+    if (ph === "A") return b.exA ?? defaultEx;
+    if (ph === "B") return b.exB ?? defaultEx;
+    return b.ex ?? defaultEx;
+  }, [activeSession]);
 
   // Pre-resolve both sides of the current block so SessionScreen
   // never needs to touch block.exA/exB directly
-  const resolvedExA = isSS ? resolveExFn(block.id, "A", block.exA) : null;
-  const resolvedExB = isSS ? resolveExFn(block.id, "B", block.exB) : null;
-  const resolvedEx  = !isSS ? resolveExFn(block.id, null, block.ex) : null;
+  const resolvedExA = isSS ? (block.exA ?? null) : null;
+  const resolvedExB = isSS ? (block.exB ?? null) : null;
+  const resolvedEx  = !isSS ? (block.ex ?? null) : null;
   const activeEx    = isSS ? (phase==="A" ? resolvedExA : resolvedExB) : resolvedEx;
 
   // Resolution order for prescribed weight:
@@ -1171,12 +1187,17 @@ export default function ForgeApp(){
   // tick a past day from the retro-catch-up picker. Streak only bumps when
   // marking today — backfilling past days shouldn't count toward "today's
   // streak", that's gaming the metric.
+  //
+  // Guard: only an integer 0–6 counts as a target index. Anything else
+  // (including the React SyntheticEvent that arrives when this is wired
+  // directly as onClick={onMarkDayDone}) falls through to "today". That
+  // exact mistake shipped once — the home Mark complete button passed the
+  // click event as idx and weekDone got keyed by "[object Object]".
   const handleMarkDayDone = useCallback((idx)=>{
     if(!activeProfile) return;
-    let dayIdx = idx;
     const todayDow = new Date().getDay();
     const todayMondayIdx = [6,0,1,2,3,4,5][todayDow];
-    if (dayIdx === undefined || dayIdx === null) dayIdx = todayMondayIdx;
+    const dayIdx = (Number.isInteger(idx) && idx >= 0 && idx <= 6) ? idx : todayMondayIdx;
     const updated=P.markDayDone(activeProfile,dayIdx);
     setWeekDone(updated);
     if (dayIdx === todayMondayIdx) {
@@ -3135,7 +3156,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Done. Streak maintained.</span>
             </div>
           ) : (
-            <button onClick={onMarkDayDone} style={{
+            <button onClick={()=>onMarkDayDone()} style={{
               margin:"12px 24px 0",width:"calc(100% - 48px)",
               padding:"16px 20px",background:"transparent",
               border:`1px solid ${accent.main}`,borderRadius:T.r.lg,cursor:"pointer",
@@ -4520,7 +4541,9 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
 // ═════════════════════════════════════════════════════════════════════════════
 
 // ─── Retro Picker Sheet ────────────────────────────────────────────────────────
-function RetroPickerSheet({history, pendingDraft, weekDone={}, userWeek=WEEK, onPick, onTickDay, onClose}){
+// Exported for direct component testing (tests/components/RetroPickerSheet.test.jsx).
+// Still rendered only via the in-file mount at <RetroPickerSheet ... /> below.
+export function RetroPickerSheet({history, pendingDraft, weekDone={}, userWeek=WEEK, onPick, onTickDay, onClose}){
   // findRecentDays consults the WEEK schedule to label each recent day's type
   // (strength / Z2 / HIIT / cardio / rest). Without userWeek threaded in, it
   // falls back to the default WEEK constant — so users with edited schedules
