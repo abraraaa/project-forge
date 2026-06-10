@@ -37,6 +37,7 @@ import {
   applyFocusToSession,
   applyFocusToSessions,
   applyRotationToSession,
+  applySwapsToSession,
   SCULPT_ALIGNED_PRIMARIES,
   dedupeRotationConfig,
   pruneStaleRotationConfig,
@@ -917,6 +918,43 @@ describe("applyRotationToSession", () => {
     expect(css3.exA.name).toBe("Hammer Curl");                  // valid → applied
     const defaultExB = dayC.blocks.find(b => b.id === "css3").exB.name;
     expect(css3.exB.name).toBe(defaultExB);                     // ghost → fallback
+  });
+});
+
+// ─── applySwapsToSession — in-session user overrides ───────────────────────
+// Final transformation in the derivation chain. Unlike applyRotationToSession,
+// no pool validation — a swap is user intent and the SWAP_DB suggestions
+// include exercises that aren't in EXERCISE_POOLS.
+describe("applySwapsToSession", () => {
+  it("empty swaps is identity — same reference", () => {
+    expect(applySwapsToSession(SESSIONS[0], {})).toBe(SESSIONS[0]);
+    expect(applySwapsToSession(SESSIONS[0])).toBe(SESSIONS[0]);
+  });
+
+  it("malformed input handled defensively", () => {
+    expect(applySwapsToSession(null, { foo: { name: "Bar" } })).toBe(null);
+    expect(applySwapsToSession({}, { foo: { name: "Bar" } })).toEqual({});
+  });
+
+  it("overrides the exB of a superset slot", () => {
+    const fake = { name: "Arnold Press", reps: 10, weight: 14, muscle: "Shoulders" };
+    const out = applySwapsToSession(SESSIONS[0], { "ass2-B": fake });
+    const ass2 = out.blocks.find((b) => b.id === "ass2");
+    expect(ass2.exB.name).toBe("Arnold Press");
+  });
+
+  it("accepts swaps that aren't in EXERCISE_POOLS (no pool validation)", () => {
+    // Unlike rotation, swaps don't validate against the pool — Arnold Press
+    // isn't in ass2-B's pool, but the user's choice stands.
+    const fake = { name: "Arnold Press", reps: 10, weight: 14, muscle: "Shoulders" };
+    const out = applySwapsToSession(SESSIONS[0], { "ass2-B": fake });
+    expect(out.blocks.find(b => b.id === "ass2").exB.name).toBe("Arnold Press");
+  });
+
+  it("pure — input session is not mutated", () => {
+    const before = JSON.parse(JSON.stringify(SESSIONS[0]));
+    applySwapsToSession(SESSIONS[0], { "ass2-A": { name: "X", reps: 5, weight: 99, muscle: "Y" } });
+    expect(SESSIONS[0]).toEqual(before);
   });
 });
 
