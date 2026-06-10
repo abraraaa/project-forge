@@ -1171,12 +1171,17 @@ export default function ForgeApp(){
   // tick a past day from the retro-catch-up picker. Streak only bumps when
   // marking today — backfilling past days shouldn't count toward "today's
   // streak", that's gaming the metric.
+  //
+  // Guard: only an integer 0–6 counts as a target index. Anything else
+  // (including the React SyntheticEvent that arrives when this is wired
+  // directly as onClick={onMarkDayDone}) falls through to "today". That
+  // exact mistake shipped once — the home Mark complete button passed the
+  // click event as idx and weekDone got keyed by "[object Object]".
   const handleMarkDayDone = useCallback((idx)=>{
     if(!activeProfile) return;
-    let dayIdx = idx;
     const todayDow = new Date().getDay();
     const todayMondayIdx = [6,0,1,2,3,4,5][todayDow];
-    if (dayIdx === undefined || dayIdx === null) dayIdx = todayMondayIdx;
+    const dayIdx = (Number.isInteger(idx) && idx >= 0 && idx <= 6) ? idx : todayMondayIdx;
     const updated=P.markDayDone(activeProfile,dayIdx);
     setWeekDone(updated);
     if (dayIdx === todayMondayIdx) {
@@ -3135,7 +3140,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Done. Streak maintained.</span>
             </div>
           ) : (
-            <button onClick={onMarkDayDone} style={{
+            <button onClick={()=>onMarkDayDone()} style={{
               margin:"12px 24px 0",width:"calc(100% - 48px)",
               padding:"16px 20px",background:"transparent",
               border:`1px solid ${accent.main}`,borderRadius:T.r.lg,cursor:"pointer",
