@@ -26,8 +26,12 @@ export default function PerformanceLab({ history, onBack }) {
 
   // Glossary sheet — opened by ⓘ triggers throughout the lab. `glossaryAnchor`
   // = null  → sheet closed; "" → open, no scroll anchor; term-id → scroll to it.
+  // openGlossary normalises null/undefined to "" so a trigger with no
+  // anchorTerm (e.g. the header ⓘ) still opens the sheet. Without that
+  // coercion the default `= ""` only handled `undefined` and a `null`
+  // anchorTerm from GlossaryTrigger silently no-op'd.
   const [glossaryAnchor, setGlossaryAnchor] = useState(null);
-  const openGlossary = (anchor = "") => setGlossaryAnchor(anchor);
+  const openGlossary = (anchor) => setGlossaryAnchor(anchor ?? "");
   const closeGlossary = () => setGlossaryAnchor(null);
 
   const isEmpty = counts.total === 0;
