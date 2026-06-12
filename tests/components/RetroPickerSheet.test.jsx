@@ -20,9 +20,16 @@
 // pure-lib suite stays on the fast node environment.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { RetroPickerSheet } from "../../components/ForgeApp.jsx";
+
+// `globals: false` in vitest config disables RTL's auto-cleanup — wire it
+// explicitly so DOM from a previous test doesn't leak and produce
+// "multiple elements found" errors on the next query.
+afterEach(() => {
+  cleanup();
+});
 
 // A custom week that puts strength on Tuesday only — everything else is
 // rest. With the bug, the default WEEK constant runs and strength surfaces
