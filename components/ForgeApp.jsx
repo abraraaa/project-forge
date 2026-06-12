@@ -1563,6 +1563,23 @@ const sProps={
     const sessionDef = SESSIONS[meta.sessionIdx];
     if (!sessionDef) return;
 
+    // Duplicate guard — retro ids are DETERMINISTIC (noon UTC of the date),
+    // so a re-log of an already-recorded day would hit H.append's silent
+    // dedupe: success toast, no new record, no rhythm bump. Confusing.
+    // (Real-world: the week-strip bug used to hide successful retro logs,
+    // inviting exactly this double-submit.) Surface it honestly instead.
+    const dupeId = `${retroDate}T12:00:00.000Z`;
+    if (H.get(activeProfile).some(r => r.id === dupeId)) {
+      setRetroToast({
+        date: meta.dateLabel,
+        sessionName: "Already logged — no changes made",
+      });
+      setRetroDate(null);
+      setScreen("home");
+      setTimeout(() => setRetroToast(null), 3000);
+      return;
+    }
+
     try {
       // Build a draft, pre-anchored to the selected date so the resulting
       // record's id sorts to the correct chronological position in history.
