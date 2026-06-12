@@ -123,3 +123,43 @@ describe("retro log → rhythm count", () => {
     expect(stored.session.startsWith("strength")).toBe(true);
   });
 });
+
+// ─── Rhythm scope: strength-only ────────────────────────────────────────────
+// User hypothesised "I've swapped a cardio day to Friday — does marking it
+// hit the streak badge?" The badge is meant to count strength sessions
+// only. handleMarkDayDone (the cardio/Z2/HIIT tick path) writes to
+// weekDone, never to history, so it can't inflate rhythm structurally.
+// Even if a non-strength record DID end up in history, computeRhythm's
+// filter would reject it. Lock both invariants.
+describe("computeRhythm — strength-only scope", () => {
+  it("non-strength history records do not count", () => {
+    // Construct records that LOOK like sessions but whose session strings
+    // aren't strength: z2, hiit, cardio, rest. computeRhythm should ignore
+    // every one of them.
+    const today = new Date().toISOString().slice(0, 10);
+    const fakes = ["z2", "hiit", "cardio", "rest"].map((kind, i) => ({
+      v: 2,
+      id: `${today}T${String(8 + i).padStart(2, "0")}:00:00.000Z`,
+      date: today,
+      session: kind,
+      readiness: "normal",
+      blocks: [],
+      summary: { totalVolume: 0 },
+    }));
+    fakes.forEach(r => H.append(PROFILE, r));
+    expect(computeRhythm(H.get(PROFILE)).completed).toBe(0);
+  });
+
+  it("ticking a day via weekDone never produces a history record", async () => {
+    // P.markDayDone updates weekDone for the current ISO week. It does NOT
+    // touch the history store. This test reads the history before and
+    // after a tick and asserts no record appeared — proving that the
+    // streak badge can't move just from a cardio tick.
+    const { P } = await import("../lib/storage.js");
+    const before = H.get(PROFILE);
+    P.markDayDone(PROFILE, 4); // Friday
+    const after = H.get(PROFILE);
+    expect(after.length).toBe(before.length);
+    expect(computeRhythm(after).completed).toBe(computeRhythm(before).completed);
+  });
+});

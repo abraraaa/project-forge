@@ -5336,14 +5336,19 @@ function Tag({children,color,style={}}){return <span style={{display:"inline-fle
 function StreakBadge({rhythm}){
   const completed = rhythm?.completed || 0;
   const expected  = rhythm?.expected  || 12;
-  // If someone's going above the expected 3x/week, show "12+" rather than capping
+  // Window is a rolling 28-day count of strength sessions — labelled
+  // honestly. Used to say "this month", but a rolling window doesn't reset
+  // on the 1st, so users counting "since the month started" saw a mismatch
+  // (e.g. 5 strength sessions in June so far, badge says 6 because a late-
+  // May session is still inside the 28-day window).
+  const window  = rhythm?.window || 28;
   const over = completed > expected;
   const primary = over ? `${expected}+` : `${completed}`;
   const secondary = over ? "of 12 · strong" : `of ${expected}`;
   return (
     <div style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.pill,padding:"8px 16px",display:"flex",alignItems:"center",gap:8}}>
       <span style={{fontFamily:T.serif,fontSize:22,fontWeight:400,color:T.gold,lineHeight:1}}>{primary}</span>
-      <div style={{fontSize:9,fontWeight:500,color:T.text3,letterSpacing:"0.1em",textTransform:"uppercase",lineHeight:1.5}}>{secondary}<br/>this month</div>
+      <div style={{fontSize:9,fontWeight:500,color:T.text3,letterSpacing:"0.1em",textTransform:"uppercase",lineHeight:1.5}}>{secondary}<br/>past {window} days</div>
     </div>
   );
 }
