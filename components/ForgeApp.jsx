@@ -18,7 +18,7 @@ import {
   blobPush, flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
   enableAutoSync, disableAutoSync,
   checkProfileExists, claimProfile, blobDelete,
-  roundPlate, applyRpe, weeksSince, weekKey,
+  applyRpe, weeksSince,
   newDraftLog, logSet, finaliseDraft, scaleForReadiness, D, TS,
   inferLoadType, LOAD_TYPES, startingWeightForLift,
 } from "@/lib/storage";
