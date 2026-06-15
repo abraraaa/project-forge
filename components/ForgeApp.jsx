@@ -3394,11 +3394,20 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         </Fade>
       )}
 
-      {/* Retrospective logging link — only surfaces when there's a missed
-          strength day in the last 3. Calm by design: no card, no chrome,
-          just an inline link tinted sage so it reads as a non-action utility
-          rather than competing with the day's "begin session" CTA. */}
-      {hasRetroGaps && !pendingDraft && onOpenRetroPicker && (
+      {/* Retrospective logging link — surfaces whenever the schedule has
+          an unmarked recent training day. Calm by design: no card, no
+          chrome, just an inline link tinted sage so it reads as a non-
+          action utility rather than competing with the day's "begin
+          session" CTA.
+          //
+          // !pendingDraft removed as a gate (was silently hiding the link
+          // for any user with a paused/half-started session). The link is
+          // informational and orthogonal to the resume-draft card — both
+          // can render. Inside the picker, pendingDraft still disables
+          // tappability with explicit "Finish your live session first"
+          // copy, so a user with an active draft sees the unmarked days
+          // and understands why they can't log them yet. */}
+      {hasRetroGaps && onOpenRetroPicker && (
         <Fade d={190}>
           <div style={{margin:"18px 24px 0",display:"flex",justifyContent:"center"}}>
             <button onClick={onOpenRetroPicker}
