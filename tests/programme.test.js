@@ -1134,10 +1134,14 @@ describe("hasMissedStrength / hasUntickedRecent — surface logic", () => {
         return { type: "rest", s: "Re" };
       });
 
-      // With weekDone empty → yesterday's z2 isn't ticked → should fire
+      // dayDone is date-keyed now — derive yesterday's date once for the
+      // both cases. With dayDone empty, the z2 row should surface.
+      const y = yesterday.getFullYear(), m = String(yesterday.getMonth()+1).padStart(2,"0"), d = String(yesterday.getDate()).padStart(2,"0");
+      const yDate = `${y}-${m}-${d}`;
+
       expect(hasUntickedRecent([], 3, {}, { week })).toBe(true);
-      // With weekDone[yIdx] = true → ticked → shouldn't fire on z2 alone
-      expect(hasUntickedRecent([], 3, { [yIdx]: true }, { week })).toBe(false);
+      // Marked via the new date-keyed store → ticked → no fire.
+      expect(hasUntickedRecent([], 3, { [yDate]: true }, { week })).toBe(false);
     } finally {
       vi.useRealTimers();
     }
@@ -1152,12 +1156,14 @@ describe("hasMissedStrength / hasUntickedRecent — surface logic", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-15T10:00:00")); // Mon
     try {
+      // Strength ONLY on Thursday so the window-cutoff is the variable
+      // under test — no other day triggers a non-strength tick path.
       const week = [
-        { type: "strength", s: "M" },   // Mon
-        { type: "rest",     s: "T" },
-        { type: "strength", s: "W" },
+        { type: "rest",     s: "M"  },
+        { type: "rest",     s: "T"  },
+        { type: "rest",     s: "W"  },
         { type: "strength", s: "Th" },  // last Thu = the missed session
-        { type: "cardio",   s: "F" },   // user swapped here
+        { type: "rest",     s: "F"  },
         { type: "rest",     s: "Sa" },
         { type: "rest",     s: "Su" },
       ];

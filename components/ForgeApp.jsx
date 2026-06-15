@@ -10,7 +10,7 @@ import {
   bonusForDay,
   FOCUS_OPTIONS, DEFAULT_FOCUS, FOCUS_SUMMARIES, applyFocusToSession, applyRotationToSession, applySwapsToSession,
   // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
-  sessionMetaForDate, findRecentDays, hasMissedStrength, hasUntickedRecent, weekdayIdxForDate,
+  sessionMetaForDate, findRecentDays, hasMissedStrength, findUntickedRecent, weekdayIdxForDate,
 } from "@/lib/programme";
 import {
   LS, P, PB, W, F, H, BW, PN, bumpStreak,
@@ -18,7 +18,7 @@ import {
   blobPush, flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
   enableAutoSync, disableAutoSync,
   checkProfileExists, claimProfile, blobDelete,
-  applyRpe, weeksSince,
+  applyRpe, weeksSince, dateOfWeekdayIdxInCurrentWeek,
   newDraftLog, logSet, finaliseDraft, scaleForReadiness, D, TS,
   inferLoadType, LOAD_TYPES, startingWeightForLift,
 } from "@/lib/storage";
@@ -333,6 +333,13 @@ export default function ForgeApp(){
   const [sessionSwaps,setSessionSwaps]=useState({});
   const [programmeBlock,setProgrammeBlock]=useState(()=>PB.get());
   const [weekDone,setWeekDone]=useState({});
+  // Date-keyed { [ISO date]: true }. Source of truth for "this day is done."
+  // Strength session finalises auto-write it; non-strength Mark ✓ writes it
+  // explicitly; cross-week back-marking just works because the key is the
+  // date, not the weekday-of-current-week. weekDone stays as a derived
+  // projection for the home week strip to render against without re-deriving
+  // the math at every cell.
+  const [dayDone,setDayDone]=useState({});
   const [bonusDone,setBonusDone]=useState({});
   const [userFocus,setUserFocus]=useState(DEFAULT_FOCUS);
   const [focusPickerOpen,setFocusPickerOpen]=useState(false);
@@ -519,19 +526,17 @@ export default function ForgeApp(){
   // without a reload. Falls back to the default WEEK when nothing is stored.
   const [userWeek, setUserWeek] = useState(() => W.get() || WEEK);
   const strengthDaySessions = useMemo(() => deriveStrengthDaySessions(userWeek), [userWeek]);
-  // Catch-up link surfaces when there's any unrecorded recent training day —
-  // missed strength session (logged via retro picker) OR untickered current-
-  // week non-strength day (zone-2 / HIIT / cardio, ticked via weekDone).
-  // hasMissedStrength stays in use for paths that want strength-only signal.
-  //
-  // Window: 7 days. Was 3 — but on Mondays a user with strength C on
-  // Thu/Fri/Sat from the previous week was already past the cutoff before
-  // they could log it. 7 days covers the full preceding training week
-  // without slipping into archaeology.
-  const hasRetroGaps = useMemo(
-    () => hasUntickedRecent(history, 7, weekDone, { week: userWeek }),
-    [history, weekDone, userWeek]
+  // Single source of truth for catch-up state. dayDone is date-keyed
+  // (`{ "2026-06-13": true, ... }`) — strength session finalises write it,
+  // the Mark ✓ path writes it explicitly. findUntickedRecent returns the
+  // actionable list (date + type + "log"/"tick" hint). Link surfaces when
+  // length > 0; picker drives off the same list; count goes into the
+  // editorial label so the user knows the scope up front.
+  const untickedDays = useMemo(
+    () => findUntickedRecent(history, 7, dayDone, { week: userWeek }),
+    [history, dayDone, userWeek]
   );
+  const hasRetroGaps = untickedDays.length > 0;
   const [weekEditorOpen, setWeekEditorOpen] = useState(false);
   const handleSaveWeek = (newWeek) => {
     W.save(newWeek);
@@ -565,6 +570,12 @@ export default function ForgeApp(){
     setWRState(local.meta.reps || {});
     setStreak(local.meta.streak?.count || 0);
     setProgrammeBlock(local.meta.programmeBlock || PB.get());
+    // dayDone tracks non-strength manual ticks (cardio/Z2/HIIT Mark ✓).
+    // Strength completion is history-backed — not mirrored here, because
+    // doing so would let a schedule edit (cardio → strength on a date that
+    // had a cardio tick) silently transmute into "strength completed."
+    // Two stores, two events; never conflated.
+    setDayDone(P.getDayDone(activeProfile));
     setWeekDone(P.getWeekDone(activeProfile));
     setBonusDone(P.getBonusDone(activeProfile));
     setUserFocus(F.get(activeProfile));
@@ -1022,7 +1033,12 @@ export default function ForgeApp(){
       if (draftLogRef.current) {
         sessionRecord = finaliseDraft(draftLogRef.current);
         H.append(activeProfile, sessionRecord);
-        // Reflect in React state so Performance Lab updates immediately
+        // Reflect in React state so Performance Lab updates immediately.
+        // NOTE: we deliberately do NOT write to dayDone here — strength
+        // completion is history-backed. Conflating the two stores would
+        // mean a cardio→strength schedule edit promotes the cardio tick
+        // into a "strength completed" mark, which corrupts the user's
+        // training record. dayDone is for non-strength manual ticks only.
         setHistory(H.get(activeProfile));
         draftLogRef.current = null;
       }
@@ -1225,15 +1241,35 @@ export default function ForgeApp(){
   // directly as onClick={onMarkDayDone}) falls through to "today". That
   // exact mistake shipped once — the home Mark complete button passed the
   // click event as idx and weekDone got keyed by "[object Object]".
-  const handleMarkDayDone = useCallback((idx)=>{
+  // Mark a non-strength day complete. Accepts either:
+  //   - a date string ("YYYY-MM-DD") — preferred, cross-week capable
+  //   - a weekday idx (0=Mon..6=Sun) — convenience for "today"; resolves to
+  //     today's date for that weekday within the current week
+  //   - nothing → today
+  // Streak only bumps when the resolved date IS today (no gaming the streak
+  // by backfilling). Writes to the date-keyed dayDone store; weekDone
+  // updates as a derived projection so the home week strip refreshes
+  // without separate state plumbing.
+  const handleMarkDayDone = useCallback((target)=>{
     if(!activeProfile) return;
-    const todayDow = new Date().getDay();
-    const todayMondayIdx = [6,0,1,2,3,4,5][todayDow];
-    const dayIdx = (Number.isInteger(idx) && idx >= 0 && idx <= 6) ? idx : todayMondayIdx;
-    const updated=P.markDayDone(activeProfile,dayIdx);
-    setWeekDone(updated);
-    if (dayIdx === todayMondayIdx) {
-      const newStreak=bumpStreak(activeProfile);
+    const todayDate = (() => {
+      const d = new Date(); d.setHours(0,0,0,0);
+      const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    })();
+    let dateStr;
+    if (typeof target === "string" && /^\d{4}-\d{2}-\d{2}$/.test(target)) {
+      dateStr = target;
+    } else if (Number.isInteger(target) && target >= 0 && target <= 6) {
+      dateStr = dateOfWeekdayIdxInCurrentWeek(target);
+    } else {
+      dateStr = todayDate;
+    }
+    const updatedDayDone = P.markDateDone(activeProfile, dateStr);
+    setDayDone(updatedDayDone);
+    setWeekDone(P.getWeekDone(activeProfile));
+    if (dateStr === todayDate) {
+      const newStreak = bumpStreak(activeProfile);
       setStreak(newStreak);
     }
   },[activeProfile]);
@@ -1639,6 +1675,10 @@ const sProps={
 
       H.append(activeProfile, sessionRecord);
       setHistory(H.get(activeProfile));
+      // No dayDone write here — strength completion is history-backed.
+      // See the live finalise path for the rationale (mixing the two
+      // stores would mean a schedule edit could promote a cardio tick
+      // into a phantom strength completion).
 
       // ─── Engine block — runs identically to live finalise hook ─────────
       try {
@@ -1846,13 +1886,13 @@ const sProps={
 
   return (
     <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} hasRetroGaps={hasRetroGaps} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} historyWeekDone={historyWeekDone}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} historyWeekDone={historyWeekDone}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
       {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} sessionStartWeights={sessionStartWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
       {screen==="performance" && <ErrorBoundary><PerformanceLab history={history} onBack={()=>setScreen("home")}/></ErrorBoundary>}
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} userWeek={userWeek} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
-      {retroPickerOpen        && <RetroPickerSheet history={history} pendingDraft={pendingDraft} weekDone={weekDone} userWeek={userWeek} onPick={handlePickRetroDate} onTickDay={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
+      {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}
       {showIosInstall         && <IosInstallOverlay onDismiss={()=>{ LS.set("forge:iosInstallDismissed", true); setShowIosInstall(false); }}/>}
@@ -2844,7 +2884,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 }
 
 // ─── Home ──────────────────────────────────��──────────────────────────────────
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,hasRetroGaps=false,onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,historyWeekDone={}}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,historyWeekDone={}}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -3407,12 +3447,14 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           // tappability with explicit "Finish your live session first"
           // copy, so a user with an active draft sees the unmarked days
           // and understands why they can't log them yet. */}
-      {hasRetroGaps && onOpenRetroPicker && (
+      {untickedDays.length > 0 && onOpenRetroPicker && (
         <Fade d={190}>
           <div style={{margin:"18px 24px 0",display:"flex",justifyContent:"center"}}>
             <button onClick={onOpenRetroPicker}
               style={{background:"none",border:"none",padding:"6px 4px",cursor:"pointer",fontFamily:T.sans,fontSize:13,color:T.sage,letterSpacing:"0.01em"}}>
-              Missed a session? <span style={{fontStyle:"italic",fontFamily:T.serif,marginLeft:2}}>Log it</span> →
+              {untickedDays.length === 1
+                ? <>1 unmarked day — <span style={{fontStyle:"italic",fontFamily:T.serif,marginLeft:2}}>catch up</span> →</>
+                : <>{untickedDays.length} unmarked days — <span style={{fontStyle:"italic",fontFamily:T.serif,marginLeft:2}}>catch up</span> →</>}
             </button>
           </div>
         </Fade>
@@ -4611,43 +4653,43 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
 // ─── Retro Picker Sheet ────────────────────────────────────────────────────────
 // Exported for direct component testing (tests/components/RetroPickerSheet.test.jsx).
 // Still rendered only via the in-file mount at <RetroPickerSheet ... /> below.
-export function RetroPickerSheet({history, pendingDraft, weekDone={}, userWeek=WEEK, onPick, onTickDay, onClose}){
-  // findRecentDays consults the WEEK schedule to label each recent day's type
-  // (strength / Z2 / HIIT / cardio / rest). Without userWeek threaded in, it
-  // falls back to the default WEEK constant — so users with edited schedules
-  // saw the "traditional" layout in the picker (strength labelled on the
-  // wrong days, picker un-tappable on the user's actual strength days, and
-  // RetrospectiveSessionSheet rendering an empty form when picks didn't
-  // match the user's schedule). Pass userWeek through so day-type labels
-  // and tappability match what RetrospectiveSessionSheet will see.
-  // Window matches the home-screen hasRetroGaps probe (also 7). Catches the
-  // common case of opening the app on Monday with a Thu/Fri/Sat strength
-  // session from the previous week still unlogged.
-  const rows = useMemo(() => findRecentDays(history, 7, { week: userWeek }), [history, userWeek]);
+// Ballerina-lean catch-up. The list is exactly what's unmarked — strength
+// days needing a retro log + non-strength days needing a tick. Each row has
+// one tap, one action. Ticks dismiss the row in place with a soft fade; the
+// sheet auto-closes when the last item clears, with a brief "All caught up"
+// micro-celebration. If the user has a live draft, rows render but are not
+// tappable, with explicit "Finish your live session first" copy.
+export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickDate, onClose}){
   const draftBlocks = !!pendingDraft;
   const { containerRef, onKeyDown } = useModalA11y(onClose);
   const titleId = "retro-picker-title";
 
-  // For non-strength rows, "ticked" = the day's weekday-idx is in weekDone.
-  // Past-week days can't be ticked (weekDone is current-week-scoped) — we
-  // mark those as non-actionable in the UI so users don't tap fruitlessly.
-  const todayMonday = (() => {
-    const d = new Date(); d.setHours(0,0,0,0);
-    const dow = d.getDay();
-    const delta = dow === 0 ? -6 : 1 - dow;
-    d.setDate(d.getDate() + delta);
-    const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
-    return `${y}-${m}-${day}`;
-  })();
-  const sameWeekAsToday = (dateStr) => {
-    const [y, m, d] = dateStr.split("-").map(Number);
-    const date = new Date(y, m-1, d);
-    const dow = date.getDay();
-    const delta = dow === 0 ? -6 : 1 - dow;
-    date.setDate(date.getDate() + delta);
-    const yy = date.getFullYear(), mm = String(date.getMonth()+1).padStart(2,"0"), dd = String(date.getDate()).padStart(2,"0");
-    return `${yy}-${mm}-${dd}` === todayMonday;
-  };
+  // Local view-state: track which rows have been dismissed in-place during
+  // this sheet session. The parent list (untickedDays) refreshes on close
+  // and re-render via the dayDone state in ForgeApp — but for the duration
+  // of this open, we want the fade-out + auto-close to feel instant.
+  const [dismissed, setDismissed] = useState(() => new Set());
+  const [celebrate, setCelebrate] = useState(false);
+  const visible = untickedDays.filter(r => !dismissed.has(r.date));
+
+  // Auto-close when the last row clears. Tiny celebratory beat first
+  // (200ms hold) so the user actually feels the "done" before the sheet
+  // dissolves — without it, the close feels sudden and joyless.
+  const lastVisibleCount = useRef(visible.length);
+  useEffect(() => {
+    if (lastVisibleCount.current > 0 && visible.length === 0) {
+      setCelebrate(true);
+      const t = setTimeout(() => onClose?.(), 1100);
+      return () => clearTimeout(t);
+    }
+    lastVisibleCount.current = visible.length;
+  }, [visible.length, onClose]);
+
+  const dismissRow = (dateStr) => setDismissed(prev => {
+    const next = new Set(prev);
+    next.add(dateStr);
+    return next;
+  });
 
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
@@ -4655,85 +4697,73 @@ export function RetroPickerSheet({history, pendingDraft, weekDone={}, userWeek=W
 
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
           <div>
-            <div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>Recent days</div>
-            <div style={{fontSize:12,color:T.text3,marginTop:4,lineHeight:1.5}}>
-              {draftBlocks ? "Finish your live session first" : "Log a missed session or tick off a non-strength day"}
+            <div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>
+              {celebrate ? "All caught up." : (visible.length === 1 ? "1 unmarked day" : `${visible.length} unmarked days`)}
             </div>
+            {!celebrate && (
+              <div style={{fontSize:12,color:T.text3,marginTop:4,lineHeight:1.5}}>
+                {draftBlocks ? "Finish your live session first" : "Tap to log a missed session — or tick the rest off"}
+              </div>
+            )}
           </div>
           <button onClick={onClose} aria-label="Close" style={{background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,padding:"6px 10px",cursor:"pointer",color:T.text2,fontSize:13,flexShrink:0}}>✕</button>
         </div>
 
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {rows.map((row) => {
-            const isStrength = row.type === "strength";
-            const isRest     = row.type === "rest";
-            // Non-strength check: is this day ticked already? Pull the
-            // weekday-idx, look it up in weekDone. Past-week days can't be
-            // ticked (different week storage) — surfaced as informational only.
-            const weekdayIdx = weekdayIdxForDate(row.date);
-            const inThisWeek = sameWeekAsToday(row.date);
-            const ticked     = !isStrength && !isRest && inThisWeek && !!weekDone[weekdayIdx];
-            const tappableStrength    = isStrength && !row.logged && !draftBlocks;
-            const tappableNonStrength = !isStrength && !isRest && inThisWeek && !ticked && !draftBlocks;
-            const tappable = tappableStrength || tappableNonStrength;
-            const accentColor = isStrength
-              ? (row.logged ? T.text4 : T.coral)
-              : (ticked ? T.sage : (tappableNonStrength ? T.sage : T.text4));
-            const opacity = draftBlocks ? 0.4
-              : isRest ? 0.55
-              : (row.logged || ticked) ? 0.7
-              : (!isStrength && !inThisWeek) ? 0.55
-              : 1;
-            const bg = tappableStrength    ? `${T.coral}0A`
-                     : tappableNonStrength ? `${T.sage}0A`
-                     : T.bg3;
-            const borderColor = tappableStrength    ? `${T.coral}33`
-                              : tappableNonStrength ? `${T.sage}33`
-                              : T.bg4;
+        {/* Celebration state — the list has cleared. Tiny editorial flourish
+            so the close feels earned rather than abrupt. The auto-close
+            timer above will dismiss the sheet shortly after. */}
+        {celebrate && (
+          <div style={{padding:"24px 8px",textAlign:"center",fontFamily:T.serif,fontStyle:"italic",fontSize:15,color:T.sage,lineHeight:1.5}}>
+            Back to it.
+          </div>
+        )}
 
-            const onTap = tappableStrength
-              ? () => onPick(row.date)
-              : tappableNonStrength
-                ? () => { onTickDay?.(weekdayIdx); }
-                : undefined;
-
-            return (
-              <div key={row.date}
-                onClick={onTap}
-                style={{
-                  padding:"14px 16px",
-                  background: bg,
-                  border: `1px solid ${borderColor}`,
-                  borderRadius: T.r.md,
-                  cursor: tappable ? "pointer" : "default",
-                  display:"flex",alignItems:"center",justifyContent:"space-between",
-                  opacity,
-                  transition: `all 180ms ${T.ease}`,
-                }}>
-                <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                  <div style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:T.text1,lineHeight:1.2}}>
-                    {row.dateLabel}
+        {!celebrate && (
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {visible.map((row) => {
+              const isLog = row.action === "log";
+              const colour = isLog ? T.coral : T.sage;
+              const onTap = draftBlocks ? undefined : (isLog
+                ? () => onPick?.(row.date)
+                : () => { onTickDate?.(row.date); dismissRow(row.date); }
+              );
+              return (
+                <div key={row.date}
+                  onClick={onTap}
+                  style={{
+                    padding:"14px 16px",
+                    background: draftBlocks ? T.bg3 : `${colour}0A`,
+                    border: `1px solid ${draftBlocks ? T.bg4 : colour+"33"}`,
+                    borderRadius: T.r.md,
+                    cursor: draftBlocks ? "default" : "pointer",
+                    display:"flex",alignItems:"center",justifyContent:"space-between",
+                    opacity: draftBlocks ? 0.5 : 1,
+                    animation: `fadeSlide 220ms ${T.ease}`,
+                    transition: `all 180ms ${T.ease}`,
+                  }}>
+                  <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                    <div style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:T.text1,lineHeight:1.2}}>
+                      {row.dateLabel}
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{display:"inline-block",width:5,height:5,borderRadius:"50%",background:colour}}/>
+                      <span style={{fontSize:11,color:T.text3,letterSpacing:"0.04em"}}>
+                        {row.sessionName}
+                      </span>
+                    </div>
                   </div>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{display:"inline-block",width:5,height:5,borderRadius:"50%",background:accentColor}}/>
-                    <span style={{fontSize:11,color:T.text3,letterSpacing:"0.04em"}}>
-                      {row.sessionName}
-                      {row.logged && " · logged"}
-                      {ticked && " · ticked"}
-                    </span>
-                  </div>
+                  {!draftBlocks && (isLog
+                    ? <span style={{fontSize:18,color:T.coral}}>→</span>
+                    : <span style={{fontSize:13,fontWeight:500,color:T.sage,letterSpacing:"0.04em"}}>Mark ✓</span>
+                  )}
                 </div>
-                {tappableStrength    && <span style={{fontSize:18,color:T.coral}}>→</span>}
-                {tappableNonStrength && <span style={{fontSize:13,fontWeight:500,color:T.sage,letterSpacing:"0.04em"}}>Mark ✓</span>}
-                {isRest              && <span style={{fontSize:10,color:T.text4,fontStyle:"italic",fontFamily:T.serif}}>rest</span>}
-                {(row.logged || ticked) && <span style={{fontSize:11,color:T.sage,fontWeight:500,letterSpacing:"0.06em",textTransform:"uppercase"}}>✓</span>}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
         <div style={{marginTop:16,fontSize:11,color:T.text4,fontStyle:"italic",fontFamily:T.serif,textAlign:"center",lineHeight:1.5}}>
-          Only the last week. Anything older is archaeology.
+          {celebrate ? "" : "Only the last week. Anything older is archaeology."}
         </div>
       </div>
     </div>
