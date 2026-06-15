@@ -33,7 +33,7 @@ A commercial license grants you the same code under terms that do not require op
 
 ## What is "Forge"?
 
-For licensing purposes, "Forge" refers to the contents of this repository (`wondabrar/project-forge`) — the source code, the programme design (`lib/programme.js` `SESSIONS` / `EXERCISE_POOLS`), the curated exercise anatomy dataset (`lib/exercise-anatomy.js`), the rotation and progression engines, the analytics layer, and the design tokens. All of these are covered by the same dual-license terms.
+For licensing purposes, "Forge" refers to the contents of this repository (`abraraaa/project-forge`) — the source code, the programme design (`lib/programme.js` `SESSIONS` / `EXERCISE_POOLS`), the curated exercise anatomy dataset (`lib/exercise-anatomy.js`), the rotation and progression engines, the analytics layer, and the design tokens. All of these are covered by the same dual-license terms.
 
 ## Quick FAQ
 

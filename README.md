@@ -17,7 +17,7 @@ A 3-day-a-week strength programme (A/B/C — Squat & Push, Hinge & Pull, Power &
 ## Quickstart
 
 ```bash
-git clone https://github.com/wondabrar/project-forge.git
+git clone https://github.com/abraraaa/project-forge.git
 cd project-forge
 npm install
 npm run dev           # http://localhost:3000
