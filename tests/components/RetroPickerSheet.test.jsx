@@ -52,15 +52,17 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
         onClose={() => {}}
       />
     );
-    expect(screen.getByText("2 unmarked days")).toBeTruthy();
+    // Reflective framing — title is descriptive ("Recent days"), no count
+    // badge, no "X unmarked" framing that turns the list into a TODO to
+    // clear. The session names prove both rows rendered.
+    expect(screen.getByText("Recent days")).toBeTruthy();
     expect(screen.getByText("Strength A")).toBeTruthy();
     expect(screen.getByText("Z2 — 60 min")).toBeTruthy();
   });
 
-  it("Mark ✓ tap calls onTickDate with the row's ISO DATE STRING", () => {
-    // Old contract passed a weekday index (0..6). The new store is date-keyed
-    // so the picker fires the actual date, which works cross-week without
-    // any current-week-only fragility.
+  it("'Yes — done' tap calls onTickDate with the row's ISO DATE STRING", () => {
+    // Confirms honest intent: "yes I did this" → write dayDone[date].
+    // Date-keyed so cross-week back-marking works without fragility.
     const onTickDate = vi.fn();
     render(
       <RetroPickerSheet
@@ -71,7 +73,7 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
         onClose={() => {}}
       />
     );
-    fireEvent.click(screen.getByText("Mark ✓"));
+    fireEvent.click(screen.getByText("Yes — done"));
     expect(onTickDate).toHaveBeenCalledTimes(1);
     expect(onTickDate.mock.calls[0][0]).toBe("2026-06-12");
   });
@@ -87,13 +89,13 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
         onClose={() => {}}
       />
     );
-    // The arrow is the affordance on a "log" row
-    fireEvent.click(screen.getByText("→"));
+    // The "Log →" affordance is the action on a "log" row
+    fireEvent.click(screen.getByText("Log →"));
     expect(onPick).toHaveBeenCalledTimes(1);
     expect(onPick.mock.calls[0][0]).toBe("2026-06-13");
   });
 
-  it("dismisses a row in place when Mark ✓ is tapped (instant feel)", () => {
+  it("dismisses a confirmed row in place (instant feel, no full rerender wait)", () => {
     render(
       <RetroPickerSheet
         untickedDays={[z2Row("2026-06-12"), strengthRow("2026-06-13")]}
@@ -103,10 +105,35 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
         onClose={() => {}}
       />
     );
-    expect(screen.getByText("2 unmarked days")).toBeTruthy();
-    fireEvent.click(screen.getByText("Mark ✓"));
-    // Visible state immediately reflects 1 row, even before the parent rerender
-    expect(screen.getByText("1 unmarked day")).toBeTruthy();
+    expect(screen.getByText("Z2 — 60 min")).toBeTruthy();
+    fireEvent.click(screen.getByText("Yes — done"));
+    // Z2 row gone, strength row still there — no auto-close, no "all caught
+    // up" celebration. The user closes manually when they're done.
+    expect(screen.queryByText("Z2 — 60 min")).toBeNull();
+    expect(screen.getByText("Strength A")).toBeTruthy();
+  });
+
+  it("does NOT auto-close or celebrate when the last row is dismissed", () => {
+    // The previous version popped a "Back to it" beat and auto-dismissed
+    // the sheet — that rewards CLEARING THE LIST which encourages
+    // speedrun-ticking even for days the user didn't actually train.
+    // Removed deliberately. After the last row, the dialog stays open
+    // with a quiet "Nothing pending." line; the close button is theirs.
+    const onClose = vi.fn();
+    render(
+      <RetroPickerSheet
+        untickedDays={[z2Row("2026-06-12")]}
+        pendingDraft={null}
+        onPick={() => {}}
+        onTickDate={() => {}}
+        onClose={onClose}
+      />
+    );
+    fireEvent.click(screen.getByText("Yes — done"));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByText(/back to it/i)).toBeNull();
+    expect(screen.queryByText(/all caught up/i)).toBeNull();
+    expect(screen.getByText("Nothing pending.")).toBeTruthy();
   });
 
   it("disables rows when pendingDraft is present", () => {
@@ -121,7 +148,7 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
       />
     );
     // No tappable affordance rendered when a draft is in progress
-    expect(screen.queryByText("Mark ✓")).toBeNull();
+    expect(screen.queryByText("Yes — done")).toBeNull();
     expect(screen.getByText("Finish your live session first")).toBeTruthy();
   });
 });

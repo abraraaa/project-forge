@@ -3452,9 +3452,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <div style={{margin:"18px 24px 0",display:"flex",justifyContent:"center"}}>
             <button onClick={onOpenRetroPicker}
               style={{background:"none",border:"none",padding:"6px 4px",cursor:"pointer",fontFamily:T.sans,fontSize:13,color:T.sage,letterSpacing:"0.01em"}}>
-              {untickedDays.length === 1
-                ? <>1 unmarked day — <span style={{fontStyle:"italic",fontFamily:T.serif,marginLeft:2}}>catch up</span> →</>
-                : <>{untickedDays.length} unmarked days — <span style={{fontStyle:"italic",fontFamily:T.serif,marginLeft:2}}>catch up</span> →</>}
+              <span style={{fontStyle:"italic",fontFamily:T.serif}}>Anything missed?</span> →
             </button>
           </div>
         </Fade>
@@ -4653,37 +4651,25 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
 // ─── Retro Picker Sheet ────────────────────────────────────────────────────────
 // Exported for direct component testing (tests/components/RetroPickerSheet.test.jsx).
 // Still rendered only via the in-file mount at <RetroPickerSheet ... /> below.
-// Ballerina-lean catch-up. The list is exactly what's unmarked — strength
-// days needing a retro log + non-strength days needing a tick. Each row has
-// one tap, one action. Ticks dismiss the row in place with a soft fade; the
-// sheet auto-closes when the last item clears, with a brief "All caught up"
-// micro-celebration. If the user has a live draft, rows render but are not
-// tappable, with explicit "Finish your live session first" copy.
+// Reflective catch-up — voice is "be honest," not "tick everything off."
+// The list shows the recent days that don't have a record yet, ordered
+// newest-first. Each row has one tap: strength → log via retro sheet,
+// non-strength → "Yes" confirms you did it (writes dayDone). Confirmed
+// rows fade out in place. No count badge, no auto-close celebration, no
+// "back to it" closure beat — those rewarded clearing the list, which is
+// the speedrun/streak-gaming antipattern we explicitly want to avoid.
+// The user reads, decides per day, closes when they're done.
 export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickDate, onClose}){
   const draftBlocks = !!pendingDraft;
   const { containerRef, onKeyDown } = useModalA11y(onClose);
   const titleId = "retro-picker-title";
 
   // Local view-state: track which rows have been dismissed in-place during
-  // this sheet session. The parent list (untickedDays) refreshes on close
-  // and re-render via the dayDone state in ForgeApp — but for the duration
-  // of this open, we want the fade-out + auto-close to feel instant.
+  // this sheet session. The parent list refreshes on close via the dayDone
+  // state in ForgeApp — for the duration of this open, the in-place fade
+  // is just visual continuity.
   const [dismissed, setDismissed] = useState(() => new Set());
-  const [celebrate, setCelebrate] = useState(false);
   const visible = untickedDays.filter(r => !dismissed.has(r.date));
-
-  // Auto-close when the last row clears. Tiny celebratory beat first
-  // (200ms hold) so the user actually feels the "done" before the sheet
-  // dissolves — without it, the close feels sudden and joyless.
-  const lastVisibleCount = useRef(visible.length);
-  useEffect(() => {
-    if (lastVisibleCount.current > 0 && visible.length === 0) {
-      setCelebrate(true);
-      const t = setTimeout(() => onClose?.(), 1100);
-      return () => clearTimeout(t);
-    }
-    lastVisibleCount.current = visible.length;
-  }, [visible.length, onClose]);
 
   const dismissRow = (dateStr) => setDismissed(prev => {
     const next = new Set(prev);
@@ -4697,73 +4683,65 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
 
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
           <div>
-            <div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>
-              {celebrate ? "All caught up." : (visible.length === 1 ? "1 unmarked day" : `${visible.length} unmarked days`)}
+            <div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>Recent days</div>
+            <div style={{fontSize:12,color:T.text3,marginTop:4,lineHeight:1.5,maxWidth:"calc(100% - 8px)"}}>
+              {draftBlocks
+                ? "Finish your live session first"
+                : "Log what you actually trained. Leave the rest."}
             </div>
-            {!celebrate && (
-              <div style={{fontSize:12,color:T.text3,marginTop:4,lineHeight:1.5}}>
-                {draftBlocks ? "Finish your live session first" : "Tap to log a missed session — or tick the rest off"}
-              </div>
-            )}
           </div>
           <button onClick={onClose} aria-label="Close" style={{background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,padding:"6px 10px",cursor:"pointer",color:T.text2,fontSize:13,flexShrink:0}}>✕</button>
         </div>
 
-        {/* Celebration state — the list has cleared. Tiny editorial flourish
-            so the close feels earned rather than abrupt. The auto-close
-            timer above will dismiss the sheet shortly after. */}
-        {celebrate && (
-          <div style={{padding:"24px 8px",textAlign:"center",fontFamily:T.serif,fontStyle:"italic",fontSize:15,color:T.sage,lineHeight:1.5}}>
-            Back to it.
-          </div>
-        )}
-
-        {!celebrate && (
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {visible.map((row) => {
-              const isLog = row.action === "log";
-              const colour = isLog ? T.coral : T.sage;
-              const onTap = draftBlocks ? undefined : (isLog
-                ? () => onPick?.(row.date)
-                : () => { onTickDate?.(row.date); dismissRow(row.date); }
-              );
-              return (
-                <div key={row.date}
-                  onClick={onTap}
-                  style={{
-                    padding:"14px 16px",
-                    background: draftBlocks ? T.bg3 : `${colour}0A`,
-                    border: `1px solid ${draftBlocks ? T.bg4 : colour+"33"}`,
-                    borderRadius: T.r.md,
-                    cursor: draftBlocks ? "default" : "pointer",
-                    display:"flex",alignItems:"center",justifyContent:"space-between",
-                    opacity: draftBlocks ? 0.5 : 1,
-                    animation: `fadeSlide 220ms ${T.ease}`,
-                    transition: `all 180ms ${T.ease}`,
-                  }}>
-                  <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                    <div style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:T.text1,lineHeight:1.2}}>
-                      {row.dateLabel}
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <span style={{display:"inline-block",width:5,height:5,borderRadius:"50%",background:colour}}/>
-                      <span style={{fontSize:11,color:T.text3,letterSpacing:"0.04em"}}>
-                        {row.sessionName}
-                      </span>
-                    </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {visible.length === 0 && (
+            <div style={{padding:"16px 4px 4px",fontSize:12,color:T.text3,fontStyle:"italic",fontFamily:T.serif,textAlign:"center",lineHeight:1.5}}>
+              Nothing pending.
+            </div>
+          )}
+          {visible.map((row) => {
+            const isLog = row.action === "log";
+            const colour = isLog ? T.coral : T.sage;
+            const onTap = draftBlocks ? undefined : (isLog
+              ? () => onPick?.(row.date)
+              : () => { onTickDate?.(row.date); dismissRow(row.date); }
+            );
+            return (
+              <div key={row.date}
+                onClick={onTap}
+                style={{
+                  padding:"14px 16px",
+                  background: draftBlocks ? T.bg3 : `${colour}0A`,
+                  border: `1px solid ${draftBlocks ? T.bg4 : colour+"33"}`,
+                  borderRadius: T.r.md,
+                  cursor: draftBlocks ? "default" : "pointer",
+                  display:"flex",alignItems:"center",justifyContent:"space-between",
+                  opacity: draftBlocks ? 0.5 : 1,
+                  animation: `fadeSlide 220ms ${T.ease}`,
+                  transition: `all 180ms ${T.ease}`,
+                }}>
+                <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                  <div style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:T.text1,lineHeight:1.2}}>
+                    {row.dateLabel}
                   </div>
-                  {!draftBlocks && (isLog
-                    ? <span style={{fontSize:18,color:T.coral}}>→</span>
-                    : <span style={{fontSize:13,fontWeight:500,color:T.sage,letterSpacing:"0.04em"}}>Mark ✓</span>
-                  )}
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{display:"inline-block",width:5,height:5,borderRadius:"50%",background:colour}}/>
+                    <span style={{fontSize:11,color:T.text3,letterSpacing:"0.04em"}}>
+                      {row.sessionName}
+                    </span>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                {!draftBlocks && (isLog
+                  ? <span style={{fontSize:13,fontWeight:500,color:T.coral,letterSpacing:"0.04em"}}>Log →</span>
+                  : <span style={{fontSize:13,fontWeight:500,color:T.sage,letterSpacing:"0.04em"}}>Yes — done</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
 
         <div style={{marginTop:16,fontSize:11,color:T.text4,fontStyle:"italic",fontFamily:T.serif,textAlign:"center",lineHeight:1.5}}>
-          {celebrate ? "" : "Only the last week. Anything older is archaeology."}
+          Only the last week. Anything older is archaeology.
         </div>
       </div>
     </div>
