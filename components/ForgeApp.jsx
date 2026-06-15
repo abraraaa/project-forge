@@ -2020,7 +2020,13 @@ function OnboardingScreen({ onContinue }) {
       background: T.bg0, minHeight: "100vh", maxWidth: 430, margin: "0 auto",
       fontFamily: T.sans, color: T.text1, WebkitFontSmoothing: "antialiased",
       padding: "72px 24px 48px", position: "relative", overflow: "hidden",
-      display: "flex", flexDirection: "column",
+      // Centre the editorial column when the viewport is taller than the
+      // content (iPad portrait was the catalyst — the old `flex: 1` spacer
+      // shoved the "Let's go" button hundreds of pixels below the promises
+      // on any screen taller than a phone). On short viewports content just
+      // fills naturally; on tall ones the whole column sits in the middle
+      // with the glow framing it, which is how the editorial intent reads.
+      display: "flex", flexDirection: "column", justifyContent: "center",
     }}>
       {/* Ambient glow */}
       <div style={{
@@ -2048,13 +2054,16 @@ function OnboardingScreen({ onContinue }) {
         </p>
       </Fade>
 
-      {/* The three promises — feel like editorial callouts rather than feature bullets */}
+      {/* The three promises — feel like editorial callouts rather than feature
+          bullets. Strength promise nods to the focus-picker (Forged / Strong /
+          Sculpt) since that's now a first-class part of the loop — used to
+          just say "the right lifts" but the personalisation deserves a hint. */}
       <Fade d={200}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, marginBottom: 32 }}>
           <PromiseLine
             accent={T.coral}
             kicker="Strength"
-            body="Three sessions a week. Squat, hinge, push, pull. Your weights adapt to how you felt last time."
+            body="Three sessions a week, shaped around your training focus. Your weights adapt to how you felt last time."
           />
           <PromiseLine
             accent={T.steel}
@@ -2068,8 +2077,6 @@ function OnboardingScreen({ onContinue }) {
           />
         </div>
       </Fade>
-
-      <div style={{ flex: 1 }}/>
 
       <Fade d={320}>
         <button onClick={() => onContinue()} style={{
