@@ -113,12 +113,13 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
     expect(screen.getByText("Strength A")).toBeTruthy();
   });
 
-  it("does NOT auto-close or celebrate when the last row is dismissed", () => {
-    // The previous version popped a "Back to it" beat and auto-dismissed
-    // the sheet — that rewards CLEARING THE LIST which encourages
-    // speedrun-ticking even for days the user didn't actually train.
-    // Removed deliberately. After the last row, the dialog stays open
-    // with a quiet "Nothing pending." line; the close button is theirs.
+  it("celebrates when the user clears the list manually — but does NOT auto-close", () => {
+    // Two-tier empty state: clearing by hand earns a quiet "Well kept."
+    // beat (acknowledging the discipline of honest logging); opening to
+    // an empty list shows neutral "Nothing pending." Auto-close removed
+    // either way — the user closes when they're done, not when the
+    // screen decides for them. Eliminates the speedrun reward without
+    // losing the satisfaction of a job done.
     const onClose = vi.fn();
     render(
       <RetroPickerSheet
@@ -131,9 +132,26 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
     );
     fireEvent.click(screen.getByText("Yes — done"));
     expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText("Well kept.")).toBeTruthy();
+    expect(screen.queryByText("Nothing pending.")).toBeNull();
     expect(screen.queryByText(/back to it/i)).toBeNull();
     expect(screen.queryByText(/all caught up/i)).toBeNull();
+  });
+
+  it("shows neutral 'Nothing pending.' when opened with no untickedDays", () => {
+    render(
+      <RetroPickerSheet
+        untickedDays={[]}
+        pendingDraft={null}
+        onPick={() => {}}
+        onTickDate={() => {}}
+        onClose={() => {}}
+      />
+    );
+    // No reward for opening to a blank surface — that would celebrate
+    // showing up, not doing the work.
     expect(screen.getByText("Nothing pending.")).toBeTruthy();
+    expect(screen.queryByText("Well kept.")).toBeNull();
   });
 
   it("disables rows when pendingDraft is present", () => {

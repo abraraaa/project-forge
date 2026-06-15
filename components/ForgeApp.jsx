@@ -4695,9 +4695,25 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
 
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {visible.length === 0 && (
-            <div style={{padding:"16px 4px 4px",fontSize:12,color:T.text3,fontStyle:"italic",fontFamily:T.serif,textAlign:"center",lineHeight:1.5}}>
-              Nothing pending.
-            </div>
+            // Two empty states, deliberately different:
+            //   - dismissed.size > 0: the user just cleared the list by
+            //     hand. A small celebratory beat — sage tick, italic
+            //     "Well kept." Acknowledges the discipline of honest
+            //     logging, not the act of clearing the list. No auto-
+            //     close; the user lingers as long as they want.
+            //   - dismissed.size === 0: opened to an already-empty list.
+            //     Neutral "Nothing pending." No reward for showing up to
+            //     a blank surface.
+            dismissed.size > 0 ? (
+              <div style={{padding:"22px 4px 6px",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+                <span style={{fontSize:18,color:T.sage,lineHeight:1}}>✓</span>
+                <span style={{fontSize:14,color:T.sage,fontStyle:"italic",fontFamily:T.serif,letterSpacing:"0.02em"}}>Well kept.</span>
+              </div>
+            ) : (
+              <div style={{padding:"16px 4px 4px",fontSize:12,color:T.text3,fontStyle:"italic",fontFamily:T.serif,textAlign:"center",lineHeight:1.5}}>
+                Nothing pending.
+              </div>
+            )
           )}
           {visible.map((row) => {
             const isLog = row.action === "log";
