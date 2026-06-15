@@ -12,7 +12,7 @@
 //      missed workout when they remember on Saturday.
 // ────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   SESSIONS,
   EXERCISE_POOLS,
@@ -1098,28 +1098,30 @@ describe("hasMissedStrength / hasUntickedRecent — surface logic", () => {
   });
 
   it("hasUntickedRecent fires for a non-strength training day that's not ticked", () => {
-    // Construct a userWeek where TODAY is a strength day (so it doesn't
-    // colour the test) but YESTERDAY is a z2 day. With weekDone empty, the
-    // detector should fire because yesterday's z2 is unticked.
-    // findRecentDays uses the WEEK constant by default; we pass a custom
-    // week that puts z2 on yesterday's weekday.
-    const today = new Date(); today.setHours(0,0,0,0);
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-    const yIdx = [6,0,1,2,3,4,5][yesterday.getDay()];
+    // Pin "today" to a Wednesday so "yesterday" is reliably Tuesday — both
+    // in the same Mon-start week. Without this, on real Mondays yesterday
+    // is in last week and hasUntickedRecent rejects it via its same-week
+    // check (returning false), which made this test silently flake every
+    // Monday on CI. Don't construct relative-to-real-now training fixtures.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-17T10:00:00")); // local Wed
+    try {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+      const yIdx = [6,0,1,2,3,4,5][yesterday.getDay()];
+      const tIdx = [6,0,1,2,3,4,5][today.getDay()];
+      const week = Array(7).fill(null).map((_, i) => {
+        if (i === yIdx) return { type: "z2", s: "Tu" };
+        if (i === tIdx) return { type: "strength", s: "Tu" };
+        return { type: "rest", s: "Re" };
+      });
 
-    // Build a week with z2 on yesterday's slot, strength on today's, rest elsewhere
-    const tIdx = [6,0,1,2,3,4,5][today.getDay()];
-    const week = Array(7).fill(null).map((_, i) => {
-      if (i === yIdx) return { type: "z2", s: "Tu" };
-      if (i === tIdx) return { type: "strength", s: "Tu" };
-      return { type: "rest", s: "Re" };
-    });
-
-    // With weekDone empty → yesterday's z2 isn't ticked → should fire
-    expect(hasUntickedRecent([], 3, {}, { week })).toBe(true);
-    // With weekDone[yIdx] = true → ticked → shouldn't fire on z2 alone
-    // (still might fire from strength misses on other recent days, but
-    // we're constructing 1 non-rest day in the window)
-    expect(hasUntickedRecent([], 3, { [yIdx]: true }, { week })).toBe(false);
+      // With weekDone empty → yesterday's z2 isn't ticked → should fire
+      expect(hasUntickedRecent([], 3, {}, { week })).toBe(true);
+      // With weekDone[yIdx] = true → ticked → shouldn't fire on z2 alone
+      expect(hasUntickedRecent([], 3, { [yIdx]: true }, { week })).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
