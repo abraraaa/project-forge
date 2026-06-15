@@ -523,8 +523,13 @@ export default function ForgeApp(){
   // missed strength session (logged via retro picker) OR untickered current-
   // week non-strength day (zone-2 / HIIT / cardio, ticked via weekDone).
   // hasMissedStrength stays in use for paths that want strength-only signal.
+  //
+  // Window: 7 days. Was 3 — but on Mondays a user with strength C on
+  // Thu/Fri/Sat from the previous week was already past the cutoff before
+  // they could log it. 7 days covers the full preceding training week
+  // without slipping into archaeology.
   const hasRetroGaps = useMemo(
-    () => hasUntickedRecent(history, 3, weekDone, { week: userWeek }),
+    () => hasUntickedRecent(history, 7, weekDone, { week: userWeek }),
     [history, weekDone, userWeek]
   );
   const [weekEditorOpen, setWeekEditorOpen] = useState(false);
@@ -4606,7 +4611,10 @@ export function RetroPickerSheet({history, pendingDraft, weekDone={}, userWeek=W
   // RetrospectiveSessionSheet rendering an empty form when picks didn't
   // match the user's schedule). Pass userWeek through so day-type labels
   // and tappability match what RetrospectiveSessionSheet will see.
-  const rows = useMemo(() => findRecentDays(history, 3, { week: userWeek }), [history, userWeek]);
+  // Window matches the home-screen hasRetroGaps probe (also 7). Catches the
+  // common case of opening the app on Monday with a Thu/Fri/Sat strength
+  // session from the previous week still unlogged.
+  const rows = useMemo(() => findRecentDays(history, 7, { week: userWeek }), [history, userWeek]);
   const draftBlocks = !!pendingDraft;
   const { containerRef, onKeyDown } = useModalA11y(onClose);
   const titleId = "retro-picker-title";
@@ -4716,7 +4724,7 @@ export function RetroPickerSheet({history, pendingDraft, weekDone={}, userWeek=W
         </div>
 
         <div style={{marginTop:16,fontSize:11,color:T.text4,fontStyle:"italic",fontFamily:T.serif,textAlign:"center",lineHeight:1.5}}>
-          Only the last 3 days. Anything older is archaeology.
+          Only the last week. Anything older is archaeology.
         </div>
       </div>
     </div>
