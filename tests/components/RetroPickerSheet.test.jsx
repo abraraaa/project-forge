@@ -72,6 +72,14 @@ describe("RetroPickerSheet — schedule + handler wiring", () => {
     // by giving the entire trailing 3 days a single z2 slot. The sheet will
     // surface a "Mark ✓" affordance for the current-week z2 day; clicking
     // it must pass an integer (0..6) to onTickDay.
+    // Pin "today" to a Wednesday so the trailing 3-day window
+    // (Tue/Mon/Sun) overlaps the current Mon-start week. RetroPickerSheet
+    // only renders "Mark ✓" for days in the current week; without pinning,
+    // running on real Mondays leaves the window entirely in last week and
+    // no Mark ✓ pills render. Same CI-Monday flake that broke
+    // hasUntickedRecent's test.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-17T10:00:00")); // local Wed
     const z2Week = Array(7).fill({ type: "z2", label: "Z2", s: "X" });
     const onTickDay = vi.fn();
     render(
@@ -95,6 +103,7 @@ describe("RetroPickerSheet — schedule + handler wiring", () => {
     expect(Number.isInteger(idx)).toBe(true);
     expect(idx).toBeGreaterThanOrEqual(0);
     expect(idx).toBeLessThanOrEqual(6);
+    vi.useRealTimers();
   });
 
   it("strength row tap calls onPick with the row's ISO date", () => {

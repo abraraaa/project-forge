@@ -31,6 +31,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Typecheck (lib/ via // @ts-check)
+        run: npm run typecheck
+
       - name: Test
         run: npm test
 
