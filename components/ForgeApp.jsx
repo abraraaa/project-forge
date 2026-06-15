@@ -305,7 +305,6 @@ function SyncStatusCard({ profile }) {
 export default function ForgeApp(){
   const [mounted,setMounted]=useState(false);
   // Canonical SSR client-mount guard: fires once, no cascade. Intentional.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>setMounted(true),[]);
 
   const [activeProfile,setActiveProfileState]=useState(()=>typeof window!=="undefined"?P.getActive():null);
@@ -549,7 +548,6 @@ export default function ForgeApp(){
     // Hydrating React state from the localStorage cache on profile change —
     // synchronising with an external store, which is exactly what effects are
     // for. The seed runs once per profile, no cascade. Intentional.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     // Sanity-clamp wildly-out-of-range workingWeights at load (defensive
     // against corruption from earlier bugs — e.g. 110kg recommendation for
     // an isolation movement). Only clamps values > 1.5× category cap.
@@ -664,7 +662,6 @@ export default function ForgeApp(){
     if(restRemain<=0){
       // Countdown reached zero — stop the timer. State machine driven by the
       // tick below; not a render-cascade. Intentional.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRestActive(false);
       // Haptic: Android fires; iOS Safari silently no-ops (returns false).
       // Wrapped defensively — some browsers throw on invocation without
@@ -712,7 +709,6 @@ export default function ForgeApp(){
     if(!restTrigger) return;
     // Start the rest timer in response to a trigger fired from set-logging
     // handlers. Translating an external event into timer state. Intentional.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRestRemain(restTrigger.duration);
     setRestActive(true);
   },[restTrigger]);
@@ -1009,7 +1005,6 @@ export default function ForgeApp(){
       // Session-finalise orchestration on the done-screen transition: persist
       // the record, run the progression engine, then reflect results in state.
       // Deliberate side-effect pipeline keyed off the screen change. Intentional.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStreak(newStreak);
       // Mark today as done in the week strip
       const dw=new Date().getDay();
