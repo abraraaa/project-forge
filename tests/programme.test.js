@@ -1142,4 +1142,32 @@ describe("hasMissedStrength / hasUntickedRecent — surface logic", () => {
       vi.useRealTimers();
     }
   });
+
+  // Regression: user opens app on Monday wanting to log Strength C from
+  // the previous week. With the old 3-day window the previous Thursday is
+  // already past the cutoff. With the 7-day window we now pass to the
+  // helper, the missed strength session resurfaces and the catch-up link
+  // appears on home — which is what they expected.
+  it("Monday + last week's unlogged Thursday strength → fires with daysBack=7", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-15T10:00:00")); // Mon
+    try {
+      const week = [
+        { type: "strength", s: "M" },   // Mon
+        { type: "rest",     s: "T" },
+        { type: "strength", s: "W" },
+        { type: "strength", s: "Th" },  // last Thu = the missed session
+        { type: "cardio",   s: "F" },   // user swapped here
+        { type: "rest",     s: "Sa" },
+        { type: "rest",     s: "Su" },
+      ];
+      // No history at all → last Thursday's strength is unlogged.
+      // 3-day window can't see Thursday (Mon - 3 = Fri, not Thu) → returns false.
+      expect(hasUntickedRecent([], 3, {}, { week })).toBe(false);
+      // 7-day window catches it → true. This is the user's case.
+      expect(hasUntickedRecent([], 7, {}, { week })).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

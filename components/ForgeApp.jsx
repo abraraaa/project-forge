@@ -523,8 +523,13 @@ export default function ForgeApp(){
   // missed strength session (logged via retro picker) OR untickered current-
   // week non-strength day (zone-2 / HIIT / cardio, ticked via weekDone).
   // hasMissedStrength stays in use for paths that want strength-only signal.
+  //
+  // Window: 7 days. Was 3 — but on Mondays a user with strength C on
+  // Thu/Fri/Sat from the previous week was already past the cutoff before
+  // they could log it. 7 days covers the full preceding training week
+  // without slipping into archaeology.
   const hasRetroGaps = useMemo(
-    () => hasUntickedRecent(history, 3, weekDone, { week: userWeek }),
+    () => hasUntickedRecent(history, 7, weekDone, { week: userWeek }),
     [history, weekDone, userWeek]
   );
   const [weekEditorOpen, setWeekEditorOpen] = useState(false);
@@ -2020,7 +2025,13 @@ function OnboardingScreen({ onContinue }) {
       background: T.bg0, minHeight: "100vh", maxWidth: 430, margin: "0 auto",
       fontFamily: T.sans, color: T.text1, WebkitFontSmoothing: "antialiased",
       padding: "72px 24px 48px", position: "relative", overflow: "hidden",
-      display: "flex", flexDirection: "column",
+      // Centre the editorial column when the viewport is taller than the
+      // content (iPad portrait was the catalyst — the old `flex: 1` spacer
+      // shoved the "Let's go" button hundreds of pixels below the promises
+      // on any screen taller than a phone). On short viewports content just
+      // fills naturally; on tall ones the whole column sits in the middle
+      // with the glow framing it, which is how the editorial intent reads.
+      display: "flex", flexDirection: "column", justifyContent: "center",
     }}>
       {/* Ambient glow */}
       <div style={{
@@ -2048,13 +2059,16 @@ function OnboardingScreen({ onContinue }) {
         </p>
       </Fade>
 
-      {/* The three promises — feel like editorial callouts rather than feature bullets */}
+      {/* The three promises — feel like editorial callouts rather than feature
+          bullets. Strength promise nods to the focus-picker (Forged / Strong /
+          Sculpt) since that's now a first-class part of the loop — used to
+          just say "the right lifts" but the personalisation deserves a hint. */}
       <Fade d={200}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, marginBottom: 32 }}>
           <PromiseLine
             accent={T.coral}
             kicker="Strength"
-            body="Three sessions a week. Squat, hinge, push, pull. Your weights adapt to how you felt last time."
+            body="Three sessions a week, shaped around your training focus. Your weights adapt to how you felt last time."
           />
           <PromiseLine
             accent={T.steel}
@@ -2068,8 +2082,6 @@ function OnboardingScreen({ onContinue }) {
           />
         </div>
       </Fade>
-
-      <div style={{ flex: 1 }}/>
 
       <Fade d={320}>
         <button onClick={() => onContinue()} style={{
@@ -3382,11 +3394,20 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         </Fade>
       )}
 
-      {/* Retrospective logging link — only surfaces when there's a missed
-          strength day in the last 3. Calm by design: no card, no chrome,
-          just an inline link tinted sage so it reads as a non-action utility
-          rather than competing with the day's "begin session" CTA. */}
-      {hasRetroGaps && !pendingDraft && onOpenRetroPicker && (
+      {/* Retrospective logging link — surfaces whenever the schedule has
+          an unmarked recent training day. Calm by design: no card, no
+          chrome, just an inline link tinted sage so it reads as a non-
+          action utility rather than competing with the day's "begin
+          session" CTA.
+          //
+          // !pendingDraft removed as a gate (was silently hiding the link
+          // for any user with a paused/half-started session). The link is
+          // informational and orthogonal to the resume-draft card — both
+          // can render. Inside the picker, pendingDraft still disables
+          // tappability with explicit "Finish your live session first"
+          // copy, so a user with an active draft sees the unmarked days
+          // and understands why they can't log them yet. */}
+      {hasRetroGaps && onOpenRetroPicker && (
         <Fade d={190}>
           <div style={{margin:"18px 24px 0",display:"flex",justifyContent:"center"}}>
             <button onClick={onOpenRetroPicker}
@@ -4599,7 +4620,10 @@ export function RetroPickerSheet({history, pendingDraft, weekDone={}, userWeek=W
   // RetrospectiveSessionSheet rendering an empty form when picks didn't
   // match the user's schedule). Pass userWeek through so day-type labels
   // and tappability match what RetrospectiveSessionSheet will see.
-  const rows = useMemo(() => findRecentDays(history, 3, { week: userWeek }), [history, userWeek]);
+  // Window matches the home-screen hasRetroGaps probe (also 7). Catches the
+  // common case of opening the app on Monday with a Thu/Fri/Sat strength
+  // session from the previous week still unlogged.
+  const rows = useMemo(() => findRecentDays(history, 7, { week: userWeek }), [history, userWeek]);
   const draftBlocks = !!pendingDraft;
   const { containerRef, onKeyDown } = useModalA11y(onClose);
   const titleId = "retro-picker-title";
@@ -4709,7 +4733,7 @@ export function RetroPickerSheet({history, pendingDraft, weekDone={}, userWeek=W
         </div>
 
         <div style={{marginTop:16,fontSize:11,color:T.text4,fontStyle:"italic",fontFamily:T.serif,textAlign:"center",lineHeight:1.5}}>
-          Only the last 3 days. Anything older is archaeology.
+          Only the last week. Anything older is archaeology.
         </div>
       </div>
     </div>
