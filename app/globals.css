@@ -71,3 +71,95 @@ input, button, textarea, select { font: inherit; }
       #131110;
   }
 }
+
+/* ─── Native motion polish (Safari 26+ / Chrome 115+) ──────────────────────
+   Four touches that lift the app from "web" to "native" without crossing
+   into skeuomorphism. Each gracefully no-ops on unsupported browsers
+   (rules just don't apply), so older Safari and SSR are unaffected.
+
+   1. View Transitions: cross-fade between screens. The JS side wraps
+      setScreen in document.startViewTransition (see ForgeApp.jsx).
+      Tuned to a 280ms Forge-ease curve — same easing as our other
+      motion (T.ease), so this swap reads as part of the same vocabulary.
+
+   2. Drum: each item's magnification is now CSS-driven via view-timeline,
+      not JS measuring scrollTop. The browser composites it smoothly on
+      every frame, no React work involved.
+
+   3. Home header: gentle scale + opacity dim on first 180px of scroll,
+      via the root scroll-timeline. "Moving past" the hero into content.
+
+   4. Performance Lab cards: each animates up + in as it crosses into
+      view (view-timeline per card). Replaces the all-at-once Fade
+      cascade with on-arrival motion that follows the eye.
+
+   prefers-reduced-motion: addressed at the end. All four collapse to
+   instant or none. */
+
+/* (1) View transitions — screen cross-fade */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* (2) Drum item magnification via view-timeline. The drum container is
+   the implicit scrollport (overflow:scroll, height:5×52px), so view(y)
+   runs each item from 0% (just entering at the bottom of the band) →
+   50% (centred) → 100% (just exiting at the top). Magnifies at the
+   middle, dims at the edges. Replaces the visibleIdx state-tracking
+   loop that fired on every onScroll. */
+@keyframes drum-item-focus {
+  0%   { transform: scale(0.68); opacity: 0.30; }
+  50%  { transform: scale(1.00); opacity: 1.00; }
+  100% { transform: scale(0.68); opacity: 0.30; }
+}
+.drum-item {
+  animation: drum-item-focus linear both;
+  animation-timeline: view(y);
+  will-change: transform, opacity;
+}
+
+/* (3) Home header compression. The "Forge / Squat & Push" headline and
+   its glow gently shrink + dim as the user scrolls into the day's session
+   card. Range capped at 180px so it's done before the user has scrolled
+   meaningfully — no lingering animation tying up frames. */
+@keyframes home-header-compress {
+  to { transform: scale(0.94) translateY(-6px); opacity: 0.72; }
+}
+.home-headline {
+  animation: home-header-compress linear both;
+  animation-timeline: scroll();
+  animation-range: 0 180px;
+  will-change: transform, opacity;
+}
+
+/* (4) Performance Lab card on-arrival. Each card lifts + fades as it
+   crosses into the viewport. animation-range "entry 0% entry 80%"
+   means the animation runs from the moment the card's leading edge
+   crosses into view, completing before the card is fully visible —
+   so the card is settled by the time the eye lands on it. */
+@keyframes lab-card-arrive {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.lab-card {
+  animation: lab-card-arrive linear both;
+  animation-timeline: view();
+  animation-range: entry 0% entry 80%;
+}
+
+/* Reduced motion — all four collapse. View transitions become instant,
+   scroll-driven animations skip their animation entirely. Honours the
+   user's system setting; Forge's motion vocabulary stays intentional. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.01ms;
+  }
+  .drum-item,
+  .home-headline,
+  .lab-card {
+    animation: none;
+  }
+}

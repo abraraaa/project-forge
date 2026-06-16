@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { flushSync } from "react-dom";
 import {
   WEEK, SESSIONS, deriveStrengthDaySessions,
   EXERCISE_POOLS, rotateAccessories, rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
@@ -131,22 +132,20 @@ function ScrollDrum({value,onChange,step=1.25,min=0,max=500,integer=false,label=
   const ref=useRef(null);
   const scrolling=useRef(false);
   const timer=useRef(null);
-  // Track the live scroll offset so the magnification can smoothly follow a
-  // flick (not just snap targets). visibleIdx is a fractional index that
-  // tracks the centre of the viewport during scroll; items compute their
-  // distance from it for opacity/scale ramps.
-  const [visibleIdx,setVisibleIdx]=useState(selectedIdx);
+  // Item magnification was a JS-driven onScroll + visibleIdx loop. As of
+  // Safari 26 / Chrome 115, CSS view-timeline does the same job natively
+  // and silkily — see `.drum-item` in globals.css. The onScroll handler
+  // here now only commits the value change (round to nearest snap-line);
+  // visual scaling is the compositor's job, not React's.
   useEffect(()=>{
     if(!ref.current||scrolling.current) return;
     const raf=requestAnimationFrame(()=>{ if(ref.current) ref.current.scrollTop=selectedIdx*ITEM_H; });
-    setVisibleIdx(selectedIdx);
     return()=>cancelAnimationFrame(raf);
   },[selectedIdx]);
   const onScroll=useCallback(()=>{
     if(!ref.current) return;
     scrolling.current=true;
     const frac=ref.current.scrollTop/ITEM_H;
-    setVisibleIdx(frac);
     const idx=Math.min(Math.round(frac),values.length-1);
     const next=values[Math.max(0,idx)];
     if(next!==undefined&&Math.abs(next-current)>(integer?0.1:0.01)) onChange(next);
@@ -158,9 +157,6 @@ function ScrollDrum({value,onChange,step=1.25,min=0,max=500,integer=false,label=
     const n=Math.round(v*100)/100;
     return Number.isInteger(n)?String(n):n.toFixed(2).replace(/0+$/,"").replace(/\.$/,"");
   };
-  // Inertia easing — cubic-bezier matches T.ease but with a softer overshoot
-  // so the magnify-on-arrival reads as a "settle" rather than a hard snap.
-  const drumEase = `cubic-bezier(0.18, 0.95, 0.30, 1.05)`;
   return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}>
       {label&&<div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>{label}</div>}
@@ -173,26 +169,11 @@ function ScrollDrum({value,onChange,step=1.25,min=0,max=500,integer=false,label=
         <div style={{position:"absolute",bottom:0,left:0,right:0,height:ITEM_H*1.8,background:`linear-gradient(to top,${T.bg2} 24%,transparent)`,pointerEvents:"none",zIndex:2}}/>
         <div ref={ref} onScroll={onScroll} style={{height:"100%",overflowY:"scroll",scrollSnapType:"y mandatory",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",paddingTop:ITEM_H*half,paddingBottom:ITEM_H*half,boxSizing:"content-box"}}>
           <style>{`*::-webkit-scrollbar{display:none}`}</style>
-          {values.map((v,i)=>{
-            // Continuous distance from the live viewport centre. While
-            // settled, this equals integer distance from selectedIdx; mid-
-            // scroll it ramps smoothly so the drum reads as a single piece
-            // of material rolling past, not 5 discrete snap-stops.
-            const dist=Math.abs(i-visibleIdx);
-            const clamped=Math.min(dist,2.2);
-            // Selected → 1.0 / 30px. ±1 row → ~0.86 / ~25px. ±2 row → ~0.7 / ~19px.
-            const scale=Math.max(0.66,1-clamped*0.16);
-            const fontSize=Math.round(30-clamped*5.5);
-            const opacity=Math.max(0.28,1-clamped*0.36);
-            const colour=dist<0.6?T.text1:dist<1.4?T.text2:T.text4;
-            const weight=dist<0.6?400:300;
-            const textShadow=dist<0.4?`0 1px 14px ${T.coral}26`:"none";
-            return(
-              <div key={i} onClick={()=>onChange(v)} style={{height:ITEM_H,scrollSnapAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
-                <span style={{fontFamily:T.serif,fontSize,fontWeight:weight,color:colour,opacity,transform:`scale(${scale})`,textShadow,transition:`font-size 220ms ${drumEase}, color 200ms ${drumEase}, opacity 200ms ${drumEase}, transform 220ms ${drumEase}, text-shadow 240ms ${drumEase}`,userSelect:"none",willChange:"transform"}}>{fmt(v)}</span>
-              </div>
-            );
-          })}
+          {values.map((v,i)=>(
+            <div key={i} onClick={()=>onChange(v)} style={{height:ITEM_H,scrollSnapAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+              <span className="drum-item" style={{fontFamily:T.serif,fontSize:30,fontWeight:400,color:T.text1,userSelect:"none"}}>{fmt(v)}</span>
+            </div>
+          ))}
         </div>
       </div>
       <div style={{fontFamily:T.serif,fontSize:12,fontWeight:300,color:T.text3,marginTop:8,fontStyle:"italic"}}>{unit ?? (integer?"reps":"kg")}</div>
@@ -325,10 +306,27 @@ export default function ForgeApp(){
     return P.getActive() !== null;
   });
   const [streak,setStreak]=useState(0); // retained for compat — now derived from history, see useMemo below
-  const [screen,setScreen]=useState(()=>{
+  const [screen,setScreenRaw]=useState(()=>{
     if (typeof window === "undefined") return "home";
     return LS.get("forge:onboarded", false) ? "home" : "onboarding";
   });
+  // Screen swap wrapped in the View Transitions API where supported (Safari
+  // 18.2+, Chrome 111+). On unsupported runtimes (older Safari, jsdom in
+  // tests, SSR) this falls straight through to a plain setState — no
+  // behaviour change, just a cinematic cross-fade where the platform lets
+  // us. flushSync forces React to commit the state change inside the
+  // callback so the browser can snapshot before/after frames; without it,
+  // React 19's deferred batching would skip the transition entirely.
+  //
+  // Reduced-motion users: prefers-reduced-motion is honoured at the CSS
+  // layer (transitions duration → 0) so the swap still happens, instantly.
+  const setScreen = useCallback((next) => {
+    if (typeof document === "undefined" || !document.startViewTransition) {
+      setScreenRaw(next);
+      return;
+    }
+    document.startViewTransition(() => flushSync(() => setScreenRaw(next)));
+  }, []);
   const [activeSessionIdx,setActiveSessionIdx]=useState(0);
   const [sessionSwaps,setSessionSwaps]=useState({});
   const [programmeBlock,setProgrammeBlock]=useState(()=>PB.get());
@@ -777,7 +775,7 @@ export default function ForgeApp(){
     if (activeProfile) {
       backgroundSync(activeProfile, { onUpdate: handleSyncUpdate });
     }
-  }, [activeProfile, handleSyncUpdate]);
+  }, [activeProfile, handleSyncUpdate, setScreen]);
 
   const activateProfile = async (name, { claim = false } = {}) => {
     const trimmed = String(name).trim();
@@ -952,7 +950,7 @@ export default function ForgeApp(){
     setRestTrigger({id:Date.now(),duration:block.rest});
     setSsRoundDone(false);
     setAwaitRpe(false);
-  },[block,blockIdx,isSS,setNum,activeSession,resolveExFn,pushSetToDraft]);
+  },[block,blockIdx,isSS,setNum,activeSession,resolveExFn,pushSetToDraft,setScreen]);
 
   const handleLog=useCallback(()=>{
     if(isSS){
@@ -976,7 +974,7 @@ export default function ForgeApp(){
       return;
     }
     setAwaitRpe(true);
-  },[block,blockIdx,isSS,phase,setNum,activeSession,resolveExFn,pushSetToDraft]);
+  },[block,blockIdx,isSS,phase,setNum,activeSession,resolveExFn,pushSetToDraft,setScreen]);
 
   // Jump to a specific block in the active session. Used by the session
   // overview sheet when a busy gym means the user needs to do exercises in
@@ -3108,9 +3106,12 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         )}
       </Fade>
 
-      {/* Day headline — driven by viewIdx */}
+      {/* Day headline — driven by viewIdx. className="home-headline" hooks
+          the scroll-timeline compression in globals.css: gentle scale +
+          opacity dim over the first 180px of scroll, so the hero feels
+          like something you're moving past, not stranded above content. */}
       <Fade d={100}>
-        <div style={{padding:"28px 24px 0"}}>
+        <div className="home-headline" style={{padding:"28px 24px 0"}}>
           {/* "Today" / "Tomorrow" / day-name label row */}
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
             <div style={{
