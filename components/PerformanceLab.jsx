@@ -136,9 +136,14 @@ function EmptyState() {
 }
 
 // ─── Card wrapper ─────────────────────────────────────────────────────────────
+// Cards rest *on* the backdrop — inset 1px top highlight (light catching
+// the upper edge), a tight contact shadow, and a wider very-faint lift.
+// Warm-black tints stay inside the Portra palette; no cool Material-grey
+// elevation. Same shape as the ForgeApp Card lift.
+const LAB_CARD_SHADOW = "inset 0 1px 0 rgba(237,235,231,0.04), 0 1px 2px rgba(10,9,8,0.28), 0 10px 28px -16px rgba(10,9,8,0.5)";
 function Card({ title, subtitle, children }) {
   return (
-    <div style={{margin:"24px 24px 0", background:T.bg2, border:`1px solid ${T.bg3}`, borderRadius:T.r.lg, overflow:"hidden"}}>
+    <div style={{margin:"24px 24px 0", background:T.bg2, border:`1px solid ${T.bg3}`, borderRadius:T.r.lg, overflow:"hidden", boxShadow:LAB_CARD_SHADOW}}>
       <div style={{padding:"18px 20px 14px", borderBottom:`1px solid ${T.bg3}`}}>
         <div style={{fontSize:10, fontWeight:500, color:T.text3, letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:4}}>{title}</div>
         {subtitle && <div style={{fontFamily:T.serif, fontSize:15, fontWeight:300, color:T.text2, fontStyle:"italic"}}>{subtitle}</div>}

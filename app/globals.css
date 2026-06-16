@@ -1,5 +1,13 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; background: #131110; overflow-x: hidden; }
+html, body {
+  height: 100%;
+  background: #131110;
+  overflow-x: hidden;
+  /* Kill the rubber-band-the-whole-page tell. Sheets each carry their own
+     overscroll-behavior:contain so an inner scroll stops cleanly at its
+     ends; this catches the root case for any non-sheet scrolling. */
+  overscroll-behavior-y: none;
+}
 body { -webkit-tap-highlight-color: transparent; font-family: var(--font-dm-sans), sans-serif; }
 input, button, textarea, select { font: inherit; }
 
