@@ -50,7 +50,7 @@ import {
   computeVolumeAggregates, recentForExercise,
   totalTonnage, pendingTonnageMilestone, formatTonnage,
 } from "@/lib/analytics";
-import { useModalA11y } from "@/lib/a11y";
+import { useModalA11y, haptic } from "@/lib/a11y";
 import PerformanceLab from "@/components/PerformanceLab";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
@@ -683,7 +683,7 @@ export default function ForgeApp(){
       // Wrapped defensively — some browsers throw on invocation without
       // a prior user gesture (shouldn't happen here since timer started
       // from a button tap, but belt-and-braces).
-      try { if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(200); } catch {}
+      haptic.alert();  // rest timer expired — felt, not just shown
       return;
     }
     const t=setTimeout(()=>setRestRemain(p=>p-1),1000);
@@ -1965,7 +1965,7 @@ function TakenNameModal({ name, webAuthnSupported, onClose, onActivate, passkeyB
 
   if (authSuccess) {
     return (
-      <div style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{background:T.bg2,borderRadius:T.r.xl,padding:"40px 32px",textAlign:"center"}}>
           <div style={{fontSize:48,marginBottom:16}}>✓</div>
           <div style={{fontFamily:T.serif,fontSize:22,fontWeight:300,color:T.text1}}>
@@ -1978,7 +1978,7 @@ function TakenNameModal({ name, webAuthnSupported, onClose, onActivate, passkeyB
   }
 
   return (
-    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",maxWidth:430,borderTop:`1px solid ${T.coral}33`,animation:`slideUp 260ms ${T.ease}`,maxHeight:"92vh",overflowY:"auto",boxSizing:"border-box",position:"relative",outline:"none"}}>
         <button onClick={onClose} aria-label="Close" style={{position:"absolute",top:14,right:14,background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,width:30,height:30,cursor:"pointer",color:T.text2,fontSize:13,padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
 
@@ -2766,7 +2766,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 
       {/* Passkey auth required modal */}
       {needsPasskeyAuth && (
-        <div onClick={()=>setNeedsPasskeyAuth(null)} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div onClick={()=>setNeedsPasskeyAuth(null)} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:T.r.xl,padding:"32px 28px",width:"90%",maxWidth:340,textAlign:"center"}}>
             <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>
               Authentication required
@@ -2812,7 +2812,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
       )}
 
       {confirmWipe&&(
-        <div onClick={()=>!wipeBusy&&setConfirmWipe(null)} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+        <div onClick={()=>!wipeBusy&&setConfirmWipe(null)} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",maxWidth:430,borderTop:`1px solid ${T.rose}33`,animation:`slideUp 240ms ${T.ease}`,maxHeight:"92vh",overflowY:"auto",boxSizing:"border-box"}}>
             <div style={{fontFamily:T.serif,fontSize:24,fontWeight:300,lineHeight:1.2,marginBottom:8}}>
               Wipe <span style={{color:T.rose,fontStyle:"italic"}}>{confirmWipe}</span>?
@@ -3670,7 +3670,7 @@ function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJumpToBloc
   };
 
   return (
-    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
         style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
@@ -3767,7 +3767,7 @@ function RecentHistorySheet({ exerciseName, recent, onCancel }) {
 
   return (
     <div onKeyDown={onKeyDown} onClick={onCancel}
-      style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
         style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
@@ -3816,7 +3816,7 @@ function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFo
   const { containerRef, onKeyDown } = useModalA11y(onCancel);
   const titleId = "rotation-choice-title";
   return (
-    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
         style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:10,fontWeight:500,color:T.gold,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
@@ -4098,8 +4098,10 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
           <div key={i} style={{flex:1,height:3,borderRadius:2,background:i<setNum-1?T.coral:T.bg3,transition:`background 300ms ${T.ease}`}}/>
         ))}
       </div>
-      {awaitRpe&&<RpeCard onPick={onCommit} label="How was that set?"/>}
-      {ssRoundDone&&<RpeCard onPick={onCommit} label={`Round ${setNum} of ${block.sets} — rate the effort`}/>}
+      {/* RPE pick = the set-confirm moment. haptic.commit on submission gives
+          it weight — same gesture that ends every set on every platform. */}
+      {awaitRpe&&<RpeCard onPick={(r)=>{haptic.commit();onCommit(r);}} label="How was that set?"/>}
+      {ssRoundDone&&<RpeCard onPick={(r)=>{haptic.commit();onCommit(r);}} label={`Round ${setNum} of ${block.sets} — rate the effort`}/>}
       {!blocking&&(
         <>
           {showRestHint&&(
@@ -4132,7 +4134,7 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
                 </div>
               )
           )}
-          <button onClick={onLog} style={{margin:"12px 20px 0",width:"calc(100% - 40px)",padding:"18px 24px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:`0 8px 28px ${s.glow}`}}>
+          <button onClick={()=>{haptic.tap();onLog();}} style={{margin:"12px 20px 0",width:"calc(100% - 40px)",padding:"18px 24px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:`0 8px 28px ${s.glow}`}}>
             <span style={{fontFamily:T.serif,fontSize:20,fontWeight:400,color:T.bg0}}>
               {isSS?(phase==="A"?"Log A — into B":"Log B — round done"):"Log set"}
             </span>
@@ -4154,7 +4156,7 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
       {editTarget&&<DrumEditOverlay target={editTarget} workingWeights={workingWeights} setWW={setWW} workingReps={workingReps} setWR={setWR} block={block} onClose={()=>setEditTarget(null)}/>}
       {swapEx&&<SwapOverlay activeEx={activeEx} swapKey={swapKey} onSwap={onSwap} onClose={()=>setSwapEx(null)}/>}
       {showVid&&vidEx&&(
-        <div onClick={()=>setShowVid(false)} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+        <div onClick={()=>setShowVid(false)} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.78)",backdropFilter:"blur(8px) saturate(115%)",WebkitBackdropFilter:"blur(8px) saturate(115%)",overscrollBehavior:"contain",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:24,width:"100%",maxWidth:430,borderTop:`1px solid ${T.coral}33`,animation:`slideUp 280ms ${T.ease}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
               <div>
@@ -4234,7 +4236,7 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
   const { containerRef, onKeyDown } = useModalA11y(onClose);
   const titleId = "swap-overlay-title";
   return (
-    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px 36px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
           <div>
@@ -4300,7 +4302,7 @@ function FocusPickerSheet({ current, onSave, onCancel }) {
   const titleId = "focus-picker-title";
   const changed = draft !== current;
   return (
-    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
         style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
@@ -4376,7 +4378,7 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
   const { containerRef, onKeyDown } = useModalA11y(onCancel);
   const titleId = "week-editor-title";
   return (
-    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
           Weekly schedule
@@ -4455,7 +4457,7 @@ function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
 
   return (
     <div onKeyDown={onKeyDown} onClick={onCancel}
-      style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
         style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:10,fontWeight:500,color:gold,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
@@ -4537,7 +4539,7 @@ function RotationSummaryModal({summary,onContinue}){
   const { containerRef, onKeyDown } = useModalA11y(null);
   const titleId = "rotation-summary-title";
   return (
-    <div onKeyDown={onKeyDown} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.94)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onKeyDown={onKeyDown} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.86)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:10,fontWeight:500,color:gold,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
           New block · {summary.blockNumber}
@@ -4613,7 +4615,7 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
   const lt = getLoadType(ex);
   const weightStep = weightStepForLoadType(lt);
   return (
-    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
           <div><div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>{target.exName}</div>
@@ -4678,7 +4680,7 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
   });
 
   return (
-    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",maxWidth:430,borderTop:`1px solid ${T.sage}28`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
 
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
@@ -5047,7 +5049,7 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
         const unit = isWeight ? (isLoadedBw ? "+ kg" : isAssistedBw ? "− kg" : "kg") : "reps";
 
         return (
-          <div onClick={() => setEditor(null)} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+          <div onClick={() => setEditor(null)} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
             <div onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
                 <div>
@@ -5117,7 +5119,7 @@ function BodyweightEditModalInner({kg, setKg, onClose, onSave, isFirstTime}){
   const { containerRef, onKeyDown } = useModalA11y(onClose);
   const titleId = "bw-edit-title";
   return (
-    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.92)",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onKeyDown={onKeyDown} onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",maxWidth:430,borderTop:`1px solid ${T.sage}28`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
 
         {/* Header — tightened to match DrumEditOverlay pattern. ✕ close
@@ -5279,7 +5281,9 @@ function IosInstallOverlay({ onDismiss }) {
       onClick={onDismiss}
       onKeyDown={onKeyDown}
       style={{
-        position:"fixed",inset:0,background:"rgba(10,9,8,0.90)",zIndex:500,
+        position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",zIndex:500,
+        backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",
+        overscrollBehavior:"contain",
         display:"flex",alignItems:"flex-end",justifyContent:"center",
         animation:`fadeIn 220ms ${T.ease}`,
       }}>
@@ -5374,7 +5378,13 @@ function InstallStep({ n, children }) {
 
 // ─── Shared ──────────────────────────────────────────────────────────��─────────
 function Fade({children,d=0}){const s=useFadeIn(d);return <div style={s}>{children}</div>;}
-function Card({children,style={}}){return <div style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,...style}}>{children}</div>;}
+// boxShadow gives cards a quiet sense of resting ON the backdrop rather than
+// being painted into it: a 1px inset top highlight (light catching the top
+// edge) + two soft ambient drops (a tight contact shadow and a wider, very
+// faint lift). Warm-black tints keep it inside the Portra palette — no cool
+// Material-grey elevation. Callers can override via style.boxShadow.
+const CARD_SHADOW = "inset 0 1px 0 rgba(237,235,231,0.04), 0 1px 2px rgba(10,9,8,0.28), 0 10px 28px -16px rgba(10,9,8,0.5)";
+function Card({children,style={}}){return <div style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,boxShadow:CARD_SHADOW,...style}}>{children}</div>;}
 function Tag({children,color,style={}}){return <span style={{display:"inline-flex",alignItems:"center",fontSize:10,fontWeight:500,color,background:`${color}12`,border:`1px solid ${color}33`,borderRadius:T.r.pill,padding:"4px 12px",letterSpacing:"0.08em",...style}}>{children}</span>;}
 function StreakBadge({rhythm}){
   const completed = rhythm?.completed || 0;
