@@ -3,10 +3,10 @@ html, body {
   height: 100%;
   background: #131110;
   overflow-x: hidden;
-  /* Kill the rubber-band-the-whole-page tell. Sheets each carry their own
-     overscroll-behavior:contain so an inner scroll stops cleanly at its
-     ends; this catches the root case for any non-sheet scrolling. */
-  overscroll-behavior-y: none;
+  /* No overscroll-behavior on the root — the native iOS rubber-band on
+     the page itself is part of the platform feel and users miss it when
+     it's gone. Sheet scrims keep their own `overscroll-behavior: contain`
+     so scrolling inside a sheet doesn't bleed into the page behind. */
 }
 body { -webkit-tap-highlight-color: transparent; font-family: var(--font-dm-sans), sans-serif; }
 input, button, textarea, select { font: inherit; }
@@ -96,11 +96,19 @@ input, button, textarea, select { font: inherit; }
    prefers-reduced-motion: addressed at the end. All four collapse to
    instant or none. */
 
-/* (1) View transitions — screen cross-fade */
+/* (1) View transitions — screen cross-fade.
+   mix-blend-mode: plus-lighter is the canonical fix for the perceived
+   midpoint dim ("flicker"). By default the old layer fades out and the
+   new layer fades in simultaneously, so at ~50% progress both layers sit
+   at ~0.5 opacity. With a normal blend the dark body shows through the
+   transparency and the eye reads a dim. plus-lighter adds the two layers'
+   premultiplied alpha so the composite stays at full brightness throughout
+   — the cross-fade reads as a soft swap, not a dip-to-black-and-back. */
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation-duration: 280ms;
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  mix-blend-mode: plus-lighter;
 }
 
 /* (2) Drum item magnification via view-timeline. The drum container is
