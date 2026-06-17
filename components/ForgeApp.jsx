@@ -541,6 +541,28 @@ export default function ForgeApp(){
   // commit a new week and have the home strip / retro / done screens reflow
   // without a reload. Falls back to the default WEEK when nothing is stored.
   const [userWeek, setUserWeek] = useState(() => W.get() || WEEK);
+
+  // Push the current local user-state to blob. Called whenever a user-
+  // facing customisation changes (schedule edit, focus pick, day tick) so
+  // a different device — or a fresh install of this one — rehydrates with
+  // the latest. Without this every customisation lived only in localStorage
+  // and reinstalls reverted to defaults despite history coming back fine.
+  const pushUserStateSnapshot = useCallback(() => {
+    if (!activeProfile) return;
+    blobPush(activeProfile, {
+      meta: {
+        weights: P.getWeights(activeProfile),
+        reps: P.getReps(activeProfile),
+        streak: P.getStreak(activeProfile),
+        programmeBlock: PB.get(),
+        userWeek: W.get(),
+        userFocus: F.get(activeProfile),
+        dayDone: P.getDayDone(activeProfile),
+        bonusDone: P.getBonusDone(activeProfile),
+      },
+      history: H.get(activeProfile),
+    });
+  }, [activeProfile]);
   const strengthDaySessions = useMemo(() => deriveStrengthDaySessions(userWeek), [userWeek]);
   // Single source of truth for catch-up state. dayDone is date-keyed
   // (`{ "2026-06-13": true, ... }`) — strength session finalises write it,
@@ -558,11 +580,13 @@ export default function ForgeApp(){
     W.save(newWeek);
     setUserWeek(W.get() || WEEK); // re-read so state mirrors the persisted/normalised shape
     setWeekEditorOpen(false);
+    pushUserStateSnapshot();
   };
   const handleResetWeek = () => {
     W.reset();
     setUserWeek(WEEK);
     setWeekEditorOpen(false);
+    pushUserStateSnapshot();
   };
 
   // Seed on profile change: instant load from localStorage, background sync from blob
@@ -776,13 +800,25 @@ export default function ForgeApp(){
 
   // Reusable sync update handler — called when backgroundSync finds newer blob data.
   // Silently updates React state so the UI reflects the freshest data.
+  // The persistToLocal step inside backgroundSync has already written each
+  // field to localStorage; this just makes the running UI catch up without
+  // a reload.
   const handleSyncUpdate = useCallback(({ meta, history: remoteHistory }) => {
     if (meta?.weights) setWWState(meta.weights);
     if (meta?.reps) setWRState(meta.reps);
     if (meta?.streak?.count) setStreak(meta.streak.count);
     if (meta?.programmeBlock) setProgrammeBlock(meta.programmeBlock);
+    if (meta?.userWeek) setUserWeek(meta.userWeek);
+    if (meta?.userFocus) setUserFocus(meta.userFocus);
+    if (meta?.dayDone) {
+      setDayDone(meta.dayDone);
+      // weekDone is derived from dayDone — re-project after the new
+      // dayDone lands so the home strip updates in the same tick.
+      if (activeProfile) setWeekDone(P.getWeekDone(activeProfile));
+    }
+    if (meta?.bonusDone) setBonusDone(meta.bonusDone);
     if (remoteHistory?.length) setHistory(remoteHistory);
-  }, []);
+  }, [activeProfile]);
 
   // Open Performance Lab — triggers background sync first to hydrate from blob
   // if localStorage is stale (e.g. switching from PWA to Safari on same device).
@@ -1232,13 +1268,19 @@ export default function ForgeApp(){
 
       // Push both meta and the just-finalised record to blob.
       // History push is incremental — only this one record, the server
-      // merges with whatever it has.
+      // merges with whatever it has. Includes user-state fields so a
+      // session-complete push can't wipe a schedule/focus/tick the user
+      // changed mid-session.
       blobPush(activeProfile, {
         meta: {
           weights: workingWeights,
           reps: workingReps,
           streak: P.getStreak(activeProfile),
           programmeBlock,
+          userWeek: W.get(),
+          userFocus: F.get(activeProfile),
+          dayDone: P.getDayDone(activeProfile),
+          bonusDone: P.getBonusDone(activeProfile),
         },
         history: sessionRecord ? [sessionRecord] : [],
       });
@@ -1288,7 +1330,8 @@ export default function ForgeApp(){
       const newStreak = bumpStreak(activeProfile);
       setStreak(newStreak);
     }
-  },[activeProfile]);
+    pushUserStateSnapshot();
+  },[activeProfile, pushUserStateSnapshot]);
 
   // Mark today's optional cardio bonus complete. Separate store from weekDone;
   // deliberately does NOT bump the streak — bonuses are extras, not adherence.
@@ -1320,6 +1363,7 @@ export default function ForgeApp(){
     const stimulusDelta = computeRotationStimulusDelta(oldConfig, newConfig);
     setRotationSummary({ blockNumber: programmeBlock.number, changes, stimulusDelta });
     setFocusPickerOpen(false);
+    pushUserStateSnapshot();
   };
 
   if(!mounted) return null;
@@ -1807,9 +1851,20 @@ const sProps={
         });
       } catch {/* analytics never blocks */}
 
-      // Push to blob in background
+      // Push to blob in background. Same reasoning as the live-finalise
+      // path: carry the full user-state so a retro submit doesn't clobber
+      // schedule/focus/tick changes that happened on this device.
       blobPush(activeProfile, {
-        meta: { weights: workingWeights, reps: workingReps },
+        meta: {
+          weights: workingWeights,
+          reps: workingReps,
+          streak: P.getStreak(activeProfile),
+          programmeBlock,
+          userWeek: W.get(),
+          userFocus: F.get(activeProfile),
+          dayDone: P.getDayDone(activeProfile),
+          bonusDone: P.getBonusDone(activeProfile),
+        },
         history: H.get(activeProfile),
       });
 
