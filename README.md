@@ -93,6 +93,7 @@ scripts/
 
 These are non-negotiable without explicit sign-off. They've each saved or unwound a real bug.
 
+0. **Local is a cache; blob is canonical. Nothing lives in `localStorage` without an explicit decision about how it survives a reinstall.** Every new persisted store must either (a) be included in the blob `meta` payload — read by `getLocalProfile`, written by `persistToLocal`, merged by `mergeProfileData`, and pushed by `pushUserStateSnapshot` on mutation — or (b) carry an inline comment declaring it intentionally device-local (e.g. transient draft state) with the reasoning. Reinstall-erased data is unrecoverable; the framing is "what survives" not "what's saved." Adding a store without picking a side is a regression.
 1. **Ballerina-lean.** Incremental, monolithic, minimal. No speculative refactors. `ForgeApp.jsx` doesn't get split unless an extraction has a concrete reason (cross-screen reuse or genuine independence).
 2. **Two effort scales only.**
    - Per-set effort = `easy / normal / cooked` (maps to RIR via `rpeToRir`).
