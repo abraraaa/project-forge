@@ -34,11 +34,19 @@ export default function GrainOverlay() {
         inset: 0,
         pointerEvents: "none",
         zIndex: 1,
-        opacity: 0.05,
-        mixBlendMode: "overlay",
+        // mix-blend-mode: overlay at 5% opacity on a near-black background
+        // (#131110) is mathematically near-invisible — the dark base
+        // dominates and the texture vanishes. mix-blend-mode: screen lifts
+        // the grain on dark surfaces (light grain becomes visible noise);
+        // opacity raised from 0.05 to 0.12 so it actually reads on a
+        // high-density display. Still textural — visible on flat fields,
+        // recedes against any content. Smaller tile (192px → richer
+        // density) so the noise pattern doesn't read as wallpaper.
+        opacity: 0.12,
+        mixBlendMode: "screen",
         backgroundImage: `url("data:image/svg+xml,${GRAIN_SVG}")`,
         backgroundRepeat: "repeat",
-        backgroundSize: "256px 256px",
+        backgroundSize: "192px 192px",
       }}
     />
   );

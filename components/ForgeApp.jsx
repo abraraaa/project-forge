@@ -95,7 +95,25 @@ function weightStepForLoadType(lt) {
   return 1.25;  // barbell / external default
 }
 
-// ─── loadType → caption ──────────────────────────────────────────────────────
+// Detect a "timed" prescription string like "20s", "30sec", "1m". Returns
+// either { seconds: 20 } for a parseable duration or null for everything
+// else. Lets the session screen show "20s · hold" instead of "20 reps",
+// and lets the drum edit overlay swap its unit to seconds. The string
+// form lives in the pool data (L-Sit Hold reps:"20s"); when a user
+// overrides via the drum we store an integer alongside — same shape as
+// numeric reps — and treat it as seconds whenever the prescribed value
+// was originally timed.
+function parseTimedReps(reps) {
+  if (typeof reps !== "string") return null;
+  const m = reps.trim().match(/^(\d+)\s*(s|sec|second|seconds|m|min|minute|minutes)$/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  const unit = m[2].toLowerCase();
+  const seconds = unit.startsWith("m") ? n * 60 : n;
+  return { seconds };
+}
+
+
 // What does the number the user types represent? Resolves the per-DB vs
 // total-load ambiguity the picker has historically left implicit. Two
 // vocabularies coexist: programme.js entries carry "barbell"/"per_db"/
@@ -4081,11 +4099,23 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
             )}
           </>
         )}
-        <div style={{display:"flex",alignItems:"baseline",gap:6,cursor:"pointer",userSelect:"none"}} onClick={()=>{ if(activeEx?.name) setEditTarget({exName:activeEx.name,currentKg:showWeightPicker?currentW:null,currentReps:getR(activeEx),loadType}); }}>
-          <span style={{fontFamily:T.serif,fontSize:48,fontWeight:400,color:T.coral,lineHeight:1,fontStyle:"italic"}}>{getR(activeEx)}</span>
-          <span style={{fontSize:14,color:T.text3,marginBottom:4}}>reps</span>
-          <span style={{fontSize:11,color:T.text3,marginBottom:6,marginLeft:4}}>↕</span>
-        </div>
+        {/* "reps" label is wrong for timed exercises (e.g. L-Sit Hold,
+            prescribed as "20s"). Read the ORIGINAL prescribed value (not
+            getR, which folds in any drum override that may have stamped
+            an integer over the string). If timed, render "Xs · hold"
+            instead of "X reps". The drum overlay also knows from this
+            (target.timed) so its unit switches to seconds. */}
+        {(() => {
+          const timed = parseTimedReps(activeEx?.reps);
+          const displayVal = getR(activeEx);
+          return (
+            <div style={{display:"flex",alignItems:"baseline",gap:6,cursor:"pointer",userSelect:"none"}} onClick={()=>{ if(activeEx?.name) setEditTarget({exName:activeEx.name,currentKg:showWeightPicker?currentW:null,currentReps:displayVal,loadType,timed:!!timed}); }}>
+              <span style={{fontFamily:T.serif,fontSize:48,fontWeight:400,color:T.coral,lineHeight:1,fontStyle:"italic"}}>{timed ? `${typeof displayVal === "number" ? displayVal : timed.seconds}s` : displayVal}</span>
+              <span style={{fontSize:14,color:T.text3,marginBottom:4}}>{timed ? "hold" : "reps"}</span>
+              <span style={{fontSize:11,color:T.text3,marginBottom:6,marginLeft:4}}>↕</span>
+            </div>
+          );
+        })()}
         {/* Phase 3 — quiet "deload · day N of M" subtitle in muted gold.
             Only renders during an active deload window. */}
         {deloadDayTag && (
@@ -4603,7 +4633,16 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
   const ex=block.type==="main"?block.ex:(target.exName===block.exA?.name?block.exA:block.exB);
   const initKg  =workingWeights[target.exName]??ex?.weight??0;
   const rawReps =workingReps[target.exName]??ex?.reps;
-  const initReps=typeof rawReps==="string"?8:(rawReps??8);
+  // Timed exercises (L-Sit Hold prescribed "20s") seed from the parsed
+  // seconds, not a default 8/20. Without this the drum opens at "8 reps"
+  // for a 20-second hold, the user confirms, and the prescription is
+  // silently stamped over with an integer that's then treated as reps
+  // everywhere downstream. target.timed is set by the session-screen
+  // dispatcher when the prescribed value parses as a duration.
+  const timedSeed = target.timed ? parseTimedReps(ex?.reps)?.seconds : null;
+  const initReps = typeof rawReps==="string"
+    ? (timedSeed ?? 8)
+    : (rawReps ?? timedSeed ?? 8);
   const [kg,setKg]    =useState(initKg);
   const [reps,setReps]=useState(initReps);
   const hasWeight=ex?.weight!==null&&ex?.weight!==undefined;
@@ -4625,7 +4664,7 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
         </div>
         <div style={{display:"flex",gap:16,justifyContent:hasWeight?"space-between":"center"}}>
           {hasWeight&&<ScrollDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
-          <ScrollDrum value={reps} onChange={setReps} step={1} min={1} max={30} integer label="reps"/>
+          <ScrollDrum value={reps} onChange={setReps} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined}/>
         </div>
         <button onClick={()=>{
           if(hasWeight) setWW(p=>({...p,[target.exName]:kg}));
