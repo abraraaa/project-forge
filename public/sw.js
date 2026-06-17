@@ -18,15 +18,19 @@
 // Bump SW_VERSION on every meaningful change so the activate handler cleans
 // up older caches. Old caches are deleted by prefix match on every activate.
 
-const SW_VERSION  = "0.2.0-shell-cache";
+const SW_VERSION  = "0.3.0-liquid-glass-icons";
 const STATIC_CACHE = `forge-static-${SW_VERSION}`;
 const HTML_CACHE   = `forge-html-${SW_VERSION}`;
 
 // Precache list — must stay tiny. Anything else is added at runtime.
+// Bumped to the Liquid Glass icon set; the legacy /icon-192.png and
+// /icon-512.png paths still exist (as flat fallbacks) for any installed
+// PWA that references them before the new manifest takes effect.
 const PRECACHE_URLS = [
   "/manifest.json",
-  "/icon-192.png",
-  "/icon-512.png",
+  "/forge-glass-192.png",
+  "/forge-glass-512.png",
+  "/apple-touch-icon.png",
 ];
 
 self.addEventListener("install", (event) => {

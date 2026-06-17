@@ -33,7 +33,11 @@ export const metadata = {
     title: "Forge",
   },
   icons: {
-    apple: "/icon-192.png",
+    apple: "/apple-touch-icon.png",
+    icon: [
+      { url: "/forge-glass-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/forge-glass-512.png", sizes: "512x512", type: "image/png" },
+    ],
   },
 };
 
@@ -51,7 +55,7 @@ export default function RootLayout({ children }) {
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body>
         <ServiceWorkerRegistrar />
