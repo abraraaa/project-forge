@@ -559,6 +559,8 @@ export default function ForgeApp(){
         userFocus: F.get(activeProfile),
         dayDone: P.getDayDone(activeProfile),
         bonusDone: P.getBonusDone(activeProfile),
+        bodyweight: BW.getRaw(activeProfile),
+        trainingState: TS.get(activeProfile),
       },
       history: H.get(activeProfile),
     });
@@ -817,6 +819,16 @@ export default function ForgeApp(){
       if (activeProfile) setWeekDone(P.getWeekDone(activeProfile));
     }
     if (meta?.bonusDone) setBonusDone(meta.bonusDone);
+    // Bodyweight + trainingState arrived from blob — reflect into React
+    // state so BW-progression slots and the engine read the freshly-merged
+    // values without a reload. persistToLocal has already written to LS;
+    // this just refreshes the UI in the same tick as the other fields.
+    if (meta?.bodyweight?.kg != null) setBodyweightState(meta.bodyweight.kg);
+    if (meta?.trainingState && activeProfile) {
+      const ts = meta.trainingState;
+      setActiveDeload(ts?.mesocycle?.activeDeload || null);
+      try { setDeloadOffer(shouldOfferDeload(ts, H.get(activeProfile))); } catch {}
+    }
     if (remoteHistory?.length) setHistory(remoteHistory);
   }, [activeProfile]);
 
@@ -1341,7 +1353,8 @@ export default function ForgeApp(){
     const wm=[6,0,1,2,3,4,5];
     const idx=wm[dw];
     setBonusDone(P.markBonusDone(activeProfile,idx));
-  },[activeProfile]);
+    pushUserStateSnapshot();
+  },[activeProfile, pushUserStateSnapshot]);
 
   // Save the user's training focus + re-rotate accessories IMMEDIATELY with the
   // new bias. Keeps block number and startDate (the change is a re-pick, not
@@ -1458,6 +1471,13 @@ const sProps={
     };
     setProgrammeBlock(next);
     PB.save(next);
+    // Push immediately — the previous code only sync'd programmeBlock via
+    // the next session-finalise, so users who rotated and then reinstalled
+    // before training lost the new rotation. Also covers the case where
+    // session-complete fires later with a stale closure over programmeBlock
+    // (the closure captures `programmeBlock` from the render where the user
+    // rotated; pushing here pins the latest persisted state regardless).
+    pushUserStateSnapshot();
     if (showSummary) {
       setRotationSummary({
         blockNumber: next.number,
