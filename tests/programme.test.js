@@ -20,6 +20,7 @@ import {
   WEEK,
   STRENGTH_DAY_SESSIONS,
   findRecentDays,
+  findUntickedRecent,
   rotateAccessories,
   pushHistoryBlock,
   computeRotationStimulusDelta,
@@ -1172,6 +1173,84 @@ describe("hasMissedStrength / hasUntickedRecent — surface logic", () => {
       expect(hasUntickedRecent([], 3, {}, { week })).toBe(false);
       // 7-day window catches it → true. This is the user's case.
       expect(hasUntickedRecent([], 7, {}, { week })).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ─── findUntickedRecent — per-week strength cap ─────────────────────────────
+// Guards against the duplicate-strength bug: editing the schedule mid-week to
+// shift strength to different days made the retro picker offer the new days
+// as "missing," even though existing records on the original days already
+// satisfied the week's strength quota. Result: user accepts, gets a second
+// strength_A in the same week.
+//
+// Rule: per ISO week, count of strength records ≥ scheduled strength-day
+// count → all strength rows for that week treated as satisfied.
+describe("findUntickedRecent — per-week strength cap", () => {
+  // Week shape: 3 strength days, 4 non-strength. Mirrors the live default.
+  const threeStrengthWeek = [
+    { type: "strength" }, { type: "cardio" }, { type: "strength" },
+    { type: "cardio" },   { type: "strength" }, { type: "zone2" },
+    { type: "rest" },
+  ];
+  // Build a strength history record on a given date.
+  const sx = (date) => ({ v: 2, id: `${date}T10:00:00.000Z`, date, session: "strength_a", blocks: [] });
+
+  it("suppresses 'missing' strength rows once the week's strength quota is met", () => {
+    vi.useFakeTimers();
+    try {
+      // Pin "now" to Sun 21 Jun 2026 so the trailing 7-day window covers
+      // the previous Mon–Sat. Schedule has 3 strength days (Mon/Wed/Fri).
+      vi.setSystemTime(new Date("2026-06-21T12:00:00"));
+      // History: 3 strength records on Mon, Wed, Fri of the current week.
+      // Schedule cap = 3, actual = 3 → no rows should surface as "missing"
+      // even though a hypothetical "Tue strength" row appears unrecorded.
+      const history = [sx("2026-06-15"), sx("2026-06-17"), sx("2026-06-19")];
+      const result = findUntickedRecent(history, 7, {}, { week: threeStrengthWeek });
+      // No strength rows should appear — the quota is met.
+      expect(result.filter((r) => r.type === "strength")).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still surfaces 'missing' strength rows when the quota is not met", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-21T12:00:00"));
+      // Only 1 of 3 scheduled strength days actually logged.
+      const history = [sx("2026-06-15")];
+      const result = findUntickedRecent(history, 7, {}, { week: threeStrengthWeek });
+      const strengthRows = result.filter((r) => r.type === "strength");
+      // Wed and Fri should appear as missing (Mon is logged).
+      expect(strengthRows.length).toBe(2);
+      const dates = strengthRows.map((r) => r.date).sort();
+      expect(dates).toEqual(["2026-06-17", "2026-06-19"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("schedule-shifted scenario: original Mon/Wed/Fri logs, new schedule Tue/Thu/Sat — no dupes offered", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-21T12:00:00"));
+      // The user's actual reported scenario: existing strength on Mon/Wed/Fri,
+      // mid-week edit bumps strength to Tue/Thu/Sat. Picker would naively offer
+      // Tue/Thu/Sat as missing despite the week's quota being met.
+      const shiftedWeek = [
+        { type: "cardio" },   { type: "strength" }, { type: "cardio" },
+        { type: "strength" }, { type: "cardio" },   { type: "strength" },
+        { type: "rest" },
+      ];
+      const history = [sx("2026-06-15"), sx("2026-06-17"), sx("2026-06-19")];
+      const result = findUntickedRecent(history, 7, {}, { week: shiftedWeek });
+      // No strength rows surface — the 3 historical records satisfy the
+      // 3 scheduled strength slots, regardless of which days the schedule
+      // currently places them on.
+      expect(result.filter((r) => r.type === "strength")).toEqual([]);
     } finally {
       vi.useRealTimers();
     }
