@@ -665,8 +665,11 @@ export default function ForgeApp(){
         if (!cancelled) setHydrating(false);
       });
 
-    // Enable auto-sync on visibility change and online events
-    enableAutoSync(activeProfile, onSyncUpdate);
+    // Enable auto-sync on visibility change and online events.
+    // The third arg is the "push current snapshot" callback — fires on
+    // visibilitychange=hidden and pagehide so a backgrounding event is a
+    // durability checkpoint, not a data-loss window.
+    enableAutoSync(activeProfile, onSyncUpdate, pushUserStateSnapshot);
 
     // Check for an interrupted session — surfaces as a resume card on home
     const interrupted = D.load(activeProfile);
@@ -712,6 +715,10 @@ export default function ForgeApp(){
       cancelled = true;
       disableAutoSync();
     };
+    // pushUserStateSnapshot is itself memoised on [activeProfile] — listing
+    // it in deps would re-run this effect identically. Suppressed for the
+    // same reason the catch-up rebuild suppresses below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   },[activeProfile]);
 
   // Rest timer tick
