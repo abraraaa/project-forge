@@ -36,7 +36,11 @@ const forgeAppSrc = readFileSync(resolve(__dirname, "../components/ForgeApp.jsx"
 //   "synced"        — included in blob meta payload (or own blob, for H)
 //   "device-local"  — intentionally not synced; reason recorded below
 const INVENTORY = {
-  P:  { disposition: "synced", keys: ["weights", "reps", "streak", "dayDone", "bonusDone", "weekDone"] },
+  // P still owns dayDone / bonusDone keys on disk for read-only rescue by
+  // Days._foldLegacy on a peer pulling a pre-cutover blob — but those keys
+  // are no longer part of the sync contract (the four-seams test). Days
+  // is the single SYNCED store for per-date completion now.
+  P:  { disposition: "synced", keys: ["weights", "reps", "streak"] },
   H:  { disposition: "synced", keys: ["history"], note: "own blob, server-side merge by id" },
   W:  { disposition: "synced", keys: ["weekConfig"] },
   PB: { disposition: "synced", keys: ["programmeBlock"] },
@@ -79,7 +83,7 @@ describe("storage durability contract", () => {
   it("every SYNCED meta store is read by getLocalProfile", () => {
     const getLocalProfile = sliceFunction(storageSrc, "getLocalProfile");
     const required = {
-      P:    ["weights", "reps", "streak", "dayDone", "bonusDone"],
+      P:    ["weights", "reps", "streak"],
       W:    ["userWeek"],
       PB:   ["programmeBlock"],
       F:    ["userFocus"],
@@ -96,7 +100,11 @@ describe("storage durability contract", () => {
 
   it("every SYNCED meta store is written by persistToLocal", () => {
     const persistToLocal = sliceFunction(storageSrc, "persistToLocal");
-    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "dayDone", "bonusDone", "bodyweight", "trainingState", "days"];
+    // dayDone / bonusDone retained ONLY as inbound rescue paths from
+    // pre-cutover peers (the substring still appears in the function body).
+    // The required-list below is the active sync contract; the rescue lines
+    // are exercised via the storage-days projection tests.
+    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "bodyweight", "trainingState", "days"];
     for (const field of required) {
       expect(persistToLocal.includes(field), `persistToLocal() must hydrate meta.${field} back to local`).toBe(true);
     }
@@ -104,7 +112,7 @@ describe("storage durability contract", () => {
 
   it("every SYNCED meta store has a merge rule in mergeProfileData", () => {
     const mergeFn = sliceFunction(storageSrc, "mergeProfileData");
-    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "dayDone", "bonusDone", "bodyweight", "trainingState", "days"];
+    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "bodyweight", "trainingState", "days"];
     for (const field of required) {
       expect(mergeFn.includes(field), `mergeProfileData must declare a merge rule for meta.${field}`).toBe(true);
     }
@@ -115,7 +123,7 @@ describe("storage durability contract", () => {
     // field, that field's mutations don't durably round-trip until the next
     // session-finalise — the same gap that lost the rotation-after-reinstall.
     const push = sliceFunction(forgeAppSrc, "pushUserStateSnapshot");
-    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "dayDone", "bonusDone", "bodyweight", "trainingState", "days"];
+    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "bodyweight", "trainingState", "days"];
     for (const field of required) {
       expect(push.includes(field), `pushUserStateSnapshot must include meta.${field} so on-mutation push doesn't drop it`).toBe(true);
     }
