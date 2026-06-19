@@ -42,8 +42,9 @@ const INVENTORY = {
   PB: { disposition: "synced", keys: ["programmeBlock"] },
   F:  { disposition: "synced", keys: ["focus"] },
   BW: { disposition: "synced", keys: ["bw"] },
-  TS: { disposition: "synced", keys: ["trainingState"] },
-  PN: { disposition: "device-local", keys: ["passkeyNudge"], reason: "per-device nudge cadence" },
+  TS:   { disposition: "synced", keys: ["trainingState"] },
+  Days: { disposition: "synced", keys: ["days", "daysProjected"], note: "unified Day completion entity (date-keyed); replaces dayDone/bonusDone/weekDone projection during cutover" },
+  PN:   { disposition: "device-local", keys: ["passkeyNudge"], reason: "per-device nudge cadence" },
   PQ: { disposition: "device-local", keys: ["pendingPushes"], reason: "retry queue, derived from failures on this device" },
   D:  { disposition: "device-local", keys: ["draft"], reason: "transient in-session draft, recovered locally only" },
   // LS and SyncStatus are utilities, not stores. They don't own data.
@@ -78,12 +79,13 @@ describe("storage durability contract", () => {
   it("every SYNCED meta store is read by getLocalProfile", () => {
     const getLocalProfile = sliceFunction(storageSrc, "getLocalProfile");
     const required = {
-      P:  ["weights", "reps", "streak", "dayDone", "bonusDone"],
-      W:  ["userWeek"],
-      PB: ["programmeBlock"],
-      F:  ["userFocus"],
-      BW: ["bodyweight"],
-      TS: ["trainingState"],
+      P:    ["weights", "reps", "streak", "dayDone", "bonusDone"],
+      W:    ["userWeek"],
+      PB:   ["programmeBlock"],
+      F:    ["userFocus"],
+      BW:   ["bodyweight"],
+      TS:   ["trainingState"],
+      Days: ["days"],
     };
     for (const [store, fields] of Object.entries(required)) {
       for (const field of fields) {
@@ -94,7 +96,7 @@ describe("storage durability contract", () => {
 
   it("every SYNCED meta store is written by persistToLocal", () => {
     const persistToLocal = sliceFunction(storageSrc, "persistToLocal");
-    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "dayDone", "bonusDone", "bodyweight", "trainingState"];
+    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "dayDone", "bonusDone", "bodyweight", "trainingState", "days"];
     for (const field of required) {
       expect(persistToLocal.includes(field), `persistToLocal() must hydrate meta.${field} back to local`).toBe(true);
     }
@@ -102,7 +104,7 @@ describe("storage durability contract", () => {
 
   it("every SYNCED meta store has a merge rule in mergeProfileData", () => {
     const mergeFn = sliceFunction(storageSrc, "mergeProfileData");
-    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "dayDone", "bonusDone", "bodyweight", "trainingState"];
+    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "dayDone", "bonusDone", "bodyweight", "trainingState", "days"];
     for (const field of required) {
       expect(mergeFn.includes(field), `mergeProfileData must declare a merge rule for meta.${field}`).toBe(true);
     }
@@ -113,7 +115,7 @@ describe("storage durability contract", () => {
     // field, that field's mutations don't durably round-trip until the next
     // session-finalise — the same gap that lost the rotation-after-reinstall.
     const push = sliceFunction(forgeAppSrc, "pushUserStateSnapshot");
-    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "dayDone", "bonusDone", "bodyweight", "trainingState"];
+    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "dayDone", "bonusDone", "bodyweight", "trainingState", "days"];
     for (const field of required) {
       expect(push.includes(field), `pushUserStateSnapshot must include meta.${field} so on-mutation push doesn't drop it`).toBe(true);
     }
