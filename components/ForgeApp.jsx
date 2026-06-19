@@ -14,7 +14,7 @@ import {
   sessionMetaForDate, findRecentDays, hasMissedStrength, findUntickedRecent, weekdayIdxForDate,
 } from "@/lib/programme";
 import {
-  LS, P, PB, W, F, H, BW, PN, bumpStreak,
+  LS, P, PB, W, F, H, BW, PN, Days, bumpStreak,
   computeRhythm, detectRecoveryPattern,
   blobPush, flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
   enableAutoSync, disableAutoSync,
@@ -559,6 +559,7 @@ export default function ForgeApp(){
         userFocus: F.get(activeProfile),
         dayDone: P.getDayDone(activeProfile),
         bonusDone: P.getBonusDone(activeProfile),
+        days: Days.getAll(activeProfile),
         bodyweight: BW.getRaw(activeProfile),
         trainingState: TS.get(activeProfile),
       },
@@ -1113,6 +1114,22 @@ export default function ForgeApp(){
       if (draftLogRef.current) {
         sessionRecord = finaliseDraft(draftLogRef.current);
         H.append(activeProfile, sessionRecord);
+        // Dual-write to Days. Strength sessions stamp completedType +
+        // sessionId so the unified store reflects the live log.
+        // scheduledType is the schedule effective on that date — preserves
+        // the original plan-of-record even if the user retroactively edits.
+        const effective = W.getEffectiveOn(sessionRecord.date);
+        const dowMon = (() => {
+          const [y, m, d] = sessionRecord.date.split("-").map(Number);
+          const js = new Date(y, m - 1, d).getDay();
+          return js === 0 ? 6 : js - 1;
+        })();
+        const scheduledType = effective && effective[dowMon] ? effective[dowMon].type : "strength";
+        Days.set(activeProfile, sessionRecord.date, {
+          scheduledType,
+          completedType: "strength",
+          sessionId: sessionRecord.id,
+        });
         // Reflect in React state so Performance Lab updates immediately.
         // NOTE: we deliberately do NOT write to dayDone here — strength
         // completion is history-backed. Conflating the two stores would
@@ -1309,6 +1326,7 @@ export default function ForgeApp(){
           userFocus: F.get(activeProfile),
           dayDone: P.getDayDone(activeProfile),
           bonusDone: P.getBonusDone(activeProfile),
+          days: Days.getAll(activeProfile),
         },
         history: sessionRecord ? [sessionRecord] : [],
       });
@@ -1354,6 +1372,22 @@ export default function ForgeApp(){
     const updatedDayDone = P.markDateDone(activeProfile, dateStr);
     setDayDone(updatedDayDone);
     setWeekDone(P.getWeekDone(activeProfile));
+    // Dual-write to the Days entity. The scheduledType comes from the
+    // schedule effective on that date — preserves truthful interpretation
+    // even if the user retroactively edits the schedule later. For the
+    // non-strength tick path, completedType === scheduledType (the user
+    // just confirmed they did the scheduled thing).
+    const effective = W.getEffectiveOn(dateStr);
+    const dowMon = (() => {
+      const [y, m, d] = dateStr.split("-").map(Number);
+      const js = new Date(y, m - 1, d).getDay();
+      return js === 0 ? 6 : js - 1;
+    })();
+    const scheduledType = effective && effective[dowMon] ? effective[dowMon].type : null;
+    Days.set(activeProfile, dateStr, {
+      scheduledType,
+      completedType: scheduledType,
+    });
     if (dateStr === todayDate) {
       const newStreak = bumpStreak(activeProfile);
       setStreak(newStreak);
@@ -1369,6 +1403,17 @@ export default function ForgeApp(){
     const wm=[6,0,1,2,3,4,5];
     const idx=wm[dw];
     setBonusDone(P.markBonusDone(activeProfile,idx));
+    // Dual-write to Days. Bonus is an extra mark on today's date; it
+    // doesn't change completedType (the user may or may not have done
+    // the scheduled training as well).
+    const today = (() => {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    })();
+    Days.set(activeProfile, today, { marks: { bonus: true } });
     pushUserStateSnapshot();
   },[activeProfile, pushUserStateSnapshot]);
 
@@ -1770,6 +1815,19 @@ const sProps={
       sessionRecord.retrospective = true;
 
       H.append(activeProfile, sessionRecord);
+      // Dual-write to Days. Same shape as the live-session path above.
+      {
+        const effective = W.getEffectiveOn(sessionRecord.date);
+        const [y, m, d] = sessionRecord.date.split("-").map(Number);
+        const js = new Date(y, m - 1, d).getDay();
+        const dowMon = js === 0 ? 6 : js - 1;
+        const scheduledType = effective && effective[dowMon] ? effective[dowMon].type : "strength";
+        Days.set(activeProfile, sessionRecord.date, {
+          scheduledType,
+          completedType: "strength",
+          sessionId: sessionRecord.id,
+        });
+      }
       setHistory(H.get(activeProfile));
       // No dayDone write here — strength completion is history-backed.
       // See the live finalise path for the rationale (mixing the two
@@ -1900,6 +1958,7 @@ const sProps={
           userFocus: F.get(activeProfile),
           dayDone: P.getDayDone(activeProfile),
           bonusDone: P.getBonusDone(activeProfile),
+          days: Days.getAll(activeProfile),
         },
         history: H.get(activeProfile),
       });

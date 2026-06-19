@@ -24,17 +24,18 @@ Every history record carries its context. No more decontextualised "date + sessi
 | `id` | ISO timestamp | Primary key, merge-by-id |
 | `date` | ISO YYYY-MM-DD | Calendar lookup |
 | `weekStart` | Monday of `date` | Week-level aggregation, per-week caps |
-| `programmeBlockNumber` | block at log time | Per-block analytics, plateau detection |
+| `blockNumber` | block at log time | Per-block analytics, plateau detection (called `programmeBlockNumber` in spec; field kept as `blockNumber` for back-compat) |
 | `scheduledLetter` | A \| B \| C | What letter this session was meant to be |
-| `expectedType` | strength \| z2 \| cardio \| hiit | Schedule-effective-on-date type |
 | `blocks[]` | existing v2 shape | Set logs, prescriptions |
 | `readiness` | fresh \| normal \| cooked | Effort modulation |
 
-Pre-v3 records get `null` for the new fields on lazy migration. Analytics tolerates nulls.
+`expectedType` was originally specced on the session record but is degenerate (strength sessions are always strength). Moved to the Day entity, where it varies meaningfully.
 
-### Day entity (new)
+Pre-v3 records get the new fields backfilled via `migrateV2ToV3` on read. Records on disk stay original; upgrades happen in `H.get`. Live-logged sessions arrive in v3 shape directly via `newDraftLog`.
 
-Replaces `dayDone`, `bonusDone`, and the projected `weekDone`. Single date-keyed source of truth.
+### Day entity (new — `Days` store in `lib/storage.js`)
+
+Single date-keyed source of truth for what happened on each calendar date. Replaces (in time) `dayDone`, `bonusDone`, and the projected `weekDone`. Lazy-projected from those stores on first read. During the rollout, writes go to BOTH the legacy stores AND the Day entity — reads stay on the legacy stores until a follow-up cuts them over.
 
 | Field | Type | Meaning |
 |---|---|---|
