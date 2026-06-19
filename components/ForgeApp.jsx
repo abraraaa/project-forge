@@ -555,7 +555,7 @@ export default function ForgeApp(){
         reps: P.getReps(activeProfile),
         streak: P.getStreak(activeProfile),
         programmeBlock: PB.get(),
-        userWeek: W.get(),
+        userWeek: W.getHistory(),
         userFocus: F.get(activeProfile),
         dayDone: P.getDayDone(activeProfile),
         bonusDone: P.getBonusDone(activeProfile),
@@ -817,7 +817,16 @@ export default function ForgeApp(){
     if (meta?.reps) setWRState(meta.reps);
     if (meta?.streak?.count) setStreak(meta.streak.count);
     if (meta?.programmeBlock) setProgrammeBlock(meta.programmeBlock);
-    if (meta?.userWeek) setUserWeek(meta.userWeek);
+    if (meta?.userWeek) {
+      // meta.userWeek is the full effective-dated schedule edit log (or
+      // a legacy single-7-day-array shape from a pre-edit-log peer).
+      // Land it in localStorage via replaceHistory — which handles
+      // both shapes — then re-read today's effective into React state
+      // so the home strip refreshes without a reload.
+      W.replaceHistory(meta.userWeek);
+      const today = W.get();
+      if (today) setUserWeek(today);
+    }
     if (meta?.userFocus) setUserFocus(meta.userFocus);
     if (meta?.dayDone) {
       setDayDone(meta.dayDone);
@@ -1296,7 +1305,7 @@ export default function ForgeApp(){
           reps: workingReps,
           streak: P.getStreak(activeProfile),
           programmeBlock,
-          userWeek: W.get(),
+          userWeek: W.getHistory(),
           userFocus: F.get(activeProfile),
           dayDone: P.getDayDone(activeProfile),
           bonusDone: P.getBonusDone(activeProfile),
@@ -1887,7 +1896,7 @@ const sProps={
           reps: workingReps,
           streak: P.getStreak(activeProfile),
           programmeBlock,
-          userWeek: W.get(),
+          userWeek: W.getHistory(),
           userFocus: F.get(activeProfile),
           dayDone: P.getDayDone(activeProfile),
           bonusDone: P.getBonusDone(activeProfile),
