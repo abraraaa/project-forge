@@ -460,38 +460,6 @@ export default function ForgeApp(){
     [history, recoveryDismissed]
   );
 
-  // Week-strip "done" from history. weekDone covers manual ticks for
-  // non-strength days; this complement covers strength days where the user
-  // has a logged session — including retro logs. Without it, the schedule
-  // dots don't update when a missed session is logged via the retro picker.
-  // Map<monday-start weekday idx, true> for the current week.
-  const historyWeekDone = useMemo(() => {
-    const map = {};
-    if (!history || history.length === 0) return map;
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const dow = today.getDay();
-    const monShift = dow === 0 ? -6 : 1 - dow;
-    const monday = new Date(today);
-    monday.setDate(monday.getDate() + monShift);
-    const isoDate = (d) => {
-      const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
-      return `${y}-${m}-${day}`;
-    };
-    const datesByIdx = {};
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday); d.setDate(d.getDate() + i);
-      datesByIdx[isoDate(d)] = i;
-    }
-    for (const rec of history) {
-      if (!rec?.date) continue;
-      if (!rec.session || !String(rec.session).startsWith("strength")) continue;
-      const idx = datesByIdx[rec.date];
-      if (idx !== undefined) map[idx] = true;
-    }
-    return map;
-  }, [history]);
-
   // Silent migration for cross-slot duplicate rotation picks. Pools overlap
   // (Leaning Lateral Raise lives in both bfin-B and css1-B) so two
   // independent picks could land on the same exercise — re-rolls the later
@@ -557,8 +525,6 @@ export default function ForgeApp(){
         programmeBlock: PB.get(),
         userWeek: W.getHistory(),
         userFocus: F.get(activeProfile),
-        dayDone: P.getDayDone(activeProfile),
-        bonusDone: P.getBonusDone(activeProfile),
         days: Days.getAll(activeProfile),
         bodyweight: BW.getRaw(activeProfile),
         trainingState: TS.get(activeProfile),
@@ -613,14 +579,18 @@ export default function ForgeApp(){
     setWRState(local.meta.reps || {});
     setStreak(local.meta.streak?.count || 0);
     setProgrammeBlock(local.meta.programmeBlock || PB.get());
-    // dayDone tracks non-strength manual ticks (cardio/Z2/HIIT Mark ✓).
-    // Strength completion is history-backed — not mirrored here, because
-    // doing so would let a schedule edit (cardio → strength on a date that
-    // had a cardio tick) silently transmute into "strength completed."
-    // Two stores, two events; never conflated.
-    setDayDone(P.getDayDone(activeProfile));
-    setWeekDone(P.getWeekDone(activeProfile));
-    setBonusDone(P.getBonusDone(activeProfile));
+    // Completion reads now come from the unified Day entity (date-keyed,
+    // type-stamped at mark time). weekDone = any completion this week
+    // (strength session OR manual non-strength tick); bonusDone = bonus
+    // marks this week; dayDone = manual non-strength ticks by date (feeds
+    // the retro picker). A schedule edit can't change a stored Day, so
+    // completion no longer drifts when the week is reshaped.
+    {
+      const proj = Days.projectCurrentWeek(activeProfile);
+      setWeekDone(proj.complete);
+      setBonusDone(proj.bonus);
+      setDayDone(Days.manualTickDates(activeProfile));
+    }
     setUserFocus(F.get(activeProfile));
     setHistory(local.history || []);
 
@@ -829,13 +799,15 @@ export default function ForgeApp(){
       if (today) setUserWeek(today);
     }
     if (meta?.userFocus) setUserFocus(meta.userFocus);
-    if (meta?.dayDone) {
-      setDayDone(meta.dayDone);
-      // weekDone is derived from dayDone — re-project after the new
-      // dayDone lands so the home strip updates in the same tick.
-      if (activeProfile) setWeekDone(P.getWeekDone(activeProfile));
+    // Completion: persistToLocal has already merged meta.days into the Day
+    // store (and folded any legacy dayDone/bonusDone a peer pushed). Re-read
+    // the unified projection so the strip + cards refresh in the same tick.
+    if ((meta?.days || meta?.dayDone || meta?.bonusDone) && activeProfile) {
+      const proj = Days.projectCurrentWeek(activeProfile);
+      setWeekDone(proj.complete);
+      setBonusDone(proj.bonus);
+      setDayDone(Days.manualTickDates(activeProfile));
     }
-    if (meta?.bonusDone) setBonusDone(meta.bonusDone);
     // Bodyweight + trainingState arrived from blob — reflect into React
     // state so BW-progression slots and the engine read the freshly-merged
     // values without a reload. persistToLocal has already written to LS;
@@ -1130,13 +1102,13 @@ export default function ForgeApp(){
           completedType: "strength",
           sessionId: sessionRecord.id,
         });
-        // Reflect in React state so Performance Lab updates immediately.
-        // NOTE: we deliberately do NOT write to dayDone here — strength
-        // completion is history-backed. Conflating the two stores would
-        // mean a cardio→strength schedule edit promotes the cardio tick
-        // into a "strength completed" mark, which corrupts the user's
-        // training record. dayDone is for non-strength manual ticks only.
+        // Reflect in React state so Performance Lab + the home strip + the
+        // "Session complete" card update immediately. weekDone is now the
+        // unified Day projection (includes strength), so refresh it here.
+        // We deliberately do NOT write the legacy dayDone store — strength
+        // completion is history-backed; dayDone is non-strength ticks only.
         setHistory(H.get(activeProfile));
+        setWeekDone(Days.projectCurrentWeek(activeProfile).complete);
         draftLogRef.current = null;
       }
       // Completed session — drop the persisted draft.
@@ -1324,8 +1296,6 @@ export default function ForgeApp(){
           programmeBlock,
           userWeek: W.getHistory(),
           userFocus: F.get(activeProfile),
-          dayDone: P.getDayDone(activeProfile),
-          bonusDone: P.getBonusDone(activeProfile),
           days: Days.getAll(activeProfile),
         },
         history: sessionRecord ? [sessionRecord] : [],
@@ -1369,14 +1339,11 @@ export default function ForgeApp(){
     } else {
       dateStr = todayDate;
     }
-    const updatedDayDone = P.markDateDone(activeProfile, dateStr);
-    setDayDone(updatedDayDone);
-    setWeekDone(P.getWeekDone(activeProfile));
-    // Dual-write to the Days entity. The scheduledType comes from the
-    // schedule effective on that date — preserves truthful interpretation
+    // Write the Day entity (now the read source). scheduledType comes from
+    // the schedule effective on that date — preserves truthful interpretation
     // even if the user retroactively edits the schedule later. For the
-    // non-strength tick path, completedType === scheduledType (the user
-    // just confirmed they did the scheduled thing).
+    // non-strength tick path, completedType === scheduledType (the user just
+    // confirmed they did the scheduled thing).
     const effective = W.getEffectiveOn(dateStr);
     const dowMon = (() => {
       const [y, m, d] = dateStr.split("-").map(Number);
@@ -1388,6 +1355,10 @@ export default function ForgeApp(){
       scheduledType,
       completedType: scheduledType,
     });
+    // Refresh React state from the unified Day projection.
+    const proj = Days.projectCurrentWeek(activeProfile);
+    setWeekDone(proj.complete);
+    setDayDone(Days.manualTickDates(activeProfile));
     if (dateStr === todayDate) {
       const newStreak = bumpStreak(activeProfile);
       setStreak(newStreak);
@@ -1399,13 +1370,8 @@ export default function ForgeApp(){
   // deliberately does NOT bump the streak — bonuses are extras, not adherence.
   const handleMarkBonusDone = useCallback(()=>{
     if(!activeProfile) return;
-    const dw=new Date().getDay();
-    const wm=[6,0,1,2,3,4,5];
-    const idx=wm[dw];
-    setBonusDone(P.markBonusDone(activeProfile,idx));
-    // Dual-write to Days. Bonus is an extra mark on today's date; it
-    // doesn't change completedType (the user may or may not have done
-    // the scheduled training as well).
+    // Bonus is an extra mark on today's date; it doesn't change completedType
+    // (the user may or may not have done the scheduled training as well).
     const today = (() => {
       const d = new Date();
       const y = d.getFullYear();
@@ -1414,6 +1380,8 @@ export default function ForgeApp(){
       return `${y}-${m}-${day}`;
     })();
     Days.set(activeProfile, today, { marks: { bonus: true } });
+    // Refresh React state from the unified Day projection.
+    setBonusDone(Days.projectCurrentWeek(activeProfile).bonus);
     pushUserStateSnapshot();
   },[activeProfile, pushUserStateSnapshot]);
 
@@ -1829,10 +1797,12 @@ const sProps={
         });
       }
       setHistory(H.get(activeProfile));
-      // No dayDone write here — strength completion is history-backed.
-      // See the live finalise path for the rationale (mixing the two
-      // stores would mean a schedule edit could promote a cardio tick
-      // into a phantom strength completion).
+      // Refresh the unified Day projection so a retro-logged strength day
+      // marks the strip dot in the same tick. No legacy dayDone write —
+      // strength completion is history-backed. See the live finalise path
+      // for the rationale (mixing the two stores would mean a schedule edit
+      // could promote a cardio tick into a phantom strength completion).
+      setWeekDone(Days.projectCurrentWeek(activeProfile).complete);
 
       // ─── Engine block — runs identically to live finalise hook ─────────
       try {
@@ -1956,8 +1926,6 @@ const sProps={
           programmeBlock,
           userWeek: W.getHistory(),
           userFocus: F.get(activeProfile),
-          dayDone: P.getDayDone(activeProfile),
-          bonusDone: P.getBonusDone(activeProfile),
           days: Days.getAll(activeProfile),
         },
         history: H.get(activeProfile),
@@ -2052,7 +2020,7 @@ const sProps={
 
   return (
     <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} historyWeekDone={historyWeekDone}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
       {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} sessionStartWeights={sessionStartWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
@@ -3050,7 +3018,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 }
 
 // ─── Home ──────────────────────────────────��──────────────────────────────────
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,historyWeekDone={}}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -3235,10 +3203,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             const a       = T[d.type];
             const isToday = i === todayIdx;
             const isView  = i === viewIdx;
-            // Done = manually ticked (non-strength) OR a strength session
-            // was logged for this date (live or retro). Without the
-            // history side, retro-logged sessions never marked the dot.
-            const isDone  = !!(weekDone[i] || historyWeekDone[i]);
+            // Done = any completion on that date — strength session or
+            // manual non-strength tick. Sourced from the Day entity via
+            // Days.projectCurrentWeek; isn't affected by schedule edits.
+            const isDone  = !!weekDone[i];
             return (
               <div key={i} onClick={()=>setViewIdx(i)}
                 style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,cursor:"pointer"}}>
