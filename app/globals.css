@@ -1,6 +1,12 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
-  height: 100%;
+  /* 100vh, not 100%. 100% calculates relative to the containing block which
+     doesn't always account for the full viewport on iOS PWAs (the bug that
+     creates the bottom chin gap if anyone re-adds the black-translucent
+     status bar later). 100vh = actual viewport height — robust to that
+     class of layout pitfall. iOS Safari's dvh would be ideal long-term but
+     vh is the broadest-supported "actual viewport" unit. */
+  height: 100vh;
   background: #131110;
   overflow-x: hidden;
   /* No overscroll-behavior on the root — the native iOS rubber-band on

@@ -29,7 +29,15 @@ export const metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    // No statusBarStyle. The legacy "black-translucent" value has a
+    // well-documented iOS WebKit bug: it shifts the viewport upward by
+    // ~59px behind the status bar without growing the viewport, leaving
+    // a chin gap at the bottom AND making fixed overlays (e.g. our grain
+    // layer) bleed into the Dynamic Island area with mismatched contrast.
+    // Without it, iOS reserves the status bar zone, fills it with the
+    // manifest's background_color (#131110 — matches the page), and lays
+    // content cleanly underneath. See:
+    // https://gist.github.com/fozzedout/5e77925381991a9570151550992baf14
     title: "Forge",
   },
   icons: {
@@ -54,7 +62,8 @@ export default function RootLayout({ children }) {
     <html lang="en" className={`${fraunces.variable} ${dmSans.variable}`}>
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        {/* Deliberately NO apple-mobile-web-app-status-bar-style: see the
+            metadata.appleWebApp block above for the WebKit-bug rationale. */}
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body>
