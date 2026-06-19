@@ -613,14 +613,18 @@ export default function ForgeApp(){
     setWRState(local.meta.reps || {});
     setStreak(local.meta.streak?.count || 0);
     setProgrammeBlock(local.meta.programmeBlock || PB.get());
-    // dayDone tracks non-strength manual ticks (cardio/Z2/HIIT Mark ✓).
-    // Strength completion is history-backed — not mirrored here, because
-    // doing so would let a schedule edit (cardio → strength on a date that
-    // had a cardio tick) silently transmute into "strength completed."
-    // Two stores, two events; never conflated.
-    setDayDone(P.getDayDone(activeProfile));
-    setWeekDone(P.getWeekDone(activeProfile));
-    setBonusDone(P.getBonusDone(activeProfile));
+    // Completion reads now come from the unified Day entity (date-keyed,
+    // type-stamped at mark time). weekDone = any completion this week
+    // (strength session OR manual non-strength tick); bonusDone = bonus
+    // marks this week; dayDone = manual non-strength ticks by date (feeds
+    // the retro picker). A schedule edit can't change a stored Day, so
+    // completion no longer drifts when the week is reshaped.
+    {
+      const proj = Days.projectCurrentWeek(activeProfile);
+      setWeekDone(proj.complete);
+      setBonusDone(proj.bonus);
+      setDayDone(Days.manualTickDates(activeProfile));
+    }
     setUserFocus(F.get(activeProfile));
     setHistory(local.history || []);
 
@@ -829,13 +833,15 @@ export default function ForgeApp(){
       if (today) setUserWeek(today);
     }
     if (meta?.userFocus) setUserFocus(meta.userFocus);
-    if (meta?.dayDone) {
-      setDayDone(meta.dayDone);
-      // weekDone is derived from dayDone — re-project after the new
-      // dayDone lands so the home strip updates in the same tick.
-      if (activeProfile) setWeekDone(P.getWeekDone(activeProfile));
+    // Completion: persistToLocal has already merged meta.days into the Day
+    // store (and folded any legacy dayDone/bonusDone a peer pushed). Re-read
+    // the unified projection so the strip + cards refresh in the same tick.
+    if ((meta?.days || meta?.dayDone || meta?.bonusDone) && activeProfile) {
+      const proj = Days.projectCurrentWeek(activeProfile);
+      setWeekDone(proj.complete);
+      setBonusDone(proj.bonus);
+      setDayDone(Days.manualTickDates(activeProfile));
     }
-    if (meta?.bonusDone) setBonusDone(meta.bonusDone);
     // Bodyweight + trainingState arrived from blob — reflect into React
     // state so BW-progression slots and the engine read the freshly-merged
     // values without a reload. persistToLocal has already written to LS;
@@ -1130,13 +1136,13 @@ export default function ForgeApp(){
           completedType: "strength",
           sessionId: sessionRecord.id,
         });
-        // Reflect in React state so Performance Lab updates immediately.
-        // NOTE: we deliberately do NOT write to dayDone here — strength
-        // completion is history-backed. Conflating the two stores would
-        // mean a cardio→strength schedule edit promotes the cardio tick
-        // into a "strength completed" mark, which corrupts the user's
-        // training record. dayDone is for non-strength manual ticks only.
+        // Reflect in React state so Performance Lab + the home strip + the
+        // "Session complete" card update immediately. weekDone is now the
+        // unified Day projection (includes strength), so refresh it here.
+        // We deliberately do NOT write the legacy dayDone store — strength
+        // completion is history-backed; dayDone is non-strength ticks only.
         setHistory(H.get(activeProfile));
+        setWeekDone(Days.projectCurrentWeek(activeProfile).complete);
         draftLogRef.current = null;
       }
       // Completed session — drop the persisted draft.
@@ -1369,14 +1375,11 @@ export default function ForgeApp(){
     } else {
       dateStr = todayDate;
     }
-    const updatedDayDone = P.markDateDone(activeProfile, dateStr);
-    setDayDone(updatedDayDone);
-    setWeekDone(P.getWeekDone(activeProfile));
-    // Dual-write to the Days entity. The scheduledType comes from the
-    // schedule effective on that date — preserves truthful interpretation
+    // Write the Day entity (now the read source). scheduledType comes from
+    // the schedule effective on that date — preserves truthful interpretation
     // even if the user retroactively edits the schedule later. For the
-    // non-strength tick path, completedType === scheduledType (the user
-    // just confirmed they did the scheduled thing).
+    // non-strength tick path, completedType === scheduledType (the user just
+    // confirmed they did the scheduled thing).
     const effective = W.getEffectiveOn(dateStr);
     const dowMon = (() => {
       const [y, m, d] = dateStr.split("-").map(Number);
@@ -1388,6 +1391,12 @@ export default function ForgeApp(){
       scheduledType,
       completedType: scheduledType,
     });
+    // Dual-write to the legacy dayDone store (safety net during cutover).
+    P.markDateDone(activeProfile, dateStr);
+    // Refresh React state from the unified Day projection.
+    const proj = Days.projectCurrentWeek(activeProfile);
+    setWeekDone(proj.complete);
+    setDayDone(Days.manualTickDates(activeProfile));
     if (dateStr === todayDate) {
       const newStreak = bumpStreak(activeProfile);
       setStreak(newStreak);
@@ -1402,10 +1411,8 @@ export default function ForgeApp(){
     const dw=new Date().getDay();
     const wm=[6,0,1,2,3,4,5];
     const idx=wm[dw];
-    setBonusDone(P.markBonusDone(activeProfile,idx));
-    // Dual-write to Days. Bonus is an extra mark on today's date; it
-    // doesn't change completedType (the user may or may not have done
-    // the scheduled training as well).
+    // Bonus is an extra mark on today's date; it doesn't change completedType
+    // (the user may or may not have done the scheduled training as well).
     const today = (() => {
       const d = new Date();
       const y = d.getFullYear();
@@ -1414,6 +1421,10 @@ export default function ForgeApp(){
       return `${y}-${m}-${day}`;
     })();
     Days.set(activeProfile, today, { marks: { bonus: true } });
+    // Dual-write to the legacy bonusDone store (safety net during cutover).
+    P.markBonusDone(activeProfile, idx);
+    // Refresh React state from the unified Day projection.
+    setBonusDone(Days.projectCurrentWeek(activeProfile).bonus);
     pushUserStateSnapshot();
   },[activeProfile, pushUserStateSnapshot]);
 
@@ -1829,10 +1840,12 @@ const sProps={
         });
       }
       setHistory(H.get(activeProfile));
-      // No dayDone write here — strength completion is history-backed.
-      // See the live finalise path for the rationale (mixing the two
-      // stores would mean a schedule edit could promote a cardio tick
-      // into a phantom strength completion).
+      // Refresh the unified Day projection so a retro-logged strength day
+      // marks the strip dot in the same tick. No legacy dayDone write —
+      // strength completion is history-backed. See the live finalise path
+      // for the rationale (mixing the two stores would mean a schedule edit
+      // could promote a cardio tick into a phantom strength completion).
+      setWeekDone(Days.projectCurrentWeek(activeProfile).complete);
 
       // ─── Engine block — runs identically to live finalise hook ─────────
       try {

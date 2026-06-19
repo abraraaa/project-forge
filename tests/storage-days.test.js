@@ -88,6 +88,52 @@ describe("Days — write + read primitives", () => {
   });
 });
 
+describe("Days — current-week read projections (cutover read source)", () => {
+  // Anchor "now" to a known Wednesday so week math is deterministic.
+  // 2026-06-17 is a Wednesday → Monday = 2026-06-15.
+  const NOW = new Date("2026-06-17T12:00:00");
+
+  it("projectCurrentWeek maps completions to weekday indices (0=Mon)", () => {
+    // Monday strength session, Tuesday cardio tick.
+    Days.set("alice", "2026-06-15", { completedType: "strength", sessionId: "s1" });
+    Days.set("alice", "2026-06-16", { completedType: "cardio" });
+    const proj = Days.projectCurrentWeek("alice", { now: NOW });
+    expect(proj.complete[0]).toBe(true);  // Monday
+    expect(proj.complete[1]).toBe(true);  // Tuesday
+    expect(proj.complete[2]).toBeUndefined(); // Wednesday — nothing yet
+  });
+
+  it("projectCurrentWeek surfaces bonus marks separately from completion", () => {
+    Days.set("alice", "2026-06-16", { marks: { bonus: true } });
+    const proj = Days.projectCurrentWeek("alice", { now: NOW });
+    expect(proj.bonus[1]).toBe(true);          // Tuesday bonus
+    expect(proj.complete[1]).toBeUndefined();  // bonus alone isn't completion
+  });
+
+  it("projectCurrentWeek ignores dates outside the current week", () => {
+    // A completion in the PRIOR week (Mon 2026-06-08) must not bleed in.
+    Days.set("alice", "2026-06-08", { completedType: "strength", sessionId: "old" });
+    const proj = Days.projectCurrentWeek("alice", { now: NOW });
+    expect(Object.keys(proj.complete)).toHaveLength(0);
+  });
+
+  it("manualTickDates returns only non-strength manual ticks (no sessionId)", () => {
+    Days.set("alice", "2026-06-15", { completedType: "strength", sessionId: "s1" });
+    Days.set("alice", "2026-06-16", { completedType: "cardio" });   // manual tick
+    Days.set("alice", "2026-06-18", { completedType: "hiit" });     // manual tick
+    const ticks = Days.manualTickDates("alice");
+    expect(ticks).toEqual({ "2026-06-16": true, "2026-06-18": true });
+    // The strength session date must NOT appear (history-backed, not a tick).
+    expect(ticks["2026-06-15"]).toBeUndefined();
+  });
+
+  it("projectCurrentWeek returns empty maps for an unknown profile", () => {
+    const proj = Days.projectCurrentWeek("nobody", { now: NOW });
+    expect(proj.complete).toEqual({});
+    expect(proj.bonus).toEqual({});
+  });
+});
+
 describe("Days — lazy projection from legacy stores", () => {
   it("projects dayDone marks into Day entries on first read", () => {
     // Set up a custom schedule so scheduledType lookups have something.
