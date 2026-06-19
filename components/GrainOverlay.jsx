@@ -47,6 +47,15 @@ export default function GrainOverlay() {
         backgroundImage: `url("data:image/svg+xml,${GRAIN_SVG}")`,
         backgroundRepeat: "repeat",
         backgroundSize: "192px 192px",
+        // Opt the grain layer out of the root view-transition capture by
+        // naming it. Without this, the screen-blended grain gets baked
+        // into BOTH the old and new root snapshots; the cross-fade then
+        // plus-lighter-composites them, doubling effective grain density
+        // at midpoint and reading as a perceived dim ("Performance Lab
+        // dimming"). Naming it pulls it out of the root group so the root
+        // cross-fade composites cleanly; the grain itself just stays put
+        // across the transition (paired no-op animation in globals.css).
+        viewTransitionName: "forge-grain",
       }}
     />
   );

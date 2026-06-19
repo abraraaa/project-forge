@@ -117,6 +117,20 @@ input, button, textarea, select { font: inherit; }
   mix-blend-mode: plus-lighter;
 }
 
+/* Grain layer is named (view-transition-name: forge-grain in GrainOverlay)
+   so it's pulled out of the root snapshot and gets its own capture group.
+   Without this opt-out, the screen-blended grain gets baked into BOTH the
+   old AND new root snapshots; cross-fading them with plus-lighter doubles
+   the grain at midpoint and reads as a dim — exactly the regression that
+   landed when grain went opacity 0.05 overlay → 0.12 screen and made the
+   layer dense enough to matter. The grain itself shouldn't animate — it's
+   a static decoration, identical on every screen — so both pseudo-elements
+   get animation:none. The element persists visually across the transition
+   while the root pseudos animate cleanly. */
+::view-transition-group(forge-grain) { animation: none; }
+::view-transition-old(forge-grain),
+::view-transition-new(forge-grain) { animation: none; }
+
 /* (2) Drum item magnification via view-timeline. The drum container is
    the implicit scrollport (overflow:scroll, height:5×52px), so view(y)
    runs each item from 0% (just entering at the bottom of the band) →
