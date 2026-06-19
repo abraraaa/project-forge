@@ -75,6 +75,25 @@ export default function RootLayout({ children }) {
             it composites on top via mix-blend overlay; pointer-events none
             and zIndex 1 keep it strictly cosmetic. */}
         <GrainOverlay />
+        {/* Status-bar continuity fade. The iOS status-bar zone is filled
+            by the manifest's background_color (#131110), but the home /
+            Performance Lab day-type radial glows bloom at the very top of
+            the content area, painting warm tints right against the dark
+            status bar — visible as a hard horizontal seam at the boundary
+            (user-reported screenshot, 2026-06-19). A 60px linear fade from
+            #131110 → transparent at the top of the viewport dissolves
+            that seam: glow still reads as "warm light from above" but
+            doesn't hit the very top edge. Also masks the grain layer from
+            the Dynamic Island adjacency zone, since the fade sits above
+            grain (zIndex 2 vs 1) and absorbs the screen-blended noise at
+            its opaque end. Pointer-events: none keeps it cosmetic. */}
+        <div aria-hidden="true" style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0, height: 60,
+          background: "linear-gradient(to bottom, #131110 0%, rgba(19,17,16,0) 100%)",
+          pointerEvents: "none",
+          zIndex: 2,
+        }}/>
         <Analytics />
         <SpeedInsights />
       </body>
