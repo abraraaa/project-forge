@@ -109,12 +109,25 @@ export default function RootLayout({ children }) {
         <div aria-hidden="true" style={{
           position: "fixed",
           top: 0, left: 0, right: 0, height: 60,
-          // Solid at top, partially transparent in the middle (so
-          // backdrop-filter has something to act on), transparent at the
-          // bottom (so the day-type glow blooms below the band).
-          background: "linear-gradient(to bottom, #131110 0%, rgba(19,17,16,0.70) 55%, rgba(19,17,16,0) 100%)",
-          backdropFilter: "blur(20px) saturate(180%)",
-          WebkitBackdropFilter: "blur(20px) saturate(180%)",
+          // The top of the gradient is intentionally NOT opaque #131110 —
+          // matching the status bar exactly created a perceptually
+          // isolated dark band ("transparency too low, status bar still a
+          // black hole"). Starting at 55% alpha lets the underlying page
+          // (with day-type glow above the fold) bleed through, so the
+          // fade reads as a single continuous surface with the content
+          // below rather than a second distinct band stacked on it. Mid
+          // band stays partially opaque to give backdrop-filter material
+          // to act on; bottom is transparent so the glow blooms below.
+          background: "linear-gradient(to bottom, rgba(19,17,16,0.55) 0%, rgba(19,17,16,0.25) 55%, rgba(19,17,16,0) 100%)",
+          // Softened blur + saturate. Safari has to bake backdrop-filter
+          // into view-transition snapshots, and the snapshot's backdrop
+          // doesn't always match the live element's backdrop on resume
+          // — visible as a small "flicker" the user caught on Performance
+          // Lab arrival. Less aggressive values (blur 14 vs 20, saturate
+          // 160 vs 180) keep the iOS frosted feel while making the
+          // snapshot↔live handoff less perceptible.
+          backdropFilter: "blur(14px) saturate(160%)",
+          WebkitBackdropFilter: "blur(14px) saturate(160%)",
           pointerEvents: "none",
           zIndex: 2,
           viewTransitionName: "forge-top-fade",
