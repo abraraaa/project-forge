@@ -123,13 +123,31 @@ input, button, textarea, select { font: inherit; }
    old AND new root snapshots; cross-fading them with plus-lighter doubles
    the grain at midpoint and reads as a dim — exactly the regression that
    landed when grain went opacity 0.05 overlay → 0.12 screen and made the
-   layer dense enough to matter. The grain itself shouldn't animate — it's
-   a static decoration, identical on every screen — so both pseudo-elements
-   get animation:none. The element persists visually across the transition
-   while the root pseudos animate cleanly. */
+   layer dense enough to matter. The plus-lighter fix never knew about a
+   layer composing on top.
+
+   Within the grain's own group, the SAME doubling can happen if both
+   old + new pseudos render at full opacity simultaneously (which is what
+   `animation: none` on both gives you — that was the "turbo grain" the
+   user caught after the initial fix). The clean treatment is to suppress
+   the old pseudo entirely and pin the new at full opacity: since grain
+   is visually identical between old and new (it's a static decoration),
+   showing only the new throughout produces a layer that looks IDENTICAL
+   to its non-transition state. No turbo, no dim, no flicker. */
 ::view-transition-group(forge-grain) { animation: none; }
-::view-transition-old(forge-grain),
-::view-transition-new(forge-grain) { animation: none; }
+::view-transition-old(forge-grain)   { animation: none; opacity: 0; }
+::view-transition-new(forge-grain)   { animation: none; opacity: 1; }
+
+/* Same treatment for the top-fade overlay (status-bar continuity). Without
+   the opt-out, the fade was baked into both root snapshots; plus-lighter
+   on the root pseudos summed two dark gradient layers and brightened the
+   fade region mid-transition, then it "popped in" to its real darkness
+   when the transition ended (user-reported, screenshot captured mid-
+   transition). Same opacity-0/opacity-1 pin keeps the fade looking static
+   throughout. */
+::view-transition-group(forge-top-fade) { animation: none; }
+::view-transition-old(forge-top-fade)   { animation: none; opacity: 0; }
+::view-transition-new(forge-top-fade)   { animation: none; opacity: 1; }
 
 /* (2) Drum item magnification via view-timeline. The drum container is
    the implicit scrollport (overflow:scroll, height:5×52px), so view(y)

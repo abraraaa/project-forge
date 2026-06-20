@@ -80,19 +80,44 @@ export default function RootLayout({ children }) {
             Performance Lab day-type radial glows bloom at the very top of
             the content area, painting warm tints right against the dark
             status bar — visible as a hard horizontal seam at the boundary
-            (user-reported screenshot, 2026-06-19). A 60px linear fade from
-            #131110 → transparent at the top of the viewport dissolves
-            that seam: glow still reads as "warm light from above" but
-            doesn't hit the very top edge. Also masks the grain layer from
-            the Dynamic Island adjacency zone, since the fade sits above
-            grain (zIndex 2 vs 1) and absorbs the screen-blended noise at
-            its opaque end. Pointer-events: none keeps it cosmetic. */}
+            (user-reported screenshot, 2026-06-19).
+
+            Two jobs:
+
+            1. AT SCROLL-TOP: dissolve the seam. The linear gradient is
+               solid #131110 at the very top (matching the status-bar zone
+               directly above) and tapers to transparent at the bottom of
+               the band, so the day-type glow blooms below it cleanly.
+
+            2. WHILE SCROLLING: handle content sliding into the top edge
+               iOS-natively. backdrop-filter blur(20px) + saturate(180%)
+               is the standard frosted-glass treatment Safari, Apple's
+               own apps, and most native nav bars use — content scrolling
+               UP into this band gets blurred + slightly more saturated
+               rather than just darkening to dead grey. The user asked
+               whether content "should slide along"; this is the iOS
+               idiom for that behaviour.
+
+            Named for its own view-transition group so root cross-fades
+            (Home ↔ Performance Lab) don't bake it into both snapshots
+            and brighten the fade region mid-transition — see globals.css
+            for the pinned-pseudo treatment.
+
+            Pointer-events: none keeps it strictly cosmetic. zIndex 2 sits
+            above grain (1) so the fade also masks grain noise out of the
+            Dynamic Island adjacency zone. */}
         <div aria-hidden="true" style={{
           position: "fixed",
           top: 0, left: 0, right: 0, height: 60,
-          background: "linear-gradient(to bottom, #131110 0%, rgba(19,17,16,0) 100%)",
+          // Solid at top, partially transparent in the middle (so
+          // backdrop-filter has something to act on), transparent at the
+          // bottom (so the day-type glow blooms below the band).
+          background: "linear-gradient(to bottom, #131110 0%, rgba(19,17,16,0.70) 55%, rgba(19,17,16,0) 100%)",
+          backdropFilter: "blur(20px) saturate(180%)",
+          WebkitBackdropFilter: "blur(20px) saturate(180%)",
           pointerEvents: "none",
           zIndex: 2,
+          viewTransitionName: "forge-top-fade",
         }}/>
         <Analytics />
         <SpeedInsights />
