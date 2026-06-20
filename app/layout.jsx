@@ -66,10 +66,22 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${dmSans.variable}`}>
       <head>
+        {/* Build-output-verified manual tags. Next 16's Metadata API
+            emits apple-mobile-web-app-status-bar-style (from
+            appleWebApp.statusBarStyle), apple-mobile-web-app-title
+            (from appleWebApp.title), apple-touch-icon (from icons.apple),
+            and the cross-platform mobile-web-app-capable automatically
+            — all four were duplicated previously and the duplicates were
+            silently disabling viewport-fit cover + black-translucent on
+            iOS Safari (chin + letterbox + opaque status bar).
+
+            What Next does NOT emit, and what iOS still requires for
+            splash screens + full standalone PWA behaviour, is
+            apple-mobile-web-app-capable (the Apple-prefixed legacy tag —
+            deprecated but still required by iOS Safari per
+            https://github.com/vercel/next.js/issues/74524). That's the
+            single tag that stays here. */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body>
         <ServiceWorkerRegistrar />

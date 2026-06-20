@@ -15,14 +15,17 @@ html, body {
 body {
   -webkit-tap-highlight-color: transparent;
   font-family: var(--font-dm-sans), sans-serif;
-  /* Reserve the system status-bar zone at the top of body content. With
-     viewport-fit: cover + black-translucent, content extends behind the
-     status bar by default — without this padding, the first row of each
-     screen sits under the system icons at scroll-top, which iOS-native
-     apps don't do. Pushing content down by env(safe-area-inset-top) lets
-     it sit naturally below the status bar at rest, then scroll behind it
-     as the user scrolls (visible through the body::before blur below). */
-  padding-top: env(safe-area-inset-top);
+  /* NO body padding-top. The prior version added it to push the first
+     row of each screen below the status bar — but that also pushed the
+     day-type radial glows out of the safe-area zone, so backdrop-filter
+     on body::before had only solid body bg to blur and the status bar
+     read as a flat dark band ("black hole"). Without the padding,
+     content (including the home / Performance Lab glows) extends behind
+     the status bar; the blur lifts the warm tint into a frosted status-
+     bar surface, the visual continuity the user has been asking for.
+     Individual screen containers handle their own safe-area-inset-top
+     in their top padding so the first VISIBLE row still sits below the
+     system icons at scroll-top. */
 }
 input, button, textarea, select { font: inherit; }
 
@@ -62,8 +65,19 @@ input, button, textarea, select { font: inherit; }
        transparent at the bottom edge. */
     -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent);
     mask-image: linear-gradient(to bottom, #000 60%, transparent);
+    /* Opt this pseudo out of the root view-transition snapshot, same as
+       the grain overlay further down. Without a name, backdrop-filter
+       would be baked into BOTH the old and new root snapshots; root
+       cross-fade with plus-lighter then doubles the filtered region and
+       the user sees the cross-fade dim again. Naming it lets the root
+       composite cleanly while this pseudo persists statically across
+       the transition (see the matching opacity 0/1 pin below). */
+    view-transition-name: forge-status-bar;
   }
 }
+::view-transition-group(forge-status-bar) { animation: none; }
+::view-transition-old(forge-status-bar)   { animation: none; opacity: 0; }
+::view-transition-new(forge-status-bar)   { animation: none; opacity: 1; }
 
 /* ─── Keyframe library ─────────────────────────────────────────────────────
    Animations consolidated here from inline <style> tags in ForgeApp.jsx.
