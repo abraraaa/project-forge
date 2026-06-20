@@ -79,6 +79,32 @@ input, button, textarea, select { font: inherit; }
 ::view-transition-old(forge-status-bar)   { animation: none; opacity: 0; }
 ::view-transition-new(forge-status-bar)   { animation: none; opacity: 1; }
 
+/* ─── /diag-vt diagnostic overrides ─────────────────────────────────────────
+   Body classes toggled by app/diag-vt/page.jsx so the diag route can isolate
+   layers contributing to the persistent Performance Lab cross-fade dim.
+   These only fire when the diag page is active; they have no effect on the
+   rest of the app. See the page-level comment for the test methodology. */
+
+/* Hide the grain overlay entirely when ?grain is NOT set. */
+body.forge-diag-no-grain > div[aria-hidden="true"] {
+  display: none !important;
+}
+
+/* Suppress body::before status-bar blur when ?status is NOT set. */
+body.forge-diag-no-statusbar::before {
+  display: none !important;
+}
+
+/* Suppress mix-blend-mode: plus-lighter on root pseudos when ?nopl IS set.
+   Reverting to the default cross-fade reproduces the original midpoint dim
+   we were trying to fix in the first place — useful as a negative control:
+   if /diag-vt?nopl visibly dims and bare /diag-vt does NOT, plus-lighter
+   IS working and the persistent Lab dim is sourced from app content. */
+body.forge-diag-no-pluslighter ::view-transition-old(root),
+body.forge-diag-no-pluslighter ::view-transition-new(root) {
+  mix-blend-mode: normal;
+}
+
 /* ─── Keyframe library ─────────────────────────────────────────────────────
    Animations consolidated here from inline <style> tags in ForgeApp.jsx.
    Inline injection works (Chrome/Safari handle duplicates gracefully) but
