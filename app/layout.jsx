@@ -29,15 +29,15 @@ export const metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    // black-translucent is the spec-correct choice for an edge-to-edge
-    // iOS PWA on iOS 26.2+. The iOS 26.1 regression (negative viewport
-    // offset producing a bottom chin gap) was fixed in iOS 26.2 beta 3;
-    // our baseline is current iOS. Paired with viewport-fit: cover below,
-    // env(safe-area-inset-*) resolves to real values and we can layout
-    // around the system status bar / Dynamic Island properly. See
-    // https://gist.github.com/fozzedout/5e77925381991a9570151550992baf14
-    // and https://danielpietzsch.com/articles/how-to-create-a-blurry-status-bar-for-pwas-on-ios
-    statusBarStyle: "black-translucent",
+    // No statusBarStyle. black-translucent has been deprecated by WebKit
+    // for multiple releases — it can't semantically work with dark mode
+    // or across different webpage styles, AND Home Screen web apps don't
+    // support drawing arbitrary content below the status bar regardless
+    // of what value is set (confirmed by a WebKit dev response, 2026-06).
+    // Without this key, the status bar automatically renders in the same
+    // colour as the webpage (matches our theme-color: #131110, which is
+    // also our body bg). The body::before backdrop-filter recipe we used
+    // to bolt on was based on a misread of what PWAs allow; removed.
     title: "Forge",
   },
   icons: {
@@ -55,10 +55,12 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  // viewport-fit: cover is MANDATORY for env(safe-area-inset-*) to return
-  // non-zero values on iOS. Without it, every safe-area-inset query
-  // resolves to 0px and Safari letterboxes landscape with black bars.
-  // This unblocks the body::before status-bar blur recipe in globals.css.
+  // viewport-fit: cover retained for landscape Dynamic Island handling
+  // (lets content extend past the notch zone horizontally). With the
+  // status bar back to its native rendering, env(safe-area-inset-top)
+  // typically returns 0 in portrait PWA — but the landscape edge cases
+  // still benefit from cover. Harmless when the right-hand side of the
+  // recipe is gone.
   viewportFit: "cover",
 };
 

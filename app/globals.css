@@ -15,69 +15,23 @@ html, body {
 body {
   -webkit-tap-highlight-color: transparent;
   font-family: var(--font-dm-sans), sans-serif;
-  /* NO body padding-top. The prior version added it to push the first
-     row of each screen below the status bar — but that also pushed the
-     day-type radial glows out of the safe-area zone, so backdrop-filter
-     on body::before had only solid body bg to blur and the status bar
-     read as a flat dark band ("black hole"). Without the padding,
-     content (including the home / Performance Lab glows) extends behind
-     the status bar; the blur lifts the warm tint into a frosted status-
-     bar surface, the visual continuity the user has been asking for.
-     Individual screen containers handle their own safe-area-inset-top
-     in their top padding so the first VISIBLE row still sits below the
-     system icons at scroll-top. */
+  /* No body padding-top. iOS PWAs reserve the system status-bar zone
+     automatically (apple-mobile-web-app-status-bar-style omitted in
+     app/layout.jsx → status bar inherits theme-color: #131110, which
+     matches body bg). Individual screen containers use fixed top
+     paddings to leave editorial breathing room below the system area;
+     env(safe-area-inset-top) compensation is no longer needed since
+     the system zone is reserved, not over-drawn. */
 }
 input, button, textarea, select { font: inherit; }
 
-/* ─── Blurry status-bar zone ────────────────────────────────────────────────
-   Per the documented iOS PWA recipe (Sept 2025, danielpietzsch.com): a
-   body::before pseudo-element pinned to env(safe-area-inset-top) height,
-   blurring whatever content scrolls behind the system status bar. The
-   pseudo-element exists ONLY in the safe-area zone — it cannot extend
-   into the content area, so it can never mask or darken content that's
-   scrolled below it. That was the structural defect in every prior
-   fixed-pixel-height fade attempt.
-
-   Gated by @supports so older / non-supporting browsers gracefully render
-   the default (system-rendered) status bar instead of the broken absence.
-
-   The mask-image fades the blur out at the bottom edge so there's no hard
-   line where the blurred status-bar zone meets the unblurred content
-   below — particularly noticeable on the home / Performance Lab screens
-   where day-type radial glows sit just below the safe area. */
-@supports (height: env(safe-area-inset-top)) {
-  body::before {
-    content: "";
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: env(safe-area-inset-top);
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    pointer-events: none;
-    /* zIndex high enough to sit above any in-page chrome but below modal
-       scrims (zIndex 300+) so sheet animations don't render UNDER the
-       status bar blur. */
-    z-index: 50;
-    /* Soften the bottom edge so the blur transitions cleanly into the
-       content surface below. Full opacity for the top ~60%, fading to
-       transparent at the bottom edge. */
-    -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent);
-    mask-image: linear-gradient(to bottom, #000 60%, transparent);
-    /* Opt this pseudo out of the root view-transition snapshot, same as
-       the grain overlay further down. Without a name, backdrop-filter
-       would be baked into BOTH the old and new root snapshots; root
-       cross-fade with plus-lighter then doubles the filtered region and
-       the user sees the cross-fade dim again. Naming it lets the root
-       composite cleanly while this pseudo persists statically across
-       the transition (see the matching opacity 0/1 pin below). */
-    view-transition-name: forge-status-bar;
-  }
-}
-::view-transition-group(forge-status-bar) { animation: none; }
-::view-transition-old(forge-status-bar)   { animation: none; opacity: 0; }
-::view-transition-new(forge-status-bar)   { animation: none; opacity: 1; }
+/* No body::before status-bar recipe. Home Screen web apps don't support
+   drawing arbitrary content behind the status bar (confirmed by a WebKit
+   dev response, 2026-06) — the recipe we used to bolt on was a misread of
+   what PWAs allow. Status bar renders in the same colour as the webpage
+   automatically once apple-mobile-web-app-status-bar-style is removed
+   (see app/layout.jsx). The forge-status-bar view-transition-name pseudo
+   rules that paired with it are deleted alongside. */
 
 /* ─── /diag-vt diagnostic overrides ─────────────────────────────────────────
    Body classes toggled by app/diag-vt/page.jsx so the diag route can isolate
@@ -190,19 +144,71 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
    prefers-reduced-motion: addressed at the end. All four collapse to
    instant or none. */
 
-/* (1) View transitions — screen cross-fade.
-   mix-blend-mode: plus-lighter is the canonical fix for the perceived
-   midpoint dim ("flicker"). By default the old layer fades out and the
-   new layer fades in simultaneously, so at ~50% progress both layers sit
-   at ~0.5 opacity. With a normal blend the dark body shows through the
-   transparency and the eye reads a dim. plus-lighter adds the two layers'
-   premultiplied alpha so the composite stays at full brightness throughout
-   — the cross-fade reads as a soft swap, not a dip-to-black-and-back. */
-::view-transition-old(root),
+/* (1) View transitions — page slide from bottom to top.
+   Originally a cross-fade with mix-blend-mode: plus-lighter to compensate
+   for the perceived midpoint dim. Plus-lighter held up in CSS theory but
+   in practice produced a 1-3 frame flicker mid-transition on iOS 26.2+/27
+   beta — likely a frame-timing issue where plus-lighter doesn't apply on
+   the first few frames of the compositor pass, so those frames render
+   with default alpha compositing (the 0.75 dim) before snapping to the
+   blend-corrected brightness. Five attempts to engineer around it failed.
+
+   Replaced with a slide: the new page translates UP from below the
+   viewport over the old page (which stays still). No compositing of two
+   snapshots happens — each frame is a single position update, immune to
+   blend-mode timing races. Same visual vocabulary as the day-type
+   transitions inside individual screens, so the swap reads as part of
+   the same motion language rather than its own thing.
+
+   320ms with the same Forge-ease curve (T.ease cubic-bezier) the rest of
+   our motion uses. New page slides in; old stays put underneath (covered
+   as the new page rises into position). animation-fill-mode: both keeps
+   the new pseudo at its final position after the animation ends so there's
+   no snap-back when control returns to the live element.
+
+   Bidirectional navigation note: a single direction (bottom-up) for all
+   screen swaps. Could be split via view-transition-types later if reverse
+   navigation feels semantically wrong, but starting simple. */
+@keyframes forge-page-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes forge-page-slide-down {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+/* Default (forward navigation, no explicit type). The new screen slides
+   UP from below over the previous screen — iOS modal-cover idiom. */
+::view-transition-old(root) {
+  /* No fade. Old page stays at full opacity behind the slide; new covers
+     it as it rises into position. Without this override, the default
+     opacity-1-to-0 fade fights the slide. */
+  animation: none;
+}
 ::view-transition-new(root) {
-  animation-duration: 280ms;
-  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-  mix-blend-mode: plus-lighter;
+  animation: forge-page-slide-up 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Back navigation (anything → home). The OLD screen slides DOWN off the
+   bottom, revealing the home screen underneath — iOS modal-dismiss idiom.
+   Inverts which pseudo carries the motion: new stays still, old animates.
+   z-index reverses the default stacking (new is normally above old) so
+   the old page is on top as it slides away, otherwise new at full opacity
+   would hide old before it had a chance to move. The JS side adds the
+   "back" view-transition-type when navigating to home (see setScreen in
+   components/ForgeApp.jsx).
+
+   For browsers that don't support :active-view-transition-type() (the
+   selector is Safari 26.0+, Chrome 125+), this block is just ignored and
+   the navigation gets the default slide-up. Worst case is a back nav that
+   slides up instead of down — odd but not broken. */
+:active-view-transition-type(back) ::view-transition-old(root) {
+  z-index: 2;
+  animation: forge-page-slide-down 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+:active-view-transition-type(back) ::view-transition-new(root) {
+  z-index: 1;
+  animation: none;
 }
 
 /* Grain layer is named (view-transition-name: forge-grain in GrainOverlay)

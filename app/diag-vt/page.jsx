@@ -2,35 +2,29 @@
 
 // app/diag-vt/page.jsx
 // ─────────────────────────────────────────────────────────────────────────────
-// View-transition cross-fade diagnostic. Isolates the dim that's persisted
-// across five attempted fixes on Home → Performance Lab navigation. The
-// strategy: minimum-viable two-screen swap using the EXACT same wrapper
-// pattern as components/ForgeApp.jsx's setScreen (document.startViewTransition
-// + flushSync), with the grain layer and body::before status-bar blur
-// suppressed via a body class so we can attribute the dim to either:
+// View-transition diagnostic. Originally built to isolate the cross-fade
+// dim that wouldn't go away; the cross-fade has since been replaced with
+// a slide transition (per a user call after the dim persisted across six
+// fixes), so the dim hypotheses below are historical.
 //
-//   A. baseline root cross-fade behaviour (mix-blend-mode: plus-lighter
-//      on ::view-transition-old/new(root) isn't doing what we think)
-//   B. one of the opted-out elements still contributing to the snapshot
-//      despite the view-transition-name treatment
-//   C. something specific to the Home / Performance Lab page tree
+// The body-class toggle infrastructure is still useful for any future
+// view-transition investigation, so the page is kept. The `?status` flag
+// is now inert (the body::before status-bar recipe it targeted has been
+// removed per a WebKit dev's guidance — iOS PWAs don't support drawing
+// content behind the status bar). Leaving the flag for parity; it's a
+// no-op until / unless we re-introduce a named element to toggle.
 //
 // What to do here:
 //
 //   1. Open /diag-vt in the deployed PWA (or in Safari directly).
-//   2. Tap "Swap screens" repeatedly. Watch for the dim.
-//   3. Use the URL flags below to toggle layers, narrowing the cause:
+//   2. Tap "Swap screens" repeatedly. Watch for any motion artefact.
+//   3. Use the URL flags below to toggle layers if investigating:
 //
-//        /diag-vt              clean baseline (grain + status-bar blur off)
+//        /diag-vt              clean baseline (grain off)
 //        /diag-vt?grain        enable grain layer for this route
-//        /diag-vt?status       enable status-bar body::before for this route
-//        /diag-vt?nopl         disable mix-blend-mode: plus-lighter on root
-//                              (predicts the original cross-fade dim)
-//
-// If dim shows at /diag-vt with nothing enabled → plus-lighter isn't
-// doing its job on iOS 26.2+/27 beta and we need a different mechanism
-// (likely opacity-pinned named root pseudos like we do for grain). That's
-// the highest-priority hypothesis.
+//        /diag-vt?nopl         (historical: would have disabled
+//                              mix-blend-mode plus-lighter, currently
+//                              inert since plus-lighter isn't used)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useState } from "react";
