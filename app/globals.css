@@ -219,6 +219,12 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
 }
+@keyframes forge-page-slide-down {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+/* Default (forward navigation, no explicit type). The new screen slides
+   UP from below over the previous screen — iOS modal-cover idiom. */
 ::view-transition-old(root) {
   /* No fade. Old page stays at full opacity behind the slide; new covers
      it as it rises into position. Without this override, the default
@@ -227,6 +233,28 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
 }
 ::view-transition-new(root) {
   animation: forge-page-slide-up 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Back navigation (anything → home). The OLD screen slides DOWN off the
+   bottom, revealing the home screen underneath — iOS modal-dismiss idiom.
+   Inverts which pseudo carries the motion: new stays still, old animates.
+   z-index reverses the default stacking (new is normally above old) so
+   the old page is on top as it slides away, otherwise new at full opacity
+   would hide old before it had a chance to move. The JS side adds the
+   "back" view-transition-type when navigating to home (see setScreen in
+   components/ForgeApp.jsx).
+
+   For browsers that don't support :active-view-transition-type() (the
+   selector is Safari 26.0+, Chrome 125+), this block is just ignored and
+   the navigation gets the default slide-up. Worst case is a back nav that
+   slides up instead of down — odd but not broken. */
+:active-view-transition-type(back) ::view-transition-old(root) {
+  z-index: 2;
+  animation: forge-page-slide-down 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+:active-view-transition-type(back) ::view-transition-new(root) {
+  z-index: 1;
+  animation: none;
 }
 
 /* Grain layer is named (view-transition-name: forge-grain in GrainOverlay)

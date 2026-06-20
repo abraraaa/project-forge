@@ -331,19 +331,29 @@ export default function ForgeApp(){
   // Screen swap wrapped in the View Transitions API where supported (Safari
   // 18.2+, Chrome 111+). On unsupported runtimes (older Safari, jsdom in
   // tests, SSR) this falls straight through to a plain setState — no
-  // behaviour change, just a cinematic cross-fade where the platform lets
-  // us. flushSync forces React to commit the state change inside the
-  // callback so the browser can snapshot before/after frames; without it,
-  // React 19's deferred batching would skip the transition entirely.
+  // behaviour change, just a slide swap where the platform lets us.
+  // flushSync forces React to commit the state change inside the callback
+  // so the browser can snapshot before/after frames; without it, React
+  // 19's deferred batching would skip the transition entirely.
+  //
+  // Direction: forward (slide up from below) for any destination, back
+  // (old slides down off the bottom) when returning to home. The "back"
+  // view-transition-type is matched by :active-view-transition-type(back)
+  // rules in globals.css. Heuristic is intentionally simple — every screen
+  // exits to home, so "next === home" cleanly captures the back direction
+  // without needing a navigation history stack.
   //
   // Reduced-motion users: prefers-reduced-motion is honoured at the CSS
-  // layer (transitions duration → 0) so the swap still happens, instantly.
+  // layer (animation-duration → 0.01ms) so the swap still happens, instantly.
   const setScreen = useCallback((next) => {
     if (typeof document === "undefined" || !document.startViewTransition) {
       setScreenRaw(next);
       return;
     }
-    document.startViewTransition(() => flushSync(() => setScreenRaw(next)));
+    document.startViewTransition({
+      update: () => flushSync(() => setScreenRaw(next)),
+      types: [next === "home" ? "back" : "forward"],
+    });
   }, []);
   const [activeSessionIdx,setActiveSessionIdx]=useState(0);
   const [sessionSwaps,setSessionSwaps]=useState({});
