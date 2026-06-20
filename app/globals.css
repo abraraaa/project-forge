@@ -1,11 +1,9 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
-  /* 100vh, not 100%. 100% calculates relative to the containing block which
-     doesn't always account for the full viewport on iOS PWAs (the bug that
-     creates the bottom chin gap if anyone re-adds the black-translucent
-     status bar later). 100vh = actual viewport height — robust to that
-     class of layout pitfall. iOS Safari's dvh would be ideal long-term but
-     vh is the broadest-supported "actual viewport" unit. */
+  /* 100vh, not 100%. 100% breaks viewport-fit: cover on iOS PWAs (Safari
+     silently falls back to default layout); 100dvh reports wrong values
+     on PWA cold start until the device rotates. 100vh works correctly
+     from launch on iOS 26.2+, the only target our baseline supports. */
   height: 100vh;
   background: #131110;
   overflow-x: hidden;
@@ -14,8 +12,58 @@ html, body {
      it's gone. Sheet scrims keep their own `overscroll-behavior: contain`
      so scrolling inside a sheet doesn't bleed into the page behind. */
 }
-body { -webkit-tap-highlight-color: transparent; font-family: var(--font-dm-sans), sans-serif; }
+body {
+  -webkit-tap-highlight-color: transparent;
+  font-family: var(--font-dm-sans), sans-serif;
+  /* Reserve the system status-bar zone at the top of body content. With
+     viewport-fit: cover + black-translucent, content extends behind the
+     status bar by default — without this padding, the first row of each
+     screen sits under the system icons at scroll-top, which iOS-native
+     apps don't do. Pushing content down by env(safe-area-inset-top) lets
+     it sit naturally below the status bar at rest, then scroll behind it
+     as the user scrolls (visible through the body::before blur below). */
+  padding-top: env(safe-area-inset-top);
+}
 input, button, textarea, select { font: inherit; }
+
+/* ─── Blurry status-bar zone ────────────────────────────────────────────────
+   Per the documented iOS PWA recipe (Sept 2025, danielpietzsch.com): a
+   body::before pseudo-element pinned to env(safe-area-inset-top) height,
+   blurring whatever content scrolls behind the system status bar. The
+   pseudo-element exists ONLY in the safe-area zone — it cannot extend
+   into the content area, so it can never mask or darken content that's
+   scrolled below it. That was the structural defect in every prior
+   fixed-pixel-height fade attempt.
+
+   Gated by @supports so older / non-supporting browsers gracefully render
+   the default (system-rendered) status bar instead of the broken absence.
+
+   The mask-image fades the blur out at the bottom edge so there's no hard
+   line where the blurred status-bar zone meets the unblurred content
+   below — particularly noticeable on the home / Performance Lab screens
+   where day-type radial glows sit just below the safe area. */
+@supports (height: env(safe-area-inset-top)) {
+  body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    pointer-events: none;
+    /* zIndex high enough to sit above any in-page chrome but below modal
+       scrims (zIndex 300+) so sheet animations don't render UNDER the
+       status bar blur. */
+    z-index: 50;
+    /* Soften the bottom edge so the blur transitions cleanly into the
+       content surface below. Full opacity for the top ~60%, fading to
+       transparent at the bottom edge. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent);
+    mask-image: linear-gradient(to bottom, #000 60%, transparent);
+  }
+}
 
 /* ─── Keyframe library ─────────────────────────────────────────────────────
    Animations consolidated here from inline <style> tags in ForgeApp.jsx.
@@ -138,16 +186,9 @@ input, button, textarea, select { font: inherit; }
 ::view-transition-old(forge-grain)   { animation: none; opacity: 0; }
 ::view-transition-new(forge-grain)   { animation: none; opacity: 1; }
 
-/* Same treatment for the top-fade overlay (status-bar continuity). Without
-   the opt-out, the fade was baked into both root snapshots; plus-lighter
-   on the root pseudos summed two dark gradient layers and brightened the
-   fade region mid-transition, then it "popped in" to its real darkness
-   when the transition ended (user-reported, screenshot captured mid-
-   transition). Same opacity-0/opacity-1 pin keeps the fade looking static
-   throughout. */
-::view-transition-group(forge-top-fade) { animation: none; }
-::view-transition-old(forge-top-fade)   { animation: none; opacity: 0; }
-::view-transition-new(forge-top-fade)   { animation: none; opacity: 1; }
+/* No forge-top-fade rules — the fixed fade overlay it accompanied has
+   been replaced by the body::before status-bar blur recipe at the top
+   of this file. */
 
 /* (2) Drum item magnification via view-timeline. The drum container is
    the implicit scrollport (overflow:scroll, height:5×52px), so view(y)
