@@ -3135,19 +3135,31 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // depth as the user scrubs through the week — strength leads from top-right
   // (intense), Z2 drifts from bottom-left (settled), HIIT counterbalances top-
   // left (sharp), cardio sits mid-right (sustained), rest near-invisible.
+  //
+  // strength + hiit `top` moved from -120 → 0 so the rim's gradient is fully
+  // transparent at content y=0 (status bar adjacency). Without that, the rim
+  // painted warm tint right at the top edge while the system status bar
+  // rendered neutral dark, creating the seam we'd been masking with overlays.
+  // Fixing the source instead.
   const dayRim = ({
-    strength: { top: -120, right: -80,    width: 360, height: 320 },
+    strength: { top: 0,     right: -80,    width: 360, height: 320 },
     zone2:    { bottom: -120, left: -80,  width: 420, height: 360 },
-    hiit:     { top: -120, left: -80,     width: 320, height: 280 },
+    hiit:     { top: 0,     left: -80,     width: 320, height: 280 },
     cardio:   { top: "30%", right: -120,  width: 360, height: 320 },
     rest:     { top: "40%", left: "20%",  width: 280, height: 240 },
   })[viewDay.type] || { top: -120, right: -80, width: 360, height: 320 };
 
   return (
     <div style={{minHeight:"100vh",paddingBottom:48,position:"relative",overflow:"hidden"}}>
-      {/* Primary ambient glow — top-centre, day-typed. The dominant signal. */}
+      {/* Primary ambient glow — top-centre, day-typed. The dominant signal.
+          top:0 (was -180) keeps the gradient's bright centre at content
+          y≈250 instead of y≈70, which leaves the topmost ~80px of content
+          at native body bg #131110. That's what the system status bar
+          renders, so there's no longer a perceived seam between the
+          status-bar zone and content's top edge — the original "black
+          hole" complaint, resolved at the source rather than via overlay. */}
       <div style={{
-        position:"absolute",top:-180,left:"50%",transform:"translateX(-50%)",
+        position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",
         width:600,height:500,
         background:`radial-gradient(ellipse,${accent.glow} 0%,transparent 65%)`,
         pointerEvents:"none",
@@ -3178,7 +3190,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 
       {/* Header */}
       <Fade d={0}>
-        <div style={{padding:"calc(env(safe-area-inset-top) + 24px) 24px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <div style={{padding:"52px 24px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div>
             <div style={{fontFamily:T.serif,fontSize:13,fontWeight:300,color:T.text2,fontStyle:"italic"}}>
               {new Date().toLocaleDateString("en-GB",{weekday:"long"})}

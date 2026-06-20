@@ -38,10 +38,14 @@ export default function PerformanceLab({ history, onBack }) {
 
   return (
     <div style={{minHeight:"100vh", paddingBottom:48, position:"relative", overflow:"hidden"}}>
-      {/* Header — ambient glow */}
-      <div style={{position:"absolute", top:-180, left:"50%", transform:"translateX(-50%)", width:600, height:500, background:`radial-gradient(ellipse, rgba(196,168,130,0.10) 0%, transparent 65%)`, pointerEvents:"none"}}/>
+      {/* Header — ambient glow. top:0 (was -180) keeps the gradient's
+          bright centre at content y≈250 instead of y≈70 so the topmost
+          ~80px stays at native body bg #131110, matching the system
+          status bar zone above it cleanly. Same fix as the HomeScreen
+          primary glow — see components/ForgeApp.jsx for full rationale. */}
+      <div style={{position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:600, height:500, background:`radial-gradient(ellipse, rgba(196,168,130,0.10) 0%, transparent 65%)`, pointerEvents:"none"}}/>
 
-      <div style={{padding:"calc(env(safe-area-inset-top) + 24px) 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
+      <div style={{padding:"52px 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
         <button onClick={onBack} style={{background:"none", border:"none", padding:0, cursor:"pointer", fontSize:12, color:T.text3, fontFamily:T.sans}}>
           ← Home
         </button>
