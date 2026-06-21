@@ -481,6 +481,10 @@ export default function ForgeApp(){
   // self-heals at read time so the ghost-pick problem is solved without
   // mutating storage. Prune is still exported for callers that want clean
   // persisted state, just no longer wired here.
+  // mutation-audit: exempt — silent read-time dedupe migration. Runs on every
+  // programmeBlock change; pushing on each render that triggers it would
+  // be excessive (and unnecessary since the dedupe is deterministic — every
+  // device reaches the same state on read, so eventual consistency holds).
   useEffect(() => {
     if (!activeProfile || !programmeBlock?.config) return;
     const deduped = dedupeRotationConfig(programmeBlock.config, programmeBlock.history, { focus: userFocus });
@@ -786,7 +790,8 @@ export default function ForgeApp(){
     BW.set(activeProfile, kg);
     setBodyweightState(kg);
     setBwIsStale(false);
-  }, [activeProfile]);
+    pushUserStateSnapshot();
+  }, [activeProfile, pushUserStateSnapshot]);
 
   // Reusable sync update handler — called when backgroundSync finds newer blob data.
   // Silently updates React state so the UI reflects the freshest data.
@@ -1561,6 +1566,7 @@ const sProps={
   const handleResetProgramme = () => {
     const next = PB.reset();
     setProgrammeBlock(next);
+    pushUserStateSnapshot();
   };
 
   const beginSession = () => {
@@ -1670,6 +1676,7 @@ const sProps={
       TS.replaceState(activeProfile, newState);
       setActiveDeload(newState.mesocycle.activeDeload);
       setDeloadOffer(null);
+      pushUserStateSnapshot();
     } catch (e) {
       console.error("[forge:deload-accept]", e);
     }
@@ -1684,6 +1691,7 @@ const sProps={
       const newState = dismissDeloadOffer(ts);
       TS.replaceState(activeProfile, newState);
       setDeloadOffer(null);
+      pushUserStateSnapshot();
     } catch (e) {
       console.error("[forge:deload-dismiss]", e);
     }
