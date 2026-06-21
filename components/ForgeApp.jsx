@@ -2828,6 +2828,23 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
         </Fade>
       )}
 
+      {/* Sync diagnostics — entry point to /diag-sync. PWAs have no address
+          bar, so an in-app link is the only way to reach it from a standalone
+          install. Plain <a> rather than next/link so the page is fetched fresh
+          (it reads LS directly) and the route is independent of the SPA shell. */}
+      {current && (
+        <Fade d={250}>
+          <a href="/diag-sync"
+            style={{marginTop:12,padding:"14px 18px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Sync diagnostics</div>
+              <div style={{fontSize:11,color:T.text3,marginTop:2}}>Local store counts + force pull/push</div>
+            </div>
+            <span style={{fontSize:14,color:T.text3}}>↗</span>
+          </a>
+        </Fade>
+      )}
+
       {/* Bodyweight row — tappable to edit */}
       {current && setBwEditOpen && (
         <Fade d={260}>
