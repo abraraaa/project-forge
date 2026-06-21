@@ -1354,13 +1354,22 @@ export default function ForgeApp(){
     // even if the user retroactively edits the schedule later. For the
     // non-strength tick path, completedType === scheduledType (the user just
     // confirmed they did the scheduled thing).
-    const effective = W.getEffectiveOn(dateStr);
+    //
+    // CRITICAL fallback: W.getEffectiveOn returns null when no schedule edit
+    // log exists (i.e., the user has been using the default schedule the
+    // whole time — the most common state). Without this fallback, scheduled
+    // and completed types both become null, and Days.manualTickDates filters
+    // out entries with null completedType — so the retro picker keeps
+    // surfacing the same day as "missed" no matter how many times the user
+    // taps Mark ✓. (User reported: "missed workout flow keeps bringing up
+    // the same cardio days from last week." This was the cause.)
     const dowMon = (() => {
       const [y, m, d] = dateStr.split("-").map(Number);
       const js = new Date(y, m - 1, d).getDay();
       return js === 0 ? 6 : js - 1;
     })();
-    const scheduledType = effective && effective[dowMon] ? effective[dowMon].type : null;
+    const effective = W.getEffectiveOn(dateStr) || WEEK;
+    const scheduledType = effective[dowMon]?.type || null;
     Days.set(activeProfile, dateStr, {
       scheduledType,
       completedType: scheduledType,
@@ -3190,7 +3199,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 
       {/* Header */}
       <Fade d={0}>
-        <div style={{padding:"52px 24px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <div style={{padding:"max(72px, calc(env(safe-area-inset-top, 0px) + 24px)) 24px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div>
             <div style={{fontFamily:T.serif,fontSize:13,fontWeight:300,color:T.text2,fontStyle:"italic"}}>
               {new Date().toLocaleDateString("en-GB",{weekday:"long"})}
