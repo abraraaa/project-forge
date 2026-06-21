@@ -3199,7 +3199,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 
       {/* Header */}
       <Fade d={0}>
-        <div style={{padding:"max(72px, calc(env(safe-area-inset-top, 0px) + 24px)) 24px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <div style={{padding:"52px 24px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div>
             <div style={{fontFamily:T.serif,fontSize:13,fontWeight:300,color:T.text2,fontStyle:"italic"}}>
               {new Date().toLocaleDateString("en-GB",{weekday:"long"})}

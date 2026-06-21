@@ -55,13 +55,15 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  // viewport-fit: cover retained for landscape Dynamic Island handling
-  // (lets content extend past the notch zone horizontally). With the
-  // status bar back to its native rendering, env(safe-area-inset-top)
-  // typically returns 0 in portrait PWA — but the landscape edge cases
-  // still benefit from cover. Harmless when the right-hand side of the
-  // recipe is gone.
-  viewportFit: "cover",
+  // No viewport-fit: cover. The recipe it enabled (env(safe-area-inset-*)
+  // returning real device values + content extending edge-to-edge into
+  // the safe-area zone) was solving for a backdrop-filter status-bar
+  // recipe we've since removed (per WebKit dev guidance: iOS PWAs don't
+  // support drawing arbitrary content behind the status bar). With cover
+  // gone, iOS automatically reserves the system status-bar zone — content
+  // sits naturally below it without per-screen env() math compensation.
+  // Manifest pins orientation to portrait so the landscape edge-handling
+  // argument for keeping cover doesn't apply.
 };
 
 export default function RootLayout({ children }) {
