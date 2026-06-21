@@ -45,7 +45,7 @@ export default function PerformanceLab({ history, onBack }) {
           primary glow — see components/ForgeApp.jsx for full rationale. */}
       <div style={{position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:600, height:500, background:`radial-gradient(ellipse, rgba(196,168,130,0.10) 0%, transparent 65%)`, pointerEvents:"none"}}/>
 
-      <div style={{padding:"52px 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
+      <div style={{padding:"max(72px, calc(env(safe-area-inset-top, 0px) + 24px)) 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
         <button onClick={onBack} style={{background:"none", border:"none", padding:0, cursor:"pointer", fontSize:12, color:T.text3, fontFamily:T.sans}}>
           ← Home
         </button>

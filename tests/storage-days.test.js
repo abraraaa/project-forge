@@ -232,13 +232,22 @@ describe("Days — lazy projection from legacy stores", () => {
     expect(got.marks?.custom).toBe(1);
   });
 
-  it("projection without a custom schedule falls back to scheduledType=null", () => {
+  it("projection without a custom schedule falls back to the default WEEK type", () => {
+    // 2026-06-16 is a Tuesday. The default WEEK has Tuesday as zone2.
+    // Critical: scheduledType must NOT be null here — if it were, the
+    // matching completedType would also be null, and Days.manualTickDates
+    // would filter the entry out as having no completion. The retro picker
+    // would then keep showing the same date as "missed" forever. Regression
+    // guard for the bug reported on 2026-06-21.
     window.localStorage.setItem(
       "forge:alice:dayDone",
       JSON.stringify({ "2026-06-16": true }),
     );
-    // No W.save() — no effective schedule.
+    // No W.save() — no schedule edit log; fallback to DEFAULT_WEEK kicks in.
     const all = Days.getAll("alice");
-    expect(all["2026-06-16"].scheduledType).toBe(null);
+    expect(all["2026-06-16"].scheduledType).toBe("zone2");
+    expect(all["2026-06-16"].completedType).toBe("zone2");
+    // And the date appears in manualTickDates (the retro picker's read).
+    expect(Days.manualTickDates("alice")["2026-06-16"]).toBe(true);
   });
 });
