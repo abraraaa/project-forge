@@ -202,6 +202,48 @@ export default function DiagSync() {
     }
   }, [profile]);
 
+  // Force the Day-entry repair migration to run again. Clears the
+  // daysRepaired_v1 gate flag so Days._maybeRepair will re-evaluate every
+  // entry on the next read. Useful when a user reports that orphaned days
+  // persist after a deploy — proves whether the repair logic matches the
+  // actual broken state of their entries vs whether they have a different
+  // problem entirely.
+  const onForceRepair = useCallback(() => {
+    if (!profile) return;
+    setBusy("repair");
+    try {
+      const before = Days.getAll(profile);
+      const beforeBroken = Object.values(before).filter(
+        (e) => !e.completedType && !e.sessionId && !e.scheduledType
+              && (!e.marks || Object.keys(e.marks).length === 0),
+      ).length;
+      LS.remove(`forge:${profile}:daysRepaired_v1`);
+      Days._maybeRepair(profile);
+      const after = Days.getAll(profile);
+      const afterBroken = Object.values(after).filter(
+        (e) => !e.completedType && !e.sessionId && !e.scheduledType
+              && (!e.marks || Object.keys(e.marks).length === 0),
+      ).length;
+      setLastAction({
+        type: "repair",
+        result: `OK — broken entries before:${beforeBroken}, after:${afterBroken} (repaired ${beforeBroken - afterBroken})`,
+        at: Date.now(),
+      });
+    } catch (e) {
+      setLastAction({ type: "repair", result: `ERR — ${e?.message || e}`, at: Date.now() });
+    } finally {
+      setBusy(null);
+    }
+  }, [profile]);
+
+  // Read-only snapshot of every Day entry. Rendered as a compact list so we
+  // can SEE the broken-state signature rather than infer it from aggregate
+  // counts. Computed inline each render — Day entry counts are small (≤90
+  // days typically) so cost is negligible.
+  const dayEntries = !profile ? [] : Object.values(Days.getAll(profile))
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    .slice(0, 20);
+
   if (!profile) {
     return (
       <div style={{ padding: 24, color: "#EDEBE7", fontFamily: "system-ui" }}>
@@ -257,6 +299,46 @@ export default function DiagSync() {
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <Button onClick={onFlushQueue} busy={busy === "flush"}>Flush pending queue</Button>
           <Button onClick={onFoldLegacy} busy={busy === "fold"} variant="danger">Re-fold legacy</Button>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button onClick={onForceRepair} busy={busy === "repair"} variant="danger">Force-repair Day entries</Button>
+        </div>
+      </Section>
+
+      <Section title="Day entries (latest 20)">
+        <div style={{
+          background: "#1A1714", border: "1px solid #2D2924", borderRadius: 8,
+          padding: "10px 12px", fontSize: 11, fontFamily: "ui-monospace, monospace",
+          maxHeight: 280, overflowY: "auto",
+        }}>
+          {dayEntries.length === 0 ? (
+            <div style={{ color: "#6B6560" }}>no entries</div>
+          ) : (
+            dayEntries.map((e) => {
+              const sched = e.scheduledType || "—";
+              const done  = e.completedType || "—";
+              const sid   = e.sessionId ? "S" : "·";
+              const marks = e.marks && Object.keys(e.marks).length > 0
+                ? Object.keys(e.marks).join(",") : "·";
+              const broken = !e.completedType && !e.sessionId;
+              return (
+                <div key={e.date} style={{
+                  display: "flex", justifyContent: "space-between",
+                  padding: "4px 0", color: broken ? "#C9A0B8" : "#EDEBE7",
+                }}>
+                  <span>{e.date}</span>
+                  <span style={{ color: "#A09890" }}>{`sched:${sched}`}</span>
+                  <span style={{ color: "#A09890" }}>{`done:${done}`}</span>
+                  <span style={{ color: "#A09890" }}>{`sid:${sid}`}</span>
+                  <span style={{ color: "#A09890" }}>{`m:${marks}`}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div style={{ fontSize: 11, color: "#6B6560", marginTop: 8, lineHeight: 1.55 }}>
+          Rose = broken (no completedType, no sessionId). Force-repair re-runs
+          the migration; rose lines should disappear or move to white.
         </div>
       </Section>
 

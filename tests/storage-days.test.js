@@ -104,7 +104,14 @@ describe("Days — current-week read projections (cutover read source)", () => {
   });
 
   it("projectCurrentWeek surfaces bonus marks separately from completion", () => {
-    Days.set("alice", "2026-06-16", { marks: { bonus: true } });
+    // Mirror what handleMarkBonusDone writes post-fix: scheduledType
+    // stamped from the effective schedule, marks carries the bonus flag,
+    // completedType stays null (bonus ≠ scheduled completion). With
+    // scheduledType set, the repair migration leaves it alone.
+    Days.set("alice", "2026-06-16", {
+      scheduledType: "zone2",
+      marks: { bonus: true },
+    });
     const proj = Days.projectCurrentWeek("alice", { now: NOW });
     expect(proj.bonus[1]).toBe(true);          // Tuesday bonus
     expect(proj.complete[1]).toBeUndefined();  // bonus alone isn't completion
@@ -283,26 +290,36 @@ describe("Days — lazy projection from legacy stores", () => {
     expect(window.localStorage.getItem("forge:alice:daysRepaired_v1")).toBe("true");
   });
 
-  it("repair leaves bonus-only entries alone (would mis-claim scheduled session)", () => {
-    // Bonus-only entry: user marked bonus on Tuesday but didn't tap Mark ✓
-    // for the scheduled training. Looks superficially like the broken case
-    // (no completedType, no sessionId, no scheduledType) but the bonus mark
-    // is the tell. Repairing this would falsely complete the scheduled day.
+  it("repair also fixes pre-fix bonus-then-broken-Mark entries (marks preserved)", () => {
+    // Pre-fix scenario: user tapped Mark ✓ (wrote null/null due to bug),
+    // then tapped bonus (added marks: { bonus: true }). Result entry has
+    // all three completion fields null + a bonus mark — indistinguishable
+    // from a legitimate bonus-only entry. Post-fix handleMarkBonusDone
+    // stamps scheduledType so new entries don't fall into this pattern;
+    // the repair healing the legacy ones unblocks the retro picker for
+    // the much more common "did both" case. False-positive risk for
+    // legit-bonus-only-with-null-scheduled is accepted (rare; user can
+    // always re-tap to correct).
     window.localStorage.setItem(
       "forge:alice:days",
       JSON.stringify({
-        "2026-06-16": {
-          date: "2026-06-16",
+        "2026-06-15": {
+          date: "2026-06-15",
+          scheduledType: null,
+          completedType: null,
+          sessionId: null,
           marks: { bonus: true },
-          updatedAt: "2026-06-16T10:00:00Z",
+          updatedAt: "2026-06-15T10:00:00Z",
         },
       }),
     );
     window.localStorage.setItem("forge:alice:daysProjected", "true");
 
     const all = Days.getAll("alice");
-    expect(all["2026-06-16"].completedType).toBeUndefined();
-    expect(all["2026-06-16"].scheduledType).toBeUndefined();
-    expect(all["2026-06-16"].marks.bonus).toBe(true);
+    // 2026-06-15 is a Monday — default WEEK says strength.
+    expect(all["2026-06-15"].scheduledType).toBe("strength");
+    expect(all["2026-06-15"].completedType).toBe("strength");
+    // Bonus mark survives the repair (spread preserves it).
+    expect(all["2026-06-15"].marks.bonus).toBe(true);
   });
 });
