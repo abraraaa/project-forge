@@ -7,6 +7,16 @@ import { NextResponse } from "next/server";
 //
 // Store access: PRIVATE.
 // Requires @vercel/blob@^2 (adds private-store support + get() for auth'd reads).
+//
+// PATH SCHEME: deterministic. We use { allowOverwrite: true } rather than
+// addRandomSuffix because addRandomSuffix inserts the suffix BEFORE the
+// extension (per Vercel docs: 'avatar-oYnXSVc….jpg', not 'avatar.jpg-oYnXSVc…').
+// An earlier version used addRandomSuffix and tried to find writes back via
+// `pathname === path || pathname.startsWith(path + '-')` — that pattern
+// never matches the actual format, so every PUT wrote a blob the GET could
+// never read. Sync looked silently fine (200s on both sides) but cross-
+// device round-trip returned empty for every user. Determ paths eliminate
+// the read-back guesswork entirely.
 
 const normalise    = (name) => String(name || "").trim().toLowerCase();
 const metaPath     = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/meta.json`;
@@ -14,6 +24,14 @@ const historyPath  = (name) => `forge/profiles/${encodeURIComponent(normalise(na
 // Trailing slash is load-bearing — without it, list() does a prefix match that
 // catches adjacent names (e.g. "analmonk" would hit "analmonkey/meta.json").
 const legacyPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/`;
+
+// Identifies legacy addRandomSuffix blobs from the broken era — pathnames of
+// the form `…/meta-XXXX.json` and `…/history-XXXX.json`. Used for one-shot
+// migration on read (fall back to latest suffixed blob if deterministic path
+// is empty) and for cleanup on write (delete obsolete suffixed blobs once the
+// new deterministic blob has been written).
+const LEGACY_META_RE    = /\/meta-[^/]+\.json$/;
+const LEGACY_HISTORY_RE = /\/history-[^/]+\.json$/;
 
 // ─── Input validation ─────────────────────────────────────────────────────
 // Profile name validation is the single highest-leverage guard on this API.
@@ -113,6 +131,19 @@ async function readJson(pathname) {
   }
 }
 
+// Migration helper: when the deterministic path is empty, fall back to the
+// latest legacy suffixed blob for that kind (meta or history). Returns the
+// parsed JSON of the latest matching blob or null if none exist.
+//
+// `kindRe` is LEGACY_META_RE or LEGACY_HISTORY_RE. We rely on the list call
+// the caller already made (don't re-list for cost reasons).
+async function readLatestLegacy(blobs, kindRe) {
+  const matches = blobs.filter(b => kindRe.test(b.pathname));
+  if (!matches.length) return null;
+  const latest = matches.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))[0];
+  return readJson(latest.pathname);
+}
+
 // GET /api/sync?profile=Name
 // Returns { meta: {...}, history: [...] }
 //
@@ -133,29 +164,57 @@ export async function GET(request) {
   }
 
   try {
-    const { blobs } = await list({ prefix: legacyPrefix(profile) });
-
+    // The check=1 endpoint still uses list because it needs to know if ANY
+    // blob exists for this profile name (including legacy suffixed ones —
+    // we don't want to release a name that was previously claimed under the
+    // old broken scheme).
     if (check) {
+      const { blobs } = await list({ prefix: legacyPrefix(profile) });
       return NextResponse.json({ exists: blobs.length > 0 });
     }
 
-    if (!blobs.length) return NextResponse.json(null, { status: 404 });
-
-    const findLatest = (pathMatch) => {
-      const matches = blobs.filter(b => b.pathname === pathMatch || b.pathname.startsWith(`${pathMatch}-`));
-      if (!matches.length) return null;
-      return matches.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))[0];
-    };
-
-    const metaBlob    = findLatest(metaPath(profile));
-    const historyBlob = findLatest(historyPath(profile));
-
-    const [meta, history] = await Promise.all([
-      metaBlob    ? readJson(metaBlob.pathname)    : Promise.resolve(null),
-      historyBlob ? readJson(historyBlob.pathname) : Promise.resolve(null),
+    // Fast path: read the deterministic paths in parallel. This is the
+    // expected case for any profile written after the addRandomSuffix bug
+    // was fixed.
+    const [metaDirect, historyDirect] = await Promise.all([
+      readJson(metaPath(profile)),
+      readJson(historyPath(profile)),
     ]);
 
-    return NextResponse.json({ meta, history: Array.isArray(history) ? history : [] });
+    // If both deterministic paths returned data, we're done.
+    if (metaDirect !== null && historyDirect !== null) {
+      return NextResponse.json({
+        meta: metaDirect,
+        history: Array.isArray(historyDirect) ? historyDirect : [],
+      });
+    }
+
+    // Slow path: one or both deterministic reads came back empty. Either
+    // this profile has never been written under the new scheme (legacy
+    // suffixed blobs only), or partially migrated. List once and fall
+    // back to the latest legacy blob for whichever side is missing.
+    const { blobs } = await list({ prefix: legacyPrefix(profile) });
+
+    // Profile has never existed at all — preserve the original 404 contract
+    // so the client treats this as "blob unavailable" rather than "blob
+    // exists but is empty". backgroundSync's branch on `if (!remote)` depends
+    // on this to queue a push when local has data that needs hoisting.
+    if (!blobs.length && metaDirect === null && historyDirect === null) {
+      return NextResponse.json(null, { status: 404 });
+    }
+
+    const [metaLegacy, historyLegacy] = await Promise.all([
+      metaDirect === null    ? readLatestLegacy(blobs, LEGACY_META_RE)    : Promise.resolve(null),
+      historyDirect === null ? readLatestLegacy(blobs, LEGACY_HISTORY_RE) : Promise.resolve(null),
+    ]);
+
+    const meta    = metaDirect    ?? metaLegacy;
+    const history = historyDirect ?? historyLegacy;
+
+    return NextResponse.json({
+      meta,
+      history: Array.isArray(history) ? history : [],
+    });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
@@ -180,35 +239,34 @@ export async function PUT(request) {
   try {
     const results = {};
 
+    // List once up-front to identify legacy suffixed blobs for cleanup +
+    // history-merge fallback. Cheap — single API call, used by everything
+    // that follows.
+    const { blobs } = await list({ prefix: legacyPrefix(profile) });
+
     // ── Meta write ──────────────────────────────────────────────
+    // Deterministic path + allowOverwrite. No suffix dance, no list-then-
+    // delete pre-step (legacy cleanup is consolidated at the end).
     if (data.meta) {
-      // Clear prior meta blobs (they have random suffixes, so no natural overwrite)
-      const { blobs } = await list({ prefix: legacyPrefix(profile) });
-      const obsolete = blobs.filter(b =>
-        b.pathname === metaPath(profile) ||
-        b.pathname.startsWith(`${metaPath(profile)}-`)
-      );
-      if (obsolete.length) {
-        try { await del(obsolete.map(b => b.url)); } catch {}
-      }
       await put(
         metaPath(profile),
         JSON.stringify({ ...data.meta, syncedAt: new Date().toISOString() }),
-        { access: "private", contentType: "application/json", addRandomSuffix: true }
+        { access: "private", contentType: "application/json", allowOverwrite: true },
       );
       results.meta = true;
     }
 
     // ── History write (merge with remote) ───────────────────────
+    // Read existing history from deterministic path first; if missing,
+    // hoist from the latest legacy suffixed blob (one-time migration for
+    // profiles that only have data in the broken-suffix scheme). Merge
+    // by record id and write deterministic.
     if (Array.isArray(data.history)) {
-      const { blobs } = await list({ prefix: historyPath(profile) });
-
-      let existing = [];
-      const latest = blobs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))[0];
-      if (latest) {
-        const pulled = await readJson(latest.pathname);
-        if (Array.isArray(pulled)) existing = pulled;
+      let existing = await readJson(historyPath(profile));
+      if (!Array.isArray(existing)) {
+        existing = await readLatestLegacy(blobs, LEGACY_HISTORY_RE);
       }
+      if (!Array.isArray(existing)) existing = [];
 
       const byId = new Map();
       [...existing, ...data.history].forEach(rec => {
@@ -216,15 +274,38 @@ export async function PUT(request) {
       });
       const merged = Array.from(byId.values()).sort((a, b) => a.id.localeCompare(b.id));
 
-      if (blobs.length) {
-        try { await del(blobs.map(b => b.url)); } catch {}
-      }
       await put(
         historyPath(profile),
         JSON.stringify(merged),
-        { access: "private", contentType: "application/json", addRandomSuffix: true }
+        { access: "private", contentType: "application/json", allowOverwrite: true },
       );
       results.history = { count: merged.length };
+    }
+
+    // ── Legacy cleanup ──────────────────────────────────────────
+    // Delete any addRandomSuffix-era blobs that match `…/meta-XXX.json` or
+    // `…/history-XXX.json`. The deterministic write above has already
+    // hoisted any data we needed (history merge included legacy via
+    // readLatestLegacy; meta is overwrite-only since we don't merge metas
+    // — incoming wins, which matches the old behaviour where addRandomSuffix
+    // PUTs created a new blob the prior was unreadable from anyway).
+    // Note: the list snapshot was taken BEFORE the put calls, so the
+    // deterministic blob we just wrote is NOT in the list and won't be
+    // deleted. Safe even if the put added it to a future list query.
+    const legacyBlobs = blobs.filter(b =>
+      LEGACY_META_RE.test(b.pathname) || LEGACY_HISTORY_RE.test(b.pathname),
+    );
+    if (legacyBlobs.length) {
+      try {
+        await del(legacyBlobs.map(b => b.url));
+        results.legacyCleaned = legacyBlobs.length;
+      } catch (e) {
+        // Don't fail the PUT if cleanup fails — the new deterministic blob
+        // is already written and will serve fresh reads. Operators will see
+        // the cleanup failure in logs and storage cost will accumulate, but
+        // user data is safe.
+        console.error("[forge:legacyCleanup]", profile, e?.message || e);
+      }
     }
 
     return NextResponse.json({ ok: true, ...results });
@@ -258,11 +339,19 @@ export async function POST(request) {
   }
 
   try {
+    // Existence check stays list-based so it catches legacy suffixed
+    // blobs from the broken-suffix era — a name claimed previously under
+    // that scheme should still be treated as taken.
     const { blobs } = await list({ prefix: legacyPrefix(profile) });
     if (blobs.length > 0) {
       return NextResponse.json({ error: "Name taken", exists: true }, { status: 409 });
     }
 
+    // Deterministic write. allowOverwrite stays false (default) — this is
+    // a claim, not an update, and the list check above already proved the
+    // name is free. If a concurrent claim races, the put errors and the
+    // race-loser gets a 500; the UI's claim flow treats that as "try
+    // again" / "name taken" anyway.
     await put(
       metaPath(profile),
       JSON.stringify({
@@ -272,7 +361,7 @@ export async function POST(request) {
         reps: {},
         streak: { count: 0, lastDate: null },
       }),
-      { access: "private", contentType: "application/json", addRandomSuffix: true }
+      { access: "private", contentType: "application/json" },
     );
 
     return NextResponse.json({ ok: true, claimed: true });
@@ -314,7 +403,7 @@ export async function DELETE(request) {
       // Verify auth token
       const tokenKey = `forge/tokens/${authToken}`;
       const tokenData = await readJson(tokenKey);
-      
+
       if (!tokenData) {
         return NextResponse.json(
           { error: "Invalid or expired auth token", requiresAuth: true },
