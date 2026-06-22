@@ -109,6 +109,7 @@ These are non-negotiable without explicit sign-off. They've each saved or unwoun
 7. **Evidence-based programming** (MEV/MAV/MRV from Israetel/Nuckols/Helms), not convention.
 8. **Stale-base discipline.** Branch from latest `main`, CI green + up-to-date base before merge.
 9. **Curated anatomy dataset.** `lib/exercise-anatomy.js` is not edited without a concrete reason.
+10. **WebKit guidance is the source of truth on iOS.** Forge leverages WebKit guidance for iOS 26 or greater — liquid glass AND sculpted ass friendly, as far as PWAs can support. The "as far as PWAs can support" qualifier is load-bearing: Home Screen web apps don't get to draw arbitrary content behind the status bar (confirmed by WebKit dev, 2026-06), so the recipe is "lean into what Safari/WebKit gives PWAs natively" rather than reverse-engineer a workaround. Anything that fights the platform — fixed pixel status-bar shims, deprecated `black-translucent`, hand-rolled backdrop-blur over the system chrome — gets removed on sight. Translucent + sculpted surfaces (Liquid Glass dialogue) are pursued where they compose cleanly with system rendering; where they don't, we choose the cleaner native fallback over a hacked imitation.
 
 ## Programme model
 
