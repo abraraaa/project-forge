@@ -1403,7 +1403,23 @@ export default function ForgeApp(){
       const day = String(d.getDate()).padStart(2, "0");
       return `${y}-${m}-${day}`;
     })();
-    Days.set(activeProfile, today, { marks: { bonus: true } });
+    // Stamp scheduledType from the effective schedule (or WEEK fallback
+    // if no edit log). Without this, bonus-only entries land with null
+    // scheduledType — indistinguishable from the buggy null/null Mark ✓
+    // writes, forcing the repair migration to guess. Writing scheduledType
+    // here gives the repair a clean signal: scheduledType set +
+    // completedType null = legit bonus-only, leave alone.
+    const dowMon = (() => {
+      const [y, m, d] = today.split("-").map(Number);
+      const js = new Date(y, m - 1, d).getDay();
+      return js === 0 ? 6 : js - 1;
+    })();
+    const effective = W.getEffectiveOn(today) || WEEK;
+    const scheduledType = effective[dowMon]?.type || null;
+    Days.set(activeProfile, today, {
+      scheduledType,
+      marks: { bonus: true },
+    });
     // Refresh React state from the unified Day projection.
     setBonusDone(Days.projectCurrentWeek(activeProfile).bonus);
     pushUserStateSnapshot();
