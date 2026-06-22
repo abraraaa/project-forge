@@ -250,4 +250,59 @@ describe("Days — lazy projection from legacy stores", () => {
     // And the date appears in manualTickDates (the retro picker's read).
     expect(Days.manualTickDates("alice")["2026-06-16"]).toBe(true);
   });
+
+  it("repairs Day entries with null scheduledType/completedType from the pre-d6772c1 bug", () => {
+    // Simulates an entry written by a buggy handleMarkDayDone tap before
+    // the DEFAULT_WEEK fallback shipped: scheduledType and completedType
+    // both null, no sessionId, no marks. Without repair, manualTickDates
+    // filters it out and the retro picker keeps re-surfacing the date.
+    window.localStorage.setItem(
+      "forge:alice:days",
+      JSON.stringify({
+        "2026-06-15": {
+          date: "2026-06-15",
+          scheduledType: null,
+          completedType: null,
+          sessionId: null,
+          marks: {},
+          updatedAt: "2026-06-15T10:00:00Z",
+        },
+      }),
+    );
+    // Set projectedKey so _foldLegacy doesn't fire — we want to verify
+    // the repair runs on its own gate.
+    window.localStorage.setItem("forge:alice:daysProjected", "true");
+
+    // First read triggers _maybeRepair via getAll → _maybeProject.
+    // 2026-06-15 is a Monday — default WEEK says strength.
+    const all = Days.getAll("alice");
+    expect(all["2026-06-15"].scheduledType).toBe("strength");
+    expect(all["2026-06-15"].completedType).toBe("strength");
+    expect(Days.manualTickDates("alice")["2026-06-15"]).toBe(true);
+    // Repair flag is set so subsequent reads no-op.
+    expect(window.localStorage.getItem("forge:alice:daysRepaired_v1")).toBe("true");
+  });
+
+  it("repair leaves bonus-only entries alone (would mis-claim scheduled session)", () => {
+    // Bonus-only entry: user marked bonus on Tuesday but didn't tap Mark ✓
+    // for the scheduled training. Looks superficially like the broken case
+    // (no completedType, no sessionId, no scheduledType) but the bonus mark
+    // is the tell. Repairing this would falsely complete the scheduled day.
+    window.localStorage.setItem(
+      "forge:alice:days",
+      JSON.stringify({
+        "2026-06-16": {
+          date: "2026-06-16",
+          marks: { bonus: true },
+          updatedAt: "2026-06-16T10:00:00Z",
+        },
+      }),
+    );
+    window.localStorage.setItem("forge:alice:daysProjected", "true");
+
+    const all = Days.getAll("alice");
+    expect(all["2026-06-16"].completedType).toBeUndefined();
+    expect(all["2026-06-16"].scheduledType).toBeUndefined();
+    expect(all["2026-06-16"].marks.bonus).toBe(true);
+  });
 });
