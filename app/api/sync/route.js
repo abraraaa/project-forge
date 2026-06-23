@@ -282,34 +282,19 @@ export async function PUT(request) {
       results.history = { count: merged.length };
     }
 
-    // ── Legacy cleanup ──────────────────────────────────────────
-    // Delete any addRandomSuffix-era blobs that match `…/meta-XXX.json` or
-    // `…/history-XXX.json`. The deterministic write above has already
-    // hoisted any data we needed (history merge included legacy via
-    // readLatestLegacy; meta is overwrite-only since we don't merge metas
-    // — incoming wins, which matches the old behaviour where addRandomSuffix
-    // PUTs created a new blob the prior was unreadable from anyway).
-    // Note: the list snapshot was taken BEFORE the put calls, so the
-    // deterministic blob we just wrote is NOT in the list and won't be
-    // deleted. Safe even if the put added it to a future list query.
-    const legacyBlobs = blobs.filter(b =>
-      LEGACY_META_RE.test(b.pathname) || LEGACY_HISTORY_RE.test(b.pathname),
-    );
-    if (legacyBlobs.length) {
-      try {
-        await del(legacyBlobs.map(b => b.url));
-        results.legacyCleaned = legacyBlobs.length;
-      } catch (e) {
-        // Don't fail the PUT if cleanup fails — the new deterministic blob
-        // is already written and will serve fresh reads. Operators will see
-        // the cleanup failure in logs and storage cost will accumulate, but
-        // user data is safe.
-        console.error("[forge:legacyCleanup]", profile, e?.message || e);
-      }
-    }
+    // Legacy suffixed blob cleanup runs in the cron job (/api/cron/cleanup),
+    // NOT in this hot path. An earlier version did it here per-PUT and was
+    // implicated in production 500s — for profiles with hundreds of pre-
+    // migration suffixed orphans, the batch `del()` either timed out the
+    // function or hit a Vercel Blob API limit. The cron is the right home
+    // for it: runs daily, paginates the list, batch-deletes in chunks,
+    // tolerates failure. PUT stays small and predictable.
 
     return NextResponse.json({ ok: true, ...results });
   } catch (e) {
+    // Tagged log so the runtime error surface tells us which call exploded
+    // next time something goes wrong. Aggregate logs truncate without this.
+    console.error("[forge:put:outer]", profile, e?.message || e, e?.stack);
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
