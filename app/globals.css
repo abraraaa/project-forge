@@ -30,13 +30,29 @@ body {
 }
 input, button, textarea, select { font: inherit; }
 
-/* No body::before status-bar overlay. We no longer try to paint a custom
-   blur strip in the status-bar zone — with viewport-fit: cover +
-   statusBarStyle: "default" (see app/layout.jsx) and the standalone
-   padding-top above, the page background flows into the status-bar zone
-   and the system bar sits cleanly on top of it. The earlier claim that
-   "iOS PWAs can't draw behind the status bar" was wrong; the real fix was
-   restoring viewport-fit: cover, which had been removed. */
+/* Grain texture as the bottom layer of the page, behind everything. Sat as a
+   fullscreen mix-blend-mode: screen overlay above all content; that left a
+   hard edge wherever an opaque surface (Card, sheet, workout view) blocked
+   the texture below it — cards read as "cut out of" the grainy field rather
+   than "floating on" it. As body::before with z-index: -1 the grain sits
+   underneath the page; cards with a translucent background + backdrop-filter
+   filter the grain through their surface, producing the glass-on-textured-
+   substrate look. Same SVG, same opacity, same blend, same view-transition-
+   name so the existing transition pseudo-rules below still pin it correctly
+   across navigations. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.12;
+  mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20256%20256%27%3E%0A%20%20%20%20%3Cfilter%20id%3D%27n%27%3E%0A%20%20%20%20%20%20%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.85%27%20numOctaves%3D%272%27%20stitchTiles%3D%27stitch%27%2F%3E%0A%20%20%20%20%20%20%3CfeColorMatrix%20values%3D%270%200%200%200%200.85%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%200%200%200%200%200.78%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%200%200%200%200%200.65%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%200%200%200%200.7%200%27%2F%3E%0A%20%20%20%20%3C%2Ffilter%3E%0A%20%20%20%20%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url%28%23n%29%27%20opacity%3D%271%27%2F%3E%0A%20%20%3C%2Fsvg%3E");
+  background-repeat: repeat;
+  background-size: 192px 192px;
+  view-transition-name: forge-grain;
+}
 
 /* ─── /diag-vt diagnostic overrides ─────────────────────────────────────────
    Body classes toggled by app/diag-vt/page.jsx so the diag route can isolate
@@ -44,8 +60,8 @@ input, button, textarea, select { font: inherit; }
    These only fire when the diag page is active; they have no effect on the
    rest of the app. See the page-level comment for the test methodology. */
 
-/* Hide the grain overlay entirely when ?grain is NOT set. */
-body.forge-diag-no-grain > div[aria-hidden="true"] {
+/* Hide the grain layer entirely when ?grain is NOT set. */
+body.forge-diag-no-grain::before {
   display: none !important;
 }
 
