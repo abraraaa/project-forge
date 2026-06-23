@@ -29,15 +29,16 @@ export const metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    // No statusBarStyle. black-translucent has been deprecated by WebKit
-    // for multiple releases — it can't semantically work with dark mode
-    // or across different webpage styles, AND Home Screen web apps don't
-    // support drawing arbitrary content below the status bar regardless
-    // of what value is set (confirmed by a WebKit dev response, 2026-06).
-    // Without this key, the status bar automatically renders in the same
-    // colour as the webpage (matches our theme-color: #131110, which is
-    // also our body bg). The body::before backdrop-filter recipe we used
-    // to bolt on was based on a misread of what PWAs allow; removed.
+    // statusBarStyle: "default" — NOT black-translucent. On iOS 26+,
+    // black-translucent triggers a regression: a shortened viewport that
+    // leaves an unreachable strip at the bottom of the screen. "default"
+    // is the reliable choice for iOS 26/27 — it bounds the web view to the
+    // physical screen correctly. Combined with viewport-fit: cover (see the
+    // viewport export) and theme-color: #131110, the status-bar zone reads
+    // as part of the app rather than a detached black band.
+    // NOTE: iOS reads this tag only at install time — remove and re-add the
+    // app to the Home Screen to see the change.
+    statusBarStyle: "default",
     title: "Forge",
   },
   icons: {
@@ -55,15 +56,15 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  // No viewport-fit: cover. The recipe it enabled (env(safe-area-inset-*)
-  // returning real device values + content extending edge-to-edge into
-  // the safe-area zone) was solving for a backdrop-filter status-bar
-  // recipe we've since removed (per WebKit dev guidance: iOS PWAs don't
-  // support drawing arbitrary content behind the status bar). With cover
-  // gone, iOS automatically reserves the system status-bar zone — content
-  // sits naturally below it without per-screen env() math compensation.
-  // Manifest pins orientation to portrait so the landscape edge-handling
-  // argument for keeping cover doesn't apply.
+  // viewport-fit: cover is REQUIRED for the immersive status-bar look.
+  // Without it, iOS paints the safe-area zones (top status bar + bottom
+  // home-indicator "chin") with theme-color as flat opaque bands, and —
+  // critically — every env(safe-area-inset-*) value in the app resolves
+  // to 0. The app already relies on those insets (toast top offsets,
+  // bottom-sheet home-indicator padding); cover is what makes them work.
+  // With cover, the page background extends edge-to-edge so the status
+  // bar reads as part of the app instead of a detached black band.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }) {
