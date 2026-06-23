@@ -94,6 +94,26 @@ indicator updates without separate plumbing.
   common "user backgrounded after viewing data" case, 2 ops on the
   uncommon "user mutated then immediately backgrounded" case.
 
+### Cold-start recovery stays independent
+
+`flushDeferred` is the WARM-state save-point path. The COLD-start
+recovery path remains `backgroundSync` checking `merged.localHadMore`
+against the merge rules and pushing if local has unflushed data the
+remote doesn't. Those are independent mechanisms by design:
+
+- `backgroundSync.localHadMore` is computed from the actual data diff
+  against the remote snapshot, not from any in-memory flag.
+- The deferred dirty flag is freshly initialised on every cold start
+  (in-memory map, no localStorage persistence). It carries no signal
+  from previous sessions and never could.
+- Therefore a session that died mid-mutation re-pushes on next open via
+  `backgroundSync`, untouched by anything in the new deferred path.
+
+Implementation discipline: profile activation must run `backgroundSync`
+before any user-driven `pushDeferred` can fire. The current activation
+order already guarantees this — flag for the implementation PR's
+review checklist anyway.
+
 ## Cost shape (target)
 
 **Workout (class-2 heavy):**
@@ -155,9 +175,9 @@ Going with yes unless Grok flags a case I'm missing.
 
 - `lib/storage.js`
   - Remove `pushUserStateSnapshot`.
-  - Add `pushNow`, `pushDeferred`, `flushDeferred`, internal dirty-flag map.
+  - Add `pushNow`, `pushDeferred`, `flushDeferred`, and a `deferredPushProfiles` map (profile → boolean dirty flag, in-memory, per-module).
   - Change `_handleVisibilityChange` + `_handlePageHide` to call `flushDeferred`.
-  - Strip rot comments in the sync-related section (separate logical change in same commit).
+  - Strip rot comments in the sync-related section. Call this out explicitly in the PR description so reviewers don't try to read the cleanup as part of the architectural change.
 - `components/ForgeApp.jsx`
   - Replace every `pushUserStateSnapshot()` call with `pushNow(activeProfile)` or `pushDeferred(activeProfile)` per the routing table.
   - Add **Sync now** row on Profile screen.
