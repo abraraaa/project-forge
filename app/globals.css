@@ -17,21 +17,15 @@ body {
   font-family: var(--font-dm-sans), sans-serif;
 }
 
-/* Installed-PWA status-bar clearance. With viewport-fit: cover (set in
-   app/layout.jsx) the web view now extends UNDER the status bar, so the
-   top content needs to be pushed clear of it. We do this only in
-   standalone mode so the in-browser layout is untouched.
-
-   The max() guards against a known WebKit regression (iOS 26.1, bug
-   #301994) where env(safe-area-inset-top) can return 0 in standalone
-   mode — the 59px floor keeps content below the status bar even when the
-   inset misreports. On devices that report a correct inset, that real
-   value (which is >= 59px on notch/Dynamic Island hardware) wins. */
-@supports (-webkit-touch-callout: none) {
-  @media (display-mode: standalone) {
-    body {
-      padding-top: max(env(safe-area-inset-top, 0px), 59px);
-    }
+/* Installed-PWA status-bar clearance. With viewport-fit: cover +
+   black-translucent (app/layout.jsx) the page draws UNDER a transparent
+   status bar, so the top content needs exactly the safe-area inset of
+   padding to clear the clock — no more. Standalone-only so the in-browser
+   layout is untouched. NOTE: an earlier version added a 59px floor here;
+   that stacked a second dark slab on top of the system bar and is removed. */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
   }
 }
 input, button, textarea, select { font: inherit; }
