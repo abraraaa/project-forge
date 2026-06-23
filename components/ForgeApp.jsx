@@ -3214,7 +3214,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   })[viewDay.type] || { top: -120, right: -80, width: 360, height: 320 };
 
   return (
-    <div style={{minHeight:"100vh",paddingBottom:48,position:"relative",overflow:"hidden"}}>
+    <div style={{minHeight:"100vh",paddingBottom:"max(env(safe-area-inset-bottom), 16px)",position:"relative",overflow:"hidden"}}>
       {/* Primary ambient glow — top-centre, day-typed. The dominant signal.
           top:0 (was -180) keeps the gradient's bright centre at content
           y≈250 instead of y≈70, which leaves the topmost ~80px of content
@@ -4236,7 +4236,7 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
   const weightCaption = WEIGHT_CAPTIONS[loadType] || null;
 
   return (
-    <div style={{minHeight:"100vh",position:"relative",overflow:"hidden",paddingBottom:40}}>
+    <div style={{minHeight:"100vh",position:"relative",overflow:"hidden",paddingBottom:"max(env(safe-area-inset-bottom), 16px)"}}>
       <div style={{position:"absolute",top:-80,right:-80,width:340,height:320,background:`radial-gradient(circle,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       <div style={{height:1,background:T.bg3}}>
         <div style={{height:"100%",width:`${progress}%`,background:T.coral,transition:`width 600ms ${T.ease}`}}/>
