@@ -142,12 +142,29 @@ export default function DiagSync() {
     setBusy("push");
     try {
       const local = getLocalProfile(profile);
-      const ok = await blobPush(profile, local);
-      setLastAction({
-        type: "push",
-        result: ok ? `OK — meta:${JSON.stringify(local.meta || {}).length}b, history:${(local.history || []).length} records` : "FAILED — queued for retry",
-        at: Date.now(),
+      // Direct fetch (not blobPush) so we can read the server's actual
+      // error body on non-2xx. blobPush wraps failures as "Push failed: 500"
+      // and discards the JSON body — useful for the sync state machine,
+      // useless for diagnosing what the route threw.
+      const res = await fetch("/api/sync", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile, data: local }),
       });
+      const bodyText = await res.text();
+      if (res.ok) {
+        setLastAction({
+          type: "push",
+          result: `OK ${res.status} — meta:${JSON.stringify(local.meta || {}).length}b, history:${(local.history || []).length} records · server: ${bodyText.slice(0, 300)}`,
+          at: Date.now(),
+        });
+      } else {
+        setLastAction({
+          type: "push",
+          result: `HTTP ${res.status} — ${bodyText.slice(0, 400)}`,
+          at: Date.now(),
+        });
+      }
     } catch (e) {
       setLastAction({ type: "push", result: `ERR — ${e?.message || e}`, at: Date.now() });
     } finally {

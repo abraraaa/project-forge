@@ -251,7 +251,7 @@ export async function PUT(request) {
       await put(
         metaPath(profile),
         JSON.stringify({ ...data.meta, syncedAt: new Date().toISOString() }),
-        { access: "private", contentType: "application/json", allowOverwrite: true },
+        { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false },
       );
       results.meta = true;
     }
@@ -277,7 +277,7 @@ export async function PUT(request) {
       await put(
         historyPath(profile),
         JSON.stringify(merged),
-        { access: "private", contentType: "application/json", allowOverwrite: true },
+        { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false },
       );
       results.history = { count: merged.length };
     }
@@ -346,7 +346,7 @@ export async function POST(request) {
         reps: {},
         streak: { count: 0, lastDate: null },
       }),
-      { access: "private", contentType: "application/json" },
+      { access: "private", contentType: "application/json", addRandomSuffix: false },
     );
 
     return NextResponse.json({ ok: true, claimed: true });
