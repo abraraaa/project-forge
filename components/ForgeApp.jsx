@@ -5614,7 +5614,12 @@ function Fade({children,d=0}){const s=useFadeIn(d);return <div style={s}>{childr
 // faint lift). Warm-black tints keep it inside the Portra palette — no cool
 // Material-grey elevation. Callers can override via style.boxShadow.
 const CARD_SHADOW = "inset 0 1px 0 rgba(237,235,231,0.04), 0 1px 2px rgba(10,9,8,0.28), 0 10px 28px -16px rgba(10,9,8,0.5)";
-function Card({children,style={}}){return <div style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,boxShadow:CARD_SHADOW,...style}}>{children}</div>;}
+// Translucent T.bg2 (#23201B → rgba 0.72) over a backdrop-blur so the body
+// grain underneath shows through the card surface softened. Without the
+// blur the grain reads through as crisp noise on the card; with it the
+// card becomes a frosted plane over the textured substrate. The edge of
+// the card no longer reads as a hard cut into the grain field.
+function Card({children,style={}}){return <div style={{background:"rgba(35,32,27,0.72)",backdropFilter:"blur(14px) saturate(120%)",WebkitBackdropFilter:"blur(14px) saturate(120%)",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,boxShadow:CARD_SHADOW,...style}}>{children}</div>;}
 function Tag({children,color,style={}}){return <span style={{display:"inline-flex",alignItems:"center",fontSize:10,fontWeight:500,color,background:`${color}12`,border:`1px solid ${color}33`,borderRadius:T.r.pill,padding:"4px 12px",letterSpacing:"0.08em",...style}}>{children}</span>;}
 function StreakBadge({rhythm}){
   const completed = rhythm?.completed || 0;
