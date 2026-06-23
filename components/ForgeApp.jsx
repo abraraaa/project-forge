@@ -346,13 +346,25 @@ export default function ForgeApp(){
   // Reduced-motion users: prefers-reduced-motion is honoured at the CSS
   // layer (animation-duration → 0.01ms) so the swap still happens, instantly.
   const setScreen = useCallback((next) => {
+    // Reset scroll on forward navigation only. Back-to-home preserves
+    // context — the user typically scrolled around home, went somewhere,
+    // and expects to return to where they were. RAF the scroll so it
+    // commits in the same paint as the View Transition update; an
+    // unscheduled call lands a frame later and reads as a visible jump.
+    const isBack = next === "home";
+    const resetScroll = () => { if (!isBack) window.scrollTo({ top: 0, behavior: "instant" }); };
+
     if (typeof document === "undefined" || !document.startViewTransition) {
       setScreenRaw(next);
+      resetScroll();
       return;
     }
     document.startViewTransition({
-      update: () => flushSync(() => setScreenRaw(next)),
-      types: [next === "home" ? "back" : "forward"],
+      update: () => {
+        flushSync(() => setScreenRaw(next));
+        requestAnimationFrame(resetScroll);
+      },
+      types: [isBack ? "back" : "forward"],
     });
   }, []);
   const [activeSessionIdx,setActiveSessionIdx]=useState(0);
