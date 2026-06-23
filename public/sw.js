@@ -18,7 +18,7 @@
 // Bump SW_VERSION on every meaningful change so the activate handler cleans
 // up older caches. Old caches are deleted by prefix match on every activate.
 
-const SW_VERSION  = "0.3.0-liquid-glass-icons";
+const SW_VERSION  = "0.4.0-day-repair-cache-bust";
 const STATIC_CACHE = `forge-static-${SW_VERSION}`;
 const HTML_CACHE   = `forge-html-${SW_VERSION}`;
 

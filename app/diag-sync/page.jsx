@@ -244,6 +244,31 @@ export default function DiagSync() {
     .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
     .slice(0, 20);
 
+  // Nuke the service worker + every cache, then reload. Equivalent to the
+  // ?nosw=1 escape hatch in ServiceWorkerRegistrar but reachable from
+  // inside the PWA (which has no address bar — typing ?nosw=1 isn't an
+  // option). Use when a deploy didn't seem to land: the new sw.js is on
+  // the server but the old one is still controlling this client.
+  const onResetCache = useCallback(async () => {
+    setBusy("reset");
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if (typeof caches !== "undefined") {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      setLastAction({ type: "reset", result: "OK — SW unregistered + caches cleared. Reloading…", at: Date.now() });
+      // Small delay so the user reads the confirmation, then hard reload.
+      setTimeout(() => window.location.reload(), 600);
+    } catch (e) {
+      setLastAction({ type: "reset", result: `ERR — ${e?.message || e}`, at: Date.now() });
+      setBusy(null);
+    }
+  }, []);
+
   if (!profile) {
     return (
       <div style={{ padding: 24, color: "#EDEBE7", fontFamily: "system-ui" }}>
@@ -300,8 +325,11 @@ export default function DiagSync() {
           <Button onClick={onFlushQueue} busy={busy === "flush"}>Flush pending queue</Button>
           <Button onClick={onFoldLegacy} busy={busy === "fold"} variant="danger">Re-fold legacy</Button>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <Button onClick={onForceRepair} busy={busy === "repair"} variant="danger">Force-repair Day entries</Button>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button onClick={onResetCache} busy={busy === "reset"} variant="danger">Reset cache &amp; reload</Button>
         </div>
       </Section>
 
