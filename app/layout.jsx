@@ -29,15 +29,15 @@ export const metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    // No statusBarStyle. black-translucent has been deprecated by WebKit
-    // for multiple releases — it can't semantically work with dark mode
-    // or across different webpage styles, AND Home Screen web apps don't
-    // support drawing arbitrary content below the status bar regardless
-    // of what value is set (confirmed by a WebKit dev response, 2026-06).
-    // Without this key, the status bar automatically renders in the same
-    // colour as the webpage (matches our theme-color: #131110, which is
-    // also our body bg). The body::before backdrop-filter recipe we used
-    // to bolt on was based on a misread of what PWAs allow; removed.
+    // black-translucent is the ONLY value that makes the status bar
+    // transparent so the page draws underneath it — i.e. the immersive
+    // "blend" we want. "default" and "black" both render an OPAQUE system
+    // bar that content cannot extend under, which reads as a detached band.
+    // Pair with viewport-fit: cover (viewport export) + an env(safe-area-
+    // inset-top) padding on the top content so it isn't hidden under the
+    // clock. NOTE: iOS reads this only at install time — you must remove and
+    // re-add the Home Screen app to see any change here.
+    statusBarStyle: "black-translucent",
     title: "Forge",
   },
   icons: {
@@ -55,15 +55,15 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  // No viewport-fit: cover. The recipe it enabled (env(safe-area-inset-*)
-  // returning real device values + content extending edge-to-edge into
-  // the safe-area zone) was solving for a backdrop-filter status-bar
-  // recipe we've since removed (per WebKit dev guidance: iOS PWAs don't
-  // support drawing arbitrary content behind the status bar). With cover
-  // gone, iOS automatically reserves the system status-bar zone — content
-  // sits naturally below it without per-screen env() math compensation.
-  // Manifest pins orientation to portrait so the landscape edge-handling
-  // argument for keeping cover doesn't apply.
+  // viewport-fit: cover is REQUIRED for the immersive status-bar look.
+  // Without it, iOS paints the safe-area zones (top status bar + bottom
+  // home-indicator "chin") with theme-color as flat opaque bands, and —
+  // critically — every env(safe-area-inset-*) value in the app resolves
+  // to 0. The app already relies on those insets (toast top offsets,
+  // bottom-sheet home-indicator padding); cover is what makes them work.
+  // With cover, the page background extends edge-to-edge so the status
+  // bar reads as part of the app instead of a detached black band.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }) {
@@ -96,13 +96,12 @@ export default function RootLayout({ children }) {
             it composites on top via mix-blend overlay; pointer-events none
             and zIndex 1 keep it strictly cosmetic. */}
         <GrainOverlay />
-        {/* Status-bar handling: NO fixed overlay element. The blur is
-            applied via body::before in globals.css, with its height
-            pinned to env(safe-area-inset-top) so it occupies ONLY the
-            system status-bar zone — it can never mask content scrolling
-            below it. This is the documented iOS PWA recipe; the prior
-            fixed-pixel fade was a workaround for missing viewport-fit
-            and is now removed. */}
+        {/* Status-bar handling lives entirely in CSS now: viewport-fit:
+            cover + statusBarStyle: black-translucent let the page background
+            (#131110) flow under a transparent system bar, and a standalone-
+            only env(safe-area-inset-top) padding on body keeps content clear
+            of the clock. There is NO body::before overlay element (an earlier
+            comment here claimed there was — it was stale). */}
         <Analytics />
         <SpeedInsights />
       </body>
