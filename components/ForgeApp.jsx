@@ -17,7 +17,7 @@ import {
   LS, P, PB, W, F, H, BW, PN, Days, bumpStreak,
   computeRhythm, detectRecoveryPattern,
   blobPush, flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
-  enableAutoSync, disableAutoSync,
+  enableAutoSync, disableAutoSync, pushNow, pushDeferred,
   checkProfileExists, claimProfile, blobDelete,
   applyRpe, weeksSince, dateOfWeekdayIdxInCurrentWeek,
   newDraftLog, logSet, finaliseDraft, scaleForReadiness, D, TS,
@@ -300,6 +300,49 @@ function SyncStatusCard({ profile }) {
   );
 }
 
+// Sync now — manual flush of the local snapshot to blob. The auto-sync
+// machinery (per-mutation pushNow, deferred-flush on lifecycle events) is
+// the normal path; this row exists as power-user reassurance and as an
+// escape hatch when observability looks stale. Subscribes to SyncStatus
+// so the subtitle reflects the same state as the SyncStatusCard above.
+function SyncNowRow({ profile }) {
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState(SyncStatus.get());
+  // `now` is snapshotted on mount + whenever sync status changes — same
+  // pattern as SyncStatusCard. Keeps render pure (no Date.now read mid-
+  // render, which the react-hooks/purity rule rightly flags) and the
+  // label still updates when it meaningfully needs to (a push completed).
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => SyncStatus.subscribe(s => { setStatus(s); setNow(Date.now()); }), []);
+
+  const handleClick = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await pushNow(profile); } finally {
+      setBusy(false);
+      setNow(Date.now());
+    }
+  };
+
+  const subtitle = busy
+    ? "Syncing now…"
+    : status.lastSync
+      ? `Last sync ${Math.max(1, Math.round((now - status.lastSync) / 1000))}s ago`
+      : "Never synced";
+
+  return (
+    <div onClick={handleClick} role="button" aria-label="Sync now"
+      style={{ marginTop: 12, padding: "14px 18px", background: T.bg2, border: `1px solid ${T.bg3}`, borderRadius: T.r.lg, cursor: busy ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: `all 180ms ${T.ease}`, opacity: busy ? 0.7 : 1 }}>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: T.text1 }}>Sync now</div>
+        <div style={{ fontSize: 11, color: T.text3, marginTop: 2 }}>{subtitle}</div>
+      </div>
+      <span style={{ fontSize: 14, color: T.text3 }}>{busy ? "…" : "↻"}</span>
+    </div>
+  );
+}
+
 // ─── Root ──────────────────────────────────────────────────────────────────────
 export default function ForgeApp(){
   const [mounted,setMounted]=useState(false);
@@ -524,28 +567,6 @@ export default function ForgeApp(){
   // without a reload. Falls back to the default WEEK when nothing is stored.
   const [userWeek, setUserWeek] = useState(() => W.get() || WEEK);
 
-  // Push the current local user-state to blob. Called whenever a user-
-  // facing customisation changes (schedule edit, focus pick, day tick) so
-  // a different device — or a fresh install of this one — rehydrates with
-  // the latest. Without this every customisation lived only in localStorage
-  // and reinstalls reverted to defaults despite history coming back fine.
-  const pushUserStateSnapshot = useCallback(() => {
-    if (!activeProfile) return;
-    blobPush(activeProfile, {
-      meta: {
-        weights: P.getWeights(activeProfile),
-        reps: P.getReps(activeProfile),
-        streak: P.getStreak(activeProfile),
-        programmeBlock: PB.get(),
-        userWeek: W.getHistory(),
-        userFocus: F.get(activeProfile),
-        days: Days.getAll(activeProfile),
-        bodyweight: BW.getRaw(activeProfile),
-        trainingState: TS.get(activeProfile),
-      },
-      history: H.get(activeProfile),
-    });
-  }, [activeProfile]);
   const strengthDaySessions = useMemo(() => deriveStrengthDaySessions(userWeek), [userWeek]);
   // Single source of truth for catch-up state. dayDone is date-keyed
   // (`{ "2026-06-13": true, ... }`) — strength session finalises write it,
@@ -563,13 +584,13 @@ export default function ForgeApp(){
     W.save(newWeek);
     setUserWeek(W.get() || WEEK); // re-read so state mirrors the persisted/normalised shape
     setWeekEditorOpen(false);
-    pushUserStateSnapshot();
+    pushNow(activeProfile);
   };
   const handleResetWeek = () => {
     W.reset();
     setUserWeek(WEEK);
     setWeekEditorOpen(false);
-    pushUserStateSnapshot();
+    pushNow(activeProfile);
   };
 
   // Seed on profile change: instant load from localStorage, background sync from blob
@@ -654,7 +675,7 @@ export default function ForgeApp(){
     // The third arg is the "push current snapshot" callback — fires on
     // visibilitychange=hidden and pagehide so a backgrounding event is a
     // durability checkpoint, not a data-loss window.
-    enableAutoSync(activeProfile, onSyncUpdate, pushUserStateSnapshot);
+    enableAutoSync(activeProfile, onSyncUpdate);
 
     // Check for an interrupted session — surfaces as a resume card on home
     const interrupted = D.load(activeProfile);
@@ -700,10 +721,6 @@ export default function ForgeApp(){
       cancelled = true;
       disableAutoSync();
     };
-    // pushUserStateSnapshot is itself memoised on [activeProfile] — listing
-    // it in deps would re-run this effect identically. Suppressed for the
-    // same reason the catch-up rebuild suppresses below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   },[activeProfile]);
 
   // Rest timer tick
@@ -790,8 +807,8 @@ export default function ForgeApp(){
     BW.set(activeProfile, kg);
     setBodyweightState(kg);
     setBwIsStale(false);
-    pushUserStateSnapshot();
-  }, [activeProfile, pushUserStateSnapshot]);
+    pushNow(activeProfile);
+  }, [activeProfile]);
 
   // Reusable sync update handler — called when backgroundSync finds newer blob data.
   // Silently updates React state so the UI reflects the freshest data.
@@ -1387,8 +1404,8 @@ export default function ForgeApp(){
       const newStreak = bumpStreak(activeProfile);
       setStreak(newStreak);
     }
-    pushUserStateSnapshot();
-  },[activeProfile, pushUserStateSnapshot]);
+    pushNow(activeProfile);
+  },[activeProfile]);
 
   // Mark today's optional cardio bonus complete. Separate store from weekDone;
   // deliberately does NOT bump the streak — bonuses are extras, not adherence.
@@ -1422,8 +1439,8 @@ export default function ForgeApp(){
     });
     // Refresh React state from the unified Day projection.
     setBonusDone(Days.projectCurrentWeek(activeProfile).bonus);
-    pushUserStateSnapshot();
-  },[activeProfile, pushUserStateSnapshot]);
+    pushNow(activeProfile);
+  },[activeProfile]);
 
   // Save the user's training focus + re-rotate accessories IMMEDIATELY with the
   // new bias. Keeps block number and startDate (the change is a re-pick, not
@@ -1445,7 +1462,7 @@ export default function ForgeApp(){
     const stimulusDelta = computeRotationStimulusDelta(oldConfig, newConfig);
     setRotationSummary({ blockNumber: programmeBlock.number, changes, stimulusDelta });
     setFocusPickerOpen(false);
-    pushUserStateSnapshot();
+    pushNow(activeProfile);
   };
 
   if(!mounted) return null;
@@ -1546,7 +1563,7 @@ const sProps={
     // session-complete fires later with a stale closure over programmeBlock
     // (the closure captures `programmeBlock` from the render where the user
     // rotated; pushing here pins the latest persisted state regardless).
-    pushUserStateSnapshot();
+    pushNow(activeProfile);
     if (showSummary) {
       setRotationSummary({
         blockNumber: next.number,
@@ -1582,7 +1599,7 @@ const sProps={
   const handleResetProgramme = () => {
     const next = PB.reset();
     setProgrammeBlock(next);
-    pushUserStateSnapshot();
+    pushNow(activeProfile);
   };
 
   const beginSession = () => {
@@ -1692,7 +1709,7 @@ const sProps={
       TS.replaceState(activeProfile, newState);
       setActiveDeload(newState.mesocycle.activeDeload);
       setDeloadOffer(null);
-      pushUserStateSnapshot();
+      pushNow(activeProfile);
     } catch (e) {
       console.error("[forge:deload-accept]", e);
     }
@@ -1707,7 +1724,7 @@ const sProps={
       const newState = dismissDeloadOffer(ts);
       TS.replaceState(activeProfile, newState);
       setDeloadOffer(null);
-      pushUserStateSnapshot();
+      pushNow(activeProfile);
     } catch (e) {
       console.error("[forge:deload-dismiss]", e);
     }
@@ -2858,6 +2875,12 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
             </div>
             <span style={{fontSize:14,color:T.text3}}>↗</span>
           </a>
+        </Fade>
+      )}
+
+      {current && (
+        <Fade d={255}>
+          <SyncNowRow profile={current} />
         </Fade>
       )}
 

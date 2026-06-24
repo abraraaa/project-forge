@@ -1,25 +1,22 @@
 // tests/forge-app-mutation-coverage.test.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Mutation-coverage audit. Asserts that every handler in ForgeApp.jsx that
-// mutates a persisted store ALSO pushes the change to blob via either
-// pushUserStateSnapshot() (the standard on-mutation save point) or
-// blobPush() (session-finalise paths that build their own payload).
+// Mutation-coverage audit. Asserts every handler in ForgeApp.jsx that mutates
+// a persisted store routes through one of the push helpers: pushNow() for
+// class-1 (immediate), pushDeferred() for class-2 (coalesced), or blobPush()
+// directly (session-finalise paths that build their own payload). Routing
+// taxonomy lives in docs/push-refactor.md.
 //
-// What the durability contract test in storage.test.js asserts: the SHAPE
-// of the payload — every SYNCED field is read by getLocalProfile, written
-// by persistToLocal, has a merge rule, and appears in pushUserStateSnapshot.
-//
-// What THIS test adds: the wiring at the handler level. Even with a perfect
-// payload shape, a handler that mutates a store without calling the push
-// helper strands the change locally until the next save point fires. That
-// gap was real — found four cases in ForgeApp.jsx via this audit
-// (updateBodyweight, handleResetProgramme, handleAcceptDeload,
-// handleDismissDeload), all fixed alongside this test.
+// What the durability contract test in storage.test.js asserts: the SHAPE of
+// the payload — every SYNCED field is read by getLocalProfile, written by
+// persistToLocal, and has a merge rule. THIS test asserts the WIRING at the
+// handler level. A handler that mutates a store without routing to a push
+// helper strands the change locally until lifecycle flush — durable in
+// theory, racy in practice.
 //
 // Approach: parse ForgeApp.jsx as text, find every line that calls a
-// persistence-mutating primitive, locate the enclosing function body,
-// assert the body contains pushUserStateSnapshot() OR blobPush() OR is
-// in the EXEMPT list (sync-side receivers + push helper itself).
+// persistence-mutating primitive, locate the enclosing function body, assert
+// the body contains pushNow(), pushDeferred(), or blobPush() — or is in the
+// EXEMPT list (sync-side receivers).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
@@ -52,9 +49,6 @@ const MUTATING_CALLS = [
 // Function names that are EXEMPT from the push requirement, with reason.
 // Adding to this list requires a justification in the comment.
 const EXEMPT_FUNCTIONS = {
-  // pushUserStateSnapshot IS the push — it contains blobPush directly.
-  // Self-recursive if we required it to call itself.
-  pushUserStateSnapshot: "Is the push helper itself; contains blobPush directly.",
   // handleSyncUpdate is the receive side — meta arrives from blob and is
   // landed into local. Pushing it back would create a loop.
   handleSyncUpdate: "Receive-side; lands incoming blob data into local stores. Pushing would loop.",
@@ -192,14 +186,16 @@ describe("ForgeApp.jsx mutation coverage — every persisted mutation pushes", (
       const endIdx = findFunctionEnd(SOURCE, charIdx);
       const body = SOURCE.slice(charIdx, endIdx + 1);
 
-      const hasSnapshot = /pushUserStateSnapshot\s*\(/.test(body);
+      const hasPushNow = /pushNow\s*\(/.test(body);
+      const hasPushDeferred = /pushDeferred\s*\(/.test(body);
       const hasDirectPush = /blobPush\s*\(\s*activeProfile/.test(body);
-      if (!hasSnapshot && !hasDirectPush) {
+      if (!hasPushNow && !hasPushDeferred && !hasDirectPush) {
         failures.push(
           `${decl.name} (around line ${site.lineIdx + 1}) mutates persisted state ` +
-          `(${site.pattern}) but never calls pushUserStateSnapshot() or blobPush(). ` +
-          `Add the push, or — if intentionally not pushing — add ${decl.name} to ` +
-          `EXEMPT_FUNCTIONS in this test with a reason.`,
+          `(${site.pattern}) but never calls pushNow(), pushDeferred(), or blobPush(). ` +
+          `Pick a class (see docs/push-refactor.md) and add the call, or — if ` +
+          `intentionally not pushing — add ${decl.name} to EXEMPT_FUNCTIONS ` +
+          `with a reason.`,
         );
       }
     }

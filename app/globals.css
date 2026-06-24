@@ -1,4 +1,13 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* color-scheme: dark tells the UA we render dark-only. Without it iOS
+   Safari falls back to light-mode defaults for chrome it paints itself
+   — toolbar surround, overscroll/rubber-band edges, scrollbars, form
+   controls. That's where Safari's "chin" band comes from on this site
+   when the body bg is near-black: the chrome was mid-grey/light by
+   default and read as a mismatched seam against #131110 content.
+   Declaring dark gets the same UA chrome to paint dark, so the seam
+   disappears. */
+:root { color-scheme: dark; }
 html, body {
   /* 100vh, not 100%. 100% breaks viewport-fit: cover on iOS PWAs (Safari
      silently falls back to default layout); 100dvh reports wrong values
