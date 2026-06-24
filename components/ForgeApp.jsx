@@ -314,7 +314,15 @@ function SyncNowRow({ profile }) {
   // label still updates when it meaningfully needs to (a push completed).
   const [now, setNow] = useState(() => Date.now());
 
-  useEffect(() => SyncStatus.subscribe(s => { setStatus(s); setNow(Date.now()); }), []);
+  useEffect(() => {
+    const unsub = SyncStatus.subscribe(s => { setStatus(s); setNow(Date.now()); });
+    // Per-second tick because the subtitle's unit is seconds — without
+    // this the label freezes between sync events. Lint allows Date.now()
+    // inside an interval callback; the render itself stays pure (reads
+    // `now` from state, not the clock).
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => { unsub(); clearInterval(tick); };
+  }, []);
 
   const handleClick = async () => {
     if (busy) return;
