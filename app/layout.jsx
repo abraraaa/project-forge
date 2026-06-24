@@ -92,9 +92,11 @@ export default function RootLayout({ children }) {
         <ErrorBoundary>
           {children}
         </ErrorBoundary>
-        {/* Kodak Portra-flavour grain texture. Mounted last in the body so
-            it composites on top via mix-blend overlay; pointer-events none
-            and zIndex 1 keep it strictly cosmetic. */}
+        {/* Kodak Portra-flavour grain texture. It is a zIndex -1 FIELD that
+            sits BEHIND the app (see GrainOverlay.jsx) — cards paint on top of
+            it, the status-bar zone stays plain. pointer-events none keeps it
+            cosmetic. Mount order in the body no longer matters for stacking
+            since z-index drives it. */}
         <GrainOverlay />
         {/* Status-bar handling lives entirely in CSS now: viewport-fit:
             cover + statusBarStyle: black-translucent let the page background

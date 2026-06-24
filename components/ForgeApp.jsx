@@ -2043,7 +2043,7 @@ const sProps={
 
   if (showHydrating) {
     return (
-      <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px",position:"relative",overflow:"hidden"}}>
+      <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:"30%",left:"50%",transform:"translateX(-50%)",width:400,height:300,background:`radial-gradient(ellipse,${T.sage}1A 0%,transparent 65%)`,pointerEvents:"none"}}/>
         <div style={{position:"relative",textAlign:"center"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:T.sage,margin:"0 auto 24px",animation:`pulse 1400ms ${T.ease} infinite`}}/>
@@ -2062,7 +2062,7 @@ const sProps={
   }
 
   return (
-    <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
+    <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
       {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
@@ -2239,7 +2239,7 @@ function OnboardingScreen({ onContinue }) {
 
   return (
     <div style={{
-      background: T.bg0, minHeight: "100vh", maxWidth: 430, margin: "0 auto",
+      background: "transparent", minHeight: "100vh", maxWidth: 430, margin: "0 auto",
       fontFamily: T.sans, color: T.text1, WebkitFontSmoothing: "antialiased",
       padding: "72px 24px 48px", position: "relative", overflow: "hidden",
       // Centre the editorial column when the viewport is taller than the
@@ -2591,7 +2591,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 
     return (
       <div style={{
-        background: T.bg0, minHeight: "100vh", maxWidth: 430, margin: "0 auto",
+        background: "transparent", minHeight: "100vh", maxWidth: 430, margin: "0 auto",
         fontFamily: T.sans, color: T.text1, WebkitFontSmoothing: "antialiased",
         padding: "72px 24px 48px", position: "relative", overflow: "hidden",
         display: "flex", flexDirection: "column",
@@ -2671,7 +2671,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 
     return (
       <div style={{
-        background: T.bg0, minHeight: "100vh", maxWidth: 430, margin: "0 auto",
+        background: "transparent", minHeight: "100vh", maxWidth: 430, margin: "0 auto",
         fontFamily: T.sans, color: T.text1, WebkitFontSmoothing: "antialiased",
         padding: "72px 24px 48px", position: "relative", overflow: "hidden",
         display: "flex", flexDirection: "column",
@@ -2736,7 +2736,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
   }
 
   return (
-    <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"hidden"}}>
+    <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"hidden"}}>
       <div style={{position:"absolute",top:-160,left:"50%",transform:"translateX(-50%)",width:500,height:440,background:`radial-gradient(ellipse,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:12,color:T.text3,fontFamily:T.sans,marginBottom:32,display:"block"}}>← Back</button>}
       <Fade d={0}>
