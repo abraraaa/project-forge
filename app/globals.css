@@ -5,7 +5,6 @@ html, body {
      on PWA cold start until the device rotates. 100vh works correctly
      from launch on iOS 26.2+, the only target our baseline supports. */
   height: 100vh;
-  background: #131110;
   overflow-x: hidden;
   /* No overscroll-behavior on the root — the native iOS rubber-band on
      the page itself is part of the platform feel and users miss it when
