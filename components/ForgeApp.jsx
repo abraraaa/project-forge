@@ -308,18 +308,27 @@ function SyncStatusCard({ profile }) {
 function SyncNowRow({ profile }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(SyncStatus.get());
-  useEffect(() => SyncStatus.subscribe(setStatus), []);
+  // `now` is snapshotted on mount + whenever sync status changes — same
+  // pattern as SyncStatusCard. Keeps render pure (no Date.now read mid-
+  // render, which the react-hooks/purity rule rightly flags) and the
+  // label still updates when it meaningfully needs to (a push completed).
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => SyncStatus.subscribe(s => { setStatus(s); setNow(Date.now()); }), []);
 
   const handleClick = async () => {
     if (busy) return;
     setBusy(true);
-    try { await pushNow(profile); } finally { setBusy(false); }
+    try { await pushNow(profile); } finally {
+      setBusy(false);
+      setNow(Date.now());
+    }
   };
 
   const subtitle = busy
     ? "Syncing now…"
     : status.lastSync
-      ? `Last sync ${Math.max(1, Math.round((Date.now() - status.lastSync) / 1000))}s ago`
+      ? `Last sync ${Math.max(1, Math.round((now - status.lastSync) / 1000))}s ago`
       : "Never synced";
 
   return (
