@@ -14,6 +14,12 @@ html, body {
      on PWA cold start until the device rotates. 100vh works correctly
      from launch on iOS 26.2+, the only target our baseline supports. */
   height: 100vh;
+  /* Deep-dark canvas. Without this iOS Safari paints the chrome zones
+     (overscroll, toolbar surround, the bottom "chin") with the system
+     Canvas colour, which surfaces as a mismatched band against our
+     content. Desktop breakpoints below ADD a radial-gradient atop this
+     on body only — html keeps the flat colour for safe-area zones. */
+  background: #131110;
   overflow-x: hidden;
   /* No overscroll-behavior on the root — the native iOS rubber-band on
      the page itself is part of the platform feel and users miss it when
