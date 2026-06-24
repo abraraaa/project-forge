@@ -246,9 +246,7 @@ function SyncStatusCard({ profile }) {
     <div style={{
       marginTop: 16,
       padding: "14px 18px",
-      background: "rgba(35,32,27,0.72)",
-      backdropFilter: "blur(14px) saturate(120%)",
-      WebkitBackdropFilter: "blur(14px) saturate(120%)",
+      background: T.bg2,
       border: `1px solid ${T.bg3}`,
       borderRadius: T.r.lg,
       display: "flex",
@@ -348,25 +346,13 @@ export default function ForgeApp(){
   // Reduced-motion users: prefers-reduced-motion is honoured at the CSS
   // layer (animation-duration → 0.01ms) so the swap still happens, instantly.
   const setScreen = useCallback((next) => {
-    // Reset scroll on forward navigation only. Back-to-home preserves
-    // context — the user typically scrolled around home, went somewhere,
-    // and expects to return to where they were. RAF the scroll so it
-    // commits in the same paint as the View Transition update; an
-    // unscheduled call lands a frame later and reads as a visible jump.
-    const isBack = next === "home";
-    const resetScroll = () => { if (!isBack) window.scrollTo({ top: 0, behavior: "instant" }); };
-
     if (typeof document === "undefined" || !document.startViewTransition) {
       setScreenRaw(next);
-      resetScroll();
       return;
     }
     document.startViewTransition({
-      update: () => {
-        flushSync(() => setScreenRaw(next));
-        requestAnimationFrame(resetScroll);
-      },
-      types: [isBack ? "back" : "forward"],
+      update: () => flushSync(() => setScreenRaw(next)),
+      types: [next === "home" ? "back" : "forward"],
     });
   }, []);
   const [activeSessionIdx,setActiveSessionIdx]=useState(0);
@@ -2057,7 +2043,7 @@ const sProps={
 
   if (showHydrating) {
     return (
-      <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px",position:"relative",overflow:"hidden"}}>
+      <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:"30%",left:"50%",transform:"translateX(-50%)",width:400,height:300,background:`radial-gradient(ellipse,${T.sage}1A 0%,transparent 65%)`,pointerEvents:"none"}}/>
         <div style={{position:"relative",textAlign:"center"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:T.sage,margin:"0 auto 24px",animation:`pulse 1400ms ${T.ease} infinite`}}/>
@@ -2076,7 +2062,7 @@ const sProps={
   }
 
   return (
-    <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
+    <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
       {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
@@ -2253,7 +2239,7 @@ function OnboardingScreen({ onContinue }) {
 
   return (
     <div style={{
-      background: T.bg0, minHeight: "100vh", maxWidth: 430, margin: "0 auto",
+      background: "transparent", minHeight: "100vh", maxWidth: 430, margin: "0 auto",
       fontFamily: T.sans, color: T.text1, WebkitFontSmoothing: "antialiased",
       padding: "72px 24px 48px", position: "relative", overflow: "hidden",
       // Centre the editorial column when the viewport is taller than the
@@ -2605,7 +2591,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 
     return (
       <div style={{
-        background: T.bg0, minHeight: "100vh", maxWidth: 430, margin: "0 auto",
+        background: "transparent", minHeight: "100vh", maxWidth: 430, margin: "0 auto",
         fontFamily: T.sans, color: T.text1, WebkitFontSmoothing: "antialiased",
         padding: "72px 24px 48px", position: "relative", overflow: "hidden",
         display: "flex", flexDirection: "column",
@@ -2685,7 +2671,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 
     return (
       <div style={{
-        background: T.bg0, minHeight: "100vh", maxWidth: 430, margin: "0 auto",
+        background: "transparent", minHeight: "100vh", maxWidth: 430, margin: "0 auto",
         fontFamily: T.sans, color: T.text1, WebkitFontSmoothing: "antialiased",
         padding: "72px 24px 48px", position: "relative", overflow: "hidden",
         display: "flex", flexDirection: "column",
@@ -2750,7 +2736,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
   }
 
   return (
-    <div style={{background:T.bg0,minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"hidden"}}>
+    <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"hidden"}}>
       <div style={{position:"absolute",top:-160,left:"50%",transform:"translateX(-50%)",width:500,height:440,background:`radial-gradient(ellipse,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:12,color:T.text3,fontFamily:T.sans,marginBottom:32,display:"block"}}>← Back</button>}
       <Fade d={0}>
@@ -2838,7 +2824,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
 
       {/* Tone-of-voice card — sets expectations on data + PII */}
       <Fade d={180}>
-        <div style={{marginTop:36,padding:"18px 20px",background:"rgba(35,32,27,0.72)",backdropFilter:"blur(14px) saturate(120%)",WebkitBackdropFilter:"blur(14px) saturate(120%)",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg}}>
+        <div style={{marginTop:36,padding:"18px 20px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg}}>
           <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
             No email. No phone.
           </div>
@@ -2865,7 +2851,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
       {current && (
         <Fade d={250}>
           <a href="/diag-sync"
-            style={{marginTop:12,padding:"14px 18px",background:"rgba(35,32,27,0.72)",backdropFilter:"blur(14px) saturate(120%)",WebkitBackdropFilter:"blur(14px) saturate(120%)",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            style={{marginTop:12,padding:"14px 18px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Sync diagnostics</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>Local store counts + force pull/push</div>
@@ -2879,7 +2865,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
       {current && setBwEditOpen && (
         <Fade d={260}>
           <div onClick={()=>setBwEditOpen(true)}
-            style={{marginTop:16,padding:"14px 18px",background:"rgba(35,32,27,0.72)",backdropFilter:"blur(14px) saturate(120%)",WebkitBackdropFilter:"blur(14px) saturate(120%)",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
+            style={{marginTop:16,padding:"14px 18px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Bodyweight</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>
@@ -2903,7 +2889,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
       {current && onEditFocus && (
         <Fade d={270}>
           <div onClick={onEditFocus}
-            style={{marginTop:12,padding:"14px 18px",background:"rgba(35,32,27,0.72)",backdropFilter:"blur(14px) saturate(120%)",WebkitBackdropFilter:"blur(14px) saturate(120%)",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
+            style={{marginTop:12,padding:"14px 18px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Training focus</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>
@@ -2918,7 +2904,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
       {/* Passkey setup card — only show if WebAuthn is supported and profile doesn't have one */}
       {current && webAuthnSupported && !profileHasPasskey[current] && (
         <Fade d={280}>
-          <div style={{marginTop:16,padding:"18px 20px",background:"rgba(35,32,27,0.72)",backdropFilter:"blur(14px) saturate(120%)",WebkitBackdropFilter:"blur(14px) saturate(120%)",border:`1px solid ${T.sage}33`,borderRadius:T.r.lg}}>
+          <div style={{marginTop:16,padding:"18px 20px",background:T.bg2,border:`1px solid ${T.sage}33`,borderRadius:T.r.lg}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
               <div style={{flex:1}}>
                 <div style={{fontSize:11,fontWeight:500,color:T.sage,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
@@ -2962,7 +2948,7 @@ function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwE
       {/* Passkey enabled badge */}
       {current && profileHasPasskey[current] && (
         <Fade d={280}>
-          <div style={{marginTop:16,padding:"14px 18px",background:"rgba(35,32,27,0.72)",backdropFilter:"blur(14px) saturate(120%)",WebkitBackdropFilter:"blur(14px) saturate(120%)",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{marginTop:16,padding:"14px 18px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",gap:12}}>
             <div style={{width:8,height:8,borderRadius:"50%",background:T.sage}}/>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Passkey enabled</div>
@@ -3214,7 +3200,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   })[viewDay.type] || { top: -120, right: -80, width: 360, height: 320 };
 
   return (
-    <div style={{minHeight:"100vh",paddingBottom:"max(env(safe-area-inset-bottom), 16px)",position:"relative",overflow:"hidden"}}>
+    <div style={{minHeight:"100vh",paddingBottom:48,position:"relative",overflow:"hidden"}}>
       {/* Primary ambient glow — top-centre, day-typed. The dominant signal.
           top:0 (was -180) keeps the gradient's bright centre at content
           y≈250 instead of y≈70, which leaves the topmost ~80px of content
@@ -4236,7 +4222,7 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
   const weightCaption = WEIGHT_CAPTIONS[loadType] || null;
 
   return (
-    <div style={{minHeight:"100vh",position:"relative",overflow:"hidden",paddingBottom:"max(env(safe-area-inset-bottom), 16px)"}}>
+    <div style={{minHeight:"100vh",position:"relative",overflow:"hidden",paddingBottom:40}}>
       <div style={{position:"absolute",top:-80,right:-80,width:340,height:320,background:`radial-gradient(circle,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       <div style={{height:1,background:T.bg3}}>
         <div style={{height:"100%",width:`${progress}%`,background:T.coral,transition:`width 600ms ${T.ease}`}}/>
@@ -5628,12 +5614,7 @@ function Fade({children,d=0}){const s=useFadeIn(d);return <div style={s}>{childr
 // faint lift). Warm-black tints keep it inside the Portra palette — no cool
 // Material-grey elevation. Callers can override via style.boxShadow.
 const CARD_SHADOW = "inset 0 1px 0 rgba(237,235,231,0.04), 0 1px 2px rgba(10,9,8,0.28), 0 10px 28px -16px rgba(10,9,8,0.5)";
-// Translucent T.bg2 (#23201B → rgba 0.72) over a backdrop-blur so the body
-// grain underneath shows through the card surface softened. Without the
-// blur the grain reads through as crisp noise on the card; with it the
-// card becomes a frosted plane over the textured substrate. The edge of
-// the card no longer reads as a hard cut into the grain field.
-function Card({children,style={}}){return <div style={{background:"rgba(35,32,27,0.72)",backdropFilter:"blur(14px) saturate(120%)",WebkitBackdropFilter:"blur(14px) saturate(120%)",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,boxShadow:CARD_SHADOW,...style}}>{children}</div>;}
+function Card({children,style={}}){return <div style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,boxShadow:CARD_SHADOW,...style}}>{children}</div>;}
 function Tag({children,color,style={}}){return <span style={{display:"inline-flex",alignItems:"center",fontSize:10,fontWeight:500,color,background:`${color}12`,border:`1px solid ${color}33`,borderRadius:T.r.pill,padding:"4px 12px",letterSpacing:"0.08em",...style}}>{children}</span>;}
 function StreakBadge({rhythm}){
   const completed = rhythm?.completed || 0;

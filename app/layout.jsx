@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import GrainOverlay from "@/components/GrainOverlay";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -91,6 +92,18 @@ export default function RootLayout({ children }) {
         <ErrorBoundary>
           {children}
         </ErrorBoundary>
+        {/* Kodak Portra-flavour grain texture. It is a zIndex -1 FIELD that
+            sits BEHIND the app (see GrainOverlay.jsx) — cards paint on top of
+            it, the status-bar zone stays plain. pointer-events none keeps it
+            cosmetic. Mount order in the body no longer matters for stacking
+            since z-index drives it. */}
+        <GrainOverlay />
+        {/* Status-bar handling lives entirely in CSS now: viewport-fit:
+            cover + statusBarStyle: black-translucent let the page background
+            (#131110) flow under a transparent system bar, and a standalone-
+            only env(safe-area-inset-top) padding on body keeps content clear
+            of the clock. There is NO body::before overlay element (an earlier
+            comment here claimed there was — it was stale). */}
         <Analytics />
         <SpeedInsights />
       </body>
