@@ -118,16 +118,11 @@ describe("storage durability contract", () => {
     }
   });
 
-  it("pushUserStateSnapshot in ForgeApp.jsx includes every SYNCED meta field", () => {
-    // pushUserStateSnapshot is the on-mutation push helper. If it skips a
-    // field, that field's mutations don't durably round-trip until the next
-    // session-finalise — the same gap that lost the rotation-after-reinstall.
-    const push = sliceFunction(forgeAppSrc, "pushUserStateSnapshot");
-    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "bodyweight", "trainingState", "days"];
-    for (const field of required) {
-      expect(push.includes(field), `pushUserStateSnapshot must include meta.${field} so on-mutation push doesn't drop it`).toBe(true);
-    }
-  });
+  // Note: a separate assertion used to parse `pushUserStateSnapshot` in
+  // ForgeApp.jsx for the same field list. That helper has been replaced by
+  // `pushNow` in storage.js, which builds the snapshot via `getLocalProfile`
+  // — already covered by the read test above. Removed to avoid duplicate
+  // coverage of the same composition.
 });
 
 // Extract a function body. Walks past the params (which can have their own
