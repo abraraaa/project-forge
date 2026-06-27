@@ -86,6 +86,17 @@ export default function RootLayout({ children }) {
             https://github.com/vercel/next.js/issues/74524). That's the
             single tag that stays here. */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
+        {/* color-scheme in HTML (not just the globals.css :root rule) so the
+            UA has it at PARSE time. In a standalone PWA, swiping back between
+            two real routes (e.g. /diag-sync → /) does a document navigation;
+            during the gesture iOS shows the destination page mid-load, and
+            before its CSS parses the new document's UA-default background is
+            white — that's the bright "shimmer" bleeding around the app edges
+            as the page jiggles into place. Declaring dark here makes the
+            pre-CSS background dark, so there's no white window to bleed.
+            Browser mode doesn't hit this (Safari composites its own chrome
+            over the transition differently), which is why it was PWA-only. */}
+        <meta name="color-scheme" content="dark" />
       </head>
       <body>
         <ServiceWorkerRegistrar />
