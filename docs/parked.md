@@ -122,6 +122,22 @@ Entries graduate here with the resolving commit. Keep most recent on top;
 trim entries older than the last block once they're no longer
 discussion-relevant.
 
+- **Bonus-only Day entry write fix** — `8431f42` (2026-06-22).
+  `handleMarkBonusDone` now derives + stamps `scheduledType` from the
+  effective schedule (or `WEEK` fallback) alongside the bonus mark. Closes
+  the door on null-scheduledType entries entering the Day store via the
+  bonus path; eliminates the false-positive risk in `Days._maybeRepair`'s
+  loosened guard.
+- **Push refactor** — `3eb7fc1` (2026-06-23). pushNow / pushDeferred /
+  flushDeferred replace the per-mutation pushUserStateSnapshot pattern.
+  Per-workout cost drops from ~30 advanced ops to 2; Sync now row on
+  Profile screen exposes manual flush for power-user reassurance.
+  Routing taxonomy in `docs/push-refactor.md`.
+- **iOS Safari "chin" fix** — `9124425` + `5f6f073` (2026-06-23).
+  `color-scheme: dark` on :root + restoring `background: #131110` on
+  html, body. UA-painted chrome (toolbar surround, overscroll edges,
+  scrollbars) now matches page content; the mismatched dark band that
+  surfaced as a "chin" is gone.
 - **Sync layer addRandomSuffix bug** — `6ede9ee` (2026-06-22). The
   root-cause of cross-device sync silently returning empty for every
   user.

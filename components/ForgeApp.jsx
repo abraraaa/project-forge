@@ -2134,9 +2134,29 @@ function TakenNameModal({ name, webAuthnSupported, onClose, onActivate, passkeyB
   const [hasProfilePasskey, setHasProfilePasskey] = useState(null); // null = checking
   const [authSuccess, setAuthSuccess] = useState(false);
 
-  // Check if this profile has a passkey
+  // Check if this profile has a passkey + warm the sign-in path. Two
+  // network calls fired in sequence on modal mount: hasPasskey() reveals
+  // whether to show the Sign-in-with-passkey button at all; if it returns
+  // true, fire a no-await POST to /api/auth/login-options purely to warm
+  // the serverless function pool. The challenge that route issues lands
+  // in blob storage with allowOverwrite: true, so the REAL options call
+  // when the user actually taps the button overwrites it cleanly — no
+  // stale-challenge leak. Trade-off: one wasted Vercel function invocation
+  // per modal mount (cheap on Pro plan) in exchange for the user's first
+  // tap hitting an already-warm function. Closes the "first attempt errors,
+  // second succeeds" pattern that traces to cold-start latency on the
+  // blob read inside /api/auth/login-options.
   useEffect(() => {
-    hasPasskey(name).then(setHasProfilePasskey);
+    hasPasskey(name).then(has => {
+      setHasProfilePasskey(has);
+      if (has) {
+        fetch("/api/auth/login-options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profile: name }),
+        }).catch(() => { /* warm-up failure is non-fatal — real call retries */ });
+      }
+    });
   }, [name]);
 
   const handlePasskeySignIn = async () => {

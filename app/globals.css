@@ -14,6 +14,12 @@ html, body {
      on PWA cold start until the device rotates. 100vh works correctly
      from launch on iOS 26.2+, the only target our baseline supports. */
   height: 100vh;
+  /* Deep-dark canvas. Without this iOS Safari paints the chrome zones
+     (overscroll, toolbar surround, the bottom "chin") with the system
+     Canvas colour, which surfaces as a mismatched band against our
+     content. Desktop breakpoints below ADD a radial-gradient atop this
+     on body only — html keeps the flat colour for safe-area zones. */
+  background: #131110;
   overflow-x: hidden;
   /* No overscroll-behavior on the root — the native iOS rubber-band on
      the page itself is part of the platform feel and users miss it when
@@ -197,9 +203,17 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
      it as it rises into position. Without this override, the default
      opacity-1-to-0 fade fights the slide. */
   animation: none;
+  /* Explicit background prevents a transient UA-default flash through the
+     pseudo's transparent backdrop during the slide — the "white border
+     shimmer" along the edges that surfaced after the grain rework. The
+     snapshot itself paints the page content but the pseudo's own backdrop
+     was uncoloured, so any sub-pixel rounding gap let the system Canvas
+     show through for a frame or two. Same colour as the page bg. */
+  background: #131110;
 }
 ::view-transition-new(root) {
   animation: forge-page-slide-up 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  background: #131110;
 }
 
 /* Back navigation (anything → home). The OLD screen slides DOWN off the
