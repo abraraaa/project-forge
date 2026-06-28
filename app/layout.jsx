@@ -50,7 +50,22 @@ export const metadata = {
 };
 
 export const viewport = {
+  // themeColor: kept for non-Safari browsers + PWA chrome that still read it.
+  // IMPORTANT (Safari 26): Safari STOPPED honouring theme-color for the
+  // toolbar tint. It now samples the background-color of a fixed/sticky edge
+  // element, falling back to <body>, at FIRST PAINT (JS bg changes don't
+  // update it). Our status bar reads correctly only because body bg is also
+  // #131110 — the two happen to match. DO NOT remove `background: #131110`
+  // from html/body in globals.css thinking themeColor covers it; on Safari
+  // 26 the body bg IS what tints the toolbar. (This exact trap already
+  // caused a regression once.) See docs/frontend-audit.md F5.
   themeColor: "#131110",
+  // colorScheme via the viewport API rather than a manual <meta> in <head>
+  // — Next dedupes/manages it and warns on hand-written viewport meta.
+  // Controls UA form controls, scrollbars, and the default canvas colour.
+  // (NB: does NOT fix the PWA back-swipe shimmer — that's a platform-level
+  // system backdrop with no CSS hook; see docs/frontend-audit.md F7.)
+  colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -63,6 +78,9 @@ export const viewport = {
   // bottom-sheet home-indicator padding); cover is what makes them work.
   // With cover, the page background extends edge-to-edge so the status
   // bar reads as part of the app instead of a detached black band.
+  // iOS 26 note: without cover, the floating Liquid Glass toolbar makes the
+  // layout viewport end ABOVE the bottom safe area — cover is now doubly
+  // load-bearing. See docs/frontend-audit.md F6.
   viewportFit: "cover",
 };
 
@@ -86,17 +104,6 @@ export default function RootLayout({ children }) {
             https://github.com/vercel/next.js/issues/74524). That's the
             single tag that stays here. */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        {/* color-scheme in HTML (not just the globals.css :root rule) so the
-            UA has it at PARSE time. In a standalone PWA, swiping back between
-            two real routes (e.g. /diag-sync → /) does a document navigation;
-            during the gesture iOS shows the destination page mid-load, and
-            before its CSS parses the new document's UA-default background is
-            white — that's the bright "shimmer" bleeding around the app edges
-            as the page jiggles into place. Declaring dark here makes the
-            pre-CSS background dark, so there's no white window to bleed.
-            Browser mode doesn't hit this (Safari composites its own chrome
-            over the transition differently), which is why it was PWA-only. */}
-        <meta name="color-scheme" content="dark" />
       </head>
       <body>
         <ServiceWorkerRegistrar />
