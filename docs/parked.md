@@ -53,6 +53,25 @@ high-value manifest fields first: `screenshots` (install-sheet polish),
 `file_handlers` against actual user flows — only add capabilities we'll
 genuinely wire up, not score-chasing. Re-run PWABuilder to confirm lift.
 
+**Concrete flow under consideration — "Share metrics" button (Performance
+Lab):** a one-way export of a point-in-time trend-line snapshot. Stays true
+to "deliberately not social" — streamlines the social-CURIOUS without
+building a social graph (no account-linking, feed, or Forge-side sharing
+backend; the user pushes an artifact to wherever THEY choose).
+
+IMPORTANT distinction so we build the right primitive:
+- This is the **Web Share API** (`navigator.share({ files: [...] })`) —
+  OUTBOUND. A runtime API, NOT a manifest field.
+- It is NOT manifest `share_target`, which is INBOUND (makes Forge appear
+  in other apps' share sheets to RECEIVE content) — off-brand here.
+
+Real work is the artifact generation, not the share call: render the
+Performance Lab trend line to a canvas → PNG (or a styled snapshot card),
+then hand it to `navigator.share`. The share call itself is trivial.
+Graceful fallback where Web Share is unsupported (desktop Safari/Firefox):
+download the PNG or copy-to-clipboard. Belongs with the Performance Lab
+polish item.
+
 ### Packaging — scroll-under status bar / chin
 
 **Status:** Designed, gated rollout pending.
