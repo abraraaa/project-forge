@@ -231,3 +231,36 @@ incremental (style hoisting, the diag-route call).
 - nasedk.in/blog/ios26-safari-toolbar-colors/ (theme-color sampling change)
 - github.com/ionic-team/ionic-framework/issues/29733 (PWA back-swipe backdrop)
 - css-tricks.com/touring-new-css-features-in-safari-26/
+
+---
+
+## Rework plan (≤3 PRs)
+
+Agreed sequencing — lightest first, meaty work on a dedicated clean day.
+
+### PR 1 — featherweight hygiene · DONE
+Zero behaviour change. F4 (color-scheme → viewport export), F5 (theme-color
+guard comment), F8 (drop dead `-webkit-overflow-scrolling`), this plan
+appended.
+
+### PR 2 — additive + incremental wins
+- **F10** React Compiler spike — enable the flag, verify the full suite +
+  a manual smoke pass (auto-memoization can surface latent
+  impure-render bugs; needs real verification, hence not in PR 1's "light"
+  bucket). If it destabilises, revert the flag — it's additive.
+- **F1/F7** diag-route decision — move `/diag-sync` + `/diag-vt` to in-app
+  screens or `history.pushState`, removing the only real cross-document nav
+  and the shimmer with it.
+- **F3** static-style hoisting in the hottest re-rendering components
+  (SessionScreen, HomeScreen) — module-scope the static objects.
+
+### PR 3 — the meaty refactor (clean day, full token budget)
+- ForgeApp.jsx decomposition where extraction has a concrete reason
+  (cross-screen reuse or genuine independence — not refactor-for-its-own-sake).
+- Lean-modern review of the operationally heavy subsystems: progression
+  engine (`lib/progression.js`), Performance Lab (`components/PerformanceLab.jsx`),
+  sync logic (`lib/storage.js` + `app/api/sync`). Goal: confirm each uses
+  current idioms and carries no accidental weight, applying the SC-composition
+  pattern (F2) only where a genuinely static surface appears.
+
+After PR 3: return to the parked-items / backlog list (docs/parked.md).
