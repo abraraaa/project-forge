@@ -244,17 +244,36 @@ guard comment), F8 (drop dead `-webkit-overflow-scrolling`), this plan
 appended.
 
 ### PR 2 — additive + incremental wins
-- **F10** React Compiler spike — enable the flag, verify the full suite +
-  a manual smoke pass (auto-memoization can surface latent
-  impure-render bugs; needs real verification, hence not in PR 1's "light"
-  bucket). If it destabilises, revert the flag — it's additive.
-- **F1/F7** diag-route decision — move `/diag-sync` + `/diag-vt` to in-app
-  screens or `history.pushState`, removing the only real cross-document nav
-  and the shimmer with it.
-- **F3** static-style hoisting in the hottest re-rendering components
-  (SessionScreen, HomeScreen) — module-scope the static objects.
+- **F10** React Compiler spike — DONE (`fea6856`). Enabled, `next build`
+  clean, deployed, runtime smoke-passed. Keeping.
+
+**Re-scope after enabling F10** (decided 2026-06-25): enabling the compiler
+changed the calculus for the other two PR2 items. Both are dropped from PR2:
+
+- **F3 — subsumed by F10.** The React Compiler auto-memoises inline
+  `style={{}}` objects, which is exactly what manual hoisting would have
+  achieved. A manual sweep is now redundant churn over what the compiler
+  already does — ballerina-lean says skip it. CLOSED, not deferred.
+
+- **F1/F7 — moved to PR3.** The shimmer can't be honestly fixed in
+  isolation. F1 says real routes are the idiomatic Next pattern; F7's only
+  fix is "have fewer real routes." Those contradict. The shimmer is jarring
+  because it's the ONE real route transition in an otherwise-SPA app — it's
+  inconsistent, not broken. Converting diag to in-app screens to dodge it
+  would make the architecture MORE SPA-ish (less idiomatic) to patch a
+  cosmetic issue on a route real users never see — backwards. The genuine
+  resolution is PR3's job: pick a side on routes-vs-SPA app-wide, after
+  which the shimmer is either a consistent tuned transition everywhere or
+  doesn't exist. Folded into PR3 scope below.
+
+PR2 therefore concludes with F10 alone — a clean, self-contained win.
 
 ### PR 3 — the meaty refactor (clean day, full token budget)
+- **Routes vs SPA decision (F1/F7)** — the foundational call. Either commit
+  to real routes app-wide (the idiomatic Next pattern; makes the iOS
+  transition consistent everywhere, dissolving the shimmer's jarring
+  one-off-ness) OR consciously stay SPA-in-one-route and accept the diag
+  shimmer as the cost of two debug routes. This decision gates the rest.
 - ForgeApp.jsx decomposition where extraction has a concrete reason
   (cross-screen reuse or genuine independence — not refactor-for-its-own-sake).
 - Lean-modern review of the operationally heavy subsystems: progression
