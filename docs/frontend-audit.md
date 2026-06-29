@@ -268,18 +268,76 @@ changed the calculus for the other two PR2 items. Both are dropped from PR2:
 
 PR2 therefore concludes with F10 alone — a clean, self-contained win.
 
-### PR 3 — the meaty refactor (clean day, full token budget)
-- **Routes vs SPA decision (F1/F7)** — the foundational call. Either commit
-  to real routes app-wide (the idiomatic Next pattern; makes the iOS
-  transition consistent everywhere, dissolving the shimmer's jarring
-  one-off-ness) OR consciously stay SPA-in-one-route and accept the diag
-  shimmer as the cost of two debug routes. This decision gates the rest.
-- ForgeApp.jsx decomposition where extraction has a concrete reason
-  (cross-screen reuse or genuine independence — not refactor-for-its-own-sake).
-- Lean-modern review of the operationally heavy subsystems: progression
-  engine (`lib/progression.js`), Performance Lab (`components/PerformanceLab.jsx`),
-  sync logic (`lib/storage.js` + `app/api/sync`). Goal: confirm each uses
-  current idioms and carries no accidental weight, applying the SC-composition
-  pattern (F2) only where a genuinely static surface appears.
+### PR 3 — real-routes migration (DECIDED: Path A, staged)
 
-After PR 3: return to the parked-items / backlog list (docs/parked.md).
+**Decision (2026-06-29):** commit to real Next routes app-wide — NOT the
+`pushState` hybrid (Path C). Rationale: the goal is modernise / future-proof
+/ latest Next + WebKit, and eventually convert to native. C is a tactical
+halfway house that becomes throwaway debt the moment we want real routes;
+doing A now (while the app is smaller) is cheaper than doing it later, and
+A compounds in value (deep links, code-splitting, Server Components for
+static surfaces, a route structure a native shell can mirror).
+
+**Key de-risking fact (verified):** the in-session draft is ALREADY
+persisted + resumable — `D.save(profile, draft)` fires on every set
+(`ForgeApp.jsx:1014`), `pendingDraft` + `handleResumeDraft` restore it, and
+HomeScreen shows a resume card. So "navigate away mid-session" does not lose
+work today; a route migration inherits that safety. The session route just
+rehydrates the draft on mount.
+
+**Accidental-swipe exit guard:** auto-persist already prevents data loss;
+the guard is about intent. Implemented as OUR OWN modal via navigation
+interception (push a sentinel history entry, catch `popstate`, confirm) —
+NOT the browser `beforeunload` dialog (unreliable in iOS standalone PWAs).
+Applied only on the active-session route.
+
+**Staged sub-PRs (each shippable + reversible, lowest-risk first):**
+
+- **3a — Routing scaffold + first leaf route.** Root layout renders a
+  lightweight client provider for the hot path (activeProfile, syncState).
+  Migrate Performance Lab → `/performance` FIRST: it's already a standalone
+  component (`components/PerformanceLab.jsx`), so no monolith extraction
+  needed — pure proof-of-pattern. Navigation via the Next router.
+- **3b — Extract shared UI primitives → `components/ui.jsx`. DONE
+  (`20e985d`).** RE-SCOPED from the original "Profile → /profile". Inspection
+  showed Profile is NOT a low-coupling leaf — it's the identity gate (owns
+  `onActivate=activateProfile`, the full-app-hydration trigger) and depends
+  on a web of monolith-internal components (BodyweightEditModal,
+  TakenNameModal, SyncStatusCard, SyncNowRow, Fade, ScrollDrum). Routing it
+  now would risk the sign-in flow. So the corrected prerequisite is lifting
+  the pure primitives out first: `useFadeIn`, `Fade`, `Card`, `Tag`,
+  `CARD_SHADOW` now live in `components/ui.jsx`, so the coupled screens can
+  import them instead of depending on ForgeApp's internal scope. Behaviour-
+  preserving extraction.
+- **3c — Extract the remaining shared sub-components** (modals, ScrollDrum,
+  SyncStatusCard/SyncNowRow, etc.) the screens depend on, into their own
+  files. Still rendered by ForgeApp exactly as now — pure decomposition, no
+  routing yet. This is the bulk of the monolith-shrinking work and the real
+  prerequisite for the screen routes.
+- **3d — Profile → `/profile`** (now unblocked by 3b/3c). The route handles
+  activation then `router.push("/")` to return to the hydrated app.
+- **3e — Home → index `/`** and **Session flow → `/session`** (LAST + most
+  careful). Session rehydrates the persisted draft on mount + gets the
+  popstate exit-guard — where the draft-persistence verification pays off.
+- **3f — Transitions + cleanup.** Migrate hand-rolled `startViewTransition`
+  to Next's `<ViewTransition>` (React 19.2 / `experimental.viewTransition`)
+  now that real route navigations exist for it to hook. Retire the bespoke
+  view-transition CSS. Confirm the shimmer is now a consistent, tuned
+  cross-route transition (or gone).
+
+Progress: 3a (Performance Lab route) + 3b (primitives) shipped. The pattern
+is proven; 3c is the next and largest chunk (sub-component extraction).
+
+**Lean-modern subsystem review** (folds into 3c–3d as the relevant code is
+touched): progression engine (`lib/progression.js`), sync (`lib/storage.js`
++ `app/api/sync`), Performance Lab. Confirm current idioms, no accidental
+weight; apply SC-composition (F2) only where a genuinely static surface
+appears.
+
+**North star:** a clean route structure is also the right substrate for the
+eventual native conversion — a native shell (or Capacitor/Tauri-style
+wrapper) maps screens to routes far more naturally than to `setScreen`
+state.
+
+After PR 3: return to the parked-items / backlog list (docs/parked.md), now
+unblocked for the URL-dependent items (shortcuts, deep-links, share).
