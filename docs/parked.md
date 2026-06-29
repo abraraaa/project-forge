@@ -11,6 +11,67 @@ specific next step that would unblock it.
 
 ## Active parking list
 
+### PWA manifest + app-capabilities enrichment (PWABuilder gaps)
+
+**Status:** Identified via PWABuilder audit; deferred until after PR3.
+
+**Context:** PWABuilder scored Forge 16/45 on manifest fields and flagged
+Service Worker + App Capabilities. Breakdown:
+
+- **Service Worker flag is likely a false negative.** Our SW
+  (`public/sw.js`, client-registered via `components/ServiceWorkerRegistrar.jsx`)
+  demonstrably works — sync runs through it, cache versioning + the SW
+  update lifecycle are live. PWABuilder's static/headless analyzer often
+  misses client-registered SWs because it doesn't always execute the
+  registration JS at fetch time. VERIFY before "fixing" — there may be
+  nothing to fix. If it IS a real gap, the cause is most likely the SW
+  not being registered/scoped where PWABuilder's crawler looks.
+
+- **Manifest 16/45 is real but all-additive.** `public/manifest.json` is
+  deliberately minimal (name, short_name, description, start_url, display,
+  background/theme color, orientation, icons). The ~29 unused fields are
+  optional richness: `screenshots` (powers the richer iOS/Android install
+  sheet), `shortcuts` (long-press app-icon quick actions — e.g. "Start
+  today's session", "Log past workout"), `categories`, `display_override`
+  (e.g. `window-controls-overlay`), `launch_handler`, `share_target`
+  (receive shared content), `file_handlers`, `protocol_handlers`,
+  `edge_side_panel`, `widgets`, `iarc_rating_id`, `related_applications`.
+
+- **App Capabilities** flagged for the same unused-surface reasons —
+  share target, shortcuts, side panel, file handling, etc.
+
+**Why deferred:** none are urgent and several intersect the PR3
+routes-vs-SPA decision (e.g. `shortcuts` deep-link to specific app states,
+which is cleaner with real routes than with `setScreen` state). Doing them
+before PR3 risks rework. Also: most "experiential chrome" wins (shortcuts,
+share_target) are higher-value once the app has stable URLs to target.
+
+**Next step (post-PR3):** (1) Confirm whether the SW flag is a real gap or
+a PWABuilder artifact — test the deployed URL, check SW scope. (2) Add the
+high-value manifest fields first: `screenshots` (install-sheet polish),
+`shortcuts` (quick actions), `categories`. (3) Evaluate `share_target` /
+`file_handlers` against actual user flows — only add capabilities we'll
+genuinely wire up, not score-chasing. Re-run PWABuilder to confirm lift.
+
+**Concrete flow under consideration — "Share metrics" button (Performance
+Lab):** a one-way export of a point-in-time trend-line snapshot. Stays true
+to "deliberately not social" — streamlines the social-CURIOUS without
+building a social graph (no account-linking, feed, or Forge-side sharing
+backend; the user pushes an artifact to wherever THEY choose).
+
+IMPORTANT distinction so we build the right primitive:
+- This is the **Web Share API** (`navigator.share({ files: [...] })`) —
+  OUTBOUND. A runtime API, NOT a manifest field.
+- It is NOT manifest `share_target`, which is INBOUND (makes Forge appear
+  in other apps' share sheets to RECEIVE content) — off-brand here.
+
+Real work is the artifact generation, not the share call: render the
+Performance Lab trend line to a canvas → PNG (or a styled snapshot card),
+then hand it to `navigator.share`. The share call itself is trivial.
+Graceful fallback where Web Share is unsupported (desktop Safari/Firefox):
+download the PNG or copy-to-clipboard. Belongs with the Performance Lab
+polish item.
+
 ### Packaging — scroll-under status bar / chin
 
 **Status:** Designed, gated rollout pending.
