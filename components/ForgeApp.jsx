@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { flushSync } from "react-dom";
+import { useRouter } from "next/navigation";
 import {
   WEEK, SESSIONS, deriveStrengthDaySessions,
   EXERCISE_POOLS, rotateAccessories, rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
@@ -52,7 +53,6 @@ import {
   totalTonnage, pendingTonnageMilestone, formatTonnage,
 } from "@/lib/analytics";
 import { useModalA11y, haptic } from "@/lib/a11y";
-import PerformanceLab from "@/components/PerformanceLab";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 // ─── Fade hook ─────────────────────────────────────────────────────────────────
@@ -356,6 +356,11 @@ export default function ForgeApp(){
   const [mounted,setMounted]=useState(false);
   // Canonical SSR client-mount guard: fires once, no cascade. Intentional.
   useEffect(()=>setMounted(true),[]);
+
+  // Next router — PR3 real-routes migration. Screens that have become real
+  // routes (Performance Lab → /performance) navigate via soft client routing
+  // (no document reload, no shimmer) rather than setScreen state.
+  const router = useRouter();
 
   const [activeProfile,setActiveProfileState]=useState(()=>typeof window!=="undefined"?P.getActive():null);
   const [showProfiles,setShowProfiles]=useState(false);
@@ -818,59 +823,16 @@ export default function ForgeApp(){
     pushNow(activeProfile);
   }, [activeProfile]);
 
-  // Reusable sync update handler — called when backgroundSync finds newer blob data.
-  // Silently updates React state so the UI reflects the freshest data.
-  // The persistToLocal step inside backgroundSync has already written each
-  // field to localStorage; this just makes the running UI catch up without
-  // a reload.
-  const handleSyncUpdate = useCallback(({ meta, history: remoteHistory }) => {
-    if (meta?.weights) setWWState(meta.weights);
-    if (meta?.reps) setWRState(meta.reps);
-    if (meta?.streak?.count) setStreak(meta.streak.count);
-    if (meta?.programmeBlock) setProgrammeBlock(meta.programmeBlock);
-    if (meta?.userWeek) {
-      // meta.userWeek is the full effective-dated schedule edit log (or
-      // a legacy single-7-day-array shape from a pre-edit-log peer).
-      // Land it in localStorage via replaceHistory — which handles
-      // both shapes — then re-read today's effective into React state
-      // so the home strip refreshes without a reload.
-      W.replaceHistory(meta.userWeek);
-      const today = W.get();
-      if (today) setUserWeek(today);
-    }
-    if (meta?.userFocus) setUserFocus(meta.userFocus);
-    // Completion: persistToLocal has already merged meta.days into the Day
-    // store (and folded any legacy dayDone/bonusDone a peer pushed). Re-read
-    // the unified projection so the strip + cards refresh in the same tick.
-    if ((meta?.days || meta?.dayDone || meta?.bonusDone) && activeProfile) {
-      const proj = Days.projectCurrentWeek(activeProfile);
-      setWeekDone(proj.complete);
-      setBonusDone(proj.bonus);
-      setDayDone(Days.manualTickDates(activeProfile));
-    }
-    // Bodyweight + trainingState arrived from blob — reflect into React
-    // state so BW-progression slots and the engine read the freshly-merged
-    // values without a reload. persistToLocal has already written to LS;
-    // this just refreshes the UI in the same tick as the other fields.
-    if (meta?.bodyweight?.kg != null) setBodyweightState(meta.bodyweight.kg);
-    if (meta?.trainingState && activeProfile) {
-      const ts = meta.trainingState;
-      setActiveDeload(ts?.mesocycle?.activeDeload || null);
-      try { setDeloadOffer(shouldOfferDeload(ts, H.get(activeProfile))); } catch {}
-    }
-    if (remoteHistory?.length) setHistory(remoteHistory);
-  }, [activeProfile]);
-
   // Open Performance Lab — triggers background sync first to hydrate from blob
   // if localStorage is stale (e.g. switching from PWA to Safari on same device).
   // Navigation happens immediately; sync runs in background and updates state
   // silently if newer data is found.
+  // Performance Lab is now a real route (PR3 3a). Soft-navigate via the
+  // router — the page reads history + runs its own background refresh on
+  // mount, so the sync that used to live here moved there.
   const handleOpenPerformance = useCallback(() => {
-    setScreen("performance");
-    if (activeProfile) {
-      backgroundSync(activeProfile, { onUpdate: handleSyncUpdate });
-    }
-  }, [activeProfile, handleSyncUpdate, setScreen]);
+    router.push("/performance");
+  }, [router]);
 
   const activateProfile = async (name, { claim = false } = {}) => {
     const trimmed = String(name).trim();
@@ -2092,7 +2054,6 @@ const sProps={
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
       {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} sessionStartWeights={sessionStartWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
-      {screen==="performance" && <ErrorBoundary><PerformanceLab history={history} onBack={()=>setScreen("home")}/></ErrorBoundary>}
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} userWeek={userWeek} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
