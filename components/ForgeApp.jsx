@@ -54,14 +54,7 @@ import {
 } from "@/lib/analytics";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import ErrorBoundary from "@/components/ErrorBoundary";
-
-// ─── Fade hook ─────────────────────────────────────────────────────────────────
-function useFadeIn(d=0){
-  const [v,setV]=useState(false);
-  useEffect(()=>{const t=setTimeout(()=>setV(true),d);return()=>clearTimeout(t);},[d]);
-  return{opacity:v?1:0,transform:v?"translateY(0)":"translateY(10px)",
-         transition:`opacity 260ms ${T.ease} ${d}ms,transform 260ms ${T.ease} ${d}ms`};
-}
+import { Fade, Card, Tag, CARD_SHADOW } from "@/components/ui";
 
 // Human-readable "X ago" — tuned for < 12h windows (draft expiry cutoff).
 function formatAgo(ms) {
@@ -5618,16 +5611,8 @@ function InstallStep({ n, children }) {
   );
 }
 
-// ─── Shared ──────────────────────────────────────────────────────────��─────────
-function Fade({children,d=0}){const s=useFadeIn(d);return <div style={s}>{children}</div>;}
-// boxShadow gives cards a quiet sense of resting ON the backdrop rather than
-// being painted into it: a 1px inset top highlight (light catching the top
-// edge) + two soft ambient drops (a tight contact shadow and a wider, very
-// faint lift). Warm-black tints keep it inside the Portra palette — no cool
-// Material-grey elevation. Callers can override via style.boxShadow.
-const CARD_SHADOW = "inset 0 1px 0 rgba(237,235,231,0.04), 0 1px 2px rgba(10,9,8,0.28), 0 10px 28px -16px rgba(10,9,8,0.5)";
-function Card({children,style={}}){return <div style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,boxShadow:CARD_SHADOW,...style}}>{children}</div>;}
-function Tag({children,color,style={}}){return <span style={{display:"inline-flex",alignItems:"center",fontSize:10,fontWeight:500,color,background:`${color}12`,border:`1px solid ${color}33`,borderRadius:T.r.pill,padding:"4px 12px",letterSpacing:"0.08em",...style}}>{children}</span>;}
+// ─── Shared ─────────────────────────────────────────────────────────────────────
+// Fade / Card / Tag / CARD_SHADOW now live in components/ui.jsx (PR3 3b).
 function StreakBadge({rhythm}){
   const completed = rhythm?.completed || 0;
   const expected  = rhythm?.expected  || 12;
