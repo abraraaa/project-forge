@@ -298,18 +298,35 @@ Applied only on the active-session route.
   Migrate Performance Lab → `/performance` FIRST: it's already a standalone
   component (`components/PerformanceLab.jsx`), so no monolith extraction
   needed — pure proof-of-pattern. Navigation via the Next router.
-- **3b — Profile → `/profile`.** Mostly LS reads; low shared-state coupling.
-- **3c — Home → index `/`.** Extract HomeScreen from ForgeApp.jsx into its
-  own component, mount at `/`.
-- **3d — Session flow → `/session`.** LAST + most careful. Extract
-  SessionScreen + the readiness/done sub-screens; rehydrate the persisted
-  draft on mount; add the popstate exit-guard. This is where the draft
-  machinery earns the earlier verification.
-- **3e — Transitions + cleanup.** Migrate hand-rolled `startViewTransition`
+- **3b — Extract shared UI primitives → `components/ui.jsx`. DONE
+  (`20e985d`).** RE-SCOPED from the original "Profile → /profile". Inspection
+  showed Profile is NOT a low-coupling leaf — it's the identity gate (owns
+  `onActivate=activateProfile`, the full-app-hydration trigger) and depends
+  on a web of monolith-internal components (BodyweightEditModal,
+  TakenNameModal, SyncStatusCard, SyncNowRow, Fade, ScrollDrum). Routing it
+  now would risk the sign-in flow. So the corrected prerequisite is lifting
+  the pure primitives out first: `useFadeIn`, `Fade`, `Card`, `Tag`,
+  `CARD_SHADOW` now live in `components/ui.jsx`, so the coupled screens can
+  import them instead of depending on ForgeApp's internal scope. Behaviour-
+  preserving extraction.
+- **3c — Extract the remaining shared sub-components** (modals, ScrollDrum,
+  SyncStatusCard/SyncNowRow, etc.) the screens depend on, into their own
+  files. Still rendered by ForgeApp exactly as now — pure decomposition, no
+  routing yet. This is the bulk of the monolith-shrinking work and the real
+  prerequisite for the screen routes.
+- **3d — Profile → `/profile`** (now unblocked by 3b/3c). The route handles
+  activation then `router.push("/")` to return to the hydrated app.
+- **3e — Home → index `/`** and **Session flow → `/session`** (LAST + most
+  careful). Session rehydrates the persisted draft on mount + gets the
+  popstate exit-guard — where the draft-persistence verification pays off.
+- **3f — Transitions + cleanup.** Migrate hand-rolled `startViewTransition`
   to Next's `<ViewTransition>` (React 19.2 / `experimental.viewTransition`)
   now that real route navigations exist for it to hook. Retire the bespoke
   view-transition CSS. Confirm the shimmer is now a consistent, tuned
   cross-route transition (or gone).
+
+Progress: 3a (Performance Lab route) + 3b (primitives) shipped. The pattern
+is proven; 3c is the next and largest chunk (sub-component extraction).
 
 **Lean-modern subsystem review** (folds into 3c–3d as the relevant code is
 touched): progression engine (`lib/progression.js`), sync (`lib/storage.js`
