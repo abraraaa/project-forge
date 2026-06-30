@@ -84,7 +84,11 @@ export const viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }) {
+// `overlay` is the @overlay parallel-route slot (app/@overlay/*). It renders
+// alongside `children` so an intercepted route (e.g. (.)performance) can
+// appear OVER the current page without unmounting it — see
+// app/@overlay/(.)performance for the rationale (preserving Home's scroll).
+export default function RootLayout({ children, overlay }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${dmSans.variable}`}>
       <head>
@@ -110,6 +114,10 @@ export default function RootLayout({ children }) {
         <ErrorBoundary>
           {children}
         </ErrorBoundary>
+        {/* Intercepted-route overlay slot. Renders nothing (default.jsx → null)
+            unless a route is intercepted into it; an interception paints over
+            `children` above, keeping the underlying page mounted. */}
+        {overlay}
         {/* Kodak Portra-flavour grain texture. It is a zIndex -1 FIELD that
             sits BEHIND the app (see GrainOverlay.jsx) — cards paint on top of
             it, the status-bar zone stays plain. pointer-events none keeps it

@@ -115,6 +115,37 @@ first ~env(safe-area-inset-top) + 80px and the last ~80px so the grain
 band sits cleanly inside the safe area. Cards retain their flat T.bg2
 backgrounds; the texture only paints behind them.
 
+### Performance Lab — correctness bugs (logged 2026-07-01, from real use)
+
+**Status:** Confirmed bugs in live use; fix before the surface polish below.
+
+1. **MEV sparklines / volume audit aren't recency-aware.** User skipped all 3
+   sessions last week (fatigue) yet exercises still read "compliant with MEV".
+   The volume audit (`lib/volume-audit.js`, surfaced via PerformanceLab) is
+   averaging/counting over a window that doesn't weight recent inactivity — a
+   week of zero volume should drag the trailing average below MEV, not hold
+   "compliant". Check the window logic + whether empty weeks are counted as 0
+   or skipped. The audit should reflect "you've fallen below MEV recently",
+   not a stale all-time-ish compliance.
+
+2. **Consistency grid: day lettering doesn't align with its row.** The
+   day-of-week letters are offset from the cells they label (`consistencyGrid`
+   in `lib/analytics.js` + its render in PerformanceLab). Likely a
+   weekday-index / column-offset mismatch (same family as the Day-entity
+   weekday-mapping bugs). Beyond the alignment fix, the consistency view
+   probably wants a rethink — there's likely a clearer way to present
+   adherence-over-time than the current grid.
+
+3. **Lab paints history once; doesn't model "currently off".** It renders
+   whatever history exists as if it's current, with no notion of a lapse.
+   Wider product question: do we have (or want) a re-engagement / "log a
+   missed stretch" flow — a modal that qualifies "you've been away N days,
+   want to log or note why?" — so the Lab can distinguish "no data yet" from
+   "deliberately rested" from "fell off"? Ties to the retro-logging picker
+   that already exists for single days; this would be the multi-day / absence
+   version. Decide whether absence is a first-class state the Lab + streak
+   logic should model.
+
 ### Performance Lab — surface polish
 
 **Status:** Functionally complete, visually conservative.
