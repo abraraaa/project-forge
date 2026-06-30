@@ -32,7 +32,15 @@ export default function PerformancePage() {
     typeof window === "undefined" || !P.getActive() ? [] : H.get(P.getActive()),
   );
 
-  const onBack = useCallback(() => router.push("/"), [router]);
+  // Prefer a real back navigation so Next restores the Home scroll position
+  // natively (applied pre-paint, coordinated with the navigation commit — no
+  // jump). router.push("/") would be a FORWARD nav, which Next scrolls to top
+  // by design. Fall back to push only if there's no in-app history to pop
+  // (e.g. a future deep-link / shortcut that lands straight on /performance).
+  const onBack = useCallback(() => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/");
+  }, [router]);
 
   // Refresh from blob on mount, then re-read local history if the sync landed
   // newer data. Mirrors the old handleOpenPerformance background refresh.
