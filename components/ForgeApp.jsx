@@ -611,8 +611,35 @@ export default function ForgeApp(){
   // router — the page reads history + runs its own background refresh on
   // mount, so the sync that used to live here moved there.
   const handleOpenPerformance = useCallback(() => {
+    // Stash the current Home scroll so we can restore it on return. Real-route
+    // navigation unmounts ForgeApp, so the SPA's "screen state preserves
+    // scroll" behaviour is gone; sessionStorage bridges the remount. One-shot:
+    // the restore effect clears it after applying (see SCROLL_RESTORE effect).
+    try { sessionStorage.setItem("forge:homeScrollY", String(window.scrollY)); } catch {}
     router.push("/performance");
   }, [router]);
+
+  // SCROLL_RESTORE — re-apply the stashed Home scroll after returning from a
+  // real route (e.g. /performance) remounts us. Gated on mounted + screen so
+  // it runs once Home has actually rendered and laid out (the `if(!mounted)
+  // return null` guard means Home isn't in the DOM before mounted flips).
+  // Double-rAF lets the home content settle to full height before we scroll,
+  // otherwise the target Y clamps to a not-yet-tall-enough page. One-shot:
+  // cleared after applying so a cold load never inherits a stale position.
+  useEffect(() => {
+    if (!mounted || screen !== "home") return;
+    let saved = null;
+    try { saved = sessionStorage.getItem("forge:homeScrollY"); } catch {}
+    if (saved == null) return;
+    try { sessionStorage.removeItem("forge:homeScrollY"); } catch {}
+    const y = parseInt(saved, 10);
+    if (!(y > 0)) return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => window.scrollTo(0, y));
+    });
+    return () => { cancelAnimationFrame(raf1); if (raf2) cancelAnimationFrame(raf2); };
+  }, [mounted, screen]);
 
   const activateProfile = async (name, { claim = false } = {}) => {
     const trimmed = String(name).trim();

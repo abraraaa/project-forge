@@ -147,6 +147,35 @@ the shimmer disappears because there's no document navigation to swipe.
 appears on the diag route, which users never see) or fold it into the F1
 routing decision. Do NOT ship more `<meta>`/background bandaids.
 
+**UPDATE (2026-06-30) — mechanism confirmed.** Two new datapoints nailed it
+down:
+1. **Device dark mode makes the shimmer vanish entirely.** So the backdrop
+   follows the DEVICE's `prefers-color-scheme`, not our app's forced
+   `color-scheme: dark`.
+2. **The `<meta name="color-scheme" content="dark">` IS present in the built
+   HTML** (verified in `.next/server/app/*.html` — Next's `viewport.colorScheme`
+   emits it correctly; it was NOT regressed when moved from a manual tag to
+   the viewport export in PR1).
+
+So: color-scheme meta present, `html`/`body` bg `#131110`, manifest
+`background_color` `#131110` — all correct — and the swipe backdrop STILL
+tracks device appearance. That confirms the backdrop is a **native window
+layer behind the webview**, exposed only during the OS swipe gesture.
+`color-scheme` governs web content; `background_color` drives the splash;
+neither reaches that native layer. There is genuinely no web-exposed knob —
+the only thing that changes it is the device appearance setting, which we
+can't force.
+
+Practical consequences (now that `/performance` is a real route and users
+CAN hit the swipe on a non-diag screen):
+- The back-LINK is clean (programmatic `router.push` — no OS gesture, no
+  native backdrop). Lean on it in the UX.
+- It only appears on light-mode devices, only on the swipe, and it's milder
+  now on the dark base.
+- **The native conversion (north star) eliminates it** — a native shell owns
+  the window background. This is a temporary PWA-only wart, not something
+  that ships to the App Store. Officially won't-fix at the web layer.
+
 ### F8 — `-webkit-` prefixes · [maintainability] · LOW
 
 Audit against Safari 26: `-webkit-backdrop-filter` (KEEP — unprefixed not fully
