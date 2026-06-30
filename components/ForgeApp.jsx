@@ -1217,7 +1217,15 @@ export default function ForgeApp(){
     pushNow(activeProfile);
   };
 
-  if(!mounted) return null;
+  // Full-height placeholder, NOT null, during the one-frame mount tick. On a
+  // real-route remount (e.g. swipe back from /performance) Next restores the
+  // prior scroll position, but if this returned null the page would collapse
+  // to zero height for that frame and the browser would clamp scroll to 0 —
+  // the "position appears then jumps to top" flicker. A 100vh placeholder
+  // keeps the page tall enough for the restored position to hold until the
+  // real content renders next frame. Hydration-safe: server + first client
+  // paint both render this (mounted=false on both), so they match.
+  if(!mounted) return <div style={{minHeight:"100vh",background:"#131110"}} />;
 
   // Onboarding — first-time intro, shown before ProfileScreen
   if(screen==="onboarding"){
