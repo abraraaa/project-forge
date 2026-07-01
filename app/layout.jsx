@@ -90,7 +90,21 @@ export const viewport = {
 // app/@overlay/(.)performance for the rationale (preserving Home's scroll).
 export default function RootLayout({ children, overlay }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${dmSans.variable}`}>
+    <html
+      lang="en"
+      className={`${fraunces.variable} ${dmSans.variable}`}
+      // Inline colorScheme + background on <html> so the dark surface exists at
+      // HTML-PARSE time, before globals.css (an external stylesheet) loads. The
+      // gap between first paint and stylesheet application is when the browser
+      // paints the UA-default canvas — WHITE in light-mode — which is the
+      // white flash on load/navigation AND, on iOS standalone, the swipe-back
+      // "shimmer" (it tracks device appearance precisely because it's the UA
+      // canvas). color-scheme:dark darkens the UA canvas; backgroundColor pins
+      // our exact #131110. Must stay in sync with html/body bg in globals.css
+      // and T.bg0. This is the parse-time layer the meta tag + CSS couldn't
+      // cover. See docs/frontend-audit.md F5/F7.
+      style={{ colorScheme: "dark", backgroundColor: "#131110" }}
+    >
       <head>
         {/* Build-output-verified manual tags. Next 16's Metadata API
             emits apple-mobile-web-app-status-bar-style (from
