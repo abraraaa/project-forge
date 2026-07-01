@@ -73,11 +73,16 @@ the first real "shared-state foundation" piece the migration needs.
 
 ## Staged plan (revised, surgical)
 
-- **3c-final — extract `TakenNameModal`.** 🔪 Safe, self-contained. Clears
-  the last sub-component blocking ProfileScreen's extraction.
+- **3c-final — extract `TakenNameModal`.** ✅ DONE (`044ee4d`).
 - **3d-prep — extract `ProfileScreen` → `components/ProfileScreen.jsx`.**
-  Pure decomposition, still rendered by ForgeApp at the gate exactly as now.
-  ~744 lines off the monolith. No routing, no behaviour change. Safe.
+  ✅ DONE. 745 lines moved verbatim; ForgeApp renders it at the gate exactly
+  as before via import. Audit-scope verified clean pre-cut (the block
+  contains no mutation primitives, so the ForgeApp-only mutation-coverage
+  audit loses nothing). Orphaned imports pruned (TakenNameModal, sync-cards,
+  checkProfileExists, blobDelete, authenticatePasskey); ScrollDrum /
+  BodyweightEditModal / passkey helpers / FOCUS_SUMMARIES stay — ForgeApp
+  still uses them elsewhere. ForgeApp: 5,688 → 4,470 lines across the
+  decomposition arc.
 - **3d-route — ⚠️ DESIGN CALL.** Split the double-duty: keep the entry gate
   rendering ProfileScreen at `/` (correct — entry lives at root); make the
   switch/settings use a `/profile` route. Requires lifting `activateProfile`
