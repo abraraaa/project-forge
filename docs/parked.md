@@ -119,14 +119,17 @@ backgrounds; the texture only paints behind them.
 
 **Status:** Confirmed bugs in live use; fix before the surface polish below.
 
-1. **MEV sparklines / volume audit aren't recency-aware.** User skipped all 3
-   sessions last week (fatigue) yet exercises still read "compliant with MEV".
-   The volume audit (`lib/volume-audit.js`, surfaced via PerformanceLab) is
-   averaging/counting over a window that doesn't weight recent inactivity — a
-   week of zero volume should drag the trailing average below MEV, not hold
-   "compliant". Check the window logic + whether empty weeks are counted as 0
-   or skipped. The audit should reflect "you've fallen below MEV recently",
-   not a stale all-time-ish compliance.
+1. **MEV / volume audit recency — FIXED** (`auditHistoryVolume` window 4→2
+   weeks). Diagnosis: not a computation bug — the 4-week trailing average was
+   too smoothing (one skipped week only moved it 25%, staying above MEV for
+   muscles programmed at MAV). Shortened the rolling window to 2 weeks so a
+   genuinely-skipped recent week halves the per-week figure and registers.
+   Added an `away` state (empty window) that surfaces Forge's philosophy —
+   *consistency over time compounds; a lighter stretch is not failure* — plus
+   an editorial line under the card, rather than a wall of under-MEV alarms.
+   New-user gate moved from window-session-count to total-session-count so a
+   consistent user isn't mistaken for a beginner. Tests added. This also
+   partially addresses item 3's "no concept of being off".
 
 2. **Consistency grid: day lettering doesn't align with its row.** The
    day-of-week letters are offset from the cells they label (`consistencyGrid`

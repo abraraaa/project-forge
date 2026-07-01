@@ -305,3 +305,54 @@ describe("computeWeeklyVolume / auditVolume — focus parameter", () => {
     expect(b).toEqual(a);
   });
 });
+
+// ─── auditHistoryVolume — recency-aware window (trailing complete weeks) ──────
+// The audit is deliberately recency-scoped: it assesses the trailing N COMPLETE
+// weeks (Monday-aligned), EXCLUDING the in-progress current week, so a genuinely
+// skipped recent week registers instead of being smoothed away by a long
+// average. now is pinned so week math is deterministic.
+describe("auditHistoryVolume — recency window (2-week rolling + away)", () => {
+  // Fixed "now" so the 14-day window math is deterministic. Session dates are
+  // chosen by day-offset from now (rolling window), so no weekday dependency.
+  const now = new Date("2026-06-29T12:00:00Z");
+
+  // History-log-shaped session: blocks[].exercises[].sets[]. ZZZ* names fall
+  // back to the given muscle (no anatomy entry), isolating set-counting.
+  const sess = (date, muscle, exName, numSets) => ({
+    date,
+    blocks: [{ exercises: [{ name: exName, muscle, sets: Array.from({ length: numSets }, () => ({ weight: 100, reps: 5 })) }] }],
+  });
+
+  it("defaults to a 2-week window", () => {
+    const a = auditHistoryVolume([], { now });
+    expect(a.weeksAnalysed).toBe(2);
+    expect(a.away).toBe(true);
+  });
+
+  it("away=true when history exists but nothing falls in the trailing 2 weeks", () => {
+    // 2026-05-30 is ~30 days before now — outside a 14-day window.
+    const a = auditHistoryVolume([sess("2026-05-30", "Quads", "ZZZ1", 16)], { weeks: 2, now });
+    expect(a.sessionsAnalysed).toBe(0);
+    expect(a.away).toBe(true);
+  });
+
+  it("a recent session registers (away=false) and averages over the window span", () => {
+    // 2026-06-26 is 3 days before now — inside the 14-day window.
+    const a = auditHistoryVolume([sess("2026-06-26", "Quads", "ZZZ1", 16)], { weeks: 2, now });
+    expect(a.away).toBe(false);
+    expect(a.sessionsAnalysed).toBe(1);
+    expect(a.perMuscle.Quads.sets).toBe(8); // 16 sets / 2-week span
+  });
+
+  it("a skipped week within the window halves the average vs training both (recency, not smoothing)", () => {
+    // Both weeks trained (3 and 10 days ago, both inside 14-day window).
+    const both = auditHistoryVolume(
+      [sess("2026-06-26", "Quads", "ZZZ1", 16), sess("2026-06-19", "Quads", "ZZZ1", 16)],
+      { weeks: 2, now },
+    );
+    const one = auditHistoryVolume([sess("2026-06-26", "Quads", "ZZZ1", 16)], { weeks: 2, now });
+    expect(both.perMuscle.Quads.sets).toBe(16); // 32 / 2
+    expect(one.perMuscle.Quads.sets).toBe(8);   // 16 / 2 — the skipped week counts as zero
+    expect(one.perMuscle.Quads.sets).toBeLessThan(both.perMuscle.Quads.sets);
+  });
+});

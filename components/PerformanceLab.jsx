@@ -16,7 +16,7 @@ export default function PerformanceLab({ history, onBack }) {
   const readiness = useMemo(() => readinessBreakdown(history), [history]);
   const counts    = useMemo(() => sessionCount(history),       [history]);
   const plateaus  = useMemo(() => detectPlateaus(history),     [history]);
-  const volumeAudit  = useMemo(() => auditHistoryVolume(history, { weeks: 4 }), [history]);
+  const volumeAudit  = useMemo(() => auditHistoryVolume(history, { weeks: 2 }), [history]);
   const volumeTrend  = useMemo(() => weeklyVolumeByMuscle(history, { weeks: 8 }), [history]);
 
   const mainLifts = Object.keys(trends);
@@ -96,14 +96,14 @@ export default function PerformanceLab({ history, onBack }) {
           {/* Per-muscle volume landscape — merges the old "Weekly volume"
               stacked-bar chart and "Volume vs landmarks" status card into one
               row-per-muscle view. Each row shows the 8-week sparkline + the
-              4-week-trailing sets/wk classified against MEV/MAV/MRV bands.
-              Sorted by deviation severity so the actionable muscles surface
-              first (under MEV, then over MRV, then in-band). */}
+              recent (trailing 2 complete weeks) sets/wk classified against
+              MEV/MAV/MRV bands. Sorted by deviation severity so the actionable
+              muscles surface first (under MEV, then over MRV, then in-band). */}
           <Card
             title="Volume per muscle"
             subtitle={<>Last 8 weeks · sets/wk vs MEV/MAV/MRV<GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/></>}
           >
-            <VolumeLandscape trend={volumeTrend} audit={volumeAudit} />
+            <VolumeLandscape trend={volumeTrend} audit={volumeAudit} totalSessions={counts.total} />
           </Card>
 
           {/* Consistency heatmap */}
@@ -284,14 +284,33 @@ const BAND_LABEL = {
 // the editorial muscle ordering (legs → torso → arms → core).
 const SEVERITY = { under_mev: 0, over_mrv: 1, low: 2, optimal: 3, untargeted: 4 };
 
-function VolumeLandscape({ trend, audit }) {
-  // Need ≥4 sessions in the trailing 4-week window before the audit is
-  // meaningful. Below that, encourage logging rather than render a wall of
-  // "under MEV" alarms for a new user.
-  if (!audit || audit.sessionsAnalysed < 4) {
+function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
+  // New user — not enough logged history anywhere yet. Gate on TOTAL sessions
+  // (not the window count, which is now recency-scoped). Encourage logging
+  // rather than render a wall of "under MEV" alarms for someone just starting.
+  if (!audit || totalSessions < 4) {
     return (
       <div style={{padding:"14px 0 2px", fontSize:13, color:T.text3, fontStyle:"italic", fontFamily:T.serif, lineHeight:1.5}}>
         A few more logged sessions and this card will start flagging the muscles below MEV or above MRV.
+      </div>
+    );
+  }
+
+  // "Away" — the user HAS a training history, but the recent window (trailing
+  // 2 complete weeks) is empty. Don't guilt them with a wall of red. Forge's
+  // philosophy, stated plainly: consistency over time is what builds — a
+  // lighter stretch is part of training, not a failure.
+  if (audit.away) {
+    return (
+      <div style={{padding:"14px 0 2px"}}>
+        <div style={{fontSize:15, color:T.text1, fontFamily:T.serif, fontWeight:300, lineHeight:1.4, marginBottom:8}}>
+          A lighter stretch — that&apos;s part of training.
+        </div>
+        <div style={{fontSize:13, color:T.text3, lineHeight:1.6}}>
+          What builds muscle is showing up over time, not any single week. Your
+          volume is measured over the last two weeks, so it&apos;ll fill back in
+          as you train — no need to chase a perfect week. Pick it up when you&apos;re ready.
+        </div>
       </div>
     );
   }
@@ -322,7 +341,10 @@ function VolumeLandscape({ trend, audit }) {
     <div style={{padding:"2px 0 0"}}>
       {visible.map(row => <MuscleRow key={row.muscle} {...row} />)}
       <div style={{marginTop:14,fontSize:11,color:T.text4,lineHeight:1.5}}>
-        Sparklines = last 8 weeks · band & sets/wk = trailing {audit.weeksAnalysed} weeks · {audit.sessionsAnalysed} session{audit.sessionsAnalysed===1?"":"s"}
+        Sparklines = last 8 weeks · band &amp; sets/wk = last {audit.weeksAnalysed} complete weeks · {audit.sessionsAnalysed} session{audit.sessionsAnalysed===1?"":"s"}
+      </div>
+      <div style={{marginTop:8,fontSize:11,color:T.text3,fontStyle:"italic",fontFamily:T.serif,lineHeight:1.55}}>
+        Measured recent, not lifetime — because consistency over time builds where single big weeks don&apos;t.
       </div>
     </div>
   );
