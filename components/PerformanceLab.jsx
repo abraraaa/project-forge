@@ -424,37 +424,43 @@ function Sparkline({ series, target, colour }) {
 }
 
 // ─── Consistency grid (GitHub-style heatmap) ─────────────────────────────────
+// Day labels live INSIDE the SVG, in the same coordinate system as the cells.
+// They used to be a fixed-pixel HTML flex column beside a width-scaled SVG —
+// the SVG stretched to the card width so its rows rendered taller than 14px,
+// and each successive label drifted further from its row (the reported
+// "day lettering doesn't align" bug). Sharing one viewBox means labels and
+// cells scale together, so alignment holds at any width.
 function ConsistencyGrid({ grid }) {
-  const CELL = 14, GAP = 3;
+  const CELL = 14, GAP = 3, LABEL_W = 13;
   if (!grid || grid.length === 0) return null;
-  const W = grid.length * (CELL + GAP);
-  const H = 7 * (CELL + GAP);
+  const W = LABEL_W + grid.length * (CELL + GAP) - GAP;
+  const H = 7 * (CELL + GAP) - GAP;
+  const DAYS = ["M","T","W","T","F","S","S"]; // Monday-start, matches col.days (d=0 is weekStart Monday)
   return (
-    <div style={{display:"flex", gap:6, alignItems:"flex-start"}}>
-      {/* Day labels */}
-      <div style={{display:"flex", flexDirection:"column", gap:GAP}}>
-        {["M","T","W","T","F","S","S"].map((d,i) => (
-          <div key={i} style={{height:CELL, display:"flex", alignItems:"center", fontSize:9, color:T.text4, fontWeight:500}}>{d}</div>
-        ))}
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:"auto", display:"block"}}>
-        {grid.map((col, ci) => (
-          col.days.map((day, di) => {
-            const fill = day.trained
-              ? (day.cooked ? T.rose : T.sage)
-              : T.bg3;
-            return (
-              <rect key={`${ci}-${di}`}
-                x={ci * (CELL + GAP)} y={di * (CELL + GAP)}
-                width={CELL} height={CELL} rx={3}
-                fill={fill}
-                fillOpacity={day.trained ? (day.cooked ? 0.9 : 1) : 1}
-              />
-            );
-          })
-        ))}
-      </svg>
-    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:"auto", display:"block"}}>
+      {DAYS.map((d, i) => (
+        <text key={i}
+          x={0} y={i * (CELL + GAP) + CELL / 2}
+          dominantBaseline="central"
+          fontSize={9} fontWeight={500} fill={T.text4} fontFamily="inherit"
+        >{d}</text>
+      ))}
+      {grid.map((col, ci) => (
+        col.days.map((day, di) => {
+          const fill = day.trained
+            ? (day.cooked ? T.rose : T.sage)
+            : T.bg3;
+          return (
+            <rect key={`${ci}-${di}`}
+              x={LABEL_W + ci * (CELL + GAP)} y={di * (CELL + GAP)}
+              width={CELL} height={CELL} rx={3}
+              fill={fill}
+              fillOpacity={day.trained ? (day.cooked ? 0.9 : 1) : 1}
+            />
+          );
+        })
+      ))}
+    </svg>
   );
 }
 
