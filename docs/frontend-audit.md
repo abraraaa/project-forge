@@ -176,6 +176,49 @@ CAN hit the swipe on a non-diag screen):
   the window background. This is a temporary PWA-only wart, not something
   that ships to the App Store. Officially won't-fix at the web layer.
 
+**DEFINITIVE UPDATE (2026-07-01) — 8-thread cited research.** The white
+flash is NOT one thing; it's ≥3 distinct sources, and conflating them is what
+sent us in circles. Straight version:
+
+1. **Document / UA-canvas flash** (load + client nav). The browser paints its
+   UA-default canvas — WHITE in light appearance — before `globals.css`
+   (external, render-blocking) applies. FIXABLE, and now fixed: `color-scheme`
+   is communicated early (the `<meta>` we already had, parsed before CSS) AND
+   `colorScheme` + `backgroundColor` are now inline on the `<html>` element in
+   the root layout (verified in built HTML). This is the #1-ranked fix across
+   MDN / web.dev / WebKit / CSS-Tricks.
+
+2. **iOS standalone-PWA back-SWIPE shimmer. NOT web-fixable — original call
+   stands; my middle-message "probably fixable" was an overcorrection.** The
+   decisive evidence: our `color-scheme: dark` meta IS present in the built
+   HTML, which *should* force the UA canvas dark even on a light-mode device —
+   yet the swipe still shows white on a light device. So it is NOT the UA
+   canvas. It matches the confirmed native-`UINavigationController` behaviour
+   (react-native-screens #3758): the container view *behind* the webview has
+   no background and exposes the system window — white in light appearance,
+   black (∴ invisible against our dark app) in dark appearance. Exactly our
+   dark-mode test. That layer is OS-level; the web author cannot reach it, and
+   the home-screen PWA edge-swipe can't be disabled from the web either
+   (ionic #22299). Native conversion is the real fix.
+
+3. **Launch splash** — manifest `background_color`/`theme_color` (both already
+   `#131110`). Android-only (iOS ignores it, would need
+   `apple-touch-startup-image`). Not our current symptom.
+
+**Tailwind: confirmed NOT a fix** (correlation). Its own `preflight.css` sets
+no background; the "no-flash" reputation is from people putting `bg-*` on
+`<html>` + a blocking theme script. We correctly skip it.
+
+**Forward web option (not for the OS swipe):** `@view-transition { navigation:
+auto; }` — cross-document view transitions (Safari 18.2+/iOS 26, Chrome 126+)
+keep the background constant across NAVIGATIONS, replacing hard inter-page
+jumps with a crossfade. Worth adopting in the 3f transitions stage; it does
+NOT address the native swipe backdrop.
+
+Net: document flash fixed at the web layer (this commit); the iOS swipe
+shimmer is a genuine OS-level limitation that only the native conversion
+removes. Not another CSS avenue to chase.
+
 ### F8 — `-webkit-` prefixes · [maintainability] · LOW
 
 Audit against Safari 26: `-webkit-backdrop-filter` (KEEP — unprefixed not fully
