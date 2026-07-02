@@ -36,11 +36,12 @@ export function Fade({ children, d = 0 }) {
 // Material-grey elevation. Callers can override via style.boxShadow.
 export const CARD_SHADOW = "inset 0 1px 0 rgba(237,235,231,0.04), 0 1px 2px rgba(10,9,8,0.28), 0 10px 28px -16px rgba(10,9,8,0.5)";
 
-// Card — elevated surface. Extracted verbatim from ForgeApp to preserve
-// appearance exactly (no glass/opacity change folded in during the move).
+// Card — glass surface over the grain substrate (.forge-glass in globals.css
+// carries the recipe + reduced-transparency/no-backdrop-filter fallbacks).
+// Callers must not set style.background — it would defeat the fallbacks.
 export function Card({ children, style = {} }) {
   return (
-    <div style={{ background: T.bg2, border: `1px solid ${T.bg3}`, borderRadius: T.r.lg, boxShadow: CARD_SHADOW, ...style }}>
+    <div className="forge-glass" style={{ border: `1px solid ${T.bg3}`, borderRadius: T.r.lg, boxShadow: CARD_SHADOW, ...style }}>
       {children}
     </div>
   );

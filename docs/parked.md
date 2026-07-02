@@ -97,7 +97,21 @@ cutting over `app/layout.jsx`.
 
 ### Grain texture — move from full-viewport overlay to body background
 
-**Status:** Designed, blocked on packaging cutover above.
+**Status:** RESOLVED (2026-07-03) — superseded by the appearance-coherence
+pass. Final architecture: grain lives in the GrainOverlay component at
+z-index −1 (BEHIND the app — v0's restoration kept the substrate
+semantics), and surfaces sit over it as glass via the shared
+`.forge-glass` class in globals.css (translucent bg2 + blur/saturate,
+with `@supports` opaque fallback and a `prefers-reduced-transparency`
+fallback). Applied to: ui.jsx Card, PerformanceLab cards, the sync
+cards, and the six ProfileScreen panels. Deliberately excluded: form
+inputs (caret legibility) and dialog surfaces on blurred scrims
+(glass-on-glass double-blur). Cross-referenced against WebKit: unprefixed
+backdrop-filter (Safari 18+; our baseline 26.2+), Safari 26.5 ships no
+web material primitives (blur+saturate is the web ceiling), reduced-
+transparency support pending in WebKit (bug 175497) but the fallback is
+in place for the day it ships. Entry retained for the history; original
+plan below.
 
 **Context:** `components/GrainOverlay.jsx` is a `position: fixed` element
 at zIndex 1, mix-blend-mode: screen. It composites over EVERYTHING below

@@ -509,7 +509,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
       {/* Tone-of-voice card — sets expectations on data + PII */}
       <Fade d={180}>
-        <div style={{marginTop:36,padding:"18px 20px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg}}>
+        <div className="forge-glass" style={{marginTop:36,padding:"18px 20px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg}}>
           <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
             No email. No phone.
           </div>
@@ -536,7 +536,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && (
         <Fade d={250}>
           <a href="/diag-sync"
-            style={{marginTop:12,padding:"14px 18px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            className="forge-glass" style={{marginTop:12,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Sync diagnostics</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>Local store counts + force pull/push</div>
@@ -556,7 +556,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && setBwEditOpen && (
         <Fade d={260}>
           <div onClick={()=>setBwEditOpen(true)}
-            style={{marginTop:16,padding:"14px 18px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
+            className="forge-glass" style={{marginTop:16,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Bodyweight</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>
@@ -580,7 +580,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && onEditFocus && (
         <Fade d={270}>
           <div onClick={onEditFocus}
-            style={{marginTop:12,padding:"14px 18px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
+            className="forge-glass" style={{marginTop:12,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Training focus</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>
@@ -595,7 +595,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {/* Passkey setup card — only show if WebAuthn is supported and profile doesn't have one */}
       {current && webAuthnSupported && !profileHasPasskey[current] && (
         <Fade d={280}>
-          <div style={{marginTop:16,padding:"18px 20px",background:T.bg2,border:`1px solid ${T.sage}33`,borderRadius:T.r.lg}}>
+          <div className="forge-glass" style={{marginTop:16,padding:"18px 20px",border:`1px solid ${T.sage}33`,borderRadius:T.r.lg}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
               <div style={{flex:1}}>
                 <div style={{fontSize:11,fontWeight:500,color:T.sage,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
@@ -639,7 +639,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {/* Passkey enabled badge */}
       {current && profileHasPasskey[current] && (
         <Fade d={280}>
-          <div style={{marginTop:16,padding:"14px 18px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",gap:12}}>
+          <div className="forge-glass" style={{marginTop:16,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",gap:12}}>
             <div style={{width:8,height:8,borderRadius:"50%",background:T.sage}}/>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Passkey enabled</div>
