@@ -73,17 +73,30 @@ the first real "shared-state foundation" piece the migration needs.
 
 ## Staged plan (revised, surgical)
 
-- **3c-final — extract `TakenNameModal`.** 🔪 Safe, self-contained. Clears
-  the last sub-component blocking ProfileScreen's extraction.
+- **3c-final — extract `TakenNameModal`.** ✅ DONE (`044ee4d`).
 - **3d-prep — extract `ProfileScreen` → `components/ProfileScreen.jsx`.**
-  Pure decomposition, still rendered by ForgeApp at the gate exactly as now.
-  ~744 lines off the monolith. No routing, no behaviour change. Safe.
-- **3d-route — ⚠️ DESIGN CALL.** Split the double-duty: keep the entry gate
-  rendering ProfileScreen at `/` (correct — entry lives at root); make the
-  switch/settings use a `/profile` route. Requires lifting `activateProfile`
-  out of ForgeApp into a shared module/context (the app's first real shared-
-  state extraction). PAUSE here for a decision before cutting — this is the
-  artery.
+  ✅ DONE. 745 lines moved verbatim; ForgeApp renders it at the gate exactly
+  as before via import. Audit-scope verified clean pre-cut (the block
+  contains no mutation primitives, so the ForgeApp-only mutation-coverage
+  audit loses nothing). Orphaned imports pruned (TakenNameModal, sync-cards,
+  checkProfileExists, blobDelete, authenticatePasskey); ScrollDrum /
+  BodyweightEditModal / passkey helpers / FOCUS_SUMMARIES stay — ForgeApp
+  still uses them elsewhere. ForgeApp: 5,688 → 4,470 lines across the
+  decomposition arc.
+- **3d-route — ✅ DECIDED (2026-07-02): storage-as-store routing.** User
+  approved the recommendation: NO context/provider layer. Extract the
+  non-React core of `activateProfile` (validate → claim → `P.add`/
+  `P.setActive`) into a pure `lib/` function; the `/profile` route renders
+  ProfileScreen reading straight from LS and, on activation, calls the lib
+  core then `router.push("/")` — ForgeApp mounts fresh and hydrates from
+  `P.getActive()` naturally. The gate stays at `/` untouched; ForgeApp's
+  in-place path keeps a thin wrapper around the same core. Rationale:
+  localStorage IS the app's shared-state layer (local is canonical) — the
+  pattern `/performance` already proved. Known loose end to resolve during
+  implementation: the focus picker renders in ForgeApp, so `/profile`
+  either hosts its own or it gets extracted first. Sequencing note: doing
+  Session (3e) first is equally acceptable if deep-link value should lead;
+  destination unchanged.
 - **3e/3f — Home + Session routes, then `<ViewTransition>` migration** (per
   frontend-audit.md). Home/Session extraction follows the same file-first
   pattern; Session carries the draft-rehydrate + popstate exit-guard.

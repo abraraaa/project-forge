@@ -296,25 +296,6 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
     );
   }
 
-  // "Away" — the user HAS a training history, but the recent window (trailing
-  // 2 complete weeks) is empty. Don't guilt them with a wall of red. Forge's
-  // philosophy, stated plainly: consistency over time is what builds — a
-  // lighter stretch is part of training, not a failure.
-  if (audit.away) {
-    return (
-      <div style={{padding:"14px 0 2px"}}>
-        <div style={{fontSize:15, color:T.text1, fontFamily:T.serif, fontWeight:300, lineHeight:1.4, marginBottom:8}}>
-          A lighter stretch — that&apos;s part of training.
-        </div>
-        <div style={{fontSize:13, color:T.text3, lineHeight:1.6}}>
-          What builds muscle is showing up over time, not any single week. Your
-          volume is measured over the last two weeks, so it&apos;ll fill back in
-          as you train — no need to chase a perfect week. Pick it up when you&apos;re ready.
-        </div>
-      </div>
-    );
-  }
-
   // Build the union of muscles to render: anything in AUDIT_MUSCLE_ORDER
   // (so missed muscles surface as under-MEV) plus anything trained that
   // doesn't have a landmark (e.g. Forearms).
@@ -328,6 +309,34 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
     const series = trend?.byMuscle?.[muscle] || [];
     return { muscle, sets: a.sets, target: a.target, status: a.status, series };
   });
+
+  // "Away" — the user HAS a training history, but the recent window is empty.
+  // The sparklines STAY: eight weeks of history (including the fade-out) is
+  // context and motivation, not something to hide. What changes is the
+  // judgement: band colouring mutes to neutral (no wall of red), and the
+  // philosophy header reframes the gap — consistency over time is what
+  // builds; a lighter stretch is part of training, not failure.
+  if (audit.away) {
+    const historical = rows
+      .filter(r => r.series.some(v => v > 0)) // only muscles actually trained — flat-zero rows are noise here
+      .sort((a, b) => b.series.reduce((s, v) => s + v, 0) - a.series.reduce((s, v) => s + v, 0));
+    return (
+      <div style={{padding:"2px 0 0"}}>
+        <div style={{padding:"12px 0 14px"}}>
+          <div style={{fontSize:15, color:T.text1, fontFamily:T.serif, fontWeight:300, lineHeight:1.4, marginBottom:8}}>
+            A lighter stretch — that&apos;s part of training.
+          </div>
+          <div style={{fontSize:13, color:T.text3, lineHeight:1.6}}>
+            What builds muscle is showing up over time, not any single week.
+            The lines below hold your last eight weeks — they&apos;ll fill back
+            in as you train. Pick it up when you&apos;re ready.
+          </div>
+        </div>
+        {historical.map(row => <MuscleRow key={row.muscle} {...row} muted />)}
+      </div>
+    );
+  }
+
   // Drop rows that have neither a landmark nor any trained sets — nothing
   // useful to say about them.
   const visible = rows.filter(r => r.target || r.sets > 0 || r.series.some(v => v > 0));
@@ -350,9 +359,12 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
   );
 }
 
-function MuscleRow({ muscle, sets, target, status, series }) {
-  const colour = BAND_COLOUR[status] || T.text4;
-  const bandLabel = BAND_LABEL[status] || "";
+function MuscleRow({ muscle, sets, target, status, series, muted = false }) {
+  // Muted = the "away" presentation: the sparkline keeps telling the 8-week
+  // story, but the band judgement is suspended (neutral colour, "resting"
+  // label) — no alarm styling while the user is deliberately/otherwise off.
+  const colour = muted ? T.text4 : (BAND_COLOUR[status] || T.text4);
+  const bandLabel = muted ? "resting" : (BAND_LABEL[status] || "");
   // Right side: sparkline. Reference bands (MEV/MAV/MRV) drawn behind the
   // line in low-opacity tints so eye picks up "you're below the floor" or
   // "you're over the ceiling" without needing tick labels.
@@ -424,37 +436,43 @@ function Sparkline({ series, target, colour }) {
 }
 
 // ─── Consistency grid (GitHub-style heatmap) ─────────────────────────────────
+// Day labels live INSIDE the SVG, in the same coordinate system as the cells.
+// They used to be a fixed-pixel HTML flex column beside a width-scaled SVG —
+// the SVG stretched to the card width so its rows rendered taller than 14px,
+// and each successive label drifted further from its row (the reported
+// "day lettering doesn't align" bug). Sharing one viewBox means labels and
+// cells scale together, so alignment holds at any width.
 function ConsistencyGrid({ grid }) {
-  const CELL = 14, GAP = 3;
+  const CELL = 14, GAP = 3, LABEL_W = 13;
   if (!grid || grid.length === 0) return null;
-  const W = grid.length * (CELL + GAP);
-  const H = 7 * (CELL + GAP);
+  const W = LABEL_W + grid.length * (CELL + GAP) - GAP;
+  const H = 7 * (CELL + GAP) - GAP;
+  const DAYS = ["M","T","W","T","F","S","S"]; // Monday-start, matches col.days (d=0 is weekStart Monday)
   return (
-    <div style={{display:"flex", gap:6, alignItems:"flex-start"}}>
-      {/* Day labels */}
-      <div style={{display:"flex", flexDirection:"column", gap:GAP}}>
-        {["M","T","W","T","F","S","S"].map((d,i) => (
-          <div key={i} style={{height:CELL, display:"flex", alignItems:"center", fontSize:9, color:T.text4, fontWeight:500}}>{d}</div>
-        ))}
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:"auto", display:"block"}}>
-        {grid.map((col, ci) => (
-          col.days.map((day, di) => {
-            const fill = day.trained
-              ? (day.cooked ? T.rose : T.sage)
-              : T.bg3;
-            return (
-              <rect key={`${ci}-${di}`}
-                x={ci * (CELL + GAP)} y={di * (CELL + GAP)}
-                width={CELL} height={CELL} rx={3}
-                fill={fill}
-                fillOpacity={day.trained ? (day.cooked ? 0.9 : 1) : 1}
-              />
-            );
-          })
-        ))}
-      </svg>
-    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:"auto", display:"block"}}>
+      {DAYS.map((d, i) => (
+        <text key={i}
+          x={0} y={i * (CELL + GAP) + CELL / 2}
+          dominantBaseline="central"
+          fontSize={9} fontWeight={500} fill={T.text4} fontFamily="inherit"
+        >{d}</text>
+      ))}
+      {grid.map((col, ci) => (
+        col.days.map((day, di) => {
+          const fill = day.trained
+            ? (day.cooked ? T.rose : T.sage)
+            : T.bg3;
+          return (
+            <rect key={`${ci}-${di}`}
+              x={LABEL_W + ci * (CELL + GAP)} y={di * (CELL + GAP)}
+              width={CELL} height={CELL} rx={3}
+              fill={fill}
+              fillOpacity={day.trained ? (day.cooked ? 0.9 : 1) : 1}
+            />
+          );
+        })
+      ))}
+    </svg>
   );
 }
 

@@ -131,13 +131,15 @@ backgrounds; the texture only paints behind them.
    consistent user isn't mistaken for a beginner. Tests added. This also
    partially addresses item 3's "no concept of being off".
 
-2. **Consistency grid: day lettering doesn't align with its row.** The
-   day-of-week letters are offset from the cells they label (`consistencyGrid`
-   in `lib/analytics.js` + its render in PerformanceLab). Likely a
-   weekday-index / column-offset mismatch (same family as the Day-entity
-   weekday-mapping bugs). Beyond the alignment fix, the consistency view
-   probably wants a rethink — there's likely a clearer way to present
-   adherence-over-time than the current grid.
+2. **Consistency grid day-letter alignment — FIXED.** Not a weekday-index
+   bug (ordering was correct, both Monday-start): the labels were a
+   fixed-pixel HTML flex column beside a width-scaled SVG, so on any real
+   screen the SVG rows rendered taller than the 14px labels and drifted
+   apart. Labels now live inside the SVG's own coordinate system, scaling
+   with the cells — aligned at any width. STILL OPEN from this item: the
+   presentation rethink ("a clearer way to present adherence-over-time
+   than the grid") — that's design work, folded into the surface-polish
+   item below.
 
 3. **Lab paints history once; doesn't model "currently off".** It renders
    whatever history exists as if it's current, with no notion of a lapse.
