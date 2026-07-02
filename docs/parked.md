@@ -113,6 +113,21 @@ transparency support pending in WebKit (bug 175497) but the fallback is
 in place for the day it ships. Entry retained for the history; original
 plan below.
 
+**Amendment (2026-07-03):** the grain layer is no longer `position:
+fixed`. Live-device screenshots showed Safari 26 rendering opaque
+colour-extension slabs behind the status bar and URL bar (no
+scroll-under translucency, and an unpredictable toolbar tint that picked
+up the Begin-session CTA). Root cause per WebKit bug 301756 + the iOS 26
+tinting write-ups: any fixed/sticky element bordering a viewport edge
+opts the page out of translucent chrome, and our full-viewport fixed
+grain bordered both edges on every screen. Grain now lives as an
+absolute z −1 child of the document-height `.forge-page` wrapper
+(app/layout.jsx) and scrolls with content — no fixed element at the
+edges, chrome tint falls back to body's solid #131110, content slides
+under the bars natively. This is close in spirit to the original
+body-background plan below, but keeps the element (blend mode + view-
+transition opt-out need one) rather than a `body::before`.
+
 **Context:** `components/GrainOverlay.jsx` is a `position: fixed` element
 at zIndex 1, mix-blend-mode: screen. It composites over EVERYTHING below
 zIndex 300 (modals) — including cards, buttons, headers. The visual
