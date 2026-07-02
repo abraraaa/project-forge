@@ -19,7 +19,6 @@ import {
   computeRhythm, detectRecoveryPattern,
   blobPush, flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
   enableAutoSync, disableAutoSync, pushNow, pushDeferred,
-  claimProfile,
   applyRpe, weeksSince, dateOfWeekdayIdxInCurrentWeek,
   newDraftLog, logSet, finaliseDraft, scaleForReadiness, D, TS,
   inferLoadType, LOAD_TYPES, startingWeightForLift,
@@ -58,6 +57,8 @@ import { Fade, Card, Tag, CARD_SHADOW } from "@/components/ui";
 import ScrollDrum from "@/components/ScrollDrum";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
 import ProfileScreen from "@/components/ProfileScreen";
+import FocusPickerSheet from "@/components/FocusPickerSheet";
+import { activateProfileCore, saveFocusCore, takePendingRotationSummary } from "@/lib/profile-actions";
 
 // Human-readable "X ago" — tuned for < 12h windows (draft expiry cutoff).
 function formatAgo(ms) {
@@ -144,7 +145,8 @@ export default function ForgeApp(){
   const router = useRouter();
 
   const [activeProfile,setActiveProfileState]=useState(()=>typeof window!=="undefined"?P.getActive():null);
-  const [showProfiles,setShowProfiles]=useState(false);
+  // showProfiles retired (PR3 3d-route): the switch/settings surface is the
+  // /profile route now; this gate renders only when there is NO profile.
 
   // Hydrating state — blocks the home screen render while we pull the user's
   // training data from blob storage. Critical because localStorage is
@@ -398,6 +400,10 @@ export default function ForgeApp(){
     
     // INSTANT: Load from localStorage (0ms, works offline)
     const local = getLocalProfile(activeProfile);
+    // One-shot handoff: if focus was changed on the /profile route, the
+    // rotation summary was stashed for us (the modal lives on this shell).
+    const pendingSummary = takePendingRotationSummary(activeProfile);
+    if (pendingSummary) setRotationSummary(pendingSummary);
     // Hydrating React state from the localStorage cache on profile change —
     // synchronising with an external store, which is exactly what effects are
     // for. The seed runs once per profile, no cascade. Intentional.
@@ -620,24 +626,14 @@ export default function ForgeApp(){
     router.push("/performance");
   }, [router]);
 
-  const activateProfile = async (name, { claim = false } = {}) => {
-    const trimmed = String(name).trim();
-    if (!trimmed) return { ok: false, reason: "empty" };
-
-    // Claim path: first-time signup for a new name.
-    // The claim endpoint is atomic — if someone else grabbed the name
-    // between the availability check and now, we'll get 409 here.
-    if (claim) {
-      const result = await claimProfile(trimmed, trimmed);
-      if (result.taken) return { ok: false, reason: "taken" };
-      if (!result.ok)   return { ok: false, reason: "network" };
-    }
-
-    P.add(trimmed);
-    P.setActive(trimmed);
-    setActiveProfileState(trimmed);
-    setShowProfiles(false);
-    return { ok: true };
+  // Thin wrapper over the shared core (lib/profile-actions). The in-place
+  // gate path reflects activation into React state directly; the /profile
+  // route calls the same core then navigates home, where this component
+  // remounts and hydrates from LS.
+  const activateProfile = async (name, opts = {}) => {
+    const result = await activateProfileCore(name, opts);
+    if (result.ok) setActiveProfileState(result.name);
+    return result;
   };
 
   // Scale session by readiness (cooked = 85% weight on mains, -1 set supersets, no finishers).
@@ -1218,23 +1214,16 @@ export default function ForgeApp(){
   // new bias. Keeps block number and startDate (the change is a re-pick, not
   // a new training block); workingWeights carry forward via existing storage,
   // so progressive overload context isn't lost. Closes the picker on save.
+  // Thin wrapper over saveFocusCore (lib/profile-actions) — persistence,
+  // re-rotation, and the snapshot push live there; this reflects the result
+  // into React state and surfaces the rotation summary.
   const handleSaveFocus = (focus) => {
     if (!activeProfile) return;
-    F.save(activeProfile, focus);
+    const { next, summary } = saveFocusCore(activeProfile, focus);
     setUserFocus(focus);
-    // Re-rotate within the same block, keep history as-is so future blocks
-    // still benefit from the 3-block exclusion memory.
-    const oldConfig = programmeBlock.config;
-    const newConfig = rotateAccessories(programmeBlock.history, { focus });
-    const next = { ...programmeBlock, config: newConfig };
     setProgrammeBlock(next);
-    PB.save(next);
-    // Surface what changed so the user can see the bias kicked in.
-    const changes = rotationDiff(oldConfig, newConfig);
-    const stimulusDelta = computeRotationStimulusDelta(oldConfig, newConfig);
-    setRotationSummary({ blockNumber: programmeBlock.number, changes, stimulusDelta });
+    setRotationSummary(summary);
     setFocusPickerOpen(false);
-    pushNow(activeProfile);
   };
 
   if(!mounted) return null;
@@ -1247,10 +1236,10 @@ export default function ForgeApp(){
     }}/>;
   }
 
-  if(!activeProfile||showProfiles){
+  if(!activeProfile){
   return (
     <>
-      <ProfileScreen existing={P.list()} current={activeProfile} onActivate={activateProfile} onCancel={showProfiles?()=>setShowProfiles(false):null} bodyweight={bodyweight} bwEditOpen={bwEditOpen} setBwEditOpen={setBwEditOpen} updateBodyweight={updateBodyweight} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)}/>
+      <ProfileScreen existing={P.list()} current={activeProfile} onActivate={activateProfile} onCancel={null} bodyweight={bodyweight} bwEditOpen={bwEditOpen} setBwEditOpen={setBwEditOpen} updateBodyweight={updateBodyweight} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)}/>
       {/* Modals triggerable from ProfileScreen must mount here too — the
           early return above bypasses the main JSX where these live, so
           without this Fragment, tapping "Edit focus" in Profile sets state
@@ -1852,7 +1841,7 @@ const sProps={
 
   return (
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
       {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} sessionStartWeights={sessionStartWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); setReturnGapDays(null); reset(); }} deloadCompleted={showDeloadComplete} returnGapDays={returnGapDays}/></ErrorBoundary>}
@@ -3439,65 +3428,7 @@ const WEEK_DAY_TYPES = [
 ];
 // ─── Focus picker sheet ──────────────────────────────────────────────────────
 // Lets users tune the accessory bias (Forged / Strong / Sculpt). Tap a focus
-// pill to preview its summary, then Save to apply. Save triggers an immediate
-// re-rotation with the new bias — the rotation-summary modal that follows
-// shows the user exactly what shifted in their accessories.
-function FocusPickerSheet({ current, onSave, onCancel }) {
-  const [draft, setDraft] = useState(current || DEFAULT_FOCUS);
-  const { containerRef, onKeyDown } = useModalA11y(onCancel);
-  const titleId = "focus-picker-title";
-  const changed = draft !== current;
-  return (
-    <div onKeyDown={onKeyDown} onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(10,9,8,0.82)",backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
-        style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
-          Training focus
-        </div>
-        <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.15,marginBottom:6,color:T.text1}}>
-          What are you training for?
-        </div>
-        <p style={{fontSize:13,color:T.text3,marginBottom:18,lineHeight:1.5}}>
-          Every focus still trains your whole body — this just biases <em>which alternatives</em> rotation favours within each accessory slot. Main lifts never change.
-        </p>
-
-        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-          {FOCUS_OPTIONS.map(f => {
-            const active = draft === f;
-            return (
-              <button key={f} onClick={()=>setDraft(f)}
-                aria-pressed={active}
-                style={{padding:"14px 16px",background:active?`${T.gold}14`:T.bg3,border:`1px solid ${active?T.gold:T.bg4}`,borderRadius:T.r.md,cursor:"pointer",textAlign:"left",transition:`all 160ms ${T.ease}`}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
-                  <span style={{fontFamily:T.serif,fontSize:18,fontWeight:300,color:active?T.gold:T.text1,fontStyle:active?"italic":"normal"}}>{f}</span>
-                  {active && <span style={{fontSize:13,color:T.gold}}>✓</span>}
-                </div>
-                <div style={{fontSize:12,color:T.text2,lineHeight:1.5}}>{FOCUS_SUMMARIES[f]}</div>
-              </button>
-            );
-          })}
-        </div>
-
-        {changed && (
-          <div style={{marginBottom:14,padding:"10px 12px",background:`${T.gold}10`,border:`1px solid ${T.gold}33`,borderRadius:T.r.sm,fontSize:12,color:T.text2,lineHeight:1.5}}>
-            Saving will re-rotate your accessories now to reflect the new focus.
-          </div>
-        )}
-
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={onCancel}
-            style={{flex:1,padding:"14px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",fontSize:13,color:T.text2,fontFamily:T.sans}}>
-            Cancel
-          </button>
-          <button onClick={()=>onSave(draft)} disabled={!changed}
-            style={{flex:2,padding:"14px",background:changed?T.gold:T.bg3,border:"none",borderRadius:T.r.lg,cursor:changed?"pointer":"default",fontFamily:T.serif,fontSize:16,fontWeight:400,color:changed?T.bg0:T.text3,opacity:changed?1:0.6}}>
-            Save focus
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// FocusPickerSheet now lives in components/FocusPickerSheet.jsx (PR3 3d-route).
 
 function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
   // Local draft — only commits on Save. Holds the full {s, label, type} shape;

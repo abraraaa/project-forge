@@ -52,6 +52,35 @@ input, button, textarea, select { font: inherit; }
    "iOS PWAs can't draw behind the status bar" was wrong; the real fix was
    restoring viewport-fit: cover, which had been removed. */
 
+/* ─── Glass surface (Liquid Glass-adjacent) ─────────────────────────────────
+   The ONE shared recipe for translucent card/panel surfaces over the grain
+   substrate. A class (not inline styles) because the fallbacks below are
+   media/feature-conditional, which inline styles cannot express. Surfaces
+   using it must NOT also set background inline (inline wins on specificity
+   and would defeat the fallbacks).
+   - Unprefixed backdrop-filter only: shipped unprefixed since Safari 18
+     (baseline here is iOS 26.2+); Chrome 76+.
+   - blur+saturate IS the current web ceiling for glass — Safari 26.5 ships
+     no web-facing material primitives (webkit.org/blog/17938), and true
+     refraction (SVG filter as backdrop) remains Chromium-only.
+   - prefers-reduced-transparency: honoured where supported (Chrome 118+/
+     Firefox today; WebKit bug 175497 still open — the block simply doesn't
+     match on Safari until they ship it, and starts working the day they do).
+   - Perf: small, static surfaces only per WebKit guidance — do NOT apply to
+     large scrolling containers or animated elements. */
+.forge-glass {
+  background: rgba(35, 32, 27, 0.72); /* T.bg2 at 72% over the substrate */
+  backdrop-filter: blur(14px) saturate(120%);
+}
+/* Engines without backdrop-filter: clean opaque card, not an invisible one. */
+@supports not (backdrop-filter: blur(1px)) {
+  .forge-glass { background: #23201B; }
+}
+/* User asked the OS to reduce transparency: opaque, no blur. */
+@media (prefers-reduced-transparency: reduce) {
+  .forge-glass { background: #23201B; backdrop-filter: none; }
+}
+
 /* ─── /diag-vt diagnostic overrides ─────────────────────────────────────────
    Body classes toggled by app/diag-vt/page.jsx so the diag route can isolate
    layers contributing to the persistent Performance Lab cross-fade dim.

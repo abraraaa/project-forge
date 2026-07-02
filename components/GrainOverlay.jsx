@@ -39,6 +39,16 @@ export default function GrainOverlay() {
     <div
       aria-hidden="true"
       style={{
+        // NO background-color here, deliberately. Safari 26 tints its
+        // toolbar from the background-color of fixed/sticky elements at the
+        // viewport edges; background-image is ignored, and elements without
+        // a background-color are skipped entirely — the sampler falls
+        // through to body's #131110, which is the correct brand colour.
+        // Adding one would be redundant for the sampler and, through the
+        // screen blend below, would lift the whole content field a couple
+        // of RGB points against the masked-out safe-area zones — recreating
+        // the seam this component's mask exists to remove. Refs:
+        // nasedk.in/blog/ios26-safari-toolbar-colors, WebKit bug 301756.
         position: "fixed",
         inset: 0,
         pointerEvents: "none",

@@ -83,7 +83,7 @@ the first real "shared-state foundation" piece the migration needs.
   BodyweightEditModal / passkey helpers / FOCUS_SUMMARIES stay — ForgeApp
   still uses them elsewhere. ForgeApp: 5,688 → 4,470 lines across the
   decomposition arc.
-- **3d-route — ✅ DECIDED (2026-07-02): storage-as-store routing.** User
+- **3d-route — ✅ IMPLEMENTED (2026-07-02, decided same day).** User
   approved the recommendation: NO context/provider layer. Extract the
   non-React core of `activateProfile` (validate → claim → `P.add`/
   `P.setActive`) into a pure `lib/` function; the `/profile` route renders
@@ -97,6 +97,16 @@ the first real "shared-state foundation" piece the migration needs.
   either hosts its own or it gets extracted first. Sequencing note: doing
   Session (3e) first is equally acceptable if deep-link value should lead;
   destination unchanged.
+  IMPLEMENTATION NOTES: activation + focus-save cores live in
+  lib/profile-actions.js (tested); FocusPickerSheet extracted to its own
+  file (both hosts import it); /profile renders components/ProfileView.jsx
+  (LS-hydrated, ErrorBoundary-wrapped) and is a PLAIN full-page route —
+  deliberately NOT @overlay-intercepted, because activating a different
+  profile must remount the shell rather than leave the old profile's Home
+  mounted underneath. Rotation summary from a route-side focus change is
+  handed to the home shell via a one-shot LS stash (take-on-mount).
+  showProfiles state retired from ForgeApp: the gate is now purely
+  !activeProfile; Home's profile button router.push("/profile")s.
 - **3e/3f — Home + Session routes, then `<ViewTransition>` migration** (per
   frontend-audit.md). Home/Session extraction follows the same file-first
   pattern; Session carries the draft-rehydrate + popstate exit-guard.

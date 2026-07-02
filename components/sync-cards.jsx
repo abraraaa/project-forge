@@ -57,10 +57,9 @@ export function SyncStatusCard({ profile }) {
   };
 
   return (
-    <div style={{
+    <div className="forge-glass" style={{
       marginTop: 16,
       padding: "14px 18px",
-      background: T.bg2,
       border: `1px solid ${T.bg3}`,
       borderRadius: T.r.lg,
       display: "flex",
@@ -154,8 +153,8 @@ export function SyncNowRow({ profile }) {
       : "Never synced";
 
   return (
-    <div onClick={handleClick} role="button" aria-label="Sync now"
-      style={{ marginTop: 12, padding: "14px 18px", background: T.bg2, border: `1px solid ${T.bg3}`, borderRadius: T.r.lg, cursor: busy ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: `all 180ms ${T.ease}`, opacity: busy ? 0.7 : 1 }}>
+    <div onClick={handleClick} role="button" aria-label="Sync now" className="forge-glass"
+      style={{ marginTop: 12, padding: "14px 18px", border: `1px solid ${T.bg3}`, borderRadius: T.r.lg, cursor: busy ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: `all 180ms ${T.ease}`, opacity: busy ? 0.7 : 1 }}>
       <div>
         <div style={{ fontSize: 13, fontWeight: 500, color: T.text1 }}>Sync now</div>
         <div style={{ fontSize: 11, color: T.text3, marginTop: 2 }}>{subtitle}</div>
