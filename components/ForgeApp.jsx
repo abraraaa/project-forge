@@ -271,6 +271,11 @@ export default function ForgeApp(){
   const [activeDeload,setActiveDeload]=useState(null); // { startedAt, plannedDays, ... } | null
   const [deloadOffer,setDeloadOffer]=useState(null);   // signal object | null
   const [showDeloadComplete,setShowDeloadComplete]=useState(false); // one-shot for Done screen
+  // One-shot for the Done screen's "Back at it" praise: days since the
+  // PREVIOUS strength session, computed in the done effect BEFORE the new
+  // record is appended (afterwards the newest record is today's and the gap
+  // is always 0). null = no praise (regular cadence or first-ever session).
+  const [returnGapDays,setReturnGapDays]=useState(null);
 
   // Retrospective logging state. Driven from the home picker — when retroDate
   // is set the app jumps to a single-screen form pre-populated from the
@@ -863,6 +868,22 @@ export default function ForgeApp(){
       const wm=[6,0,1,2,3,4,5];
       const updated=P.markDayDone(activeProfile,wm[dw]);
       setWeekDone(updated);
+
+      // "Back at it" gap — read the newest strength record BEFORE appending
+      // today's. A gap > 7 days means this session is a return after time
+      // away; the Done screen praises the comeback (consistency-over-time
+      // philosophy: coming back IS the win, not an apology owed).
+      {
+        const prior = H.get(activeProfile)
+          .filter(r => r?.date && String(r.session || "").startsWith("strength"))
+          .map(r => r.date).sort().pop();
+        if (prior) {
+          const gap = Math.round((new Date().setHours(0,0,0,0) - new Date(prior).setHours(0,0,0,0)) / 86400000);
+          setReturnGapDays(gap > 7 ? gap : null);
+        } else {
+          setReturnGapDays(null);
+        }
+      }
 
       // Finalise the session draft and append to history
       let sessionRecord = null;
@@ -1834,7 +1855,7 @@ const sProps={
       {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>setShowProfiles(true)} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone}/>}
       {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
       {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
-      {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} sessionStartWeights={sessionStartWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); reset(); }} deloadCompleted={showDeloadComplete}/></ErrorBoundary>}
+      {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} sessionStartWeights={sessionStartWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); setReturnGapDays(null); reset(); }} deloadCompleted={showDeloadComplete} returnGapDays={returnGapDays}/></ErrorBoundary>}
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} userWeek={userWeek} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
@@ -4238,7 +4259,7 @@ const NEXT_DAY_MSG = {
   strength:"Strength session next. Load up.",
 };
 
-function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},userWeek=WEEK,onHome,deloadCompleted=false}){
+function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},userWeek=WEEK,onHome,deloadCompleted=false,returnGapDays=null}){
   // `base` = what the user lifted at SESSION START (snapshotted in
   // sessionStartWeightsRef on handleReadinessStart). Falls back to the
   // current working weight if no snapshot (e.g. very first session) — that
@@ -4307,6 +4328,17 @@ function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},u
         <Fade d={240}>
           <div style={{marginTop:24,textAlign:"center",fontFamily:T.serif,fontSize:14,fontStyle:"italic",fontWeight:300,color:T.sage,letterSpacing:"0.01em"}}>
             Deload complete. Welcome back.
+          </div>
+        </Fade>
+      )}
+      {/* "Back at it" — first strength session after >7 days away. The
+          consistency-over-time philosophy, said at the moment it counts:
+          coming back IS the win, no apology owed. Suppressed when the gap
+          was a completed deload (that line already says welcome back). */}
+      {!deloadCompleted && returnGapDays != null && (
+        <Fade d={240}>
+          <div style={{marginTop:24,textAlign:"center",fontFamily:T.serif,fontSize:14,fontStyle:"italic",fontWeight:300,color:T.sage,letterSpacing:"0.01em"}}>
+            Back at it — first one in {returnGapDays} days. Coming back is what counts.
           </div>
         </Fade>
       )}

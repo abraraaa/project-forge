@@ -296,25 +296,6 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
     );
   }
 
-  // "Away" — the user HAS a training history, but the recent window (trailing
-  // 2 complete weeks) is empty. Don't guilt them with a wall of red. Forge's
-  // philosophy, stated plainly: consistency over time is what builds — a
-  // lighter stretch is part of training, not a failure.
-  if (audit.away) {
-    return (
-      <div style={{padding:"14px 0 2px"}}>
-        <div style={{fontSize:15, color:T.text1, fontFamily:T.serif, fontWeight:300, lineHeight:1.4, marginBottom:8}}>
-          A lighter stretch — that&apos;s part of training.
-        </div>
-        <div style={{fontSize:13, color:T.text3, lineHeight:1.6}}>
-          What builds muscle is showing up over time, not any single week. Your
-          volume is measured over the last two weeks, so it&apos;ll fill back in
-          as you train — no need to chase a perfect week. Pick it up when you&apos;re ready.
-        </div>
-      </div>
-    );
-  }
-
   // Build the union of muscles to render: anything in AUDIT_MUSCLE_ORDER
   // (so missed muscles surface as under-MEV) plus anything trained that
   // doesn't have a landmark (e.g. Forearms).
@@ -328,6 +309,34 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
     const series = trend?.byMuscle?.[muscle] || [];
     return { muscle, sets: a.sets, target: a.target, status: a.status, series };
   });
+
+  // "Away" — the user HAS a training history, but the recent window is empty.
+  // The sparklines STAY: eight weeks of history (including the fade-out) is
+  // context and motivation, not something to hide. What changes is the
+  // judgement: band colouring mutes to neutral (no wall of red), and the
+  // philosophy header reframes the gap — consistency over time is what
+  // builds; a lighter stretch is part of training, not failure.
+  if (audit.away) {
+    const historical = rows
+      .filter(r => r.series.some(v => v > 0)) // only muscles actually trained — flat-zero rows are noise here
+      .sort((a, b) => b.series.reduce((s, v) => s + v, 0) - a.series.reduce((s, v) => s + v, 0));
+    return (
+      <div style={{padding:"2px 0 0"}}>
+        <div style={{padding:"12px 0 14px"}}>
+          <div style={{fontSize:15, color:T.text1, fontFamily:T.serif, fontWeight:300, lineHeight:1.4, marginBottom:8}}>
+            A lighter stretch — that&apos;s part of training.
+          </div>
+          <div style={{fontSize:13, color:T.text3, lineHeight:1.6}}>
+            What builds muscle is showing up over time, not any single week.
+            The lines below hold your last eight weeks — they&apos;ll fill back
+            in as you train. Pick it up when you&apos;re ready.
+          </div>
+        </div>
+        {historical.map(row => <MuscleRow key={row.muscle} {...row} muted />)}
+      </div>
+    );
+  }
+
   // Drop rows that have neither a landmark nor any trained sets — nothing
   // useful to say about them.
   const visible = rows.filter(r => r.target || r.sets > 0 || r.series.some(v => v > 0));
@@ -350,9 +359,12 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
   );
 }
 
-function MuscleRow({ muscle, sets, target, status, series }) {
-  const colour = BAND_COLOUR[status] || T.text4;
-  const bandLabel = BAND_LABEL[status] || "";
+function MuscleRow({ muscle, sets, target, status, series, muted = false }) {
+  // Muted = the "away" presentation: the sparkline keeps telling the 8-week
+  // story, but the band judgement is suspended (neutral colour, "resting"
+  // label) — no alarm styling while the user is deliberately/otherwise off.
+  const colour = muted ? T.text4 : (BAND_COLOUR[status] || T.text4);
+  const bandLabel = muted ? "resting" : (BAND_LABEL[status] || "");
   // Right side: sparkline. Reference bands (MEV/MAV/MRV) drawn behind the
   // line in low-opacity tints so eye picks up "you're below the floor" or
   // "you're over the ceiling" without needing tick labels.
