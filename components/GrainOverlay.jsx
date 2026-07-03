@@ -60,33 +60,38 @@ export default function GrainOverlay() {
         position: "absolute",
         inset: 0,
         pointerEvents: "none",
-        // zIndex -1: behind all app content. .forge-page (position: relative,
-        // no z-index) does not form a stacking context, so this participates
-        // in the root context's negative-z phase exactly as it did as a body
-        // child: above the page base background, below the in-flow app.
-        // mix-blend-mode: screen therefore still blends with the page base
-        // (#131110 + desktop gradients) — NOT with the cards above it — so
-        // the warm grain lift lands on the field only.
+        // zIndex -1: behind all app content. .forge-page is isolation:
+        // isolate (its own stacking context), so this paints AFTER the
+        // wrapper's own background and before its in-flow content — i.e.
+        // above the page substrate (#131110 + desktop gradients, both on
+        // .forge-page), below the app. The isolation is load-bearing: in
+        // the root stacking context a negative-z grandchild paints beneath
+        // BODY's background, which occluded the grain for the first 100vh
+        // of every page (the "blocking halfway down" band, found on
+        // device). mix-blend-mode: screen blends with the substrate — not
+        // the cards above — so the warm grain lift lands on the field only.
         zIndex: -1,
         opacity: 0.12,
         mixBlendMode: "screen",
         backgroundImage: `url("data:image/svg+xml,${GRAIN_SVG}")`,
         backgroundRepeat: "repeat",
         backgroundSize: "192px 192px",
-        // Dissolve the grain over 80px at both ends of the DOCUMENT (the
-        // wrapper is document-height, so these are page ends, not viewport
-        // edges). At rest in the installed PWA this reproduces the previous
-        // env()-anchored fade exactly — body's standalone padding-top already
-        // places the wrapper below the clock, so 0→80px here lands where
-        // env(inset)→env(inset)+80px landed before. Mid-scroll the grain now
-        // slides under the (translucent) system bars along with the content
-        // it textures, which is the native look; a static viewport-anchored
-        // fade would instead read as a stationary haze band over moving
-        // content.
+        // Dissolve the grain over the first 80px of the DOCUMENT (the
+        // wrapper is document-height, so this is the page top, not the
+        // viewport edge). At rest in the installed PWA this reproduces the
+        // previous env()-anchored fade exactly — body's standalone
+        // padding-top already places the wrapper below the clock, so 0→80px
+        // here lands where env(inset)→env(inset)+80px landed before.
+        // Top-only, deliberately: an earlier symmetric fade at the document
+        // END dissolved the texture over the last 80px of every page, which
+        // read as a flat self-made "chin" at full scroll. Content now slides
+        // under the translucent chrome, so the texture should run flush to
+        // the page end; overscroll past it shows the flat body base, which
+        // is the native rubber-band look.
         WebkitMaskImage:
-          "linear-gradient(to bottom, transparent 0, #000 80px, #000 calc(100% - 80px), transparent 100%)",
+          "linear-gradient(to bottom, transparent 0, #000 80px)",
         maskImage:
-          "linear-gradient(to bottom, transparent 0, #000 80px, #000 calc(100% - 80px), transparent 100%)",
+          "linear-gradient(to bottom, transparent 0, #000 80px)",
         // Opt the grain layer out of the root view-transition capture by
         // naming it. Without this, the screen-blended grain gets baked
         // into BOTH the old and new root snapshots; the cross-fade then

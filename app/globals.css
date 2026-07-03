@@ -17,8 +17,10 @@ html, body {
   /* Deep-dark canvas. Without this iOS Safari paints the chrome zones
      (overscroll, toolbar surround, the bottom "chin") with the system
      Canvas colour, which surfaces as a mismatched band against our
-     content. Desktop breakpoints below ADD a radial-gradient atop this
-     on body only — html keeps the flat colour for safe-area zones. */
+     content. Flat at every breakpoint: this is the chrome-sampling /
+     overscroll base only — the visible page substrate (base + desktop
+     ambient gradients + grain) paints on .forge-page below, which spans
+     the full document rather than body's 100vh box. */
   background: #131110;
   /* NO overflow on the root — deliberately. overflow-x: hidden here turned
      html into a managed scroll container, and iOS 26 Safari's chrome
@@ -66,6 +68,21 @@ input, button, textarea, select { font: inherit; }
 .forge-page {
   position: relative;
   min-height: 100vh;
+  /* The page substrate paints HERE, not on body. Two reasons, both found
+     on device: (1) body's box is only 100vh tall, so anything painted on
+     body (base colour relative to the grain, the desktop ambient
+     gradients) stops at exactly one viewport height into a taller page —
+     a hard horizontal seam. (2) the grain child uses z-index: -1, and in
+     the ROOT stacking context a negative-z grandchild paints BENEATH
+     body's background — body's own #131110 occluded the grain for the
+     first 100vh of every page. isolation: isolate makes .forge-page its
+     own stacking context: the grain now paints after THIS background and
+     screen-blends against it (same math as before — flat #131110, plus
+     the ambient gradients on desktop below), and nothing can occlude it.
+     body/html keep their flat #131110 for Safari's chrome sampling and
+     the overscroll rubber-band. */
+  isolation: isolate;
+  background: #131110;
   /* Horizontal clipping guard, relocated from html/body. `clip` (not
      `hidden`) because clip clips paint without creating a scroll
      container — the root above must stay a natural scroller for Safari
@@ -218,20 +235,25 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
    stranded rather than designed. Two soft warm radial gradients give the
    centered column intentional centerpiece feel. Mobile unaffected. */
 
+/* On .forge-page, not body: body's box is 100vh tall, so gradients painted
+   there cut off with a hard edge one viewport into any taller page. The
+   .forge-page substrate spans the full document. Anchors are viewport
+   lengths (svh) so the ambient light stays framed around the first fold
+   across devices, as originally designed against the 100vh body box. */
 @media (min-width: 768px) {
-  body {
+  .forge-page {
     background:
-      radial-gradient(ellipse 720px 520px at 18% 30%, rgba(224, 149, 106, 0.06) 0%, transparent 60%),
-      radial-gradient(ellipse 640px 480px at 82% 70%, rgba(139, 176, 154, 0.05) 0%, transparent 60%),
+      radial-gradient(ellipse 720px 520px at 18% 30svh, rgba(224, 149, 106, 0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 640px 480px at 82% 70svh, rgba(139, 176, 154, 0.05) 0%, transparent 60%),
       #131110;
   }
 }
 
 @media (min-width: 1280px) {
-  body {
+  .forge-page {
     background:
-      radial-gradient(ellipse 800px 580px at 12% 28%, rgba(224, 149, 106, 0.07) 0%, transparent 62%),
-      radial-gradient(ellipse 720px 540px at 88% 72%, rgba(139, 176, 154, 0.06) 0%, transparent 62%),
+      radial-gradient(ellipse 800px 580px at 12% 28svh, rgba(224, 149, 106, 0.07) 0%, transparent 62%),
+      radial-gradient(ellipse 720px 540px at 88% 72svh, rgba(139, 176, 154, 0.06) 0%, transparent 62%),
       #131110;
   }
 }

@@ -45,7 +45,12 @@ export default function PerformanceLab({ history, onBack }) {
           primary glow — see components/ForgeApp.jsx for full rationale. */}
       <div style={{position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:600, height:500, background:`radial-gradient(ellipse, rgba(196,168,130,0.10) 0%, transparent 65%)`, pointerEvents:"none"}}/>
 
-      <div style={{padding:"52px 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
+      {/* Top clearance is self-sufficient: max() guarantees the back nav
+          clears the translucent status bar in the installed PWA even if
+          the body-level standalone padding doesn't apply on this route
+          (observed on device: nav rendered under the clock). In-browser
+          env() is 0, so this resolves to exactly the old 52px. */}
+      <div style={{padding:"max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
         <button onClick={onBack} style={{background:"none", border:"none", padding:0, cursor:"pointer", fontSize:12, color:T.text3, fontFamily:T.sans}}>
           ← Home
         </button>
