@@ -5,22 +5,18 @@ import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   WEEK, SESSIONS, deriveStrengthDaySessions,
-  EXERCISE_POOLS, rotateAccessories, rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
+  rotateAccessories, rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
   dedupeRotationConfig,
-  ROTATION_OPTIONAL, ROTATION_AUTO, ROTATION_FORCED,
-  SWAP_DB, EQ_COLOUR,
-  FOCUS_OPTIONS, DEFAULT_FOCUS, FOCUS_SUMMARIES, applyFocusToSession, applyRotationToSession, applySwapsToSession,
-  // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
-  sessionMetaForDate, findRecentDays, hasMissedStrength, findUntickedRecent, weekdayIdxForDate,
-} from "@/lib/programme";
+  ROTATION_AUTO, DEFAULT_FOCUS, // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
+  sessionMetaForDate, findUntickedRecent, } from "@/lib/programme";
 import {
+  SessionIntent,
   LS, P, PB, W, F, H, BW, PN, Days, bumpStreak,
   computeRhythm, detectRecoveryPattern,
   blobPush, flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
-  enableAutoSync, disableAutoSync, pushNow, pushDeferred,
-  applyRpe, weeksSince, dateOfWeekdayIdxInCurrentWeek,
-  newDraftLog, logSet, finaliseDraft, scaleForReadiness, D, TS,
-  inferLoadType, LOAD_TYPES, startingWeightForLift,
+  enableAutoSync, disableAutoSync, pushNow, weeksSince, dateOfWeekdayIdxInCurrentWeek,
+  newDraftLog, logSet, finaliseDraft, D, TS,
+  startingWeightForLift,
 } from "@/lib/storage";
 import { T, MUSCLE_COLOURS } from "@/lib/tokens";
 import {
@@ -37,28 +33,23 @@ import {
   dismissDeloadOffer,
   decrementRecoveryCounter,
   shouldAutoCompleteDeload,
-  deloadCardCopy,
-  deloadDayLabel,
 } from "@/lib/progression";
 import { getLiftProfile, sanitiseWorkingWeights, getLoadType, weightStepForLoadType } from "@/lib/lift-translations";
 import {
-  isWebAuthnSupported, isPlatformAuthenticatorAvailable,
+  isPlatformAuthenticatorAvailable,
   registerPasskey, hasPasskey,
 } from "@/lib/webauthn";
 import { track } from "@vercel/analytics";
 import {
-  computeVolumeAggregates, recentForExercise,
-  totalTonnage, pendingTonnageMilestone, formatTonnage,
-} from "@/lib/analytics";
+  computeVolumeAggregates, totalTonnage, pendingTonnageMilestone, } from "@/lib/analytics";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { Fade, Card, Tag, CARD_SHADOW } from "@/components/ui";
+import { Fade } from "@/components/ui";
 import ScrollDrum from "@/components/ScrollDrum";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
 import ProfileScreen from "@/components/ProfileScreen";
 import FocusPickerSheet from "@/components/FocusPickerSheet";
 import HomeScreen from "@/components/HomeScreen";
-import { ReadinessScreen, SessionScreen, DoneScreen, SessionOverviewSheet } from "@/components/SessionScreen";
 import { activateProfileCore, saveFocusCore, takePendingRotationSummary } from "@/lib/profile-actions";
 
 
@@ -131,8 +122,6 @@ export default function ForgeApp(){
       types: [next === "home" ? "back" : "forward"],
     });
   }, []);
-  const [activeSessionIdx,setActiveSessionIdx]=useState(0);
-  const [sessionSwaps,setSessionSwaps]=useState({});
   const [programmeBlock,setProgrammeBlock]=useState(()=>PB.get());
   const [weekDone,setWeekDone]=useState({});
   // Date-keyed { [ISO date]: true }. Source of truth for "this day is done."
@@ -145,26 +134,12 @@ export default function ForgeApp(){
   const [bonusDone,setBonusDone]=useState({});
   const [userFocus,setUserFocus]=useState(DEFAULT_FOCUS);
   const [focusPickerOpen,setFocusPickerOpen]=useState(false);
-  const [blockIdx,setBlockIdx]=useState(0);
-  const [setNum,setSetNum]=useState(1);
-  const [phase,setPhase]=useState("A");
   // Session overview — lets users jump between blocks when gym constraints
   // dictate a different order than the prescribed flow. Auto-advance still
   // happens; this is the escape hatch.
-  const [sessionOverviewOpen,setSessionOverviewOpen]=useState(false);
-  const [readiness,setReadiness]=useState(null);
-  const [readinessReason,setReadinessReason]=useState(null);
-  const [showVid,setShowVid]=useState(false);
-  const [editTarget,setEditTarget]=useState(null);
-  const [awaitRpe,setAwaitRpe]=useState(false);
-  const [ssRoundDone,setSsRoundDone]=useState(false);
   const [workingWeights,setWWState]=useState({});
   const [workingReps,setWRState]=useState({});
-  const [restActive,setRestActive]=useState(false);
-  const [restRemain,setRestRemain]=useState(180);
-  const [restTrigger,setRestTrigger]=useState(null);
   // Append-only session log built during an active session
-  const draftLogRef = useRef(null);
   // Snapshot of workingWeights at SESSION START. State (not ref) because the
   // DoneScreen consumes it during render. Set in handleReadinessStart /
   // handleResumeDraft. Without this, the Done summary compared the user's
@@ -173,12 +148,10 @@ export default function ForgeApp(){
   // every session ("base" = template default 50kg). Now base = what the
   // user lifted at the start of this session; if the engine bumped weight
   // after the session, the diff is real.
-  const [sessionStartWeights, setSessionStartWeights] = useState({});
   // Snapshot of the in-progress draft log, captured when the overview sheet
   // opens. State (not ref) for the same render-time-readability reason — the
   // sheet displays "sets done per block" at open time; subsequent set-logs
   // while the sheet is open don't need to live-update (user is mid-jump).
-  const [overviewDraftSnapshot, setOverviewDraftSnapshot] = useState(null);
   // Shown when auto-rotation fires — acknowledge before starting session
   const [rotationSummary,setRotationSummary]=useState(null);
   // Preview-before-commit for user-initiated rotation. Holds the candidate
@@ -201,7 +174,6 @@ export default function ForgeApp(){
   const [bwIsStale,setBwIsStale]=useState(false); // true if BW > 14 days old or never set
   const [bwCardDismissed,setBwCardDismissed]=useState(false); // in-memory dismiss for this session
   const [bwEditOpen,setBwEditOpen]=useState(false); // BW edit modal state
-  const [bwPromptedThisSession,setBwPromptedThisSession]=useState(false); // only prompt once per session
 
   // Phase 3 — Deload state. Driven by training-state mesocycle subtree.
   //   activeDeload: when set, every prescribed weight is deloaded + carries the day-N tag.
@@ -209,12 +181,10 @@ export default function ForgeApp(){
   //   showDeloadComplete: one-shot flag for "Deload complete. Welcome back." on Done screen.
   const [activeDeload,setActiveDeload]=useState(null); // { startedAt, plannedDays, ... } | null
   const [deloadOffer,setDeloadOffer]=useState(null);   // signal object | null
-  const [showDeloadComplete,setShowDeloadComplete]=useState(false); // one-shot for Done screen
   // One-shot for the Done screen's "Back at it" praise: days since the
   // PREVIOUS strength session, computed in the done effect BEFORE the new
   // record is appended (afterwards the newest record is today's and the gap
   // is always 0). null = no praise (regular cadence or first-ever session).
-  const [returnGapDays,setReturnGapDays]=useState(null);
 
   // Retrospective logging state. Driven from the home picker — when retroDate
   // is set the app jumps to a single-screen form pre-populated from the
@@ -465,24 +435,6 @@ export default function ForgeApp(){
     };
   },[activeProfile]);
 
-  // Rest timer tick
-  useEffect(()=>{
-    if(!restActive) return;
-    if(restRemain<=0){
-      // Countdown reached zero — stop the timer. State machine driven by the
-      // tick below; not a render-cascade. Intentional.
-      setRestActive(false);
-      // Haptic: Android fires; iOS Safari silently no-ops (returns false).
-      // Wrapped defensively — some browsers throw on invocation without
-      // a prior user gesture (shouldn't happen here since timer started
-      // from a button tap, but belt-and-braces).
-      haptic.alert();  // rest timer expired — felt, not just shown
-      return;
-    }
-    const t=setTimeout(()=>setRestRemain(p=>p-1),1000);
-    return()=>clearTimeout(t);
-  },[restActive,restRemain]);
-
   // PWA install prompt — iOS needs a custom overlay because Safari has no
   // beforeinstallprompt event. Android/Chrome handles this natively via
   // the manifest, so we only target iOS Safari here.
@@ -513,14 +465,6 @@ export default function ForgeApp(){
     const t = setTimeout(() => setShowIosInstall(true), 1200);
     return () => clearTimeout(t);
   }, [activeProfile, history.length]);
-
-  useEffect(()=>{
-    if(!restTrigger) return;
-    // Start the rest timer in response to a trigger fired from set-logging
-    // handlers. Translating an external event into timer state. Intentional.
-    setRestRemain(restTrigger.duration);
-    setRestActive(true);
-  },[restTrigger]);
 
   const setWW=useCallback((upd)=>{
     setWWState(prev=>{
@@ -573,473 +517,8 @@ export default function ForgeApp(){
     return result;
   };
 
-  // Scale session by readiness (cooked = 85% weight on mains, -1 set supersets, no finishers).
-  // Three-step derivation: rotation config (substitutes the user's currently-
-  // active accessory exercise per slot) → focus programming (Strong drops a
-  // superset + shifts accessory reps; Sculpt bumps aligned slots + shifts
-  // those reps) → readiness scaling (cooked = 85% weight, -1 superset set,
-  // no finishers). Order matters: rotation first so focus/readiness operate
-  // on the user's actual exercises; readiness last so it reshapes only
-  // today's instance.
-  // Single derivation chain. Order matters:
-  //   raw template → rotation pick (with pool self-heal) → in-session swap →
-  //   focus reshape → readiness scale.
-  // SessionScreen and every other consumer read exercises straight off
-  // `activeSession.blocks[i]` — the substitution has already happened. This
-  // is the fix for the historical split-brain where the home overview saw
-  // the resolved exercise but the in-session resolver re-resolved from raw
-  // config and could pick up stale entries (DB Kickback ghost) or skip
-  // pool validation.
-  const rawSession = SESSIONS[activeSessionIdx];
-  const rotatedSession = useMemo(
-    () => applyRotationToSession(rawSession, programmeBlock?.config),
-    [rawSession, programmeBlock?.config]
-  );
-  const swappedSession = useMemo(
-    () => applySwapsToSession(rotatedSession, sessionSwaps),
-    [rotatedSession, sessionSwaps]
-  );
-  const focusedSession = useMemo(
-    () => applyFocusToSession(swappedSession, userFocus, programmeBlock?.config),
-    [swappedSession, userFocus, programmeBlock?.config]
-  );
-  const activeSession = useMemo(
-    () => scaleForReadiness(focusedSession, readiness),
-    [focusedSession, readiness]
-  );
-  const block    = activeSession.blocks[blockIdx];
-  const isSS     = block.type==="superset"||block.type==="finisher";
-  const swapKey  = isSS ? `${block.id}-${phase}` : block.id;
-
-  // resolveExFn reads from the already-resolved activeSession instead of
-  // re-walking sessionSwaps + programmeBlock.config. Same callsites, single
-  // truth — drift between overview and session is no longer possible.
-  // Still parameterised by blockId/phase so legacy callers (pushSetToDraft,
-  // rest-timer setup, finisher pushes) keep their signatures.
-  const resolveExFn = useCallback((blockId, ph, defaultEx) => {
-    const b = activeSession.blocks.find(x => x.id === blockId);
-    if (!b) return defaultEx;
-    if (ph === "A") return b.exA ?? defaultEx;
-    if (ph === "B") return b.exB ?? defaultEx;
-    return b.ex ?? defaultEx;
-  }, [activeSession]);
-
-  // Pre-resolve both sides of the current block so SessionScreen
-  // never needs to touch block.exA/exB directly
-  const resolvedExA = isSS ? (block.exA ?? null) : null;
-  const resolvedExB = isSS ? (block.exB ?? null) : null;
-  const resolvedEx  = !isSS ? (block.ex ?? null) : null;
-  const activeEx    = isSS ? (phase==="A" ? resolvedExA : resolvedExB) : resolvedEx;
-
-  // Resolution order for prescribed weight:
-  //   1. workingWeights[ex.name]  — engine-driven progression from prior sessions
-  //   2. startingWeightForLift(ex.name, bodyweight) — BW% floor for main lifts
-  //      on first-session cold start (only fires for the 5 mains, and only
-  //      when bodyweight has been captured)
-  //   3. ex.weight — the hardcoded SESSIONS default
-  const getW=useCallback((ex)=>{
-    if (!ex) return null;
-    if (workingWeights[ex.name] !== undefined) return workingWeights[ex.name];
-    const bwSeeded = startingWeightForLift(ex.name, bodyweight);
-    if (bwSeeded !== null) return bwSeeded;
-    return ex.weight;
-  },[workingWeights, bodyweight]);
-  const getR=useCallback((ex)=>ex?(workingReps[ex.name]??ex.reps):null,[workingReps]);
-
-  const onSwap=useCallback((key, newEx)=>{
-    setSessionSwaps(prev=>({...prev,[key]:newEx}));
-  },[]);
-
-  // Append one set to the draft log. Tolerant of missing draft (mid-session recovery).
-  // Phase is derived from the exercise identity — critical for supersets where
-  // commitLog fires after phase has already moved, and we need both A and B
-  // logged against the correct slot keys.
-  const pushSetToDraft = useCallback((ex, rpe) => {
-    if (!draftLogRef.current || !ex) return;
-    let key = block.id;
-    if (isSS) {
-      // Match the exercise against the resolved A/B to determine its slot
-      const resolvedA = resolveExFn(block.id, "A", block.exA);
-      const resolvedB = resolveExFn(block.id, "B", block.exB);
-      const derivedPhase = ex.name === resolvedA?.name ? "A"
-                         : ex.name === resolvedB?.name ? "B"
-                         : phase; // fallback for edge cases
-      key = `${block.id}-${derivedPhase}`;
-    }
-    const swapPick = sessionSwaps[key];
-    const swapped  = !!swapPick;
-    const fromPool = EXERCISE_POOLS[key] ? key : null;
-    const loadType = getLoadType(ex);
-    // Mirror getW's resolution order so the LOGGED weight matches what was
-    // DISPLAYED to the user. Critical for main lifts on first session — the
-    // user sees the BW-seeded weight but if we logged ex.weight (the old
-    // hardcoded default) the engine would reason from a phantom number.
-    const resolvedWeight = workingWeights[ex.name]
-      ?? startingWeightForLift(ex.name, bodyweight)
-      ?? ex.weight;
-    logSet(draftLogRef.current, {
-      blockId: block.id,
-      blockType: block.type,
-      exerciseName: ex.name,
-      muscle: ex.muscle,
-      swapped,
-      fromPool,
-      loadType,
-      bodyweight: bodyweight,
-      weight: resolvedWeight,
-      reps: workingReps[ex.name] ?? ex.reps,
-      rpe: rpe || null,
-    });
-    // Persist the draft to LS so a force-quit or crash doesn't lose work.
-    // LS-only on purpose — blob isn't chatty-enough-reliable for this.
-    D.save(activeProfile, draftLogRef.current);
-    
-    // If this is a bodyweight movement and user hasn't set BW, prompt once per session.
-    // The brief delay (~280ms) matches the RPE card's fade-out animation so the
-    // BW modal slides up immediately as the RPE card finishes dismissing — feels
-    // like a smooth handoff rather than two competing animations or an awkward gap.
-    // Tied to RPE animation duration; if that changes, update this to match.
-    if (loadType !== "external" && bodyweight === null && !bwPromptedThisSession) {
-      setBwPromptedThisSession(true);
-      setTimeout(() => setBwEditOpen(true), 280);
-    }
-  }, [block, isSS, phase, sessionSwaps, workingWeights, workingReps, resolveExFn, activeProfile, bodyweight, bwPromptedThisSession]);
-
-  const commitLog=useCallback((rpe)=>{
-    // Use resolved exercises so RPE weight adjustments target the correct name
-    const exes = isSS
-      ? [resolveExFn(block.id,"A",block.exA), resolveExFn(block.id,"B",block.exB)]
-      : [resolveExFn(block.id, null, block.ex)];
-
-    // Record the actual sets performed in the draft log. Per-block weight
-    // adjustments via applyRpe used to fire here, but Phase 2 moves all
-    // progression decisions to the session-finalise hook (better — engine
-    // sees the entire session's performance against prescribed targets,
-    // not just one block).
-    exes.forEach(ex => pushSetToDraft(ex, rpe));
-
-    // Advance block / set / screen
-    if(setNum>=block.sets){
-      if(blockIdx<activeSession.blocks.length-1){setBlockIdx(p=>p+1);setSetNum(1);setPhase("A");}
-      else setScreen("done");
-    }else setSetNum(p=>p+1);
-    setRestTrigger({id:Date.now(),duration:block.rest});
-    setSsRoundDone(false);
-    setAwaitRpe(false);
-  },[block,blockIdx,isSS,setNum,activeSession,resolveExFn,pushSetToDraft,setScreen]);
-
-  const handleLog=useCallback(()=>{
-    if(isSS){
-      if(phase==="A"){
-        // Log exercise A as we move into B. Only for finishers — supersets
-        // will log both A and B together in commitLog when RPE is submitted.
-        if(block.type==="finisher"){
-          pushSetToDraft(resolveExFn(block.id,"A",block.exA), null);
-        }
-        setPhase("B");return;
-      }
-      setPhase("A");
-      if(block.type==="superset"){setSsRoundDone(true);return;}
-      // Finisher: log B, then advance silently without RPE
-      pushSetToDraft(resolveExFn(block.id,"B",block.exB), null);
-      if(setNum>=block.sets){
-        if(blockIdx<activeSession.blocks.length-1){setBlockIdx(p=>p+1);setSetNum(1);setPhase("A");}
-        else setScreen("done");
-      }else setSetNum(p=>p+1);
-      setRestTrigger({id:Date.now(),duration:block.rest});
-      return;
-    }
-    setAwaitRpe(true);
-  },[block,blockIdx,isSS,phase,setNum,activeSession,resolveExFn,pushSetToDraft,setScreen]);
-
-  // Jump to a specific block in the active session. Used by the session
-  // overview sheet when a busy gym means the user needs to do exercises in
-  // a different order than prescribed. Resumes setNum from the draft log so
-  // a partially-completed block picks up at the right next set.
-  const handleJumpToBlock = (targetIdx) => {
-    if (typeof targetIdx !== "number" || targetIdx < 0) return;
-    if (!activeSession?.blocks?.[targetIdx]) return;
-    const targetBlock = activeSession.blocks[targetIdx];
-    // Count completed sets across the target block's logged exercises.
-    // For supersets we log both sides together, so pairs done = the max
-    // sets count across either side (matches resume-draft maths).
-    const saved = draftLogRef.current?.blocks?.[targetBlock.id];
-    const pairs = saved?.exercises
-      ? Math.max(0, ...Object.values(saved.exercises).map(ex => (ex.sets || []).length))
-      : 0;
-    setBlockIdx(targetIdx);
-    setSetNum(Math.min(pairs + 1, targetBlock.sets));
-    setPhase("A");
-    setAwaitRpe(false);
-    setSsRoundDone(false);
-    setRestActive(false);
-    setSessionOverviewOpen(false);
-  };
-
-  const reset=()=>{
-    setBlockIdx(0);setSetNum(1);setPhase("A");setReadiness(null);setReadinessReason(null);
-    setAwaitRpe(false);setSsRoundDone(false);
-    setRestActive(false);setRestRemain(180);setRestTrigger(null);
-    setSessionSwaps({});
-    setSessionOverviewOpen(false);
-    draftLogRef.current = null;
-    // If the user explicitly quits, the pending-draft card should go too.
-    D.clear(activeProfile);
-    setPendingDraft(null);
-    setScreen("home");
-  };
-
-  useEffect(()=>{
-    if(screen==="done"&&activeProfile){
-      const newStreak=bumpStreak(activeProfile);
-      // Session-finalise orchestration on the done-screen transition: persist
-      // the record, run the progression engine, then reflect results in state.
-      // Deliberate side-effect pipeline keyed off the screen change. Intentional.
-      setStreak(newStreak);
-      // Mark today as done in the week strip
-      const dw=new Date().getDay();
-      const wm=[6,0,1,2,3,4,5];
-      const updated=P.markDayDone(activeProfile,wm[dw]);
-      setWeekDone(updated);
-
-      // "Back at it" gap — read the newest strength record BEFORE appending
-      // today's. A gap > 7 days means this session is a return after time
-      // away; the Done screen praises the comeback (consistency-over-time
-      // philosophy: coming back IS the win, not an apology owed).
-      {
-        const prior = H.get(activeProfile)
-          .filter(r => r?.date && String(r.session || "").startsWith("strength"))
-          .map(r => r.date).sort().pop();
-        if (prior) {
-          const gap = Math.round((new Date().setHours(0,0,0,0) - new Date(prior).setHours(0,0,0,0)) / 86400000);
-          setReturnGapDays(gap > 7 ? gap : null);
-        } else {
-          setReturnGapDays(null);
-        }
-      }
-
-      // Finalise the session draft and append to history
-      let sessionRecord = null;
-      if (draftLogRef.current) {
-        sessionRecord = finaliseDraft(draftLogRef.current);
-        H.append(activeProfile, sessionRecord);
-        // Dual-write to Days. Strength sessions stamp completedType +
-        // sessionId so the unified store reflects the live log.
-        // scheduledType is the schedule effective on that date — preserves
-        // the original plan-of-record even if the user retroactively edits.
-        const effective = W.getEffectiveOn(sessionRecord.date);
-        const dowMon = (() => {
-          const [y, m, d] = sessionRecord.date.split("-").map(Number);
-          const js = new Date(y, m - 1, d).getDay();
-          return js === 0 ? 6 : js - 1;
-        })();
-        const scheduledType = effective && effective[dowMon] ? effective[dowMon].type : "strength";
-        Days.set(activeProfile, sessionRecord.date, {
-          scheduledType,
-          completedType: "strength",
-          sessionId: sessionRecord.id,
-        });
-        // Reflect in React state so Performance Lab + the home strip + the
-        // "Session complete" card update immediately. weekDone is now the
-        // unified Day projection (includes strength), so refresh it here.
-        // We deliberately do NOT write the legacy dayDone store — strength
-        // completion is history-backed; dayDone is non-strength ticks only.
-        setHistory(H.get(activeProfile));
-        setWeekDone(Days.projectCurrentWeek(activeProfile).complete);
-        draftLogRef.current = null;
-      }
-      // Completed session — drop the persisted draft.
-      D.clear(activeProfile);
-      setPendingDraft(null);
-
-      // ─── Phase 2 + 3: progression engine + deload transitions ─────────
-      // For every exercise in the just-finished session, compute next
-      // prescription (standard / deload / recovery), update lift state +
-      // muscle anchors, and write the new working weight back to setWW.
-      // Engine is silent — user sees a quietly smarter app.
-      if (sessionRecord) {
-        try {
-          const fullHistory = H.get(activeProfile); // already includes the new record
-          let trainingState = TS.get(activeProfile);
-          const wwUpdates = {};
-
-          // Phase 3 — was a deload active and should it auto-complete?
-          // Auto-completion fires on the first session ≥ 4 days after deload start.
-          // The current session being logged IS that crossing-the-threshold session,
-          // so we run the standard progression on it (recovery from this point on)
-          // rather than treating it as another deload session.
-          const wasInDeload = !!trainingState.mesocycle?.activeDeload;
-          let justCompletedDeload = false;
-          if (wasInDeload && shouldAutoCompleteDeload(trainingState, sessionRecord.date)) {
-            trainingState = completeDeload(trainingState);
-            TS.replaceState(activeProfile, trainingState);
-            justCompletedDeload = true;
-            setActiveDeload(null);
-            setShowDeloadComplete(true); // one-shot for Done screen
-          }
-
-          // After auto-completion, every lift now has inRecoveryUntil > 0.
-          // The very session that triggered auto-completion still uses STANDARD
-          // accumulation logic (it's the user's first non-deload session) — so
-          // we DON'T run recovery prescription on this session. Recovery starts
-          // from the NEXT session forward.
-
-          // If still in active deload (didn't cross threshold), this session uses deload prescriptions.
-          const stillInDeload = !justCompletedDeload && wasInDeload;
-
-          for (const block of sessionRecord.blocks || []) {
-            for (const ex of block.exercises || []) {
-              // Reconcile liftState.currentWeight with what was actually
-              // performed BEFORE computing the prescription. A stale seed
-              // (programme default, or a prior session's adjusted-down weight
-              // that the user has since dialled further) otherwise overrides
-              // the engine's reasoning basis and "HOLD" prescriptions surface
-              // at the old number instead of what the user just lifted.
-              const rawLiftState = trainingState.lifts?.[ex.name] || null;
-              const liftState    = reconcileLiftStateWithSession(rawLiftState, ex);
-              const profile = getLiftProfile(ex.name);
-              const anchorMuscle = profile.primaryMuscle;
-              const muscleAnchor = anchorMuscle
-                ? trainingState.muscleAnchors?.[anchorMuscle] || null
-                : null;
-
-              let prescription;
-              const context = {
-                readiness: sessionRecord.readiness,
-                currentWeight: workingWeights[ex.name] ?? ex.sets?.[0]?.weight ?? null,
-              };
-
-              if (stillInDeload) {
-                // Active deload — flat scaled prescription, no progression decisions
-                prescription = computeDeloadPrescription(ex.name, liftState, context);
-              } else if (liftState?.inRecoveryUntil > 0 && !justCompletedDeload) {
-                // In recovery phase — rebuild from deloaded weight
-                prescription = computeRecoveryPrescription(ex.name, liftState, fullHistory, context);
-              } else {
-                // Standard accumulation (Phase 2)
-                prescription = computeNextPrescription({
-                  liftName: ex.name,
-                  history: fullHistory,
-                  liftState,
-                  muscleAnchor,
-                  context,
-                });
-              }
-
-              // Update working weights for next session — only when engine
-              // returned a numeric weight (BW lifts return null).
-              if (prescription.weight !== null && prescription.weight !== undefined) {
-                wwUpdates[ex.name] = prescription.weight;
-              }
-
-              // Persist updated lift state. During an active deload, we DON'T
-              // run the standard updateLiftStateFromSession (which would mutate
-              // stallSignal, e1RM, consecutiveHolds) — the deload window is
-              // invisible to progression tracking.
-              if (stillInDeload && liftState) {
-                // Deload session — leave lift state untouched aside from history
-                const lastHistEntry = {
-                  date: sessionRecord.date,
-                  weight: ex.sets?.[0]?.weight ?? null,
-                  effectiveLoad: ex.sets?.[0]?.effectiveLoad ?? null,
-                  reps: ex.sets?.[0]?.reps ?? null,
-                  rir: ex.sets?.[0]?.rir ?? null,
-                  est1rm: null,
-                  decision: "DELOAD",
-                  rationale: ["deload_session_logged"],
-                };
-                TS.updateLift(activeProfile, ex.name, {
-                  ...liftState,
-                  history: [...(liftState.history || []), lastHistEntry].slice(-12),
-                });
-              } else {
-                const newLiftState = updateLiftStateFromSession(
-                  liftState,
-                  sessionRecord,
-                  ex,
-                  prescription,
-                );
-                // If this session was a recovery session (lift had inRecoveryUntil > 0),
-                // decrement the counter so we step toward "back to accumulation."
-                const counterAdjusted = (liftState?.inRecoveryUntil > 0 && !justCompletedDeload)
-                  ? decrementRecoveryCounter(newLiftState)
-                  : newLiftState;
-                TS.updateLift(activeProfile, ex.name, counterAdjusted);
-              }
-
-              // Update muscle anchor — only for loaded lifts with a known muscle group.
-              // Skip during deload (the weights aren't representative of true strength).
-              if (anchorMuscle && profile.progressesByLoad && !stillInDeload) {
-                const currentAnchor = TS.get(activeProfile).muscleAnchors?.[anchorMuscle] || null;
-                const newAnchor = updateMuscleAnchorFromSession(currentAnchor, sessionRecord, ex);
-                if (newAnchor) TS.updateMuscleAnchor(activeProfile, anchorMuscle, newAnchor);
-              }
-            }
-          }
-
-          if (Object.keys(wwUpdates).length) {
-            setWW(p => ({ ...p, ...wwUpdates }));
-          }
-
-          // Phase 3 — refresh the home-screen offer state.
-          const finalState = TS.get(activeProfile);
-          const finalHistory = H.get(activeProfile);
-          setDeloadOffer(shouldOfferDeload(finalState, finalHistory));
-          setActiveDeload(finalState?.mesocycle?.activeDeload || null);
-        } catch (e) {
-          // Engine errors must never block session completion.
-          console.error("[forge:progression]", e);
-        }
-      }
-      // ──────────────────────────────────────────────────────────────────
-
-      // ─── Phase 4: silent volume tracking ──────────────────────────────
-      // After every session, recompute rolling 7/14/28-day volume aggregates +
-      // a 16-week baseline, persist to TS.volume. No UI consumes this yet —
-      // it's infrastructure for future Performance Lab visualisations and for
-      // Phase 5+ fatigue tuning. Errors silently logged, never blocking.
-      if (sessionRecord) {
-        try {
-          const fullHistory = H.get(activeProfile);
-          const aggregates = computeVolumeAggregates(fullHistory);
-          TS.updateVolume(activeProfile, aggregates);
-        } catch (e) {
-          console.error("[forge:volume-tracking]", e);
-        }
-      }
-      // ──────────────────────────────────────────────────────────────────
-
-      // Anonymous completion signal — feeds Vercel Analytics funnel.
-      // No PII, no free-text; enum-only dimensions.
-      try {
-        track("session_complete", {
-          session: sessionRecord?.session || "strength",
-          readiness: readiness || "normal",
-          readinessReason: readinessReason || "unspecified",
-          block: String(programmeBlock?.number ?? 1),
-        });
-      } catch {}
-
-      // Push both meta and the just-finalised record to blob.
-      // History push is incremental — only this one record, the server
-      // merges with whatever it has. Includes user-state fields so a
-      // session-complete push can't wipe a schedule/focus/tick the user
-      // changed mid-session.
-      blobPush(activeProfile, {
-        meta: {
-          weights: workingWeights,
-          reps: workingReps,
-          streak: P.getStreak(activeProfile),
-          programmeBlock,
-          userWeek: W.getHistory(),
-          userFocus: F.get(activeProfile),
-          days: Days.getAll(activeProfile),
-        },
-        history: sessionRecord ? [sessionRecord] : [],
-      });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[screen==="done"]);
+  // Session derivation chain + set-logging + finalise pipeline moved to
+  // components/SessionHost.jsx (PR3 3e-route).
 
   // Mark a non-strength day complete (zone 2, cardio, HIIT, rest). Defaults
   // to today; pass an explicit weekday index (0=Mon..6=Sun, monday-start) to
@@ -1194,32 +673,6 @@ export default function ForgeApp(){
   );
   }
 
-const sProps={
-  session:activeSession,
-  block,blockIdx,totalBlocks:activeSession.blocks.length,setNum,phase,isSS,
-  activeEx, resolvedExA, resolvedExB, resolvedEx,
-  swapKey,onSwap,
-  showVid,setShowVid,getW,getR,editTarget,setEditTarget,
-  workingWeights,setWW,workingReps,setWR,
-  // History feeds the in-session "Recent" sanity-check sheet so the user
-  // can compare today's prescribed weight against their last 3 performances
-  // of the active exercise.
-  history,
-  awaitRpe,ssRoundDone,
-  restActive,restRemain,setRestActive,setRestRemain,
-  onCommit:commitLog,onLog:handleLog,onQuit:reset,
-  // Snapshot the draft log at sheet-open so the overview reads from a stable
-  // value (no render-time ref access). Subsequent set logs while the sheet
-  // is open don't live-update — user is mid-jump, that's fine.
-  onShowOverview: () => {
-    setOverviewDraftSnapshot(draftLogRef.current);
-    setSessionOverviewOpen(true);
-  },
-  bodyweight,
-  // Phase 3 — when active, SessionScreen renders "deload · day N of M" subtitle below prescribed weight.
-  deloadDayTag: activeDeload ? deloadDayLabel(activeDeload) : null,
-  };
-
   // Derive today's session index for HomeScreen
   const dow      = new Date().getDay();
   const weekMap  = [6,0,1,2,3,4,5];
@@ -1301,94 +754,37 @@ const sProps={
   };
 
   const beginSession = () => {
-    // Auto-rotate if we're past the threshold. Show summary card;
-    // once acknowledged, readiness screen follows.
+    // Auto-rotate if we're past the threshold: show the summary card first;
+    // its continue button performs the /session handoff.
     const weeks = weeksSince(programmeBlock.startDate);
     if (weeks >= ROTATION_AUTO) {
       rotate(true);
-      // The summary modal's continue button transitions to readiness
-      setActiveSessionIdx(todaySessionIdx);
       return;
     }
-    setActiveSessionIdx(todaySessionIdx);
-    setScreen("readiness");
+    startSessionRoute();
   };
 
-  // After rotation summary acknowledged, advance to readiness
+  // One-shot intent handoff to the /session route (PR3 3e-route). The route
+  // hydrates everything else from LS — see components/SessionHost.jsx.
+  const startSessionRoute = () => {
+    SessionIntent.stash(activeProfile, { sessionIdx: todaySessionIdx });
+    router.push("/session");
+  };
+
+  // After rotation summary acknowledged, hand off to the session route
   const handleRotationContinue = () => {
     setRotationSummary(null);
-    setScreen("readiness");
-  };
-
-  // Readiness screen's "start" initialises the draft log and enters session
-  const handleReadinessStart = () => {
-    setSessionStartWeights({ ...workingWeights });
-    draftLogRef.current = newDraftLog({
-      profileName: activeProfile,
-      session: ["strength-a","strength-b","strength-c"][activeSessionIdx],
-      blockNumber: programmeBlock.number,
-      readiness,
-      readinessReason,
-    });
-    setScreen("session");
+    startSessionRoute();
   };
 
   // Resume a draft from a previous, interrupted session.
   // Jumps straight into session screen at the furthest block the user reached.
+  // Resume a draft from a previous, interrupted session — the /session route
+  // reconstructs position from the persisted draft itself.
   const handleResumeDraft = () => {
     if (!pendingDraft) return;
-    const { draft } = pendingDraft;
-
-    // Rehydrate readiness / session selection from the saved draft so the
-    // working-set path resolves correctly.
-    const sessionKey = draft.session; // "strength-a" | ...
-    const idx = ["strength-a","strength-b","strength-c"].indexOf(sessionKey);
-    if (idx === -1) { handleDiscardDraft(); return; }
-
-    // Map back to the live SESSIONS definition. If programme has rotated since
-    // the draft was saved, the draft's block ids should still match by id.
-    const session = SESSIONS[idx];
-    if (!session) { handleDiscardDraft(); return; }
-
-    // Find which block they reached — the highest-indexed block with any sets.
-    let resumeBlockIdx = 0;
-    let setsOnCurrent  = 0;
-    for (let i = 0; i < session.blocks.length; i++) {
-      const saved = draft.blocks[session.blocks[i].id];
-      if (!saved) continue;
-      const setsHere = Object.values(saved.exercises || {})
-        .reduce((n, ex) => n + (ex.sets || []).length, 0);
-      if (setsHere > 0) {
-        resumeBlockIdx = i;
-        // For non-superset, sets-per-exercise == setNum-1 completed
-        // For superset, we log both A+B together, so pairs == setNum-1
-        const block = session.blocks[i];
-        const isSS = block.type === "superset" || block.type === "finisher";
-        const pairs = Math.max(
-          ...Object.values(saved.exercises || {}).map(ex => (ex.sets || []).length)
-        );
-        setsOnCurrent = isSS ? pairs : pairs; // both resolve the same way here
-      }
-    }
-
-    // Hydrate React state and re-attach the draft ref
-    draftLogRef.current = draft;
-    // Resume preserves the session-start snapshot too. Use the current working
-    // weights as the best available baseline (we don't store the original
-    // pre-session snapshot on the draft); if the user adjusted in the previous
-    // run, that adjustment carries forward as "base" for the diff. Acceptable
-    // — the resumed user is mid-session, so "what was today's starting weight"
-    // is fuzzy anyway.
-    setSessionStartWeights({ ...workingWeights });
-    setActiveSessionIdx(idx);
-    setReadiness(draft.readiness);
-    setReadinessReason(draft.readinessReason);
-    setBlockIdx(resumeBlockIdx);
-    // Resume AT the next set (what they'd have logged next)
-    setSetNum(Math.min(setsOnCurrent + 1, session.blocks[resumeBlockIdx].sets));
-    setPhase("A");
-    setPendingDraft(null);
-    setScreen("session");
+    SessionIntent.stash(activeProfile, { resume: true });
+    router.push("/session");
   };
 
   const handleDiscardDraft = () => {
@@ -1779,9 +1175,6 @@ const sProps={
   return (
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
       {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone}/>}
-      {screen==="readiness"   && <ReadinessScreen readiness={readiness} setReadiness={setReadiness} reason={readinessReason} setReason={setReadinessReason} onStart={handleReadinessStart}/>}
-      {screen==="session"     && <ErrorBoundary><SessionScreen {...sProps}/></ErrorBoundary>}
-      {screen==="done"        && <ErrorBoundary><DoneScreen session={activeSession} profileName={activeProfile} workingWeights={workingWeights} sessionStartWeights={sessionStartWeights} userWeek={userWeek} onHome={()=>{ setShowDeloadComplete(false); setReturnGapDays(null); reset(); }} deloadCompleted={showDeloadComplete} returnGapDays={returnGapDays}/></ErrorBoundary>}
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} userWeek={userWeek} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
@@ -1804,15 +1197,7 @@ const sProps={
           onCancel={()=>setFocusPickerOpen(false)}
         />
       )}
-      {sessionOverviewOpen && screen === "session" && (
-        <SessionOverviewSheet
-          session={activeSession}
-          currentBlockIdx={blockIdx}
-          draftLog={overviewDraftSnapshot}
-          onJumpToBlock={handleJumpToBlock}
-          onCancel={()=>setSessionOverviewOpen(false)}
-        />
-      )}
+      
     </div>
   );
 }

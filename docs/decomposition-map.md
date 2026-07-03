@@ -107,9 +107,23 @@ the first real "shared-state foundation" piece the migration needs.
   handed to the home shell via a one-shot LS stash (take-on-mount).
   showProfiles state retired from ForgeApp: the gate is now purely
   !activeProfile; Home's profile button router.push("/profile")s.
-- **3e/3f — Home + Session routes, then `<ViewTransition>` migration** (per
-  frontend-audit.md). Home/Session extraction follows the same file-first
-  pattern; Session carries the draft-rehydrate + popstate exit-guard.
+- **3e — ✅ IMPLEMENTED (2026-07-04).** File-first: HomeScreen →
+  components/HomeScreen.jsx, session flow (Readiness/Session/Done +
+  satellites) → components/SessionScreen.jsx, load-type helpers →
+  lib/lift-translations.js. Route: /session renders
+  components/SessionHost.jsx, which owns the whole session state machine
+  and the finalise pipeline (moved from ForgeApp's done-effect, run as an
+  event on the done transition). Handoff = one-shot SessionIntent LS stash
+  ({sessionIdx} | {resume:true}); no intent AND no live draft → bounce to /.
+  The planned popstate exit-guard proved unnecessary: the per-set-persisted
+  draft makes back-navigation pause semantics for free (resume card on
+  home; refresh/deep-link auto-resumes; only explicit Quit discards).
+  Home projections (streak/weekDone/deloadOffer) re-derive from LS when the
+  shell remounts — no context layer, same storage-as-store line as 3d.
+  ForgeApp: 5,688 → ~2,150 across the arc.
+- **3f — `<ViewTransition>` migration** (per frontend-audit.md): migrate the
+  hand-rolled startViewTransition to Next's experimental viewTransition +
+  @view-transition navigation:auto; retire bespoke VT CSS.
 
 **Principle:** file-extraction (decomposition) is always safe and goes first;
 route-ing — which moves identity/activation logic — pauses for a design call.
