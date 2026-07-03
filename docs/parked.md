@@ -184,6 +184,41 @@ length → 42vh drift over 200vh of scroll ≈ 0.21× everywhere; short
 pages simply use the first slice of the curve). Already inside the
 @supports gate; test on a rest day + Performance Lab.
 
+### In-session RIR threshold hints (power-user affordance)
+
+**Status:** Parked 2026-07-04 (from the Copilot v1.5 review, item 9).
+
+**Context:** The progression engine's ADD thresholds vary by exercise
+category (e.g. lower_compound needs RIR ≥ 2, power ≥ 3) but the session
+screen never says so — the engine reads as "quietly smarter" by design,
+and for most users that opacity is the feature. For power users, though,
+a tiny affordance ("2 reps in reserve adds weight next time") turns the
+RPE tap from a mood report into a lever they understand.
+
+**Next step:** Design call first, not code: does surfacing the mechanism
+break the "prescriptive, not punitive" voice? If it survives that test,
+the shape is a one-line hint under the RPE card (RpeCard already takes a
+`label` prop), sourced from the same category-threshold table the engine
+uses so it can never drift. Belongs with the session-screen polish pass.
+
+### Progression history window depth (12 sessions) — v2 question
+
+**Status:** Parked 2026-07-04 (from the Copilot v1.5 review, item 5).
+Likely only material for true power users with long, consistent history.
+
+**Context:** `liftState.history` caps at 12 sessions per lift. For the
+current Phase 3 signals (stall detection, fatigue override) that window
+is deliberately tight — roughly one mesocycle at 3 strength days/week —
+so signals react to the CURRENT block rather than archaeology. The open
+question for multi-year users: do slow-burn patterns (e.g. a lift that
+stalls every third block, seasonal regression) need a deeper window or a
+second, coarser aggregate (per-block summaries) alongside the tight one?
+
+**Next step:** Decide with data, not speculation: once real users have
+6+ months of history, sample whether any Phase 3 misfires trace to the
+window edge. If a deeper view is needed, prefer adding a per-block
+summary layer over widening the raw window (keeps signal reactivity).
+
 ### Performance Lab — correctness bugs (logged 2026-07-01, from real use)
 
 **Status:** Confirmed bugs in live use; fix before the surface polish below.
