@@ -53,10 +53,15 @@ body {
    black-translucent (app/layout.jsx) the page draws UNDER a transparent
    status bar, so the top content needs exactly the safe-area inset of
    padding to clear the clock — no more. Standalone-only so the in-browser
-   layout is untouched. NOTE: an earlier version added a 59px floor here;
-   that stacked a second dark slab on top of the system bar and is removed. */
+   layout is untouched. On .forge-page, NOT body: body padding would start
+   the .forge-page box (substrate + grain) BELOW the safe area, leaving a
+   strip of bare body background behind the clock — a hard band against
+   the field (found on device after the substrate/tone split). Padding the
+   substrate itself keeps the field continuous under the clock and pushes
+   only the content down. NOTE: an earlier version added a 59px floor
+   here; that stacked a second dark slab on the system bar — removed. */
 @media (display-mode: standalone) {
-  body {
+  .forge-page {
     padding-top: env(safe-area-inset-top, 0px);
   }
 }
