@@ -146,7 +146,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // Fixing the source instead.
   const dayRim = ({
     strength: { top: 0,     right: -80,    width: 360, height: 320 },
-    zone2:    { bottom: -120, left: -80,  width: 420, height: 360 },
+    zone2:    { bottom: 24, left: -80,  width: 420, height: 360 },
     hiit:     { top: 0,     left: -80,     width: 320, height: 280 },
     cardio:   { top: "30%", right: -120,  width: 360, height: 320 },
     rest:     { top: "40%", left: "20%",  width: 280, height: 240 },
@@ -188,9 +188,14 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       }}/>
       {/* Focus-accent rim glow — quiet "you-are-here" layer in the user's
           chosen identity colour. Bottom-right by convention; opacity low so
-          it never competes with the day-type signal above. */}
+          it never competes with the day-type signal above. bottom:24 (was
+          -100), deliberately: a bottom-anchored glow box that crosses the
+          document end gets cut mid-gradient at the page edge and reads as a
+          hard warm "chin" against the chrome zone below (found on device —
+          gold on every screen, since this is focus- not day-accent). Same
+          constraint applies to the zone2 dayRim above. */}
       <div style={{
-        position:"absolute",bottom:-100,right:-60,
+        position:"absolute",bottom:24,right:-60,
         width:340,height:280,
         background:`radial-gradient(ellipse,${focusAccent.glow} 0%,transparent 70%)`,
         opacity:0.7,
