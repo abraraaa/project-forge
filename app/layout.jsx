@@ -59,7 +59,7 @@ export const viewport = {
   // from html/body in globals.css thinking themeColor covers it; on Safari
   // 26 the body bg IS what tints the toolbar. (This exact trap already
   // caused a regression once.) See docs/frontend-audit.md F5.
-  themeColor: "#131110",
+  themeColor: "#1D1A19",
   // colorScheme via the viewport API rather than a manual <meta> in <head>
   // — Next dedupes/manages it and warns on hand-written viewport meta.
   // Controls UA form controls, scrollbars, and the default canvas colour.
@@ -100,10 +100,11 @@ export default function RootLayout({ children, overlay }) {
       // white flash on load/navigation AND, on iOS standalone, the swipe-back
       // "shimmer" (it tracks device appearance precisely because it's the UA
       // canvas). color-scheme:dark darkens the UA canvas; backgroundColor pins
-      // our exact #131110. Must stay in sync with html/body bg in globals.css
-      // and T.bg0. This is the parse-time layer the meta tag + CSS couldn't
+      // the chrome-sampling tone. Must stay in sync with html/body bg in
+      // globals.css — #1D1A19, the grain-lifted field tone, NOT T.bg0 (see
+      // the globals.css comment). This is the parse-time layer the meta tag + CSS couldn't
       // cover. See docs/frontend-audit.md F5/F7.
-      style={{ colorScheme: "dark", backgroundColor: "#131110" }}
+      style={{ colorScheme: "dark", backgroundColor: "#1D1A19" }}
     >
       <head>
         {/* Build-output-verified manual tags. Next 16's Metadata API

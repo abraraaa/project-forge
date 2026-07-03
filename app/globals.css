@@ -21,7 +21,14 @@ html, body {
      overscroll base only — the visible page substrate (base + desktop
      ambient gradients + grain) paints on .forge-page below, which spans
      the full document rather than body's 100vh box. */
-  background: #131110;
+  /* #1D1A19, not the #131110 design base, deliberately: this colour is
+     what Safari 26 SAMPLES for its chrome extension (bottom chin, status
+     zone) and what overscroll rubber-band shows — and the page's visible
+     field is the substrate PLUS the 12% screen-blend grain lift, which
+     renders at #1D1A19 (measured in Chromium at page end). Sampling the
+     raw base left a visibly darker chin below the grain field at full
+     scroll. The painted substrate itself stays #131110 on .forge-page. */
+  background: #1D1A19;
   /* NO overflow on the root — deliberately. overflow-x: hidden here turned
      html into a managed scroll container, and iOS 26 Safari's chrome
      behaviours key off a NATURAL root scroller: with the root constrained,
@@ -79,7 +86,7 @@ input, button, textarea, select { font: inherit; }
      own stacking context: the grain now paints after THIS background and
      screen-blends against it (same math as before — flat #131110, plus
      the ambient gradients on desktop below), and nothing can occlude it.
-     body/html keep their flat #131110 for Safari's chrome sampling and
+     body/html carry the grain-lifted #1D1A19 for chrome sampling and
      the overscroll rubber-band. */
   isolation: isolate;
   background: #131110;
