@@ -37,7 +37,7 @@ export default function PerformanceLab({ history, onBack }) {
   const isEmpty = counts.total === 0;
 
   return (
-    <div style={{minHeight:"100vh", paddingBottom:48, position:"relative", overflow:"hidden"}}>
+    <div style={{minHeight:"100vh", paddingBottom:48, position:"relative", overflow:"clip"}}>
       {/* Header — ambient glow. top:0 (was -180) keeps the gradient's
           bright centre at content y≈250 instead of y≈70 so the topmost
           ~80px stays at native body bg #131110, matching the system

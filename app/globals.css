@@ -20,9 +20,18 @@ html, body {
      content. Desktop breakpoints below ADD a radial-gradient atop this
      on body only — html keeps the flat colour for safe-area zones. */
   background: #131110;
-  overflow-x: hidden;
-  /* No overscroll-behavior on the root — the native iOS rubber-band on
-     the page itself is part of the platform feel and users miss it when
+  /* NO overflow on the root — deliberately. overflow-x: hidden here turned
+     html into a managed scroll container, and iOS 26 Safari's chrome
+     behaviours key off a NATURAL root scroller: with the root constrained,
+     Safari painted opaque colour-extension slabs behind the status bar and
+     URL bar instead of letting content slide under translucent chrome
+     (observed on device even after the fixed-element fix; the iOS 26
+     write-ups' guidance is "let html remain scrollable" and clip on an app
+     shell instead — 1ar.io/updates/safari-26-liquid-glass-web). Horizontal
+     clipping now lives on .forge-page below as overflow-x: clip, which
+     clips WITHOUT creating a scroll container.
+     No overscroll-behavior on the root either — the native iOS rubber-band
+     on the page itself is part of the platform feel and users miss it when
      it's gone. Sheet scrims keep their own `overscroll-behavior: contain`
      so scrolling inside a sheet doesn't bleed into the page behind. */
 }
@@ -57,6 +66,13 @@ input, button, textarea, select { font: inherit; }
 .forge-page {
   position: relative;
   min-height: 100vh;
+  /* Horizontal clipping guard, relocated from html/body. `clip` (not
+     `hidden`) because clip clips paint without creating a scroll
+     container — the root above must stay a natural scroller for Safari
+     26's translucent chrome and for scroll-driven timelines to bind.
+     Fixed-position descendants (modals, toasts) are NOT clipped: a plain
+     position: relative ancestor is not their containing block. */
+  overflow-x: clip;
 }
 
 /* ─── Scroll-anchored ambient glow ─────────────────────────────────────────
@@ -76,7 +92,14 @@ input, button, textarea, select { font: inherit; }
   @media (prefers-reduced-motion: no-preference) {
     .forge-glow-anchor {
       /* Shorthand first — it resets animation-timeline, so the timeline
-         must be declared after it. */
+         must be declared after it. scroll(root) explicitly, NOT scroll():
+         `nearest` walks up to the first ancestor SCROLL CONTAINER, and an
+         intermediate overflow: hidden shell hijacks that resolution (an
+         overflow: hidden box is a scroll container; overflow: clip is not
+         — screen shells now use clip for exactly this reason). Verified in
+         Chromium: with a hidden shell in the chain, the timeline bound to
+         the shell (whose scroll offset never moves) and every scroll-driven
+         animation on the page sat frozen at progress 0. */
       animation: forge-glow-drift linear both;
       animation-timeline: scroll(root);
     }
