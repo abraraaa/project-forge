@@ -126,18 +126,25 @@ export default function RootLayout({ children, overlay }) {
       <body>
         <ServiceWorkerRegistrar />
         <ErrorBoundary>
-          {children}
+          {/* .forge-page (globals.css): document-height positioned wrapper
+              that hosts the Portra grain field as an absolute z -1 child, so
+              the texture scrolls WITH the page. Deliberately NOT a fixed
+              overlay: Safari 26 paints opaque colour-extension slabs behind
+              its chrome whenever a fixed/sticky element borders a viewport
+              edge (WebKit bug 301756), which was suppressing the translucent
+              scroll-under treatment at both the status bar and the URL bar.
+              With no fixed element at the edges, chrome tint falls back to
+              body's solid #131110 and content slides under the bars
+              natively. See GrainOverlay.jsx for the full rationale. */}
+          <div className="forge-page">
+            <GrainOverlay />
+            {children}
+          </div>
         </ErrorBoundary>
         {/* Intercepted-route overlay slot. Renders nothing (default.jsx → null)
             unless a route is intercepted into it; an interception paints over
             `children` above, keeping the underlying page mounted. */}
         {overlay}
-        {/* Kodak Portra-flavour grain texture. It is a zIndex -1 FIELD that
-            sits BEHIND the app (see GrainOverlay.jsx) — cards paint on top of
-            it, the status-bar zone stays plain. pointer-events none keeps it
-            cosmetic. Mount order in the body no longer matters for stacking
-            since z-index drives it. */}
-        <GrainOverlay />
         {/* Status-bar handling lives entirely in CSS now: viewport-fit:
             cover + statusBarStyle: black-translucent let the page background
             (#131110) flow under a transparent system bar, and a standalone-

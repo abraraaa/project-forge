@@ -44,6 +44,49 @@ body {
 }
 input, button, textarea, select { font: inherit; }
 
+/* ─── Page substrate wrapper ───────────────────────────────────────────────
+   .forge-page wraps all routed content (app/layout.jsx) and exists so the
+   grain field (GrainOverlay) can cover the FULL scrollable document as an
+   absolute z -1 child that scrolls with content. It must NOT be replaced
+   with a fixed overlay: Safari 26 renders an opaque colour-extension slab
+   behind its chrome whenever any fixed/sticky element borders a viewport
+   edge (WebKit bug 301756), which defeats the translucent scroll-under
+   treatment at both the status bar and the URL bar. position: relative
+   without z-index — it anchors the grain but deliberately does not create
+   a stacking context, so the grain keeps blending against the page base. */
+.forge-page {
+  position: relative;
+  min-height: 100vh;
+}
+
+/* ─── Scroll-anchored ambient glow ─────────────────────────────────────────
+   The home backdrop's accent glow layers drift DOWN as the user scrolls, at
+   a fraction of scroll speed, so the glass cards visibly slide over the
+   colour field — backdrop-filter picks up the shifting tint underneath and
+   the surfaces gain real depth. Implemented as a scroll-driven animation
+   (Safari 26.0+, compositor-threaded since 26.4 — webkit.org/blog/17333,
+   /17862) and NOT as position: fixed/sticky, which would re-trigger Safari
+   26's opaque chrome slabs (WebKit bug 301756 — see .forge-page above).
+   Animates `translate` rather than `transform` so it composes with the
+   glow elements' inline centering transforms. Progressive: browsers
+   without scroll timelines keep the static glow (the @supports gate also
+   prevents the animation running as a 0s time-based one), and reduced-
+   motion users are exempted. */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .forge-glow-anchor {
+      /* Shorthand first — it resets animation-timeline, so the timeline
+         must be declared after it. */
+      animation: forge-glow-drift linear both;
+      animation-timeline: scroll(root);
+    }
+  }
+}
+@keyframes forge-glow-drift {
+  from { translate: 0 0; }
+  to   { translate: 0 42vh; }
+}
+
 /* No body::before status-bar overlay. We no longer try to paint a custom
    blur strip in the status-bar zone — with viewport-fit: cover +
    statusBarStyle: "default" (see app/layout.jsx) and the standalone
@@ -87,8 +130,10 @@ input, button, textarea, select { font: inherit; }
    These only fire when the diag page is active; they have no effect on the
    rest of the app. See the page-level comment for the test methodology. */
 
-/* Hide the grain overlay entirely when ?grain is NOT set. */
-body.forge-diag-no-grain > div[aria-hidden="true"] {
+/* Hide the grain overlay entirely when ?grain is NOT set. Targeted by
+   class now that the grain lives inside .forge-page rather than as a
+   direct body child. */
+body.forge-diag-no-grain .forge-grain {
   display: none !important;
 }
 

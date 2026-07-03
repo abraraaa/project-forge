@@ -2121,8 +2121,15 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           at native body bg #131110. That's what the system status bar
           renders, so there's no longer a perceived seam between the
           status-bar zone and content's top edge — the original "black
-          hole" complaint, resolved at the source rather than via overlay. */}
-      <div style={{
+          hole" complaint, resolved at the source rather than via overlay.
+          forge-glow-anchor (globals.css) drifts this layer down at a
+          fraction of scroll speed via a scroll-driven animation, so the
+          glass cards slide THROUGH the colour field as the page scrolls —
+          the backdrop-filter tint shifts and the surfaces read as depth.
+          Only this dominant layer drifts: the rim glows below are tied to
+          page geometry (zone2/focus rims are bottom-anchored, where a
+          downward drift would push them out of view at page end). */}
+      <div className="forge-glow-anchor" style={{
         position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",
         width:600,height:500,
         background:`radial-gradient(ellipse,${accent.glow} 0%,transparent 65%)`,
@@ -2357,16 +2364,21 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       {/* Non-strength day — tips card + mark complete */}
       {!cfg.canBegin && cfg.tips && (
         <Fade d={160}>
-          <Card style={{margin:"24px 24px 0",padding:"20px 22px 24px"}}>
-            <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:16}}>
-              {viewDay.type==="rest" ? "Recovery notes" : "Session notes"}
-            </div>
-            {cfg.tips.map((tip,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"flex-start",gap:12,padding:"8px 0",borderBottom:i<cfg.tips.length-1?`1px solid ${T.bg3}`:"none"}}>
-                <div style={{width:6,height:6,borderRadius:"50%",background:accent.main,flexShrink:0,marginTop:5,transition:`background 300ms ${T.ease}`}}/>
-                <span style={{fontSize:13,color:T.text2,lineHeight:1.5}}>{tip}</span>
+          {/* Same accent top-rim as the strength session card — every day
+              type's card leads with its own colour, not just strength. */}
+          <Card style={{margin:"24px 24px 0",padding:0,overflow:"hidden"}}>
+            <div style={{height:2,background:`linear-gradient(90deg,${accent.main},${accent.main}00)`,transition:`background 400ms ${T.ease}`}}/>
+            <div style={{padding:"20px 22px 24px"}}>
+              <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:16}}>
+                {viewDay.type==="rest" ? "Recovery notes" : "Session notes"}
               </div>
-            ))}
+              {cfg.tips.map((tip,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"flex-start",gap:12,padding:"8px 0",borderBottom:i<cfg.tips.length-1?`1px solid ${T.bg3}`:"none"}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:accent.main,flexShrink:0,marginTop:5,transition:`background 300ms ${T.ease}`}}/>
+                  <span style={{fontSize:13,color:T.text2,lineHeight:1.5}}>{tip}</span>
+                </div>
+              ))}
+            </div>
           </Card>
         </Fade>
       )}
@@ -2396,34 +2408,38 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           separate store with zero streak impact. */}
       {dayBonus && isViewingToday && (
         <Fade d={260}>
-          <Card style={{margin:"16px 24px 0",padding:"18px 20px 20px"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-              <div style={{fontSize:11,fontWeight:500,color:accent.main,letterSpacing:"0.12em",textTransform:"uppercase"}}>
-                Today&apos;s bonus · optional
+          {/* Accent top-rim, matching the day cards above. */}
+          <Card style={{margin:"16px 24px 0",padding:0,overflow:"hidden"}}>
+            <div style={{height:2,background:`linear-gradient(90deg,${accent.main},${accent.main}00)`,transition:`background 400ms ${T.ease}`}}/>
+            <div style={{padding:"18px 20px 20px"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                <div style={{fontSize:11,fontWeight:500,color:accent.main,letterSpacing:"0.12em",textTransform:"uppercase"}}>
+                  Today&apos;s bonus · optional
+                </div>
+                <div style={{fontSize:10,color:T.text4,letterSpacing:"0.06em",textTransform:"uppercase"}}>~5 min</div>
               </div>
-              <div style={{fontSize:10,color:T.text4,letterSpacing:"0.06em",textTransform:"uppercase"}}>~5 min</div>
-            </div>
-            <div style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:T.text1,lineHeight:1.2,marginBottom:4}}>
-              {dayBonus.name}
-            </div>
-            <div style={{fontSize:13,color:T.text2,lineHeight:1.5,marginBottom:16}}>
-              {dayBonus.detail}
-            </div>
-            {bonusDone[todayIdx] ? (
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <span style={{fontSize:16,color:accent.main}}>✓</span>
-                <span style={{fontFamily:T.serif,fontSize:15,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Bonus banked. Animal.</span>
+              <div style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:T.text1,lineHeight:1.2,marginBottom:4}}>
+                {dayBonus.name}
               </div>
-            ) : (
-              <button onClick={onMarkBonusDone} aria-label="Mark bonus complete" style={{
-                width:"100%",padding:"12px 16px",background:"transparent",
-                border:`1px solid ${accent.main}66`,borderRadius:T.r.md,cursor:"pointer",
-                display:"flex",alignItems:"center",justifyContent:"space-between",
-              }}>
-                <span style={{fontSize:14,fontWeight:500,color:accent.main}}>Mark bonus done</span>
-                <span style={{fontSize:14,color:accent.main}}>+</span>
-              </button>
-            )}
+              <div style={{fontSize:13,color:T.text2,lineHeight:1.5,marginBottom:16}}>
+                {dayBonus.detail}
+              </div>
+              {bonusDone[todayIdx] ? (
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:16,color:accent.main}}>✓</span>
+                  <span style={{fontFamily:T.serif,fontSize:15,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Bonus banked. Animal.</span>
+                </div>
+              ) : (
+                <button onClick={onMarkBonusDone} aria-label="Mark bonus complete" style={{
+                  width:"100%",padding:"12px 16px",background:"transparent",
+                  border:`1px solid ${accent.main}66`,borderRadius:T.r.md,cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"space-between",
+                }}>
+                  <span style={{fontSize:14,fontWeight:500,color:accent.main}}>Mark bonus done</span>
+                  <span style={{fontSize:14,color:accent.main}}>+</span>
+                </button>
+              )}
+            </div>
           </Card>
         </Fade>
       )}

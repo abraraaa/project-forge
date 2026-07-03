@@ -1,6 +1,7 @@
 // GrainOverlay — a Kodak Portra-style warm grain FIELD that sits BEHIND the
-// app content (zIndex -1), not a layer composited on top of it. Pure-CSS /
-// inline SVG; no asset to ship; mounted once in app/layout.jsx.
+// app content (zIndex -1) and scrolls WITH the page. Pure-CSS / inline SVG;
+// no asset to ship; mounted once inside the .forge-page wrapper in
+// app/layout.jsx.
 //
 // Why behind, not on top: at zIndex 1 the screen-blended grain composited
 // over EVERYTHING below the modal layer — including card faces, buttons and
@@ -8,11 +9,23 @@
 // edge against the flat iOS-reserved status-bar zone produced a hard seam
 // (see docs/parked.md). As a zIndex -1 field it screen-blends only with the
 // page base (#131110 + the desktop ambient gradients) painted beneath it, so
-// cards (T.bg2, opaque) sit ON the texture as physical objects and the
-// status-bar zone stays plain #131110 — no seam. The 6 secondary screens
-// that previously painted an opaque T.bg0 background are now transparent
-// (T.bg0 === the page base, so visually identical) so the field shows
-// through them too; the main screens were already transparent.
+// cards sit ON the texture as physical objects.
+//
+// Why position: absolute (inside .forge-page), NOT fixed: Safari 26 decides
+// how to render its chrome from the fixed/sticky elements at the viewport
+// edges. When any fixed element borders an edge, Safari paints an OPAQUE
+// colour-extension slab behind the status bar / URL bar instead of the
+// translucent scroll-under treatment (WebKit bug 301756; nasedk.in/blog/
+// ios26-safari-toolbar-colors; jahir.dev/blog/safari-toolbar). As a
+// full-viewport fixed layer this component bordered BOTH edges on every
+// screen, opting the entire app out of chrome translucency — and because it
+// had no background-color to sample, Safari's tint choice went unpredictable
+// (observed: the toolbar adopting the peach Begin-session CTA scrolled near
+// the bottom edge). Absolute inside the document-height .forge-page wrapper,
+// the grain is ordinary scrolling page content: no fixed element at the
+// edges, chrome tint falls back to body's solid #131110, and content slides
+// under the translucent bars natively. Do NOT reintroduce position: fixed
+// here — it silently reverts the whole app to opaque chrome slabs.
 //
 // Tuning: low frequency = chunkier grain (film-like); the warm colour matrix
 // tints the noise toward Forge's cream palette. opacity 0.12 + screen blend
@@ -38,46 +51,42 @@ export default function GrainOverlay() {
   return (
     <div
       aria-hidden="true"
+      className="forge-grain"
       style={{
-        // NO background-color here, deliberately. Safari 26 tints its
-        // toolbar from the background-color of fixed/sticky elements at the
-        // viewport edges; background-image is ignored, and elements without
-        // a background-color are skipped entirely — the sampler falls
-        // through to body's #131110, which is the correct brand colour.
-        // Adding one would be redundant for the sampler and, through the
-        // screen blend below, would lift the whole content field a couple
-        // of RGB points against the masked-out safe-area zones — recreating
-        // the seam this component's mask exists to remove. Refs:
-        // nasedk.in/blog/ios26-safari-toolbar-colors, WebKit bug 301756.
-        position: "fixed",
+        // NO background-color, deliberately: the layer screen-blends at 12%
+        // opacity, so any backing colour would lift the whole field a couple
+        // of RGB points against the masked-out edges — a faint band of the
+        // seam class the mask below exists to remove.
+        position: "absolute",
         inset: 0,
         pointerEvents: "none",
-        // zIndex -1: behind all app content. A negative z-index on a direct
-        // child of <body> paints above the page base background but below the
-        // in-flow app, so transparent screens reveal it and opaque cards
-        // cover it. mix-blend-mode: screen blends with the page base painted
-        // beneath this layer (#131110 + desktop gradients) — NOT with the
-        // cards above it — so the warm grain lift lands on the field only.
+        // zIndex -1: behind all app content. .forge-page (position: relative,
+        // no z-index) does not form a stacking context, so this participates
+        // in the root context's negative-z phase exactly as it did as a body
+        // child: above the page base background, below the in-flow app.
+        // mix-blend-mode: screen therefore still blends with the page base
+        // (#131110 + desktop gradients) — NOT with the cards above it — so
+        // the warm grain lift lands on the field only.
         zIndex: -1,
         opacity: 0.12,
         mixBlendMode: "screen",
         backgroundImage: `url("data:image/svg+xml,${GRAIN_SVG}")`,
         backgroundRepeat: "repeat",
         backgroundSize: "192px 192px",
-        // Fade the grain to zero through the top status-bar safe-area and the
-        // bottom home-indicator chin, ramping over a long 80px easing band so
-        // the texture DISSOLVES into the flat #131110 reserved zones instead
-        // of butting against them. The earlier 24px ramp was too short — the
-        // luminance step still read as an abrupt line right under the clock
-        // (the seam the user reported). 80px makes the transition perceptually
-        // gradient-free. env() resolves to real insets only in standalone w/
-        // viewport-fit:cover; in-browser it's 0, so the top stop collapses to
-        // a 0→80px fade from the very top — harmless, since in-browser there's
-        // no reserved zone to blend against anyway.
+        // Dissolve the grain over 80px at both ends of the DOCUMENT (the
+        // wrapper is document-height, so these are page ends, not viewport
+        // edges). At rest in the installed PWA this reproduces the previous
+        // env()-anchored fade exactly — body's standalone padding-top already
+        // places the wrapper below the clock, so 0→80px here lands where
+        // env(inset)→env(inset)+80px landed before. Mid-scroll the grain now
+        // slides under the (translucent) system bars along with the content
+        // it textures, which is the native look; a static viewport-anchored
+        // fade would instead read as a stationary haze band over moving
+        // content.
         WebkitMaskImage:
-          "linear-gradient(to bottom, transparent 0, transparent env(safe-area-inset-top, 0px), #000 calc(env(safe-area-inset-top, 0px) + 80px), #000 calc(100% - env(safe-area-inset-bottom, 0px) - 80px), transparent calc(100% - env(safe-area-inset-bottom, 0px)))",
+          "linear-gradient(to bottom, transparent 0, #000 80px, #000 calc(100% - 80px), transparent 100%)",
         maskImage:
-          "linear-gradient(to bottom, transparent 0, transparent env(safe-area-inset-top, 0px), #000 calc(env(safe-area-inset-top, 0px) + 80px), #000 calc(100% - env(safe-area-inset-bottom, 0px) - 80px), transparent calc(100% - env(safe-area-inset-bottom, 0px)))",
+          "linear-gradient(to bottom, transparent 0, #000 80px, #000 calc(100% - 80px), transparent 100%)",
         // Opt the grain layer out of the root view-transition capture by
         // naming it. Without this, the screen-blended grain gets baked
         // into BOTH the old and new root snapshots; the cross-fade then
