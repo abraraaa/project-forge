@@ -131,6 +131,14 @@ input, button, textarea, select { font: inherit; }
          animation on the page sat frozen at progress 0. */
       animation: forge-glow-drift linear both;
       animation-timeline: scroll(root);
+      /* Pin the timeline to an absolute length so the drift RATE is
+         constant on every page. Without a range, progress normalises over
+         each page's own scroll span — on a short rest-day page (~150px of
+         scroll) the whole 42vh drift compressed into that span, moving the
+         glow at >2× scroll speed and bouncing with rubber-band overscroll
+         (the "hops" report). 0–200vh ≈ 0.21× drift everywhere; short pages
+         simply use the first slice of the curve. */
+      animation-range: 0 200vh;
     }
   }
 }
