@@ -46,12 +46,20 @@ which is cleaner with real routes than with `setScreen` state). Doing them
 before PR3 risks rework. Also: most "experiential chrome" wins (shortcuts,
 share_target) are higher-value once the app has stable URLs to target.
 
-**Next step (post-PR3):** (1) Confirm whether the SW flag is a real gap or
-a PWABuilder artifact — test the deployed URL, check SW scope. (2) Add the
-high-value manifest fields first: `screenshots` (install-sheet polish),
-`shortcuts` (quick actions), `categories`. (3) Evaluate `share_target` /
-`file_handlers` against actual user flows — only add capabilities we'll
-genuinely wire up, not score-chasing. Re-run PWABuilder to confirm lift.
+**Progress (2026-07-04):** `categories` + `shortcuts` shipped — the 3d/3e
+route work gave shortcuts stable URLs to target (Performance Lab →
+/performance, Profile → /profile; both long-press quick actions reuse the
+flat maskable icon). Manifest theme/background colours aligned with the
+chrome-sampling tone (#1D1A19). Still parked: `screenshots` (needs real
+capture assets), the SW-flag verification, and the share_target /
+file_handlers evaluation.
+
+**Next step:** (1) Confirm whether the SW flag is a real gap or a
+PWABuilder artifact — test the deployed URL, check SW scope. (2) Add
+`screenshots` once capture assets exist (install-sheet polish). (3)
+Evaluate `share_target` / `file_handlers` against actual user flows —
+only add capabilities we'll genuinely wire up, not score-chasing. Re-run
+PWABuilder to confirm lift.
 
 **Concrete flow under consideration — "Share metrics" button (Performance
 Lab):** a one-way export of a point-in-time trend-line snapshot. Stays true
@@ -74,7 +82,13 @@ polish item.
 
 ### Packaging — scroll-under status bar / chin
 
-**Status:** Designed, gated rollout pending.
+**Status:** RESOLVED (2026-07-03/04) — superseded by the chrome-
+translucency arc: viewport-fit cover + black-translucent, no fixed
+elements at viewport edges, natural root scroller, `.forge-page`
+substrate carrying safe-area padding, and chrome-sampling tone matched
+to the grain-lifted field (#1D1A19). The scroll-under look this entry
+wanted is live; the /diag-status experiment below never became
+necessary. Entry retained for history.
 
 **Context:** Current iOS PWA recipe (no `viewport-fit: cover`, fixed 52px
 top padding on screens) renders three visible bands — flat #131110 status
@@ -146,7 +160,11 @@ backgrounds; the texture only paints behind them.
 
 ### Glow drift "hops" on short pages (non-strength days)
 
-**Status:** Parked 2026-07-04 (user call: refine after the 3e/3f meat).
+**Status:** RESOLVED (2026-07-04) — `animation-range: 0 200vh` on
+`.forge-glow-anchor` pins the timeline to an absolute length, making the
+drift rate constant (~0.21×) on every page; verified in Chromium that
+progress now tracks scroll distance, not per-page span. Diagnosis
+retained below.
 
 **Symptom:** on non-strength days the home page is short (small scroll
 range), and the day-accent glow visibly hops up/down while scrolling.
