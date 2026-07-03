@@ -144,6 +144,28 @@ first ~env(safe-area-inset-top) + 80px and the last ~80px so the grain
 band sits cleanly inside the safe area. Cards retain their flat T.bg2
 backgrounds; the texture only paints behind them.
 
+### Glow drift "hops" on short pages (non-strength days)
+
+**Status:** Parked 2026-07-04 (user call: refine after the 3e/3f meat).
+
+**Symptom:** on non-strength days the home page is short (small scroll
+range), and the day-accent glow visibly hops up/down while scrolling.
+
+**Diagnosis:** `.forge-glow-anchor`'s scroll-driven animation maps
+0→42vh of translate over the FULL document scroll range (`scroll(root)`
+with default range). On a long page that's a gentle ~0.4× drift; on a
+~150px-range rest-day page the same 42vh compresses into that tiny
+range, so the glow moves at >2× scroll speed — and iOS rubber-band
+overscroll drives the timeline progress past its bounds and back,
+reading as a hop.
+
+**Fix sketch (one line):** pin the mapping to an absolute length so the
+drift rate is constant on every page: add `animation-range: 0 200vh;`
+to `.forge-glow-anchor` (progress = scrollY / 200vh regardless of page
+length → 42vh drift over 200vh of scroll ≈ 0.21× everywhere; short
+pages simply use the first slice of the curve). Already inside the
+@supports gate; test on a rest day + Performance Lab.
+
 ### Performance Lab — correctness bugs (logged 2026-07-01, from real use)
 
 **Status:** Confirmed bugs in live use; fix before the surface polish below.
