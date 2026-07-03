@@ -54,9 +54,9 @@ export default function GrainOverlay() {
       className="forge-grain"
       style={{
         // NO background-color, deliberately: the layer screen-blends at 12%
-        // opacity, so any backing colour would lift the whole field a couple
-        // of RGB points against the masked-out edges — a faint band of the
-        // seam class the mask below exists to remove.
+        // opacity, so a backing colour would double-lift the field over the
+        // substrate .forge-page already paints — the grain texture is the
+        // only thing this layer should contribute.
         position: "absolute",
         inset: 0,
         pointerEvents: "none",
@@ -76,22 +76,11 @@ export default function GrainOverlay() {
         backgroundImage: `url("data:image/svg+xml,${GRAIN_SVG}")`,
         backgroundRepeat: "repeat",
         backgroundSize: "192px 192px",
-        // Dissolve the grain over the first 80px of the DOCUMENT (the
-        // wrapper is document-height, so this is the page top, not the
-        // viewport edge). At rest in the installed PWA this reproduces the
-        // previous env()-anchored fade exactly — body's standalone
-        // padding-top already places the wrapper below the clock, so 0→80px
-        // here lands where env(inset)→env(inset)+80px landed before.
-        // Top-only, deliberately: an earlier symmetric fade at the document
-        // END dissolved the texture over the last 80px of every page, which
-        // read as a flat self-made "chin" at full scroll. Content now slides
-        // under the translucent chrome, so the texture should run flush to
-        // the page end; overscroll past it shows the flat body base, which
-        // is the native rubber-band look.
-        WebkitMaskImage:
-          "linear-gradient(to bottom, transparent 0, #000 80px)",
-        maskImage:
-          "linear-gradient(to bottom, transparent 0, #000 80px)",
+        // No mask, deliberately: the grain runs full-bleed to every edge.
+        // The old top fade guarded a seam from the fixed-overlay era; now
+        // the safe-area strip, overscroll and chrome zones all show the
+        // same grain-lifted field tone (#1D1A19 — what html/body sample),
+        // so a fade would reintroduce a flat band where the texture stops.
         // Opt the grain layer out of the root view-transition capture by
         // naming it. Without this, the screen-blended grain gets baked
         // into BOTH the old and new root snapshots; the cross-fade then
