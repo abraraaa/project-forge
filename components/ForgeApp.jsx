@@ -1821,7 +1821,7 @@ const sProps={
 
   if (showHydrating) {
     return (
-      <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px",position:"relative",overflow:"hidden"}}>
+      <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px",position:"relative",overflow:"clip"}}>
         <div style={{position:"absolute",top:"30%",left:"50%",transform:"translateX(-50%)",width:400,height:300,background:`radial-gradient(ellipse,${T.sage}1A 0%,transparent 65%)`,pointerEvents:"none"}}/>
         <div style={{position:"relative",textAlign:"center"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:T.sage,margin:"0 auto 24px",animation:`pulse 1400ms ${T.ease} infinite`}}/>
@@ -2114,7 +2114,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   })[viewDay.type] || { top: -120, right: -80, width: 360, height: 320 };
 
   return (
-    <div style={{minHeight:"100vh",paddingBottom:48,position:"relative",overflow:"hidden"}}>
+    <div style={{minHeight:"100vh",paddingBottom:48,position:"relative",overflow:"clip"}}>
       {/* Primary ambient glow — top-centre, day-typed. The dominant signal.
           top:0 (was -180) keeps the gradient's bright centre at content
           y≈250 instead of y≈70, which leaves the topmost ~80px of content
@@ -3152,7 +3152,7 @@ function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,act
   const weightCaption = WEIGHT_CAPTIONS[loadType] || null;
 
   return (
-    <div style={{minHeight:"100vh",position:"relative",overflow:"hidden",paddingBottom:40}}>
+    <div style={{minHeight:"100vh",position:"relative",overflow:"clip",paddingBottom:40}}>
       <div style={{position:"absolute",top:-80,right:-80,width:340,height:320,background:`radial-gradient(circle,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       <div style={{height:1,background:T.bg3}}>
         <div style={{height:"100%",width:`${progress}%`,background:T.coral,transition:`width 600ms ${T.ease}`}}/>
@@ -3975,7 +3975,7 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
   }
 
   return (
-    <div style={{minHeight:"100vh",position:"relative",overflow:"hidden",paddingBottom:120}}>
+    <div style={{minHeight:"100vh",position:"relative",overflow:"clip",paddingBottom:120}}>
       {/* Sage ambient — wellness/measurement territory, not training */}
       <div style={{position:"absolute",top:-100,right:-80,width:340,height:300,background:`radial-gradient(circle,${T.sage}1A 0%,transparent 65%)`,pointerEvents:"none"}}/>
 
@@ -4234,7 +4234,7 @@ function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},u
   useEffect(() => SyncStatus.subscribe(setSyncState), []);
 
   return (
-    <div style={{minHeight:"100vh",padding:"72px 24px 0",position:"relative",overflow:"hidden"}}>
+    <div style={{minHeight:"100vh",padding:"72px 24px 0",position:"relative",overflow:"clip"}}>
       {/* Victory gradient — warm peach wash from top-centre down. A small
           non-patronising triumph beat at the moment the user has just put
           the work in. Two stacked layers: a tight glow above the headline +
