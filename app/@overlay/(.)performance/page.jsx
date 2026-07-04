@@ -22,10 +22,20 @@
 // parked as "instant home hydration" — see docs/parked.md.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { useEffect } from "react";
 import PerformanceLabView from "@/components/PerformanceLabView";
 import GrainOverlay from "@/components/GrainOverlay";
 
 export default function PerformanceOverlay() {
+  // Hide the root page while the overlay covers it — Safari paints the root
+  // document's content under its translucent chrome, which a fixed overlay
+  // can't cover (Home's headline ghosted behind the clock). visibility
+  // preserves Home's layout + scroll for back-restore. See globals.css.
+  useEffect(() => {
+    document.body.classList.add("forge-overlay-open");
+    return () => document.body.classList.remove("forge-overlay-open");
+  }, []);
+
   return (
     <div style={{
       position: "fixed",
