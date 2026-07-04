@@ -210,6 +210,32 @@ inherits scroll-under + the ViewTransition slide for free. Do NOT
 band-aid with a sessionStorage scroll stash — explicitly rejected
 before.
 
+### Grain "pops in" on route switch to /profile
+
+**Status:** Parked 2026-07-05 (user report, session note).
+
+**Symptom:** navigating to profile view, the grain appears a beat after
+the page instead of painting with it.
+
+**Angles for next session:** (1) the ViewTransition boundary swaps
+content while GrainOverlay lives OUTSIDE it at layout level — during
+the slide, document height changes and the grain's inset:0 box resizes
+after the new page commits; (2) the root VT group is pinned static
+(animation:none) — check whether the new-root snapshot (which includes
+grain) lands a frame late vs the boundary snapshot; (3) ProfileView's
+bounce/hydration double-render may shrink then grow .forge-page.
+Reproduce in Chromium with slowed VT durations before touching anything.
+
+### Performance Lab — ideal rebuild (dedicated session)
+
+**Status:** Queued by user 2026-07-05 for a fresh-credits session.
+
+**Scope to unpack together:** instant home hydration (unlocks deleting
+the @overlay interception → Lab gets scroll-under + VT slide as the
+real route everywhere); the parked surface-polish + adherence-view
+rethink; absence modelling (item 3 of the correctness log); share-
+metrics export. One coherent design pass rather than four patches.
+
 ### Chrome-tone gaps on secondary surfaces (top/bottom bands)
 
 **Status:** Parked 2026-07-05 — each needs on-device verification; the
