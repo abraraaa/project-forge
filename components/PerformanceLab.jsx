@@ -38,12 +38,14 @@ export default function PerformanceLab({ history, onBack }) {
 
   return (
     <div style={{minHeight:"100vh", paddingBottom:48, position:"relative", overflow:"clip"}}>
-      {/* Header — ambient glow. top:0 (was -180) keeps the gradient's
-          bright centre at content y≈250 instead of y≈70 so the topmost
-          ~80px stays at native body bg #131110, matching the system
-          status bar zone above it cleanly. Same fix as the HomeScreen
-          primary glow — see components/ForgeApp.jsx for full rationale. */}
-      <div style={{position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:600, height:500, background:`radial-gradient(ellipse, rgba(196,168,130,0.10) 0%, transparent 65%)`, pointerEvents:"none"}}/>
+      {/* Header — ambient glow. top:80 (was 0): the substrate-edge rule.
+          The shell clips at its top edge (overflow: clip), which in the
+          PWA sits exactly at the safe-area line — any glow luminance at
+          the shell top hard-cuts against the flat status-bar strip
+          (reported on device). With the ellipse centre at y≈330 the
+          gradient is fully transparent for the shell's first ~100px, so
+          strip and content read as one field. */}
+      <div style={{position:"absolute", top:80, left:"50%", transform:"translateX(-50%)", width:600, height:500, background:`radial-gradient(ellipse, rgba(196,168,130,0.10) 0%, transparent 65%)`, pointerEvents:"none"}}/>
 
       {/* Top clearance is self-sufficient: max() guarantees the back nav
           clears the translucent status bar in the installed PWA even if
