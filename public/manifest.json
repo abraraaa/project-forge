@@ -7,13 +7,42 @@
   "background_color": "#1D1A19",
   "theme_color": "#1D1A19",
   "orientation": "portrait",
-  "categories": ["fitness", "health", "lifestyle"],
+  "categories": [
+    "fitness",
+    "health",
+    "lifestyle"
+  ],
   "icons": [
-    { "src": "/forge-glass-192.png",  "sizes": "192x192",   "type": "image/png", "purpose": "any" },
-    { "src": "/forge-glass-512.png",  "sizes": "512x512",   "type": "image/png", "purpose": "any" },
-    { "src": "/forge-glass-1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
-    { "src": "/forge-flat-192.png",   "sizes": "192x192",   "type": "image/png", "purpose": "maskable" },
-    { "src": "/forge-flat-512.png",   "sizes": "512x512",   "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/forge-glass-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/forge-glass-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/forge-glass-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/forge-flat-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/forge-flat-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
     {
@@ -21,14 +50,42 @@
       "short_name": "Progress",
       "description": "1RM trends, weekly volume, consistency",
       "url": "/performance",
-      "icons": [{ "src": "/forge-flat-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/forge-flat-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Profile",
       "short_name": "Profile",
       "description": "Switch profile, bodyweight, training focus",
       "url": "/profile",
-      "icons": [{ "src": "/forge-flat-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/forge-flat-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/home.png",
+      "sizes": "1206x2622",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Today's training at a glance \u2014 week rhythm, session overview, and the Performance Lab"
+    },
+    {
+      "src": "/screenshots/profile.png",
+      "sizes": "1206x2622",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Profiles travel across devices \u2014 bodyweight, training focus, and sync in one place"
     }
   ]
 }

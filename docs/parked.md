@@ -50,9 +50,10 @@ share_target) are higher-value once the app has stable URLs to target.
 route work gave shortcuts stable URLs to target (Performance Lab →
 /performance, Profile → /profile; both long-press quick actions reuse the
 flat maskable icon). Manifest theme/background colours aligned with the
-chrome-sampling tone (#1D1A19). Still parked: `screenshots` (needs real
-capture assets), the SW-flag verification, and the share_target /
-file_handlers evaluation.
+chrome-sampling tone (#1D1A19). `screenshots` shipped 2026-07-05
+(Chromium-captured home + profile at 1206x2622, form_factor narrow —
+richer install sheet). Still parked: the SW-flag verification and the
+share_target / file_handlers evaluation.
 
 **Next step:** (1) Confirm whether the SW flag is a real gap or a
 PWABuilder artifact — test the deployed URL, check SW scope. (2) Add
@@ -183,6 +184,31 @@ to `.forge-glow-anchor` (progress = scrollY / 200vh regardless of page
 length → 42vh drift over 200vh of scroll ≈ 0.21× everywhere; short
 pages simply use the first slice of the curve). Already inside the
 @supports gate; test on a rest day + Performance Lab.
+
+### Performance Lab scroll-under — blocked on instant home hydration
+
+**Status:** Parked 2026-07-05 after an attempted fix was reverted on
+evidence.
+
+**Context:** the Lab (opened from Home) renders in the @overlay
+intercepted route — a position:fixed opaque internal scroller. Fixed
+internal scrollers can never get Safari's status-bar scroll-under (that
+belongs to the ROOT scroller only), so the Lab is the one surface where
+content doesn't slide under the clock. Removing the interception fixes
+that instantly BUT regresses the thing the overlay was built for:
+measured in Chromium, back-from-Lab loses Home's scroll (300 → 0)
+because ForgeApp's mount/hydration gate collapses Home's height at the
+exact moment the browser applies scroll restoration — the documented
+"restore-then-jump" the overlay avoids.
+
+**Next step (the real unlock):** make Home render at full height on
+first client paint — hydrate ForgeApp's screen-critical state from LS
+in lazy initializers instead of behind the mounted gate, so browser
+scroll restoration lands on a full-height page. Once that holds, delete
+app/@overlay entirely (one route architecture everywhere), and the Lab
+inherits scroll-under + the ViewTransition slide for free. Do NOT
+band-aid with a sessionStorage scroll stash — explicitly rejected
+before.
 
 ### Chrome-tone gaps on secondary surfaces (top/bottom bands)
 
