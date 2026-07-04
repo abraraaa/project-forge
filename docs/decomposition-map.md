@@ -121,9 +121,19 @@ the first real "shared-state foundation" piece the migration needs.
   Home projections (streak/weekDone/deloadOffer) re-derive from LS when the
   shell remounts — no context layer, same storage-as-store line as 3d.
   ForgeApp: 5,688 → ~2,150 across the arc.
-- **3f — `<ViewTransition>` migration** (per frontend-audit.md): migrate the
-  hand-rolled startViewTransition to Next's experimental viewTransition +
-  @view-transition navigation:auto; retire bespoke VT CSS.
+- **3f — ✅ IMPLEMENTED (2026-07-05).** experimental.viewTransition on;
+  ONE React <ViewTransition> boundary in app/layout.jsx (inside .forge-page,
+  AFTER the grain — substrate outside the boundary means the plus-lighter/
+  midpoint-dim bug class is structurally impossible). Route navs and
+  in-shell setScreen swaps flow through the same boundary + class-mapped
+  CSS (.forge-vt-forward slide-up default, .forge-vt-back slide-down via
+  addTransitionType("nav-back") — lib/nav-transitions.js, guarded for
+  stable-React contexts like vitest). Retired: document.startViewTransition
+  + flushSync wrapper in ForgeApp, typed-root :active-view-transition-type
+  CSS. Verified in Chromium: forward push fires an untyped VT; profile
+  activation fires VT with types ["nav-back"]. Known/accepted: history.back()
+  pops don't run a VT (Next doesn't wrap popstate; they never animated
+  pre-3f either — browser-gesture territory).
 
 **Principle:** file-extraction (decomposition) is always safe and goes first;
 route-ing — which moves identity/activation logic — pauses for a design call.

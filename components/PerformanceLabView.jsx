@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { P, H, backgroundSync } from "@/lib/storage";
+import { withNavTransition } from "@/lib/nav-transitions";
 import PerformanceLab from "@/components/PerformanceLab";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
@@ -34,8 +35,10 @@ export default function PerformanceLabView() {
   // preserved natively, no remount). Fall back to push("/") only if there's
   // no in-app history to pop (direct deep-link / future shortcut).
   const onBack = useCallback(() => {
-    if (typeof window !== "undefined" && window.history.length > 1) router.back();
-    else router.push("/");
+    withNavTransition(() => {
+      if (typeof window !== "undefined" && window.history.length > 1) router.back();
+      else router.push("/");
+    }, "nav-back");
   }, [router]);
 
   useEffect(() => {
