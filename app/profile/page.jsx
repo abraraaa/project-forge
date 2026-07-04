@@ -7,6 +7,12 @@
 // remount the app shell. See components/ProfileView.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const metadata = {
+  title: "Profile",
+  description:
+    "Switch profiles, set bodyweight, and choose your training focus — Forged, Strong, or Sculpt.",
+};
+
 import ProfileView from "@/components/ProfileView";
 
 export default function ProfilePage() {

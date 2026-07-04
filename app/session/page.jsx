@@ -7,6 +7,14 @@
 // home shell so it re-derives streak/week/history projections from LS.
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const metadata = {
+  title: "Session",
+  description: "Live strength session.",
+  // A live session is app-state-dependent (bounces home without an intent
+  // or draft) — meaningless to index.
+  robots: { index: false },
+};
+
 import SessionHost from "@/components/SessionHost";
 
 export default function SessionPage() {

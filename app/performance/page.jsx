@@ -7,6 +7,12 @@
 // Both render the same PerformanceLabView.
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const metadata = {
+  title: "Performance Lab",
+  description:
+    "Per-muscle volume against MEV/MAV/MRV, 8-week sparklines, a consistency grid, and 1RM trends. See exactly where your training is working.",
+};
+
 import PerformanceLabView from "@/components/PerformanceLabView";
 
 export default function PerformancePage() {
