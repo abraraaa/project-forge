@@ -282,7 +282,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         display: "flex", flexDirection: "column",
       }}>
         {/* Sage ambient — wellness/security territory */}
-        <div style={{position:"absolute",top:-160,left:"50%",transform:"translateX(-50%)",width:500,height:440,background:`radial-gradient(ellipse,${T.sage}26 0%,transparent 65%)`,pointerEvents:"none"}}/>
+        <div style={{position:"absolute",top:100,left:"50%",transform:"translateX(-50%)",width:500,height:440,background:`radial-gradient(ellipse,${T.sage}26 0%,transparent 65%)`,pointerEvents:"none"}}/>
 
         <Fade d={0}>
           <div style={{
@@ -362,7 +362,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         display: "flex", flexDirection: "column",
       }}>
         {/* Sage-tinted ambient glow — wellness territory, not training */}
-        <div style={{position:"absolute",top:-160,left:"50%",transform:"translateX(-50%)",width:500,height:440,background:`radial-gradient(ellipse,${T.sage}26 0%,transparent 65%)`,pointerEvents:"none"}}/>
+        <div style={{position:"absolute",top:100,left:"50%",transform:"translateX(-50%)",width:500,height:440,background:`radial-gradient(ellipse,${T.sage}26 0%,transparent 65%)`,pointerEvents:"none"}}/>
 
         <Fade d={0}>
           <div style={{
@@ -422,7 +422,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
   return (
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"clip"}}>
-      <div style={{position:"absolute",top:-160,left:"50%",transform:"translateX(-50%)",width:500,height:440,background:`radial-gradient(ellipse,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
+      <div style={{position:"absolute",top:100,left:"50%",transform:"translateX(-50%)",width:500,height:440,background:`radial-gradient(ellipse,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:12,color:T.text3,fontFamily:T.sans,marginBottom:32,display:"block"}}>← Back</button>}
       <Fade d={0}>
         <div style={{fontFamily:T.serif,fontSize:36,fontWeight:300,lineHeight:1.15,marginBottom:8}}>

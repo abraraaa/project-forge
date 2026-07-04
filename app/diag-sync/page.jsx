@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 // app/diag-sync/page.jsx
 // ─────────────────────────────────────────────────────────────────────────────
 // Sync diagnostic page. Surfaces the actual state of every persisted store
@@ -301,10 +302,16 @@ export default function DiagSync() {
     <div style={{
       minHeight: "100vh",
       padding: "52px 24px 48px",
-      background: "#131110",
+      // Transparent over the .forge-page substrate (grain + base) — an
+      // opaque #131110 here covered the grain and mismatched both the
+      // status-bar strip and Safari's chrome tone (#1D1A19, the grain-
+      // lifted field), seen on device as bands at both ends.
       color: "#EDEBE7",
       fontFamily: "system-ui, -apple-system, sans-serif",
     }}>
+      <Link href="/" style={{ display: "inline-block", marginBottom: 18, fontSize: 12, color: "#857D75", textDecoration: "none" }}>
+        ← Home
+      </Link>
       <div style={{ fontSize: 11, color: "#6B6560", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
         Sync diagnostic
       </div>

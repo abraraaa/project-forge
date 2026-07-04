@@ -1215,7 +1215,14 @@ function OnboardingScreen({ onContinue }) {
     }}>
       {/* Ambient glow */}
       <div style={{
-        position: "absolute", top: -160, left: "50%", transform: "translateX(-50%)",
+        // top: 100 (was -160): the substrate-edge rule. The shell clips at
+        // its top edge (overflow: clip), which in the PWA sits exactly at
+        // the safe-area line — a glow that is bright at the shell top gets
+        // hard-cut against the flat status-bar strip (seen on device on
+        // every non-home screen). Keeping the first ~100px at substrate
+        // darkness lets strip and content read as one field; same geometry
+        // the HomeScreen glows have used since the "black hole" fix.
+        position: "absolute", top: 100, left: "50%", transform: "translateX(-50%)",
         width: 500, height: 440,
         background: `radial-gradient(ellipse, ${s.glow} 0%, transparent 65%)`,
         pointerEvents: "none",
