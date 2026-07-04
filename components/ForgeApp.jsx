@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   WEEK, SESSIONS, deriveStrengthDaySessions,
@@ -43,6 +42,7 @@ import { track } from "@vercel/analytics";
 import {
   computeVolumeAggregates, totalTonnage, pendingTonnageMilestone, } from "@/lib/analytics";
 import { useModalA11y, haptic } from "@/lib/a11y";
+import { withNavTransition } from "@/lib/nav-transitions";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Fade } from "@/components/ui";
 import ScrollDrum from "@/components/ScrollDrum";
@@ -95,32 +95,22 @@ export default function ForgeApp(){
     if (typeof window === "undefined") return "home";
     return LS.get("forge:onboarded", false) ? "home" : "onboarding";
   });
-  // Screen swap wrapped in the View Transitions API where supported (Safari
-  // 18.2+, Chrome 111+). On unsupported runtimes (older Safari, jsdom in
-  // tests, SSR) this falls straight through to a plain setState — no
-  // behaviour change, just a slide swap where the platform lets us.
-  // flushSync forces React to commit the state change inside the callback
-  // so the browser can snapshot before/after frames; without it, React
-  // 19's deferred batching would skip the transition entirely.
+  // Screen swap as a typed React transition (PR3 3f). The <ViewTransition>
+  // boundary in app/layout.jsx animates any transition that updates its
+  // subtree — this in-shell swap and route navigations flow through the
+  // SAME boundary and CSS, so the motion vocabulary can't fork. The old
+  // hand-rolled document.startViewTransition + flushSync wrapper is retired:
+  // flushSync forced sync commits (bypassing concurrent rendering), and the
+  // browser API call is now React's job.
   //
-  // Direction: forward (slide up from below) for any destination, back
-  // (old slides down off the bottom) when returning to home. The "back"
-  // view-transition-type is matched by :active-view-transition-type(back)
-  // rules in globals.css. Heuristic is intentionally simple — every screen
-  // exits to home, so "next === home" cleanly captures the back direction
-  // without needing a navigation history stack.
-  //
-  // Reduced-motion users: prefers-reduced-motion is honoured at the CSS
-  // layer (animation-duration → 0.01ms) so the swap still happens, instantly.
+  // Direction: forward (slide up) for any destination, "nav-back" (old
+  // slides down) when returning to home — every in-shell screen exits to
+  // home, so "next === home" cleanly captures the back direction without a
+  // history stack. On runtimes without View Transitions (jsdom, older
+  // Safari) the transition commits without animating; reduced-motion users
+  // get the instant swap via the CSS layer.
   const setScreen = useCallback((next) => {
-    if (typeof document === "undefined" || !document.startViewTransition) {
-      setScreenRaw(next);
-      return;
-    }
-    document.startViewTransition({
-      update: () => flushSync(() => setScreenRaw(next)),
-      types: [next === "home" ? "back" : "forward"],
-    });
+    withNavTransition(() => setScreenRaw(next), next === "home" ? "nav-back" : null);
   }, []);
   const [programmeBlock,setProgrammeBlock]=useState(()=>PB.get());
   const [weekDone,setWeekDone]=useState({});

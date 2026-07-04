@@ -5,6 +5,12 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import GrainOverlay from "@/components/GrainOverlay";
+// ViewTransition ships in the React canary Next vendors for App Router
+// bundles (verified: next/dist/compiled/react exports it). Server components
+// compile against that copy — the `any` cast is only for the build's
+// type-checker, whose stable @types/react doesn't know the export yet.
+import * as React from "react";
+const ViewTransition = /** @type {any} */ (React).ViewTransition;
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -139,7 +145,24 @@ export default function RootLayout({ children, overlay }) {
               natively. See GrainOverlay.jsx for the full rationale. */}
           <div className="forge-page">
             <GrainOverlay />
-            {children}
+            {/* The ONE transition boundary (PR3 3f): route navigations and
+                in-shell screen swaps both update this subtree inside a React
+                transition, so both animate through the same class-mapped
+                slide vocabulary (globals.css ::view-transition-*(.forge-vt-*)).
+                Typed "nav-back" transitions (lib/nav-transitions.js) slide
+                down; everything else slides up. Deliberately INSIDE
+                .forge-page and AFTER the grain: the substrate is outside the
+                boundary, so it is never double-captured — the entire
+                plus-lighter/midpoint-dim class of bugs is now structurally
+                impossible rather than patched. */}
+            <ViewTransition
+              default={{
+                "nav-back": "forge-vt-back",
+                default: "forge-vt-forward",
+              }}
+            >
+              {children}
+            </ViewTransition>
           </div>
         </ErrorBoundary>
         {/* Intercepted-route overlay slot. Renders nothing (default.jsx → null)

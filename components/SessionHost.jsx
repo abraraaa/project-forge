@@ -47,6 +47,7 @@ import {
 } from "@/lib/progression";
 import { getLiftProfile, getLoadType } from "@/lib/lift-translations";
 import { haptic } from "@/lib/a11y";
+import { withNavTransition } from "@/lib/nav-transitions";
 import { computeVolumeAggregates } from "@/lib/analytics";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
@@ -362,7 +363,9 @@ export default function SessionHost() {
   const handleQuit = () => {
     draftLogRef.current = null;
     D.clear(profile);
-    router.replace("/");
+    // Typed back-transition: leaving the session for home slides down
+    // (modal-dismiss idiom) via the layout <ViewTransition> boundary.
+    withNavTransition(() => router.replace("/"), "nav-back");
   };
 
   // ─── Session-finalise pipeline — moved from ForgeApp's done-effect, now
@@ -582,7 +585,7 @@ export default function SessionHost() {
           session={activeSession} profileName={profile}
           workingWeights={workingWeights} sessionStartWeights={sessionStartWeights}
           userWeek={userWeek || WEEK}
-          onHome={() => { setShowDeloadComplete(false); setReturnGapDays(null); router.replace("/"); }}
+          onHome={() => { setShowDeloadComplete(false); setReturnGapDays(null); withNavTransition(() => router.replace("/"), "nav-back"); }}
           deloadCompleted={showDeloadComplete} returnGapDays={returnGapDays}
         />
       )}

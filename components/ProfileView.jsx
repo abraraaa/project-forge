@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { P, BW, F, pushNow } from "@/lib/storage";
+import { withNavTransition } from "@/lib/nav-transitions";
 import { activateProfileCore, saveFocusCore, stashRotationSummary } from "@/lib/profile-actions";
 import { DEFAULT_FOCUS } from "@/lib/programme";
 import ProfileScreen from "@/components/ProfileScreen";
@@ -51,13 +52,15 @@ export default function ProfileView() {
 
   const onActivate = useCallback(async (name, opts = {}) => {
     const result = await activateProfileCore(name, opts);
-    if (result.ok) router.push("/");
+    if (result.ok) withNavTransition(() => router.push("/"), "nav-back");
     return result;
   }, [router]);
 
   const onCancel = useCallback(() => {
-    if (typeof window !== "undefined" && window.history.length > 1) router.back();
-    else router.push("/");
+    withNavTransition(() => {
+      if (typeof window !== "undefined" && window.history.length > 1) router.back();
+      else router.push("/");
+    }, "nav-back");
   }, [router]);
 
   const updateBodyweight = useCallback((kg) => {
