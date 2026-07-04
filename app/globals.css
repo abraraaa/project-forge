@@ -104,6 +104,43 @@ input, button, textarea, select { font: inherit; }
   overflow-x: clip;
 }
 
+/* ─── Modal scrims (Safari 26 chrome-safe) ─────────────────────────────────
+   Every sheet/dialog scrim is position:fixed inset:0 — it borders both
+   viewport edges, and Safari 26 samples a fixed edge element's OWN
+   background-color/backdrop-filter for its chrome tint. A semi-transparent
+   painted scrim therefore re-tinted the toolbar zone the moment a sheet
+   opened (the "chin appears with the bodyweight/focus modal" report).
+   Remedy per the iOS 26 write-ups: the FIXED element carries no paint at
+   all; a ::before absolute child carries the dim + blur instead (absolute
+   children are not consulted by the sampler — chrome falls back to body).
+   z-index:-1 keeps the paint under the sheet content within the scrim's
+   stacking context (fixed + inline zIndex), and clicks still land on the
+   scrim itself. Scrim JSX keeps layout/interaction props inline and takes
+   these classes for position + paint. */
+.forge-scrim { position: fixed; inset: 0; }
+.forge-scrim::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(10, 9, 8, 0.82);
+  -webkit-backdrop-filter: blur(7px) saturate(115%);
+  backdrop-filter: blur(7px) saturate(115%);
+}
+/* Variants preserve each surface's original recipe exactly. */
+.forge-scrim-video::before {
+  background: rgba(10, 9, 8, 0.78);
+  -webkit-backdrop-filter: blur(8px) saturate(115%);
+  backdrop-filter: blur(8px) saturate(115%);
+}
+.forge-scrim-deep::before {
+  background: rgba(10, 9, 8, 0.86);
+}
+.forge-scrim-plain::before {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 /* ─── Scroll-anchored ambient glow ─────────────────────────────────────────
    The home backdrop's accent glow layers drift DOWN as the user scrolls, at
    a fraction of scroll speed, so the glass cards visibly slide over the

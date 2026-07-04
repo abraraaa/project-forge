@@ -184,6 +184,35 @@ length → 42vh drift over 200vh of scroll ≈ 0.21× everywhere; short
 pages simply use the first slice of the curve). Already inside the
 @supports gate; test on a rest day + Performance Lab.
 
+### Chrome-tone gaps on secondary surfaces (top/bottom bands)
+
+**Status:** Parked 2026-07-05 — each needs on-device verification; the
+modal-scrim case from the same report shipped with the SEO pass (all 19
+scrims now paint via .forge-scrim::before so the fixed element samples
+clean).
+
+**Report:** the status-bar/chin tone work doesn't extend to: onboarding
+pages (both ends), /profile (status bar only), Performance Lab (chin
+only), /diag-sync (both — also lacks a back button; swipe-back works, so
+not urgent).
+
+**Recipe (all remedies already proven elsewhere in this codebase):**
+1. Chin = something crossing/stopping at the document end — check for
+   bottom-anchored glow boxes cut mid-gradient (fix: anchor inside the
+   page, see HomeScreen bottom:24) or an opaque background that ends
+   before the chrome zone.
+2. Status bar = the first ~safe-area of the page painting a tone other
+   than the field — check for opaque headers/screens covering the
+   .forge-page substrate near y=0, or screens that paint their own
+   background instead of staying transparent over the substrate.
+3. Fixed/sticky elements near either edge carrying background-color or
+   backdrop-filter re-tint chrome — move paint to an absolute child
+   (.forge-scrim pattern) or remove.
+
+**Next step:** screenshot each surface at rest + full scroll on device,
+match against the three causes, apply the matching fix. Also give
+/diag-sync a "← Home" back nav while in there.
+
 ### In-session RIR threshold hints (power-user affordance)
 
 **Status:** Parked 2026-07-04 (from the Copilot v1.5 review, item 9).
