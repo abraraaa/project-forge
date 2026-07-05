@@ -434,7 +434,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Done. Streak maintained.</span>
             </div>
           ) : (
-            <button onClick={()=>onMarkDayDone()} style={{
+            <button onClick={()=>onMarkDayDone(viewDateStr)} style={{
               margin:"12px 24px 0",width:"calc(100% - 48px)",
               padding:"16px 20px",background:"transparent",
               border:`1px solid ${accent.main}`,borderRadius:T.r.lg,cursor:"pointer",
@@ -474,7 +474,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                   <span style={{fontFamily:T.serif,fontSize:15,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Bonus banked. Animal.</span>
                 </div>
               ) : (
-                <button onClick={onMarkBonusDone} aria-label="Mark bonus complete" style={{
+                <button onClick={()=>onMarkBonusDone(viewDateStr)} aria-label="Mark bonus complete" style={{
                   width:"100%",padding:"12px 16px",background:"transparent",
                   border:`1px solid ${accent.main}66`,borderRadius:T.r.md,cursor:"pointer",
                   display:"flex",alignItems:"center",justifyContent:"space-between",

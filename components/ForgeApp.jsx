@@ -602,11 +602,13 @@ export default function ForgeApp(){
 
   // Mark today's optional cardio bonus complete. Separate store from weekDone;
   // deliberately does NOT bump the streak — bonuses are extras, not adherence.
-  const handleMarkBonusDone = useCallback(()=>{
+  const handleMarkBonusDone = useCallback((renderedDate)=>{
     if(!activeProfile) return;
-    // Bonus is an extra mark on today's date; it doesn't change completedType
-    // (the user may or may not have done the scheduled training as well).
-    const today = (() => {
+    // Bonus is an extra mark on the RENDERED day's date (passed by
+    // HomeScreen) — falling back to tap-time today only if absent. Same
+    // midnight-straddle guard as handleMarkDayDone: an app open across
+    // midnight must mark the day the user is looking at.
+    const today = (typeof renderedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(renderedDate)) ? renderedDate : (() => {
       const d = new Date();
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, "0");
