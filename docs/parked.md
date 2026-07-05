@@ -220,8 +220,13 @@ before.
 
 ### Grain "pops in" on route switch to /profile
 
-**Status:** Candidate fix shipped 2026-07-05, awaiting device
-confirmation: (1) old(root) VT pseudo now opacity:0 — with animation:
+**Status:** REOPENED 2026-07-06 — device says the pop-in is unchanged, so
+the two shipped changes below were hygiene, not the cure. Next session:
+reproduce with Safari devtools on-device (Web Inspector timeline over the
+transition) rather than headless Chromium; the remaining suspects are
+Safari-specific compositing of the isolated .forge-page (isolation +
+blend layer re-rasterising after navigation commit) and the standalone
+safe-area padding shifting layout post-commit. Shipped hygiene: (1) old(root) VT pseudo now opacity:0 — with animation:
 none on both pseudos the UA default composited old AND new at full
 opacity (plus-lighter), altering the substrate for the transition's
 duration and snapping back at completion; (2) the grain's

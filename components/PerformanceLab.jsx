@@ -65,7 +65,7 @@ export default function PerformanceLab({ history, onBack }) {
           </div>
           <GlossaryTrigger onOpen={openGlossary} label="Open glossary"/>
         </div>
-        <div style={{fontFamily:T.serif, fontSize:42, fontWeight:300, lineHeight:1.1}}>
+        <div className="home-headline" style={{fontFamily:T.serif, fontSize:42, fontWeight:300, lineHeight:1.1, transformOrigin:"left top"}}>
           Your<br/><span style={{color:T.gold, fontStyle:"italic"}}>progress.</span>
         </div>
         <div style={{fontSize:14, color:T.text2, marginTop:10, lineHeight:1.5}}>
@@ -189,7 +189,7 @@ function LiftSelector({ lifts, active, onSelect }) {
 // ─── Line chart (1RM trend) ──────────────────────────────────────────────────
 // Hand-rolled SVG. No tooltips — tap a point to see the value (future).
 function LineChart({ series }) {
-  const W = 320, H = 140, PAD_X = 12, PAD_Y = 20;
+  const W = 320, H = 108, PAD_X = 12, PAD_Y = 18;
   if (!series || series.length === 0) {
     return <div style={{padding:"28px 0", fontSize:13, color:T.text3, fontFamily:T.serif, fontStyle:"italic", textAlign:"center"}}>No data yet</div>;
   }
