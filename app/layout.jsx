@@ -114,11 +114,7 @@ export const viewport = {
   viewportFit: "cover",
 };
 
-// `overlay` is the @overlay parallel-route slot (app/@overlay/*). It renders
-// alongside `children` so an intercepted route (e.g. (.)performance) can
-// appear OVER the current page without unmounting it — see
-// app/@overlay/(.)performance for the rationale (preserving Home's scroll).
-export default function RootLayout({ children, overlay }) {
+export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
@@ -207,10 +203,6 @@ export default function RootLayout({ children, overlay }) {
             </ViewTransition>
           </div>
         </ErrorBoundary>
-        {/* Intercepted-route overlay slot. Renders nothing (default.jsx → null)
-            unless a route is intercepted into it; an interception paints over
-            `children` above, keeping the underlying page mounted. */}
-        {overlay}
         {/* Status-bar handling lives entirely in CSS now: viewport-fit:
             cover + statusBarStyle: black-translucent let the page background
             (#131110) flow under a transparent system bar, and a standalone-

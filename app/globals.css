@@ -104,19 +104,6 @@ input, button, textarea, select { font: inherit; }
   overflow-x: clip;
 }
 
-/* While the @overlay interception is open, hide the ROOT page (direct
-   body > .forge-page child only — the overlay's own nested .forge-page is
-   untouched). Safari renders the root document's content under its
-   translucent chrome, and a fixed overlay cannot paint into that zone —
-   so Home's headline ghosted behind the clock while the Lab was open
-   (Safari-only report). visibility (not display) keeps layout and scroll
-   position intact, so back-from-overlay scroll restoration is unaffected;
-   the chrome zone falls back to the body tone. Class toggled by the
-   overlay's mount effect. */
-body.forge-overlay-open > .forge-page {
-  visibility: hidden;
-}
-
 /* ─── Modal scrims (Safari 26 chrome-safe) ─────────────────────────────────
    Every sheet/dialog scrim is position:fixed inset:0 — it borders both
    viewport edges, and Safari 26 samples a fixed edge element's OWN

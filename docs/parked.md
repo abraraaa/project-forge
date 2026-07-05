@@ -187,8 +187,16 @@ pages simply use the first slice of the curve). Already inside the
 
 ### Performance Lab scroll-under — blocked on instant home hydration
 
-**Status:** Parked 2026-07-05 after an attempted fix was reverted on
-evidence.
+**Status:** RESOLVED 2026-07-06 — instant home hydration shipped (mount
+gate removed, hydrating splash only fires for genuinely-empty LS,
+history lazy-hydrated) and the @overlay interception deleted. The twist:
+the overlay PARALLEL SLOT itself was suppressing the browser's native
+popstate scroll restoration (removing it, back-from-Lab restores
+natively — measured 166 → 166 in Chromium; headless-native probe
+confirmed browser machinery works). The Lab is a real route everywhere:
+scroll-under, VT slide, substrate — all inherited. Follow-up
+observation: the FIRST traversal after a fresh load missed restoration
+once in Chromium while subsequent ones restored; watch on device.
 
 **Context:** the Lab (opened from Home) renders in the @overlay
 intercepted route — a position:fixed opaque internal scroller. Fixed
