@@ -212,7 +212,16 @@ before.
 
 ### Grain "pops in" on route switch to /profile
 
-**Status:** Parked 2026-07-05 (user report, session note).
+**Status:** Candidate fix shipped 2026-07-05, awaiting device
+confirmation: (1) old(root) VT pseudo now opacity:0 — with animation:
+none on both pseudos the UA default composited old AND new at full
+opacity (plus-lighter), altering the substrate for the transition's
+duration and snapping back at completion; (2) the grain's
+view-transition-name is retired (its double-capture rationale died when
+the grain moved outside the boundary), so browsers no longer snapshot
+the document-height blended layer separately per transition. Not
+reproducible in headless Chromium — if the device still shows it,
+reopen with the angles below.
 
 **Symptom:** navigating to profile view, the grain appears a beat after
 the page instead of painting with it.
@@ -238,10 +247,13 @@ metrics export. One coherent design pass rather than four patches.
 
 ### Chrome-tone gaps on secondary surfaces (top/bottom bands)
 
-**Status:** Parked 2026-07-05 — each needs on-device verification; the
-modal-scrim case from the same report shipped with the SEO pass (all 19
-scrims now paint via .forge-scrim::before so the fixed element samples
-clean).
+**Status:** RESOLVED 2026-07-05 — user supplied screenshots for every
+surface; all reduced to the substrate-edge rule (glow luminance clipped
+at shell tops) + diag-sync's opaque background, fixed and
+device-confirmed same day. The Lab status-bar scroll-under remains the
+one exception, parked separately behind instant home hydration. Entry
+retained for the recipe below, which is now the canonical diagnosis
+path for any future band report.
 
 **Report:** the status-bar/chin tone work doesn't extend to: onboarding
 pages (both ends), /profile (status bar only), Performance Lab (chin
