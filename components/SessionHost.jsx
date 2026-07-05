@@ -376,9 +376,14 @@ export default function SessionHost() {
   const finishSession = () => {
     if (profile) {
       bumpStreak(profile);
-      const dw = new Date().getDay();
-      const wm = [6, 0, 1, 2, 3, 4, 5];
-      P.markDayDone(profile, wm[dw]);
+      // Week-strip completion is marked FROM THE SESSION RECORD'S DATE, not
+      // the wall clock. The record's date is stamped at draft creation, so a
+      // session finished after midnight (start 23:40, finish 00:20) belongs
+      // to the day it was started. Using new Date() here marked the NEXT
+      // day complete — which then also appeared in missed workouts because
+      // Days/history (correctly date-keyed below) had no record for it.
+      // Found on device: the classic midnight in-and-out. The mark happens
+      // after finaliseDraft below so both stores share one date.
 
       // "Back at it" gap — read the newest strength record BEFORE appending.
       {
@@ -403,6 +408,9 @@ export default function SessionHost() {
           const js = new Date(y, m - 1, d).getDay();
           return js === 0 ? 6 : js - 1;
         })();
+        // Legacy week-strip mark — same record-date weekday as Days below
+        // (see the midnight-straddle note above).
+        P.markDayDone(profile, dowMon);
         const scheduledType = effective && effective[dowMon] ? effective[dowMon].type : "strength";
         Days.set(profile, sessionRecord.date, {
           scheduledType,
