@@ -62,11 +62,17 @@ Evaluate `share_target` / `file_handlers` against actual user flows —
 only add capabilities we'll genuinely wire up, not score-chasing. Re-run
 PWABuilder to confirm lift.
 
-**Concrete flow under consideration — "Share metrics" button (Performance
-Lab):** a one-way export of a point-in-time trend-line snapshot. Stays true
-to "deliberately not social" — streamlines the social-CURIOUS without
+**"Share metrics" button (Performance Lab) — SHIPPED 2026-07-05:** a
+one-way export of a point-in-time trend-line snapshot. Stays true to
+"deliberately not social" — streamlines the social-CURIOUS without
 building a social graph (no account-linking, feed, or Forge-side sharing
 backend; the user pushes an artifact to wherever THEY choose).
+Implementation: `lib/share-card.js` renders the active lift's e1RM series
+to a 1080×1350 branded canvas (Forge palette, headline value + delta,
+coral trend line, theforged.fit footer); "Share ↗" in the 1RM card hands
+the PNG to `navigator.share({ files })`, with a plain download fallback
+where file-share is unsupported (desktop Safari/Firefox — the fallback is
+also the Chromium-verifiable branch; the share sheet needs a device).
 
 IMPORTANT distinction so we build the right primitive:
 - This is the **Web Share API** (`navigator.share({ files: [...] })`) —

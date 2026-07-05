@@ -8,6 +8,7 @@ import {
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
 import { T } from "@/lib/tokens";
 import GlossarySheet, { GlossaryTrigger } from "@/components/GlossarySheet";
+import { renderShareCard, shareCanvas } from "@/lib/share-card";
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 export default function PerformanceLab({ history, onBack }) {
@@ -97,6 +98,22 @@ export default function PerformanceLab({ history, onBack }) {
                 <LiftSelector lifts={mainLifts} active={activeLift} onSelect={setSelectedLift}/>
               )}
               <LineChart series={trends[activeLift]} />
+              {/* Share metrics — one-way export of this trend as a branded
+                  PNG via the Web Share API (download fallback). Deliberately
+                  not-social: generated on-device, pushed wherever the USER
+                  chooses. See lib/share-card.js. */}
+              <div style={{display:"flex", justifyContent:"flex-end", marginTop:14}}>
+                <button
+                  onClick={async ()=>{
+                    const canvas = renderShareCard({ lift: activeLift, series: trends[activeLift] || [] });
+                    await shareCanvas(canvas, `forge-${activeLift.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-1rm.png`);
+                  }}
+                  style={{background:"none", border:"none", padding:"6px 0", cursor:"pointer", fontSize:12, color:T.text3, fontFamily:T.sans, letterSpacing:"0.04em"}}
+                  aria-label={`Share ${activeLift} trend`}
+                >
+                  Share ↗
+                </button>
+              </div>
             </Card>
           )}
 
