@@ -93,27 +93,31 @@ export default function PerformanceLab({ history, onBack }) {
 
           {/* 1RM trend */}
           {activeLift && (
-            <Card title="Estimated 1RM" subtitle={activeLift}>
-              {mainLifts.length > 1 && (
-                <LiftSelector lifts={mainLifts} active={activeLift} onSelect={setSelectedLift}/>
-              )}
-              <LineChart series={trends[activeLift]} />
-              {/* Share metrics — one-way export of this trend as a branded
-                  PNG via the Web Share API (download fallback). Deliberately
-                  not-social: generated on-device, pushed wherever the USER
-                  chooses. See lib/share-card.js. */}
-              <div style={{display:"flex", justifyContent:"flex-end", marginTop:14}}>
+            <Card
+              title="Estimated 1RM"
+              subtitle={activeLift}
+              action={
+                /* Share metrics — one-way export of this trend as a branded
+                   PNG via the Web Share API (download fallback). Deliberately
+                   not-social: generated on-device, pushed wherever the USER
+                   chooses. Lives in the card header (not below the chart) so
+                   it doesn't push the fold down. See lib/share-card.js. */
                 <button
                   onClick={async ()=>{
-                    const canvas = renderShareCard({ lift: activeLift, series: trends[activeLift] || [] });
+                    const canvas = await renderShareCard({ lift: activeLift, series: trends[activeLift] || [] });
                     await shareCanvas(canvas, `forge-${activeLift.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-1rm.png`);
                   }}
-                  style={{background:"none", border:"none", padding:"6px 0", cursor:"pointer", fontSize:12, color:T.text3, fontFamily:T.sans, letterSpacing:"0.04em"}}
+                  style={{background:"none", border:"none", padding:"6px 0", cursor:"pointer", fontSize:12, color:T.text3, fontFamily:T.sans, letterSpacing:"0.04em", flexShrink:0}}
                   aria-label={`Share ${activeLift} trend`}
                 >
                   Share ↗
                 </button>
-              </div>
+              }
+            >
+              {mainLifts.length > 1 && (
+                <LiftSelector lifts={mainLifts} active={activeLift} onSelect={setSelectedLift}/>
+              )}
+              <LineChart series={trends[activeLift]} />
             </Card>
           )}
 
@@ -169,12 +173,15 @@ function EmptyState() {
 // Warm-black tints stay inside the Portra palette; no cool Material-grey
 // elevation. Same shape as the ForgeApp Card lift.
 const LAB_CARD_SHADOW = "inset 0 1px 0 rgba(237,235,231,0.04), 0 1px 2px rgba(10,9,8,0.28), 0 10px 28px -16px rgba(10,9,8,0.5)";
-function Card({ title, subtitle, children }) {
+function Card({ title, subtitle, action, children }) {
   return (
     <div className="lab-card forge-glass" style={{margin:"24px 24px 0", border:`1px solid ${T.bg3}`, borderRadius:T.r.lg, overflow:"hidden", boxShadow:LAB_CARD_SHADOW}}>
-      <div style={{padding:"18px 20px 14px", borderBottom:`1px solid ${T.bg3}`}}>
-        <div style={{fontSize:10, fontWeight:500, color:T.text3, letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:4}}>{title}</div>
-        {subtitle && <div style={{fontFamily:T.serif, fontSize:15, fontWeight:300, color:T.text2, fontStyle:"italic"}}>{subtitle}</div>}
+      <div style={{padding:"18px 20px 14px", borderBottom:`1px solid ${T.bg3}`, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12}}>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:10, fontWeight:500, color:T.text3, letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:4}}>{title}</div>
+          {subtitle && <div style={{fontFamily:T.serif, fontSize:15, fontWeight:300, color:T.text2, fontStyle:"italic"}}>{subtitle}</div>}
+        </div>
+        {action}
       </div>
       <div style={{padding:"18px 20px 20px"}}>
         {children}
