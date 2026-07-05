@@ -81,15 +81,13 @@ export default function GrainOverlay() {
         // the safe-area strip, overscroll and chrome zones all show the
         // same grain-lifted field tone (#1D1A19 — what html/body sample),
         // so a fade would reintroduce a flat band where the texture stops.
-        // Opt the grain layer out of the root view-transition capture by
-        // naming it. Without this, the screen-blended grain gets baked
-        // into BOTH the old and new root snapshots; the cross-fade then
-        // plus-lighter-composites them, doubling effective grain density
-        // at midpoint and reading as a perceived dim ("Performance Lab
-        // dimming"). Naming it pulls it out of the root group so the root
-        // cross-fade composites cleanly; the grain itself just stays put
-        // across the transition (paired no-op animation in globals.css).
-        viewTransitionName: "forge-grain",
+        // No view-transition-name, deliberately (PR3 3f follow-up): the
+        // grain sits OUTSIDE the ViewTransition boundary and the root
+        // group renders a single copy (old root suppressed in
+        // globals.css), so the historical double-capture/plus-lighter
+        // dim can't occur. Naming this document-height blended layer
+        // forced browsers to snapshot it separately on every transition
+        // — suspected cause of the Safari "grain pops in" report.
       }}
     />
   );

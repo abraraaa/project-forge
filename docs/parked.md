@@ -187,8 +187,16 @@ pages simply use the first slice of the curve). Already inside the
 
 ### Performance Lab scroll-under — blocked on instant home hydration
 
-**Status:** Parked 2026-07-05 after an attempted fix was reverted on
-evidence.
+**Status:** RESOLVED 2026-07-06 — instant home hydration shipped (mount
+gate removed, hydrating splash only fires for genuinely-empty LS,
+history lazy-hydrated) and the @overlay interception deleted. The twist:
+the overlay PARALLEL SLOT itself was suppressing the browser's native
+popstate scroll restoration (removing it, back-from-Lab restores
+natively — measured 166 → 166 in Chromium; headless-native probe
+confirmed browser machinery works). The Lab is a real route everywhere:
+scroll-under, VT slide, substrate — all inherited. Follow-up
+observation: the FIRST traversal after a fresh load missed restoration
+once in Chromium while subsequent ones restored; watch on device.
 
 **Context:** the Lab (opened from Home) renders in the @overlay
 intercepted route — a position:fixed opaque internal scroller. Fixed
@@ -210,12 +218,50 @@ inherits scroll-under + the ViewTransition slide for free. Do NOT
 band-aid with a sessionStorage scroll stash — explicitly rejected
 before.
 
+### Grain "pops in" on route switch to /profile
+
+**Status:** Candidate fix shipped 2026-07-05, awaiting device
+confirmation: (1) old(root) VT pseudo now opacity:0 — with animation:
+none on both pseudos the UA default composited old AND new at full
+opacity (plus-lighter), altering the substrate for the transition's
+duration and snapping back at completion; (2) the grain's
+view-transition-name is retired (its double-capture rationale died when
+the grain moved outside the boundary), so browsers no longer snapshot
+the document-height blended layer separately per transition. Not
+reproducible in headless Chromium — if the device still shows it,
+reopen with the angles below.
+
+**Symptom:** navigating to profile view, the grain appears a beat after
+the page instead of painting with it.
+
+**Angles for next session:** (1) the ViewTransition boundary swaps
+content while GrainOverlay lives OUTSIDE it at layout level — during
+the slide, document height changes and the grain's inset:0 box resizes
+after the new page commits; (2) the root VT group is pinned static
+(animation:none) — check whether the new-root snapshot (which includes
+grain) lands a frame late vs the boundary snapshot; (3) ProfileView's
+bounce/hydration double-render may shrink then grow .forge-page.
+Reproduce in Chromium with slowed VT durations before touching anything.
+
+### Performance Lab — ideal rebuild (dedicated session)
+
+**Status:** Queued by user 2026-07-05 for a fresh-credits session.
+
+**Scope to unpack together:** instant home hydration (unlocks deleting
+the @overlay interception → Lab gets scroll-under + VT slide as the
+real route everywhere); the parked surface-polish + adherence-view
+rethink; absence modelling (item 3 of the correctness log); share-
+metrics export. One coherent design pass rather than four patches.
+
 ### Chrome-tone gaps on secondary surfaces (top/bottom bands)
 
-**Status:** Parked 2026-07-05 — each needs on-device verification; the
-modal-scrim case from the same report shipped with the SEO pass (all 19
-scrims now paint via .forge-scrim::before so the fixed element samples
-clean).
+**Status:** RESOLVED 2026-07-05 — user supplied screenshots for every
+surface; all reduced to the substrate-edge rule (glow luminance clipped
+at shell tops) + diag-sync's opaque background, fixed and
+device-confirmed same day. The Lab status-bar scroll-under remains the
+one exception, parked separately behind instant home hydration. Entry
+retained for the recipe below, which is now the canonical diagnosis
+path for any future band report.
 
 **Report:** the status-bar/chin tone work doesn't extend to: onboarding
 pages (both ends), /profile (status bar only), Performance Lab (chin

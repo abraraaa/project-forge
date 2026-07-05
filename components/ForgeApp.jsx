@@ -63,9 +63,15 @@ import { activateProfileCore, saveFocusCore, takePendingRotationSummary } from "
 
 // ─── Root ──────────────────────────────────────────────────────────────────────
 export default function ForgeApp(){
-  const [mounted,setMounted]=useState(false);
-  // Canonical SSR client-mount guard: fires once, no cascade. Intentional.
-  useEffect(()=>setMounted(true),[]);
+  // The old `if (!mounted) return null` SSR guard is retired (instant home
+  // hydration): returning null on first client render collapsed the page to
+  // zero height at the exact moment the browser applies scroll restoration
+  // on back-navigation, losing the user's position (measured 300 → 0).
+  // State initializers read LS lazily (same storage-as-store pattern as
+  // SessionHost/ProfileView), so the first client render IS the full home.
+  // The server renders the empty-LS branches; React 19 recovers the
+  // client/server divergence — the same trade the /profile and /session
+  // hosts have shipped with, console-clean in Chromium.
 
   // Next router — PR3 real-routes migration. Screens that have become real
   // routes (Performance Lab → /performance) navigate via soft client routing
@@ -88,7 +94,15 @@ export default function ForgeApp(){
   // user) and stays true until the activation effect's blob sync resolves.
   const [hydrating,setHydrating]=useState(()=>{
     if (typeof window === "undefined") return false;
-    return P.getActive() !== null;
+    // Splash ONLY when LS is genuinely empty for a signed-in profile (the
+    // cross-context case the splash exists for: PWA and Safari are separate
+    // sandboxes, so a returning user on a new surface needs the blob pull
+    // before home has anything truthful to show). When LS already has
+    // history, home renders instantly at full height from local data and
+    // the sync refreshes silently — this is what keeps back-navigation
+    // scroll restoration working (instant home hydration).
+    const p = P.getActive();
+    return p !== null && H.get(p).length === 0;
   });
   const [streak,setStreak]=useState(0); // retained for compat — now derived from history, see useMemo below
   const [screen,setScreenRaw]=useState(()=>{
@@ -149,8 +163,13 @@ export default function ForgeApp(){
   // replaces the candidate; confirm commits it; cancel drops it (engine
   // state stays untouched because computeRotationPreview never mutates).
   const [rotationPreview,setRotationPreview]=useState(null);
-  // Full session history — loaded from localStorage, merged from blob
-  const [history,setHistory]=useState([]);
+  // Full session history — lazy-hydrated from localStorage (instant home),
+  // merged/refreshed from blob by the sync effect.
+  const [history,setHistory]=useState(()=>{
+    if (typeof window === "undefined") return [];
+    const p = P.getActive();
+    return p ? H.get(p) : [];
+  });
   // Anti-dysmorphia: dismiss-once-per-render for recovery nudge
   const [recoveryDismissed,setRecoveryDismissed]=useState(false);
   // PWA install prompt (iOS needs custom UI; Android gets the OS prompt for free)
@@ -632,8 +651,6 @@ export default function ForgeApp(){
     setFocusPickerOpen(false);
   };
 
-  if(!mounted) return null;
-
   // Onboarding — first-time intro, shown before ProfileScreen
   if(screen==="onboarding"){
     return <OnboardingScreen onContinue={()=>{
@@ -837,7 +854,7 @@ export default function ForgeApp(){
   // session record so the engine doesn't need a code path for it" job.
   //
   // INTENTIONALLY a plain arrow function, NOT useCallback. The function lives
-  // after the SSR mount guard (`if (!mounted) return null`) earlier in this
+  // after the state initializers have hydrated from LS earlier in this
   // component, so wrapping it in useCallback creates a hook-ordering violation:
   // the first render (pre-mount) skips this hook entirely, the second render
   // calls it. React detects the mismatch and crashes with Error #310 in prod
