@@ -179,9 +179,9 @@ When you add a new SESSIONS exercise, the pool/anatomy/canonical-name invariants
 
 - **README** — this file: what Forge is, how to run it, design principles.
 - **CHANGELOG** — [CHANGELOG.md](./CHANGELOG.md): what changed and why, newest first.
-- **Licensing** — [LICENSING.md](./LICENSING.md): AGPL-3.0 default + commercial-licence path.
+- **Licensing** — [LICENSING.md](./LICENSING.md): source-available (PolyForm Strict) + commercial-licence path.
 - **Code of Conduct** — [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
 
 ## License
 
-Forge is dual-licensed. The default release is **AGPL-3.0** — see [LICENSE](./LICENSE) for the full terms and [LICENSING.md](./LICENSING.md) for what that means in practice. Commercial licences for use cases AGPL-3.0 doesn't cover (closed-source SaaS, white-label, proprietary integrations) are available — contact `abrar.a@outlook.com`.
+Forge is **source-available, not open-source** — the code is public so you can validate the research and the engineering, and that transparency is the whole grant. The default terms are **PolyForm Strict 1.0.0** (read, study, run privately; no redistribution, no derivatives, no reuse of code or content) — see [LICENSE](./LICENSE) for the binding text and [LICENSING.md](./LICENSING.md) for what that means in practice. Commercial licences (SaaS, white-label, integrations, any commercial use) are available — contact `abrar.a@outlook.com`.
