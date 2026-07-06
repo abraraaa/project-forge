@@ -40,12 +40,12 @@ export const metadata = {
     template: "%s | Forge",
   },
   description:
-    "The intention-first strength tracker. Volume audits against MEV/MAV/MRV, focus-aware exercise rotation, and progression that stays honest.",
+    "Unveil the best you. Evidence-based strength training — volume audits against MEV/MAV/MRV, focus-aware rotation, and progression that stays honest.",
   manifest: "/manifest.json",
   openGraph: {
     title: "Forge — Train with intention",
     description:
-      "Performance Lab, focus-aware rotation, and progression that stays honest. Built for people who lift with purpose.",
+      "Unveil the best you. Performance Lab, focus-aware rotation, progression that stays honest — fire and pressure, applied with intent.",
     siteName: "Forge",
     locale: "en_GB",
     type: "website",
@@ -55,7 +55,7 @@ export const metadata = {
     card: "summary_large_image",
     title: "Forge — Train with intention",
     description:
-      "The intention-first strength tracker. Volume audits, smart rotation, honest progression.",
+      "Unveil the best you. Volume audits, smart rotation, honest progression.",
   },
   appleWebApp: {
     capable: true,
@@ -162,7 +162,7 @@ export default function RootLayout({ children }) {
               operatingSystem: "Web, iOS, Android (PWA)",
               offers: { "@type": "Offer", price: "0", priceCurrency: "GBP" },
               description:
-                "Intention-first strength training tracker with live volume auditing and focus-aware exercise rotation.",
+                "Unveil the best you. Evidence-based strength training with live volume auditing and focus-aware exercise rotation.",
               url: "https://theforged.fit",
             }),
           }}

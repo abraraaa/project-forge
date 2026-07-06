@@ -431,7 +431,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           {weekDone[todayIdx] ? (
             <div style={{margin:"12px 24px 0",padding:"16px 20px",background:`${accent.main}10`,border:`1px solid ${accent.main}40`,borderRadius:T.r.lg,display:"flex",alignItems:"center",gap:12}}>
               <span style={{fontSize:18,color:accent.main}}>✓</span>
-              <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Done. Streak maintained.</span>
+              <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Done. Rhythm kept.</span>
             </div>
           ) : (
             <button onClick={()=>onMarkDayDone(viewDateStr)} style={{

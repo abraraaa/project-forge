@@ -1,6 +1,6 @@
 # Forge
 
-**Evidence-based, autoregulated strength programme. Next.js PWA. Live at [theforged.fit](https://theforged.fit).**
+**Unveil the best you.** Evidence-based, autoregulated strength training — fire and pressure, applied with intent. Next.js PWA, live at [theforged.fit](https://theforged.fit).
 
 A 3-day-a-week strength programme (A/B/C — Squat & Push, Hinge & Pull, Power & Volume) with a progression engine that responds to how hard the work felt, a per-muscle analytics surface that compares your training to evidence-based volume landmarks (MEV/MAV/MRV), and an accessory rotation engine that keeps the stimulus fresh without you having to think about it.
 

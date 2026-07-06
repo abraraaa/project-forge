@@ -203,8 +203,8 @@ function RecentHistorySheet({ exerciseName, recent, onCancel }) {
 
 export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart}){
   const opts=[
-    {id:"fresh", icon:"○",label:"Fresh", sub:"Full programme. Push today.",       color:T.sage},
-    {id:"normal",icon:"◐",label:"Normal",sub:"Standard session.",                  color:T.gold},
+    {id:"fresh", icon:"○",label:"Fresh", sub:"Full programme. The good kind of heavy.", color:T.sage},
+    {id:"normal",icon:"◐",label:"Normal",sub:"The work, as written.",              color:T.gold},
     {id:"cooked",icon:"●",label:"Cooked",sub:"Deload weights · trimmed volume.",   color:T.rose},
   ];
   // Short, enum-only reasons. Fed into session record so patterns can surface.
@@ -284,11 +284,11 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
 // Maps to RIR via rpeToRir in storage.js: easy=3, normal=2, cooked=0.
 // The legacy hard/limit scale is only kept as a read-time alias inside
 // rpeToRir for v1 records — it must NOT appear in any UI.
-function RpeCard({onPick,label="How was that set?"}){
+function RpeCard({onPick,label="How did that one move?"}){
   const opts=[
     {id:"easy",  icon:"😮‍💨",label:"Easy",  sub:"More in the tank",color:T.sage},
     {id:"normal",icon:"😤", label:"Normal",sub:"Working effort",   color:T.gold},
-    {id:"cooked",icon:"🔥", label:"Cooked",sub:"Max effort",       color:T.rose},
+    {id:"cooked",icon:"🔥", label:"Cooked",sub:"Nothing left",     color:T.rose},
   ];
   return (
     <div style={{margin:"14px 20px 0",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,padding:"16px 18px",animation:`fadeSlide 240ms ${T.ease}`}}>
@@ -501,7 +501,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             <div style={{padding:"12px 20px 0"}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <span style={{fontSize:12,color:restActive?T.coral:T.text4,fontStyle:"italic",fontFamily:T.serif,transition:`color 300ms ${T.ease}`}}>
-                  {restActive?`Resting — ${restStr}`:`~${Math.round(block.rest/60)} min rest`}
+                  {restActive?`Resting — ${restStr}`:`~${Math.round(block.rest/60)} min. Catch your breath.`}
                 </span>
                 <button onClick={()=>{if(restActive){setRestActive(false);setRestRemain(block.rest);}else{setRestRemain(block.rest);setRestActive(true);}}}
                   style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.sm,padding:"4px 10px",cursor:"pointer",fontSize:11,color:restActive?T.coral:T.text3,transition:`all 180ms ${T.ease}`}}>
@@ -720,6 +720,8 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
 // ─── Done ──────────────────────────────────────────────────────────────────────
 const DONE_HEADLINES = [
   ["Solid", "work."],
+  ["Heavy,", "handled."],
+  ["The bar", "moved."],
   ["That's", "a session."],
   ["Job", "done."],
   ["Nothing", "wasted."],
@@ -728,7 +730,7 @@ const NEXT_DAY_MSG = {
   zone2:  "Zone 2 tomorrow. 60 min, conversational pace.",
   cardio: "Moderate cardio tomorrow. 35 min at ~75%.",
   hiit:   "HIIT tomorrow. 8–10 rounds, all out.",
-  rest:   "Rest day tomorrow. You've earned it.",
+  rest:   "Rest day tomorrow. That's where you grow.",
   strength:"Strength session next. Load up.",
 };
 
@@ -790,7 +792,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
               {n.base} kg{n.changed&&<span style={{color:T.coral}}> → {n.current} kg</span>}
             </div>
             <div style={{fontSize:12,marginTop:6,color:n.changed?T.coral:T.text4,fontStyle:"italic",fontFamily:T.serif}}>
-              {n.changed?"Weight updated for next session":"Hold — keep grinding"}
+              {n.changed?"Next time, heavier.":"Hold — grind it smooth."}
             </div>
           </Card>
         </Fade>
