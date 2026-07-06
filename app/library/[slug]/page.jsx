@@ -11,6 +11,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LIBRARY, getExercise, exerciseDescription } from "@/lib/library";
+import { getTempo, decodeTempo, TEMPO_SOURCES } from "@/lib/exercise-tempo";
 import { T } from "@/lib/tokens";
 
 export const dynamicParams = false;
@@ -42,6 +43,42 @@ function MuscleBar({ muscle, weight, primary = false }) {
         {weight.toFixed(weight === 1 ? 0 : 2).replace(/^0/, "")}
       </span>
     </div>
+  );
+}
+
+// Tempo prescription — data from lib/exercise-tempo.js (externally sourced,
+// reviewed, honestly labelled). Isometric holds have tempo:null and render
+// the hold guidance instead of fake digits.
+function TempoSection({ name }) {
+  const t = getTempo(name);
+  if (!t) return null;
+  const segments = t.tempo ? decodeTempo(t.tempo) : null;
+  return (
+    <section style={{ marginTop: 36 }}>
+      <h2 style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 10px" }}>
+        Tempo
+      </h2>
+      {segments ? (
+        <div style={{ display: "flex", gap: 18, alignItems: "baseline" }}>
+          {segments.map((seg, i) => (
+            <div key={i}>
+              <span style={{ fontFamily: T.serif, fontSize: 34, fontWeight: 300, color: seg.n === "X" ? T.coral : T.text1 }}>{seg.n}</span>
+              <span style={{ display: "block", fontSize: 10, color: T.text4, letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2 }}>{seg.label}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p style={{ fontFamily: T.serif, fontSize: 17, fontWeight: 300, fontStyle: "italic", color: T.text1, margin: 0 }}>
+          Hold, don&apos;t count reps.
+        </p>
+      )}
+      <p style={{ fontSize: 13, color: T.text2, marginTop: 12, lineHeight: 1.6 }}>{t.principle}</p>
+      {t.note && <p style={{ fontSize: 12, color: T.text3, marginTop: 8, lineHeight: 1.6 }}>{t.note}</p>}
+      <p style={{ fontSize: 11, color: T.text4, marginTop: 10, lineHeight: 1.6 }}>
+        {t.evidence === "derived" ? "Derived from tempo research on this movement class — " : ""}
+        {t.sources.map((s) => TEMPO_SOURCES[s]?.cite.split(".")[0]).filter(Boolean).join("; ")}.
+      </p>
+    </section>
   );
 }
 
@@ -94,6 +131,8 @@ export default async function ExercisePage({ params }) {
           counts as half a set for that muscle: meaningful help, not a replacement for direct work.
         </p>
       </section>
+
+      <TempoSection name={entry.name} />
 
       <section style={{ marginTop: 36 }}>
         <h2 style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 6px" }}>

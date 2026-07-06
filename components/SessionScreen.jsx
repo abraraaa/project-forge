@@ -20,6 +20,7 @@ import { WEEK, SWAP_DB, EQ_COLOUR } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
 import { getLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS } from "@/lib/lift-translations";
+import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 
 // ─── Session overview sheet ──────────────────────────────────────────────────
 // Mid-session escape hatch: list every block in today's session, show which
@@ -336,6 +337,19 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   // where activeEx was logged, opens a bottom sheet on tap. The link only
   // shows when there's at least one prior performance to display.
   const [historyOpen,setHistoryOpen]=useState(false);
+  // Tempo discovery — a quiet chip beside the muscle tag, expanding to the
+  // decoded prescription. Data from lib/exercise-tempo.js (sourced +
+  // reviewed, honestly labelled); only renders where a rep tempo exists
+  // (isometric holds already show "Xs · hold" and need no second voice).
+  const [tempoOpen,setTempoOpen]=useState(false);
+  const tempoEntry=useMemo(()=>getTempo(activeEx?.name),[activeEx?.name]);
+  // Collapse the explainer when the exercise changes — render-time reset
+  // (the documented adjust-state-on-prop-change pattern), not an effect.
+  const [tempoFor,setTempoFor]=useState(activeEx?.name);
+  if(tempoFor!==activeEx?.name){ setTempoFor(activeEx?.name); setTempoOpen(false); }
+  const tempoPhrase=tempoEntry?.tempo
+    ? decodeTempo(tempoEntry.tempo).filter(seg=>seg.n!=="0").map(seg=>seg.n==="X"?seg.label:`${seg.n}s ${seg.label}`).join(" · ")
+    : null;
   const recent = useMemo(
     () => recentForExercise(history, activeEx?.name, 3),
     [history, activeEx?.name]
@@ -392,6 +406,16 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 <span style={{fontSize:11,color:T.coral,fontWeight:500}}>▶ Watch demo</span>
               )}
               <span style={{fontSize:11,color:T.text3}}>{activeEx?.muscle}</span>
+              {tempoEntry?.tempo && (
+                <button
+                  onClick={(e)=>{e.stopPropagation();setTempoOpen(o=>!o);}}
+                  aria-expanded={tempoOpen}
+                  aria-label={`Tempo ${tempoEntry.tempo} — tap to ${tempoOpen?"hide":"explain"}`}
+                  style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:11,color:tempoOpen?T.gold:T.text3,fontFamily:T.sans,fontVariantNumeric:"tabular-nums",letterSpacing:"0.08em",transition:`color 180ms ${T.ease}`}}
+                >
+                  ◔ {tempoEntry.tempo}
+                </button>
+              )}
             </div>
           </div>
           <button
@@ -402,6 +426,14 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             <span style={{fontSize:9,fontWeight:500,color:T.text3,letterSpacing:"0.08em",textTransform:"uppercase"}}>Swap</span>
           </button>
         </div>
+        {tempoEntry?.tempo && tempoOpen && (
+          <Fade>
+            <div style={{marginTop:12,padding:"12px 14px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.md}}>
+              <div style={{fontSize:12,fontWeight:500,color:T.text1,letterSpacing:"0.02em"}}>{tempoPhrase}</div>
+              <div style={{fontSize:12,color:T.text3,fontStyle:"italic",fontFamily:T.serif,marginTop:6,lineHeight:1.5}}>{tempoEntry.principle}</div>
+            </div>
+          </Fade>
+        )}
       </div>
       <div style={{padding:"22px 20px 0"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
