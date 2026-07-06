@@ -1,0 +1,44 @@
+# Nightly sync round-trip integration test against the live Vercel Blob store.
+#
+# Runs on a schedule (not per-PR) so the store isn't churned on every push —
+# see tests/integration/sync-roundtrip.test.js for the rationale (the
+# addRandomSuffix class of bug is invisible to the unit suite; only a real
+# PUT-then-GET against the store catches it). The test writes under a unique
+# throwaway profile name and deletes it on the way out.
+#
+# Requires the BLOB_READ_WRITE_TOKEN repository secret. Without it the suite
+# self-skips and this job passes vacuously — set the secret for the run to
+# mean anything.
+name: Nightly sync integration
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync-roundtrip:
+    name: Sync round-trip (live Blob)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run integration test
+        run: npx vitest run tests/integration/sync-roundtrip.test.js
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}

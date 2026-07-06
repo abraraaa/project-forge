@@ -400,20 +400,24 @@ button press feedback) and apply a spring physics curve. Use
 
 ### Sync layer — true integration test against Vercel Blob
 
-**Status:** Wanted, not yet scoped.
+**Status:** SHIPPED 2026-07-05. `tests/integration/sync-roundtrip.test.js`
+calls the real route handlers (GET/PUT/POST/DELETE with real Request
+objects) against the live store: 404 contract for unwritten profiles,
+claim/409/check=1 lifecycle, PUT-then-GET exact round-trip, case-
+insensitive resolution, history merge-by-id, DELETE releasing the name.
+Gated on `BLOB_READ_WRITE_TOKEN` (skips cleanly in local + per-PR runs;
+a token-free validation half still runs everywhere); writes under a
+unique throwaway profile and deletes it in cleanup. Runs nightly via
+`.github/workflows/nightly-sync-integration.yml` (cron + manual
+dispatch). REMAINING SETUP: add the `BLOB_READ_WRITE_TOKEN` repository
+secret, then trigger the workflow manually once to confirm the live
+path is green — without the secret the job passes vacuously.
 
 **Context:** The addRandomSuffix bug found on 2026-06-22 was invisible to
 client-side tests — the writer and reader agreed on a broken pattern,
 no errors thrown, every test passed. The only signal was cross-device
 behavior. Future regressions in `app/api/sync/route.js` are equally
 invisible to the current suite.
-
-**Next step:** Add a `tests/integration/sync-roundtrip.test.js` that
-requires `BLOB_READ_WRITE_TOKEN`, hits the actual route handlers (or a
-local Vercel dev server), and verifies PUT-then-GET returns the exact
-payload written. Run nightly in CI rather than per-PR to avoid Vercel
-Blob test pollution. Gate behind an env-var so it skips locally without
-a token.
 
 ### Repair button on diag-sync — wider repair scenarios
 
