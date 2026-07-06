@@ -1261,7 +1261,7 @@ function OnboardingScreen({ onContinue }) {
 
       <Fade d={120}>
         <p style={{ fontSize: 15, color: T.text2, lineHeight: 1.65, marginBottom: 28 }}>
-          A lean strength tracker. Three sessions a week, the right lifts, and a timer that minds its own business.
+          Unveil the best you. Three sessions a week, the right lifts, and a timer that minds its own business.
         </p>
       </Fade>
 

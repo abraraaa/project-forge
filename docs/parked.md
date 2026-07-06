@@ -13,7 +13,18 @@ specific next step that would unblock it.
 
 ### Microcopy & tone-of-voice pass — "quietly sexy", sensation-forward
 
-**Status:** Parked 2026-07-06 (user request, queued for a dedicated pass).
+**Status:** RESOLVED 2026-07-06 — both passes shipped same day. First
+batch (readiness, RPE, rest, done screen, home) reviewed with two vetoes
+honoured ("grinding" stays — "Hold — grind it smooth."; rest-day line is
+"That's where *you* grow."). Positioning shipped: "Unveil the best you."
+across metadata/manifest/README; onboarding's "A lean strength tracker"
+(the last self-description as a tracker) replaced in the second pass.
+Second-pass inventory found the remaining surfaces (retro link, passkey
+nudges, overlays, glossary) already in register or correctly exempt as
+pure instruction. docs/voice.md was deliberately RETIRED after shipping:
+the register is codified as README design principle #11 (voice as innate
+doctrine, not a patch log); the review record lives in PR #186. Entry
+retained below for the original brief.
 
 **Context:** Forge's visual language (Portra warmth, serif italics, film
 grain) already carries the "quietly sexy" aesthetic; the microcopy mostly
