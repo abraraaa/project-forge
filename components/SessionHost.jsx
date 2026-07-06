@@ -29,7 +29,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { track } from "@vercel/analytics";
 import {
-  P, H, W, PB, F, TS, BW, Days, D, SessionIntent,
+  P, H, W, PB, F, TS, BW, Days, Bk, D, SessionIntent,
   newDraftLog, logSet, finaliseDraft, bumpStreak, scaleForReadiness,
   startingWeightForLift, blobPush, pushNow,
 } from "@/lib/storage";
@@ -417,6 +417,9 @@ export default function SessionHost() {
           completedType: "strength",
           sessionId: sessionRecord.id,
         });
+        // A session dated after an open breather's start resumes the rhythm
+        // (lib/breaks.js). Home re-reads Bk on mount, so the badge un-rests.
+        Bk.endOnActivity(profile, sessionRecord.date);
         draftLogRef.current = null;
       }
       D.clear(profile);

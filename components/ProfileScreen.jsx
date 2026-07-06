@@ -24,7 +24,7 @@ import ScrollDrum from "@/components/ScrollDrum";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
 import TakenNameModal from "@/components/TakenNameModal";
 
-export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus}){
+export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,onOpenBreather}){
   const [name,setName]=useState("");
   const [confirmWipe,setConfirmWipe]=useState(null);
   const [showTakenHelp,setShowTakenHelp]=useState(false);
@@ -526,6 +526,22 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && (
         <Fade d={240}>
           <SyncStatusCard profile={current} />
+        </Fade>
+      )}
+
+      {/* Need a breather? — manual entry to declare a pause any time, not
+          only when an absence is detected. Opens the same modal the Home
+          nudge does (ForgeApp owns it there; ProfileView owns it here). */}
+      {current && onOpenBreather && (
+        <Fade d={245}>
+          <button onClick={onOpenBreather}
+            className="forge-glass" style={{width:"100%",textAlign:"left",marginTop:12,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",background:"none"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Need a breather?</div>
+              <div style={{fontSize:11,color:T.text3,marginTop:2}}>Pause your rhythm while life happens</div>
+            </div>
+            <span style={{fontSize:14,color:T.text3}}>→</span>
+          </button>
         </Fade>
       )}
 

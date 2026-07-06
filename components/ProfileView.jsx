@@ -21,12 +21,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { P, BW, F, pushNow } from "@/lib/storage";
+import { P, BW, F, Bk, pushNow } from "@/lib/storage";
 import { withNavTransition } from "@/lib/nav-transitions";
 import { activateProfileCore, saveFocusCore, stashRotationSummary } from "@/lib/profile-actions";
 import { DEFAULT_FOCUS } from "@/lib/programme";
 import ProfileScreen from "@/components/ProfileScreen";
 import FocusPickerSheet from "@/components/FocusPickerSheet";
+import BreatherModal from "@/components/BreatherModal";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 export default function ProfileView() {
@@ -43,6 +44,16 @@ export default function ProfileView() {
   );
   const [bwEditOpen, setBwEditOpen] = useState(false);
   const [focusPickerOpen, setFocusPickerOpen] = useState(false);
+  const [breatherOpen, setBreatherOpen] = useState(false);
+
+  // Declare a breather from Profile. Same store + push as the Home path;
+  // this route has no rhythm badge to re-render, so no local state to sync.
+  const handleStartBreather = useCallback((reason) => {
+    if (!current) return;
+    Bk.start(current, reason);
+    setBreatherOpen(false);
+    pushNow(current);
+  }, [current]);
 
   // Settings surface needs an active profile — a deep link without one goes
   // to the gate at /.
@@ -93,9 +104,13 @@ export default function ProfileView() {
         updateBodyweight={updateBodyweight}
         userFocus={userFocus}
         onEditFocus={() => setFocusPickerOpen(true)}
+        onOpenBreather={() => setBreatherOpen(true)}
       />
       {focusPickerOpen && (
         <FocusPickerSheet current={userFocus} onSave={handleSaveFocus} onCancel={() => setFocusPickerOpen(false)} />
+      )}
+      {breatherOpen && (
+        <BreatherModal onConfirm={handleStartBreather} onCancel={() => setBreatherOpen(false)} />
       )}
     </ErrorBoundary>
   );
