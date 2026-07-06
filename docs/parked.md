@@ -32,10 +32,17 @@ the share-card footer line ("Train with intention." is the register to
 match). Existing tempo notes ("back knee kisses floor", "feel the
 stretch") already hit the target voice — use them as the reference.
 
-**Next step:** one editorial sweep producing a before/after table per
-surface (docs/voice.md as the deliverable + codified register rules),
-reviewed together before any strings change in code. Not a find-and-
-replace job — each line individually weighed against the clarity gate.
+**Progress (2026-07-06):** docs/voice.md drafted — register rules (the
+five: clarity gate, sensation-not-hype, prescriptive-not-punitive, quiet
+confidence, mid-set test) + before/after tables covering readiness, RPE,
+rest, done screen, home, Lab, library, share card. ~10 proposed changes,
+the rest explicitly marked keep. Awaiting joint review; no strings
+changed in code yet.
+
+**Next step:** review docs/voice.md together, approve/strike per row,
+then ship approved rows in one commit referencing the doc. Second-pass
+inventory (onboarding, overlays, notifications) after the first batch
+lands.
 
 ### PWA manifest + app-capabilities enrichment (PWABuilder gaps)
 
