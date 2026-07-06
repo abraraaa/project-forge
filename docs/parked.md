@@ -13,7 +13,18 @@ specific next step that would unblock it.
 
 ### Microcopy & tone-of-voice pass — "quietly sexy", sensation-forward
 
-**Status:** Parked 2026-07-06 (user request, queued for a dedicated pass).
+**Status:** RESOLVED 2026-07-06 — both passes shipped same day. First
+batch (readiness, RPE, rest, done screen, home) reviewed with two vetoes
+honoured ("grinding" stays — "Hold — grind it smooth."; rest-day line is
+"That's where *you* grow."). Positioning shipped: "Unveil the best you."
+across metadata/manifest/README; onboarding's "A lean strength tracker"
+(the last self-description as a tracker) replaced in the second pass.
+Second-pass inventory found the remaining surfaces (retro link, passkey
+nudges, overlays, glossary) already in register or correctly exempt as
+pure instruction. docs/voice.md was deliberately RETIRED after shipping:
+the register is codified as README design principle #11 (voice as innate
+doctrine, not a patch log); the review record lives in PR #186. Entry
+retained below for the original brief.
 
 **Context:** Forge's visual language (Portra warmth, serif italics, film
 grain) already carries the "quietly sexy" aesthetic; the microcopy mostly
@@ -32,10 +43,40 @@ the share-card footer line ("Train with intention." is the register to
 match). Existing tempo notes ("back knee kisses floor", "feel the
 stretch") already hit the target voice — use them as the reference.
 
-**Next step:** one editorial sweep producing a before/after table per
-surface (docs/voice.md as the deliverable + codified register rules),
-reviewed together before any strings change in code. Not a find-and-
-replace job — each line individually weighed against the clarity gate.
+**Progress (2026-07-06):** docs/voice.md drafted — register rules (the
+five: clarity gate, sensation-not-hype, prescriptive-not-punitive, quiet
+confidence, mid-set test) + before/after tables covering readiness, RPE,
+rest, done screen, home, Lab, library, share card. ~10 proposed changes,
+the rest explicitly marked keep. Awaiting joint review; no strings
+changed in code yet.
+
+**Next step:** review docs/voice.md together, approve/strike per row,
+then ship approved rows in one commit referencing the doc. Second-pass
+inventory (onboarding, overlays, notifications) after the first batch
+lands.
+
+### Fresh-visitor hydration mismatch on / (React #418)
+
+**Status:** Logged 2026-07-06 — found while reworking onboarding copy.
+Pre-existing, NOT caused by the copy change (bisected: reproduces on the
+parent commit's production build too).
+
+**Repro:** brand-new browser context (no localStorage at all), production
+build, load `/` → React error #418 (server text ≠ client text,
+`args[]=text&args[]=` — one side rendered text, the other empty), React
+regenerates the tree client-side. Console-only for users but it means
+first paint gets thrown away on the first-ever visit.
+
+**Suspect:** the instant-home-hydration lazy LS initializers (#179) —
+verified at the time with SEEDED storage (existing profile), never with
+a truly empty browser. Something in the ForgeApp screen gate or a
+date-derived string renders differently server-side vs fresh-client.
+
+**Next step:** run the non-minified dev build in a fresh context and read
+the full #418 diff to identify the exact text node; fix at the source
+(likely a lazy initializer branching differently on `typeof window` vs
+empty-LS, or a locale/timezone-dependent date string). Do NOT wallpaper
+with suppressHydrationWarning.
 
 ### PWA manifest + app-capabilities enrichment (PWABuilder gaps)
 

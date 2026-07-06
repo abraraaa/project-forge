@@ -1,6 +1,6 @@
 # Forge
 
-**Evidence-based, autoregulated strength programme. Next.js PWA. Live at [theforged.fit](https://theforged.fit).**
+**Unveil the best you.** Evidence-based, autoregulated strength training — fire and pressure, applied with intent. Next.js PWA, live at [theforged.fit](https://theforged.fit).
 
 A 3-day-a-week strength programme (A/B/C — Squat & Push, Hinge & Pull, Power & Volume) with a progression engine that responds to how hard the work felt, a per-muscle analytics surface that compares your training to evidence-based volume landmarks (MEV/MAV/MRV), and an accessory rotation engine that keeps the stimulus fresh without you having to think about it.
 
@@ -110,6 +110,8 @@ These are non-negotiable without explicit sign-off. They've each saved or unwoun
 8. **Stale-base discipline.** Branch from latest `main`, CI green + up-to-date base before merge.
 9. **Curated anatomy dataset.** `lib/exercise-anatomy.js` is not edited without a concrete reason.
 10. **WebKit guidance is the source of truth on iOS.** Forge leverages WebKit guidance for iOS 26 or greater — liquid glass AND sculpted ass friendly, as far as PWAs can support. The "as far as PWAs can support" qualifier is load-bearing: Home Screen web apps don't get to draw arbitrary content behind the status bar (confirmed by WebKit dev, 2026-06), so the recipe is "lean into what Safari/WebKit gives PWAs natively" rather than reverse-engineer a workaround. Anything that fights the platform — fixed pixel status-bar shims, deprecated `black-translucent`, hand-rolled backdrop-blur over the system chrome — gets removed on sight. Translucent + sculpted surfaces (Liquid Glass dialogue) are pursued where they compose cleanly with system rendering; where they don't, we choose the cleaner native fallback over a hacked imitation.
+
+11. **The voice: quietly sexy, innate — never patched in.** Microcopy references the *sensation* of training (bar speed, breath, the good kind of heavy) in the serif italic, while instruction stays in the sans. Five gates, in order: clarity first (a user at RPE 9 parses every line in one pass — the mid-set test); sensation, not hype (no cheerleading, no exclamation marks, no gym-bro register); prescriptive, not punitive; quiet confidence (short declaratives); and positioning lives at the edges ("Unveil the best you." in metadata/manifest/README, "Train with intention." as the imperative anchor) — inside the app it shows, it doesn't pitch. Purely operational surfaces (/diag-*) carry zero atmosphere by design. The register review that set this doctrine lives in PR #186.
 
 ## Programme model
 

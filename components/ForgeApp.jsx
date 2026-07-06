@@ -1261,25 +1261,25 @@ function OnboardingScreen({ onContinue }) {
 
       <Fade d={120}>
         <p style={{ fontSize: 15, color: T.text2, lineHeight: 1.65, marginBottom: 28 }}>
-          A lean strength tracker. Three sessions a week, the right lifts, and a timer that minds its own business.
+          Forge notices. Bar speed, effort, the days you show up. Every session quietly shaped to the athlete you're becoming.
         </p>
       </Fade>
 
-      {/* The three promises — feel like editorial callouts rather than feature
-          bullets. Strength promise nods to the focus-picker (Forged / Strong /
-          Sculpt) since that's now a first-class part of the loop — used to
-          just say "the right lifts" but the personalisation deserves a hint. */}
+      {/* The three promises — editorial callouts, not feature bullets. No
+          session-count claims: the schedule is user-shaped (two days or
+          six), so the promises sell the quiet intelligence and whose terms
+          it runs on, never a number the settings can contradict. */}
       <Fade d={200}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18, marginBottom: 32 }}>
           <PromiseLine
             accent={T.coral}
-            kicker="Strength"
-            body="Three sessions a week, shaped around your training focus. Your weights adapt to how you felt last time."
+            kicker="Intelligence"
+            body="Forge reads how the last session felt and loads the next to match. More when you've earned it, less when you need it."
           />
           <PromiseLine
             accent={T.steel}
-            kicker="Conditioning"
-            body="Zone 2 and HIIT days baked in. Because a strong heart matters as much as a strong back."
+            kicker="Rhythm"
+            body="Strength, Zone 2, HIIT, rest. Your week, your shape. The programme bends to fit your life, never the reverse."
           />
           <PromiseLine
             accent={T.sage}
@@ -1297,7 +1297,7 @@ function OnboardingScreen({ onContinue }) {
           boxShadow: `0 12px 40px ${s.glow}`,
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
-          <span>Let's go</span>
+          <span>Unveil the best you</span>
           <span style={{ fontSize: 18 }}>→</span>
         </button>
       </Fade>
