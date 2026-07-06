@@ -438,15 +438,19 @@ summary layer over widening the raw window (keeps signal reactivity).
    than the grid") — that's design work, folded into the surface-polish
    item below.
 
-3. **Lab paints history once; doesn't model "currently off".** It renders
-   whatever history exists as if it's current, with no notion of a lapse.
-   Wider product question: do we have (or want) a re-engagement / "log a
-   missed stretch" flow — a modal that qualifies "you've been away N days,
-   want to log or note why?" — so the Lab can distinguish "no data yet" from
-   "deliberately rested" from "fell off"? Ties to the retro-logging picker
-   that already exists for single days; this would be the multi-day / absence
-   version. Decide whether absence is a first-class state the Lab + streak
-   logic should model.
+3. **Lab paints history once; doesn't model "currently off".** — ENGINE
+   LANDED 2026-07-06 (phase 0). `lib/absence.js` + `tests/absence.test.js`:
+   absence is DERIVED (pure function of activity dates + cadence, zero new
+   storage — principle #0 satisfied for free), measured in quiet days
+   against the user's schedule, symmetric between closed and ongoing gaps.
+   Turned out far simpler than this note feared — the "re-engagement flow"
+   worry was a surface question downstream of a ~90-line model. Full design
+   + roadmap + exact Lab wiring in **docs/absence-modelling.md**. STILL
+   OPEN (phase 1, the surface): wire `current` into the Lab as a calm
+   away-state banner (not built — deliberately left as the reviewable
+   product call: Lab-only vs. also a home-screen nudge). Phase 2 (optional
+   user annotations "travelling/injured") deferred — it's the only part
+   that would need a store, gated behind proving the banner first.
 
 ### Performance Lab — surface polish
 
