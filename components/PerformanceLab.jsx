@@ -384,7 +384,7 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
         Sparklines = last 8 weeks · band &amp; sets/wk = last {audit.weeksAnalysed} complete weeks · {audit.sessionsAnalysed} session{audit.sessionsAnalysed===1?"":"s"}
       </div>
       <div style={{marginTop:8,fontSize:11,color:T.text3,fontStyle:"italic",fontFamily:T.serif,lineHeight:1.55}}>
-        Measured recent, not lifetime — because consistency over time builds where single big weeks don&apos;t.
+        Read from your recent weeks, not your lifetime average. Your body answers to the training in front of it.
       </div>
     </div>
   );
