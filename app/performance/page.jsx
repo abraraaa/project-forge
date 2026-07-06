@@ -13,8 +13,8 @@ export const metadata = {
     "Per-muscle volume against MEV/MAV/MRV, 8-week sparklines, a consistency grid, and 1RM trends. See exactly where your training is working.",
 };
 
-import PerformanceLabView from "@/components/PerformanceLabView";
+import { PerformanceLabShell } from "@/components/client-shells";
 
 export default function PerformancePage() {
-  return <PerformanceLabView />;
+  return <PerformanceLabShell />;
 }

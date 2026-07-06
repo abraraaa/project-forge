@@ -15,8 +15,8 @@ export const metadata = {
   robots: { index: false },
 };
 
-import SessionHost from "@/components/SessionHost";
+import { SessionShell } from "@/components/client-shells";
 
 export default function SessionPage() {
-  return <SessionHost />;
+  return <SessionShell />;
 }
