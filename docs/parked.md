@@ -57,9 +57,23 @@ lands.
 
 ### Fresh-visitor hydration mismatch on / (React #418)
 
-**Status:** Logged 2026-07-06 — found while reworking onboarding copy.
-Pre-existing, NOT caused by the copy change (bisected: reproduces on the
-parent commit's production build too).
+**Status:** RESOLVED 2026-07-06 — and it was bigger than filed: the
+unminified diff showed the server ALWAYS rendered ProfileScreen ("Who's
+training?") and React regenerated the whole tree for EVERY cohort on
+every cold document load (fresh, profile-less, and seeded active users
+all threw #418; /performance and /profile mismatched the same way).
+Fix: components/client-shells.jsx — all four LS-determined route views
+(/, /performance, /profile, /session) now mount client-only via
+next/dynamic ssr:false with an empty full-height field as the loading
+shell. No server tree → no mismatch; the #179 lazy initializers work
+unchanged; probed before/after, client-back and reload scroll numbers
+are identical (166→221 drift and reload→0 are PRE-EXISTING, see below)
+and all routes are hydration-clean for fresh and seeded contexts.
+Two pre-existing observations spun out while probing: client-side back
+restores with a +55px drift (content shift between visits — likely a
+Fade/nudge card), and document-RELOAD restoration misses entirely
+(166→0, both before and after the fix) — these are the parked
+"first-traversal restoration miss", now with measurements.
 
 **Repro:** brand-new browser context (no localStorage at all), production
 build, load `/` → React error #418 (server text ≠ client text,

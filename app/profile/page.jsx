@@ -13,8 +13,8 @@ export const metadata = {
     "Switch profiles, set bodyweight, and choose your training focus — Forged, Strong, or Sculpt.",
 };
 
-import ProfileView from "@/components/ProfileView";
+import { ProfileShell } from "@/components/client-shells";
 
 export default function ProfilePage() {
-  return <ProfileView />;
+  return <ProfileShell />;
 }
