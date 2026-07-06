@@ -14,10 +14,16 @@ Commercial licenses (SaaS, white-label, integrations, or any use the terms
 below don't permit) are available — see LICENSING.md or contact
 abrar.a@outlook.com.
 
-Relicensing note: releases up to and including commit b75a0db (2026-07-06)
-were published under AGPL-3.0; those grants stand for copies received under
-them. Everything after that commit is licensed solely under the terms
-below.
+Relicensing note: between 2026-06-01 and 2026-07-06 (commits e687892
+through b75a0db) this repository was offered under AGPL-3.0. That offer is
+WITHDRAWN IN FULL. As of 2026-07-06 the licensor grants no license to any
+version of Forge — including historical versions reachable through this
+repository's git history or any mirror of it — other than the terms below
+and negotiated commercial licenses. Cloning this repository today conveys
+the entire history under the terms below only. Copies actually obtained
+under AGPL-3.0 before the withdrawal retain that grant for those copies,
+as copyright law requires; no new AGPL grant arises from this repository
+after that date.
 
 The unmodified PolyForm Strict License 1.0.0 text follows. The terms below
 are the binding legal grant; the summary above is informative only.

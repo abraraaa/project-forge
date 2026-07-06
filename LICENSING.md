@@ -67,11 +67,19 @@ be released under these terms and under commercial licenses.
 
 ## Relicensing history
 
-Releases up to and including commit `b75a0db` (2026-07-06) were published
-under **AGPL-3.0** with a commercial-license option. Those grants are not
-retracted — copies received under AGPL-3.0 remain AGPL-3.0. Everything
-after that commit is released solely under PolyForm Strict 1.0.0 + the
-commercial path above.
+Between 2026-06-01 and 2026-07-06 (commits `e687892` → `b75a0db`) this
+repository was offered under **AGPL-3.0** with a commercial-license
+option. **That offer is withdrawn in full.** As of 2026-07-06, no license
+is granted to any version of Forge — including historical versions
+reachable through this repository's git history or any mirror — other
+than PolyForm Strict 1.0.0 and negotiated commercial licenses. Cloning
+this repository today conveys the entire history, old commits included,
+under PolyForm Strict only. The presence of a historical LICENSE file in
+old commits is a record of a past offer, not a live grant.
+
+The one thing copyright law doesn't allow us to undo: copies actually
+obtained while the AGPL offer stood retain that grant *for those copies*.
+No new AGPL rights arise from this repository after the withdrawal date.
 
 ## Quick FAQ
 
