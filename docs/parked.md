@@ -55,6 +55,29 @@ then ship approved rows in one commit referencing the doc. Second-pass
 inventory (onboarding, overlays, notifications) after the first batch
 lands.
 
+### Fresh-visitor hydration mismatch on / (React #418)
+
+**Status:** Logged 2026-07-06 — found while reworking onboarding copy.
+Pre-existing, NOT caused by the copy change (bisected: reproduces on the
+parent commit's production build too).
+
+**Repro:** brand-new browser context (no localStorage at all), production
+build, load `/` → React error #418 (server text ≠ client text,
+`args[]=text&args[]=` — one side rendered text, the other empty), React
+regenerates the tree client-side. Console-only for users but it means
+first paint gets thrown away on the first-ever visit.
+
+**Suspect:** the instant-home-hydration lazy LS initializers (#179) —
+verified at the time with SEEDED storage (existing profile), never with
+a truly empty browser. Something in the ForgeApp screen gate or a
+date-derived string renders differently server-side vs fresh-client.
+
+**Next step:** run the non-minified dev build in a fresh context and read
+the full #418 diff to identify the exact text node; fix at the source
+(likely a lazy initializer branching differently on `typeof window` vs
+empty-LS, or a locale/timezone-dependent date string). Do NOT wallpaper
+with suppressHydrationWarning.
+
 ### PWA manifest + app-capabilities enrichment (PWABuilder gaps)
 
 **Status:** Identified via PWABuilder audit; deferred until after PR3.
