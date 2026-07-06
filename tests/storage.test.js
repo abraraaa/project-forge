@@ -90,6 +90,7 @@ describe("storage durability contract", () => {
       BW:   ["bodyweight"],
       TS:   ["trainingState"],
       Days: ["days"],
+      Bk:   ["breaks"],
     };
     for (const [store, fields] of Object.entries(required)) {
       for (const field of fields) {
@@ -104,7 +105,7 @@ describe("storage durability contract", () => {
     // pre-cutover peers (the substring still appears in the function body).
     // The required-list below is the active sync contract; the rescue lines
     // are exercised via the storage-days projection tests.
-    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "bodyweight", "trainingState", "days"];
+    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "bodyweight", "trainingState", "days", "breaks"];
     for (const field of required) {
       expect(persistToLocal.includes(field), `persistToLocal() must hydrate meta.${field} back to local`).toBe(true);
     }
@@ -112,7 +113,7 @@ describe("storage durability contract", () => {
 
   it("every SYNCED meta store has a merge rule in mergeProfileData", () => {
     const mergeFn = sliceFunction(storageSrc, "mergeProfileData");
-    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "bodyweight", "trainingState", "days"];
+    const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "bodyweight", "trainingState", "days", "breaks"];
     for (const field of required) {
       expect(mergeFn.includes(field), `mergeProfileData must declare a merge rule for meta.${field}`).toBe(true);
     }
