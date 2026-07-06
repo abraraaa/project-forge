@@ -2,7 +2,7 @@
   "name": "project-forge",
   "version": "0.3.0",
   "private": true,
-  "license": "AGPL-3.0-only",
+  "license": "PolyForm-Strict-1.0.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

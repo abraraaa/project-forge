@@ -11,6 +11,32 @@ specific next step that would unblock it.
 
 ## Active parking list
 
+### Microcopy & tone-of-voice pass — "quietly sexy", sensation-forward
+
+**Status:** Parked 2026-07-06 (user request, queued for a dedicated pass).
+
+**Context:** Forge's visual language (Portra warmth, serif italics, film
+grain) already carries the "quietly sexy" aesthetic; the microcopy mostly
+doesn't — it's clear but utilitarian. The brief: lean the words into the
+*sensation* of training — the stretch, the drive, the held breath, the
+weight settling — **without obscuring clarity**. Clarity remains the gate:
+a user mid-set gets instruction first, atmosphere second. The voice is
+already "prescriptive, not punitive"; this pass adds *sensory* to that,
+not slang or hype (no "crush it", no gym-bro register).
+
+**Surfaces to inventory (first pass):** session screen (RPE card labels,
+rest hints, deload tag, done screen), home screen day cards + streak
+copy, Lab editorial lines (away-state, volume philosophy), library page
+prose (contribution caption, tempo principles, footer), onboarding, and
+the share-card footer line ("Train with intention." is the register to
+match). Existing tempo notes ("back knee kisses floor", "feel the
+stretch") already hit the target voice — use them as the reference.
+
+**Next step:** one editorial sweep producing a before/after table per
+surface (docs/voice.md as the deliverable + codified register rules),
+reviewed together before any strings change in code. Not a find-and-
+replace job — each line individually weighed against the clarity gate.
+
 ### PWA manifest + app-capabilities enrichment (PWABuilder gaps)
 
 **Status:** Identified via PWABuilder audit; deferred until after PR3.

@@ -1,48 +1,108 @@
 # Licensing
 
-Forge is dual-licensed.
+Forge is **source-available, not open-source** — and that's deliberate.
 
-## Default: AGPL-3.0
+The source is published for one reason: trust. Forge makes evidence-based
+claims (volume landmarks, progression thresholds, tempo prescriptions,
+honest per-muscle contribution weights), and you shouldn't have to take our
+word for any of it. Read the engine. Check the citations. Run it privately
+and verify it does what it says. That transparency is the entire grant —
+nothing here is licensed for reuse.
 
-Forge is available under the [GNU Affero General Public License, version 3](./LICENSE) at no cost. Under AGPL-3.0 you may:
+## Default: PolyForm Strict 1.0.0
 
-- Use, study, modify, and self-host Forge for any purpose, including commercial use.
-- Distribute the source or your modified versions.
+Forge is available under the [PolyForm Strict License 1.0.0](./LICENSE).
+Under it you may:
 
-**You must, in return:**
+- **Read and study** everything in this repository.
+- **Run Forge privately, unmodified**, for personal or noncommercial
+  purposes — including to validate the research and engineering.
 
-- Keep the AGPL-3.0 license and copyright notices intact in any distribution.
-- If you run a modified version of Forge as a network-accessible service (e.g. a fitness app or web product that users interact with remotely), **publish your full modified source under AGPL-3.0** for those users.
+**You may not:**
 
-This is the AGPL's network clause — the term most people mean when they say "AGPL." It exists to prevent the SaaS loophole MIT and Apache leave open.
+- Redistribute the software or any part of it.
+- Create modified versions or derivative works.
+- Reuse any part of it — code, programme design, datasets, editorial
+  content — in another product, commercial or not.
+- Use it for any commercial purpose.
 
-## Commercial license (non-AGPL)
+## Commercial license
 
-If AGPL-3.0 doesn't fit your use case — for example:
-
-- You want to run a closed-source SaaS built on Forge without publishing your modifications.
-- You're a gym chain or fitness brand wanting a white-label deployment.
-- You want to integrate Forge's engine into a proprietary product.
-- Your organisation's policy disallows AGPL'd dependencies.
-
-…a separate, paid commercial license is available. Terms are negotiated case-by-case (per-seat, revenue share, or flat fee depending on scope).
+If you want rights the default terms don't grant — SaaS, white-label
+deployment, integrating the engine or datasets into another product, or
+any commercial use — a separate, paid commercial license is available.
+Terms are negotiated case-by-case (per-seat, revenue share, or flat fee
+depending on scope).
 
 **Contact:** `abrar.a@outlook.com`
 
-A commercial license grants you the same code under terms that do not require open-sourcing your derivative work. The default AGPL-3.0 release remains available to everyone else.
-
 ## What is "Forge"?
 
-For licensing purposes, "Forge" refers to the contents of this repository (`abraraaa/project-forge`) — the source code, the programme design (`lib/programme.js` `SESSIONS` / `EXERCISE_POOLS`), the curated exercise anatomy dataset (`lib/exercise-anatomy.js`), the rotation and progression engines, the analytics layer, and the design tokens. All of these are covered by the same dual-license terms.
+For licensing purposes, "Forge" refers to the contents of this repository
+(`abraraaa/project-forge`) — the source code, the programme design
+(`lib/programme.js` `SESSIONS` / `EXERCISE_POOLS`), the curated exercise
+anatomy dataset (`lib/exercise-anatomy.js`), the curated tempo dataset
+(`lib/exercise-tempo.js`), the exercise-library editorial content
+(`/library` pages and `lib/library.js`), the rotation and progression
+engines, the analytics layer, and the design tokens. All of these are
+covered by the same terms.
+
+The datasets synthesise published research (cited in-module); the
+underlying scientific findings belong to their authors and to everyone.
+What the license covers is Forge's curation, weighting, structure, and
+expression of them — the part that took the work.
+
+## Branding
+
+The **Forge** name, wordmark, visual identity, and the **theforged.fit**
+domain are *not* licensed under any grant in this repository. All branding
+rights reserved.
+
+## Contributions
+
+Because nothing here carries a reciprocal license, contributions can't be
+accepted on implied terms: by submitting a pull request you agree to
+license your contribution to the licensor without restriction, so it can
+be released under these terms and under commercial licenses.
+
+## Relicensing history
+
+Between 2026-06-01 and 2026-07-06 (commits `e687892` → `b75a0db`) this
+repository was offered under **AGPL-3.0** with a commercial-license
+option. **That offer is withdrawn in full.** As of 2026-07-06, no license
+is granted to any version of Forge — including historical versions
+reachable through this repository's git history or any mirror — other
+than PolyForm Strict 1.0.0 and negotiated commercial licenses. Cloning
+this repository today conveys the entire history, old commits included,
+under PolyForm Strict only. The presence of a historical LICENSE file in
+old commits is a record of a past offer, not a live grant.
+
+The one thing copyright law doesn't allow us to undo: copies actually
+obtained while the AGPL offer stood retain that grant *for those copies*.
+No new AGPL rights arise from this repository after the withdrawal date.
 
 ## Quick FAQ
 
-**Can I fork Forge for personal use?** Yes — AGPL-3.0 permits any personal, educational, or self-hosted use.
+**Can I read the source to check your claims?** Yes — that's why it's
+public. The citations are in the modules themselves.
 
-**Can I run an AGPL-licensed Forge as a service for my own gym?** Yes, as long as you publish your modifications back to your users under AGPL-3.0.
+**Can I clone it and run it locally?** Yes, unmodified, for personal /
+noncommercial purposes.
 
-**Can I take Forge, close-source it, and ship it as a paid product?** No — that requires a commercial license.
+**Can I self-host a modified Forge? Fork it and build on it?** No — no
+modified versions, no derivative works. If you want Forge, it lives at
+[theforged.fit](https://theforged.fit).
 
-**Can I copy the programme design into a different app?** The programme content (SESSIONS / pools / anatomy weights / volume targets) is part of "Forge" for licensing purposes — it's also covered. Treat it like the code.
+**Can I copy the programme design, anatomy weights, or tempo data into a
+different app?** No. The curated datasets and programme content are part
+of "Forge" and are not licensed for reuse. (The published research they
+cite is, of course, yours to read at the source.)
 
-**Why AGPL and not MIT?** MIT lets competitors take the engine into a closed product. AGPL closes that loophole. The dual-license offer above keeps the commercial path open without giving the work away.
+**Can I use any of this commercially?** Only with a commercial license —
+`abrar.a@outlook.com`.
+
+**Why not MIT/Apache — or AGPL like before?** Permissive licenses let
+competitors lift the engine and content wholesale. AGPL closed the SaaS
+loophole but still granted modification and redistribution. Forge's source
+is open for **trust**, not for reuse — PolyForm Strict says exactly that,
+in professionally drafted terms.
