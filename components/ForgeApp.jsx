@@ -1255,13 +1255,13 @@ function OnboardingScreen({ onContinue }) {
           Forge
         </div>
         <div style={{ fontFamily: T.serif, fontSize: 44, fontWeight: 300, lineHeight: 1.1, marginBottom: 16 }}>
-          Unveil the<br/><span style={{ fontStyle: "italic", color: T.coral }}>best you.</span>
+          Train with<br/><span style={{ fontStyle: "italic", color: T.coral }}>intention.</span>
         </div>
       </Fade>
 
       <Fade d={120}>
         <p style={{ fontSize: 15, color: T.text2, lineHeight: 1.65, marginBottom: 28 }}>
-          Forge pays attention — bar speed, effort, the days you show up — and quietly shapes every session to the athlete you're becoming.
+          Forge notices. Bar speed, effort, the days you show up. Every session quietly shaped to the athlete you're becoming.
         </p>
       </Fade>
 
@@ -1274,12 +1274,12 @@ function OnboardingScreen({ onContinue }) {
           <PromiseLine
             accent={T.coral}
             kicker="Intelligence"
-            body="Every session reads how the last one felt. Weight rises when you've earned it, eases when you need it — no spreadsheets, no guesswork."
+            body="Forge reads how the last session felt and loads the next to match. More when you've earned it, less when you need it."
           />
           <PromiseLine
             accent={T.steel}
             kicker="Rhythm"
-            body="Strength, Zone 2, HIIT, rest — your week, your shape. The programme bends to your life, not the other way round."
+            body="Strength, Zone 2, HIIT, rest. Your week, your shape. The programme bends to fit your life, never the reverse."
           />
           <PromiseLine
             accent={T.sage}
@@ -1297,7 +1297,7 @@ function OnboardingScreen({ onContinue }) {
           boxShadow: `0 12px 40px ${s.glow}`,
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
-          <span>Train with intention</span>
+          <span>Unveil the best you</span>
           <span style={{ fontSize: 18 }}>→</span>
         </button>
       </Fade>
