@@ -483,18 +483,23 @@ button press feedback) and apply a spring physics curve. Use
 
 ### Sync layer — true integration test against Vercel Blob
 
-**Status:** SHIPPED 2026-07-05. `tests/integration/sync-roundtrip.test.js`
-calls the real route handlers (GET/PUT/POST/DELETE with real Request
-objects) against the live store: 404 contract for unwritten profiles,
-claim/409/check=1 lifecycle, PUT-then-GET exact round-trip, case-
-insensitive resolution, history merge-by-id, DELETE releasing the name.
-Gated on `BLOB_READ_WRITE_TOKEN` (skips cleanly in local + per-PR runs;
-a token-free validation half still runs everywhere); writes under a
-unique throwaway profile and deletes it in cleanup. Runs nightly via
-`.github/workflows/nightly-sync-integration.yml` (cron + manual
-dispatch). REMAINING SETUP: add the `BLOB_READ_WRITE_TOKEN` repository
-secret, then trigger the workflow manually once to confirm the live
-path is green — without the secret the job passes vacuously.
+**Status:** SHIPPED 2026-07-05, RE-HOMED 2026-07-07. The live round-trip
+runs INSIDE Vercel now — `app/api/cron/sync-selftest/route.js`, a
+CRON_SECRET-guarded route that exercises the real sync handlers
+(GET/PUT/POST/DELETE) against the live store (404 contract, claim/409/
+check=1, PUT-then-GET exact round-trip, case-insensitive resolution,
+history merge-by-id) and cleans up its throwaway profile. Vercel Cron
+fires it daily (vercel.json, 04:00 UTC); visibility is Vercel cron logs
++ monitoring. The token-FREE validation half stays in
+`tests/integration/sync-roundtrip.test.js` for the per-PR suite.
+
+WHY re-homed: the original GitHub Actions nightly needed
+`BLOB_READ_WRITE_TOKEN` as a hand-synced repo secret — a second copy of
+a credential whose home is Vercel. That copy went stale (Vercel rotates
+Blob tokens / store mismatch) and the nightly failed "access denied" on a
+clean paste. Duplication was the bug. Keeping the key where it belongs
+(Vercel) and running the test there removes the copy entirely. The GitHub
+workflow was deleted.
 
 **Context:** The addRandomSuffix bug found on 2026-06-22 was invisible to
 client-side tests — the writer and reader agreed on a broken pattern,
