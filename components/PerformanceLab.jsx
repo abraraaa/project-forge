@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   mainLiftTrend, weeklyVolumeByMuscle, consistencyGrid,
   readinessBreakdown, sessionCount, detectPlateaus,
@@ -160,6 +160,44 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
       {glossaryAnchor !== null && (
         <GlossarySheet anchorTerm={glossaryAnchor || null} onCancel={closeGlossary}/>
       )}
+
+      {!isEmpty && <ScrollCue />}
+    </div>
+  );
+}
+
+// ─── Scroll cue ───────────────────────────────────────────────────────────────
+// The accessibility fallback for below-fold content: in bright light our
+// low-contrast surfaces can wash out, so a chevron acts as the explicit
+// "there's more" signal we've otherwise left to intuition. Points DOWN — a
+// hint points at its referent (the content waiting below), not at the
+// gesture. Fixed at the fold, fades the instant you scroll, and only appears
+// when the page actually overflows. Inset from the bottom edge (no
+// background) so it stays clear of the chrome/chin rules; gentle bob under
+// motion-ok, static under reduced-motion. Legible-not-ambient on purpose —
+// a whisper-faint fallback fails the sunlight case it exists for.
+function ScrollCue() {
+  const [hidden, setHidden] = useState(true);
+  useEffect(() => {
+    const overflows = () => document.documentElement.scrollHeight > window.innerHeight + 24;
+    const update = () => setHidden(window.scrollY > 24 || !overflows());
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+  return (
+    <div aria-hidden="true" style={{
+      position: "fixed", left: "50%", bottom: "calc(env(safe-area-inset-bottom, 0px) + 22px)",
+      transform: "translateX(-50%)", pointerEvents: "none", zIndex: 20,
+      opacity: hidden ? 0 : 0.72, transition: "opacity 420ms ease",
+    }}>
+      <svg className="lab-scroll-cue" width="26" height="15" viewBox="0 0 26 15" fill="none">
+        <path d="M2 2.5 L13 12 L24 2.5" stroke={T.coral} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
     </div>
   );
 }
