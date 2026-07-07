@@ -445,12 +445,10 @@ summary layer over widening the raw window (keeps signal reactivity).
    against the user's schedule, symmetric between closed and ongoing gaps.
    Turned out far simpler than this note feared — the "re-engagement flow"
    worry was a surface question downstream of a ~90-line model. Full design
-   + roadmap + exact Lab wiring in **docs/absence-modelling.md**. STILL
-   OPEN (phase 1, the surface): wire `current` into the Lab as a calm
-   away-state banner (not built — deliberately left as the reviewable
-   product call: Lab-only vs. also a home-screen nudge). Phase 2 (optional
-   user annotations "travelling/injured") deferred — it's the only part
-   that would need a store, gated behind proving the banner first.
+   + roadmap + exact Lab wiring in **docs/absence-modelling.md**. SHIPPED IN FULL 2026-07-06 — phases 1+2 rolled together as declared
+   breathers (Bk store, reason annotation, rhythm-rest badge, Home nudge,
+   breather modal, Profile row, Lab banner; resume on next session/tick).
+   See docs/absence-modelling.md.
 
 ### Performance Lab — surface polish
 

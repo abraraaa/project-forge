@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { P, H, backgroundSync } from "@/lib/storage";
+import { P, H, Bk, backgroundSync } from "@/lib/storage";
 import { withNavTransition } from "@/lib/nav-transitions";
 import PerformanceLab from "@/components/PerformanceLab";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -28,6 +28,13 @@ export default function PerformanceLabView() {
   );
   const [history, setHistory] = useState(() =>
     typeof window === "undefined" || !P.getActive() ? [] : H.get(P.getActive()),
+  );
+  // Resting = a declared breather is open. Only the DECLARED state surfaces
+  // here; an undeclared quiet stretch is already covered by the Home nudge
+  // and the VolumeLandscape away-state (showing both would repeat the
+  // "lighter stretch is part of training" line on one screen).
+  const [resting] = useState(() =>
+    typeof window === "undefined" || !P.getActive() ? false : !!Bk.getActive(P.getActive()),
   );
 
   // router.back() pops the navigation — for the intercepted overlay this
@@ -55,7 +62,7 @@ export default function PerformanceLabView() {
 
   return (
     <ErrorBoundary>
-      <PerformanceLab history={history} onBack={onBack} />
+      <PerformanceLab history={history} onBack={onBack} resting={resting} />
     </ErrorBoundary>
   );
 }

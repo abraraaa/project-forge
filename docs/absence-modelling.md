@@ -84,7 +84,34 @@ engine handles DST/timezone edges).
 `lib/absence.js` + `tests/absence.test.js`. Pure, no UI, no storage, no
 wiring. Safe to build on.
 
-### Phase 1 — Lab surface (next; NOT yet built)
+### Phase 1 + 2 — surfaces + declared breathers — SHIPPED 2026-07-06
+Rolled together (the industry norm — Apple Fitness / Whoop / Oura all have
+a break mode; schedule-anxiety is the un-sexy energy the voice refuses).
+Declared breathers (lib/breaks.js + Bk store) carry the user's reason and
+pause the rhythm. Surfaces:
+- **Home nudge** ("No drama · {N} days off. Here for a session, or need a
+  breather?") when an absence is detected and no breather is active.
+- **Breather modal** ("Need a breather?" → 5 reasons → "Breathe easy"),
+  reached from the nudge and the Profile row.
+- **Resting badge** — the rhythm badge shows "Resting · on a breather"
+  instead of the ratio while a breather is open.
+- **Profile row** "Need a breather?" for manual entry any time.
+- **Lab banner** — "On a breather · Your numbers are holding" (DECLARED
+  state only; the undeclared-absence line was dropped to avoid repeating
+  the VolumeLandscape away-state on the same screen).
+- **Resume** — first session/tick dated ON OR AFTER the breather's start
+  ends it (live or retro), so training the same day you paused resumes you;
+  only activity strictly before the start is exempt (retro-fill last week).
+  Plus a manual **"Back to it"** in the Profile row (`Bk.end`) for undo/
+  assurance — no session required. The Done screen's "Coming back is what
+  counts" handles the welcome.
+- **Profile** — the breather row is context-aware (declare vs. "Back to
+  it"), and the card stack was restacked so user-configurable rows lead and
+  the sync group (status/now/diagnostics) drops to the bottom.
+
+Original phase-1 sketch retained below for history.
+
+### Phase 1 — Lab surface (original sketch)
 Wire `current` into the Performance Lab as an honest, non-alarming banner.
 
 Exact wiring (the data is all already in `PerformanceLabView`):
@@ -119,7 +146,14 @@ home-screen re-engagement nudge? The parked item frames a "log a missed
 stretch" flow. Recommend shipping the Lab banner first (read-only,
 low-risk), then deciding home-screen treatment with the user.
 
-### Phase 2 — annotations (deferred; needs the storage decision)
+### Phase 2 — annotations — SHIPPED with phase 1
+The reason chip IS the annotation (Travelling / Injured or ill / Resting
+up / Busy stretch / Something else), stored on the break record and synced
+via the Bk store's blob-meta wiring. The Lab can now distinguish
+deliberately-rested from fell-off by reading the reason. Original note
+below.
+
+### Phase 2 — annotations (original note)
 Let the user tag an absence ("travelling", "injured", "deload") so the Lab
 can distinguish *deliberately rested* from *fell off*. This is the ONLY
 part that needs a store: a small date-keyed `forge:{profile}:absenceNotes`

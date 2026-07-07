@@ -11,7 +11,7 @@ import GlossarySheet, { GlossaryTrigger } from "@/components/GlossarySheet";
 import { renderShareCard, shareCanvas } from "@/lib/share-card";
 
 // ─── Main export ──────────────────────────────────────────────────────────────
-export default function PerformanceLab({ history, onBack }) {
+export default function PerformanceLab({ history, onBack, resting = false }) {
   const trends  = useMemo(() => mainLiftTrend(history),   [history]);
   const grid    = useMemo(() => consistencyGrid(history, 12), [history]);
   const readiness = useMemo(() => readinessBreakdown(history), [history]);
@@ -76,6 +76,17 @@ export default function PerformanceLab({ history, onBack }) {
           }
         </div>
       </div>
+
+      {/* Breather banner — only when a break is DECLARED (resting). Calm,
+          reaffirming: the numbers below aren't slipping, they're held. */}
+      {resting && !isEmpty && (
+        <div style={{margin:"20px 24px 0", padding:"14px 18px", borderRadius:T.r.lg, background:`${T.sage}0E`, border:`1px solid ${T.sage}33`}}>
+          <div style={{fontSize:10, fontWeight:500, color:T.sage, letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:6}}>On a breather</div>
+          <div style={{fontSize:13, color:T.text2, fontFamily:T.serif, fontStyle:"italic", lineHeight:1.5}}>
+            Your numbers are holding. Come back when it feels right.
+          </div>
+        </div>
+      )}
 
       {isEmpty && <EmptyState />}
 

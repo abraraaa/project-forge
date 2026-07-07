@@ -31,7 +31,7 @@ function formatAgo(ms) {
 }
 
 export default
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -215,7 +215,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             </div>
           </div>
           <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
-            <StreakBadge rhythm={rhythm}/>
+            <StreakBadge rhythm={rhythm} resting={resting}/>
             <button onClick={onProfile} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:11,color:T.text3,fontFamily:T.sans,fontWeight:500,display:"flex",alignItems:"center",gap:6}}>
               {profileName}
               {syncState === "pulling" || syncState === "pushing" ? (
@@ -617,6 +617,34 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         </Fade>
       )}
 
+      {/* Absence nudge — slides in when a breather-worthy gap is detected
+          (ForgeApp derives it from lib/absence.js). Leads with the welcome,
+          not "you're quitting": "here for a session" is answered by the
+          Begin button above; this offers the breather door. Suppressed while
+          already resting. Copy signed off 2026-07-06. */}
+      {absenceNudge && onOpenBreather && (
+        <Fade d={185}>
+          <div style={{margin:"20px 24px 0",padding:"18px 20px",background:`${T.gold}0E`,border:`1px solid ${T.gold}38`,borderRadius:T.r.lg}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,fontWeight:500,color:T.gold,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>
+                  No drama
+                </div>
+                <p style={{fontSize:14,color:T.text1,lineHeight:1.55,margin:0}}>
+                  {absenceNudge.days} days off. Here for a session, or need a breather? No wrong answer.
+                </p>
+              </div>
+              <button onClick={onDismissAbsenceNudge} aria-label="Dismiss"
+                style={{flexShrink:0,background:"none",border:"none",padding:"4px 8px",cursor:"pointer",fontSize:14,color:T.text3,fontFamily:T.sans}}>✕</button>
+            </div>
+            <button onClick={onOpenBreather}
+              style={{marginTop:14,padding:"9px 16px",background:"none",border:`1px solid ${T.gold}66`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.gold}}>
+              Take a breather
+            </button>
+          </div>
+        </Fade>
+      )}
+
       {/* Retrospective logging link — surfaces whenever the schedule has
           an unmarked recent training day. Calm by design: no card, no
           chrome, just an inline link tinted sage so it reads as a non-
@@ -855,7 +883,17 @@ function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFo
   );
 }
 
-function StreakBadge({rhythm}){
+function StreakBadge({rhythm, resting=false}){
+  // Resting: a breather is active, so the rhythm pauses rather than showing
+  // a number that would only tick down. Calm dot + "Resting", no ratio.
+  if (resting) {
+    return (
+      <div style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.pill,padding:"8px 16px",display:"flex",alignItems:"center",gap:9}}>
+        <span style={{width:7,height:7,borderRadius:"50%",background:T.sage,display:"inline-block",flexShrink:0}}/>
+        <div style={{fontSize:9,fontWeight:500,color:T.text3,letterSpacing:"0.1em",textTransform:"uppercase",lineHeight:1.5}}>Resting<br/>on a breather</div>
+      </div>
+    );
+  }
   const completed = rhythm?.completed || 0;
   const expected  = rhythm?.expected  || 12;
   // Window is a rolling 28-day count of strength sessions — labelled
