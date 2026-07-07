@@ -17,7 +17,7 @@ import { GrabHandle } from "@/components/ui";
 
 export default function BreatherModal({ onConfirm, onCancel }) {
   const { containerRef, onKeyDown } = useModalA11y(onCancel);
-  const { grabProps, sheetStyle, dragY, dragging } = useSheetDrag(onCancel);
+  const { grabProps, sheetStyle } = useSheetDrag(onCancel);
   const [reason, setReason] = useState(null);
   const titleId = "breather-title";
 
@@ -26,7 +26,7 @@ export default function BreatherModal({ onConfirm, onCancel }) {
       style={{ overscrollBehavior: "contain", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        style={{ background: T.bg2, borderRadius: `${T.r.lg}px ${T.r.lg}px 0 0`, padding: "12px 24px calc(32px + env(safe-area-inset-bottom))", width: "100%", maxWidth: 430, borderTop: `1px solid ${T.bg3}`, outline: "none", ...sheetStyle, animation: (dragging || dragY > 0) ? "none" : `slideUp 280ms ${T.ease}` }}>
+        style={{ background: T.bg2, borderRadius: `${T.r.lg}px ${T.r.lg}px 0 0`, padding: "12px 24px calc(32px + env(safe-area-inset-bottom))", width: "100%", maxWidth: 430, borderTop: `1px solid ${T.bg3}`, outline: "none", animation: `slideUp 280ms ${T.ease}`, ...sheetStyle }}>
         {/* Grab zone — handle + title are the drag target so the chips and
             buttons below never fight a tap. Flick or drag down to dismiss. */}
         <div {...grabProps}>
