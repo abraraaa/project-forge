@@ -55,3 +55,14 @@ export function Tag({ children, color, style = {} }) {
     </span>
   );
 }
+
+// GrabHandle — the small centred bar at the top of a draggable bottom sheet.
+// Signals "drag me" (iOS convention) and gives the drag zone visual weight.
+// Purely decorative; the drag logic lives in useSheetDrag.
+export function GrabHandle() {
+  return (
+    <div aria-hidden="true" style={{ display: "flex", justifyContent: "center", padding: "2px 0 10px" }}>
+      <div style={{ width: 38, height: 4, borderRadius: 2, background: T.bg4 }} />
+    </div>
+  );
+}

@@ -498,6 +498,17 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   animation-range: entry 0% entry 80%;
 }
 
+/* Scroll cue — a slow, small downward bob so the eye catches the "more
+   below" hint. Deliberately gentle (3px, 1.9s); goes static under reduced
+   motion via the block below. */
+@keyframes lab-scroll-cue {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(3px); }
+}
+.lab-scroll-cue {
+  animation: lab-scroll-cue 1900ms ease-in-out infinite;
+}
+
 /* Reduced motion — all four collapse. View transitions become instant,
    scroll-driven animations skip their animation entirely. Honours the
    user's system setting; Forge's motion vocabulary stays intentional. */
@@ -512,7 +523,8 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   }
   .drum-item,
   .home-headline,
-  .lab-card {
+  .lab-card,
+  .lab-scroll-cue {
     animation: none;
   }
 }
