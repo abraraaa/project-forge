@@ -18,13 +18,14 @@ import {
   hasPasskey, registerPasskey, authenticatePasskey, isPlatformAuthenticatorAvailable,
 } from "@/lib/webauthn";
 import { FOCUS_SUMMARIES } from "@/lib/programme";
+import { reasonLabel } from "@/lib/breaks";
 import { Fade } from "@/components/ui";
 import { SyncStatusCard, SyncNowRow } from "@/components/sync-cards";
 import ScrollDrum from "@/components/ScrollDrum";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
 import TakenNameModal from "@/components/TakenNameModal";
 
-export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,onOpenBreather}){
+export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,onOpenBreather,resting=false,restingReason=null,onEndBreather}){
   const [name,setName]=useState("");
   const [confirmWipe,setConfirmWipe]=useState(null);
   const [showTakenHelp,setShowTakenHelp]=useState(false);
@@ -522,20 +523,29 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </div>
       </Fade>
 
-      {/* Sync status card — shows cloud connection state */}
-      {current && (
+      {/* Breather row — context-aware. When resting, it's the "Back to it"
+          resume affordance (assurance: undo a pause any time, no need to
+          train to clear it — Bk.end). Otherwise it's the manual entry to
+          declare a pause. Same modal the Home nudge opens. */}
+      {current && resting && onEndBreather ? (
         <Fade d={240}>
-          <SyncStatusCard profile={current} />
+          <div className="forge-glass" style={{marginTop:36,padding:"14px 18px",border:`1px solid ${T.sage}33`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:500,color:T.sage}}>On a breather</div>
+              <div style={{fontSize:11,color:T.text3,marginTop:2}}>
+                {restingReason ? `${reasonLabel(restingReason)} · your rhythm's paused` : "Your rhythm's paused"}
+              </div>
+            </div>
+            <button onClick={onEndBreather}
+              style={{flexShrink:0,padding:"8px 14px",background:"none",border:`1px solid ${T.sage}66`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.sage}}>
+              Back to it
+            </button>
+          </div>
         </Fade>
-      )}
-
-      {/* Need a breather? — manual entry to declare a pause any time, not
-          only when an absence is detected. Opens the same modal the Home
-          nudge does (ForgeApp owns it there; ProfileView owns it here). */}
-      {current && onOpenBreather && (
-        <Fade d={245}>
+      ) : current && onOpenBreather ? (
+        <Fade d={240}>
           <button onClick={onOpenBreather}
-            className="forge-glass" style={{width:"100%",textAlign:"left",marginTop:12,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",background:"none"}}>
+            className="forge-glass" style={{width:"100%",textAlign:"left",marginTop:36,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",background:"none"}}>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Need a breather?</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>Pause your rhythm while life happens</div>
@@ -543,30 +553,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             <span style={{fontSize:14,color:T.text3}}>→</span>
           </button>
         </Fade>
-      )}
-
-      {/* Sync diagnostics — entry point to /diag-sync. PWAs have no address
-          bar, so an in-app link is the only way to reach it from a standalone
-          install. Plain <a> rather than next/link so the page is fetched fresh
-          (it reads LS directly) and the route is independent of the SPA shell. */}
-      {current && (
-        <Fade d={250}>
-          <a href="/diag-sync"
-            className="forge-glass" style={{marginTop:12,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
-            <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Sync diagnostics</div>
-              <div style={{fontSize:11,color:T.text3,marginTop:2}}>Local store counts + force pull/push</div>
-            </div>
-            <span style={{fontSize:14,color:T.text3}}>↗</span>
-          </a>
-        </Fade>
-      )}
-
-      {current && (
-        <Fade d={255}>
-          <SyncNowRow profile={current} />
-        </Fade>
-      )}
+      ) : null}
 
       {/* Bodyweight row — tappable to edit */}
       {current && setBwEditOpen && (
@@ -662,6 +649,40 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>Your profile is secured with biometric auth</div>
             </div>
           </div>
+        </Fade>
+      )}
+
+      {/* ── Sync group — dropped to the bottom so the user-configurable rows
+          (breather, bodyweight, focus, passkey) lead. Status kept (liked),
+          just no longer top of the stack; Sync now + diagnostics follow. ── */}
+      {current && (
+        <Fade d={290}>
+          <div style={{marginTop:36}}>
+            <SyncStatusCard profile={current} />
+          </div>
+        </Fade>
+      )}
+
+      {current && (
+        <Fade d={295}>
+          <SyncNowRow profile={current} />
+        </Fade>
+      )}
+
+      {/* Sync diagnostics — entry point to /diag-sync. PWAs have no address
+          bar, so an in-app link is the only way to reach it from a standalone
+          install. Plain <a> rather than next/link so the page is fetched fresh
+          (it reads LS directly) and the route is independent of the SPA shell. */}
+      {current && (
+        <Fade d={300}>
+          <a href="/diag-sync"
+            className="forge-glass" style={{marginTop:12,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Sync diagnostics</div>
+              <div style={{fontSize:11,color:T.text3,marginTop:2}}>Local store counts + force pull/push</div>
+            </div>
+            <span style={{fontSize:14,color:T.text3}}>↗</span>
+          </a>
         </Fade>
       )}
 

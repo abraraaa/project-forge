@@ -99,9 +99,15 @@ pause the rhythm. Surfaces:
 - **Lab banner** — "On a breather · Your numbers are holding" (DECLARED
   state only; the undeclared-absence line was dropped to avoid repeating
   the VolumeLandscape away-state on the same screen).
-- **Resume** — first session/tick dated after the breather's start ends it
-  (live or retro); the Done screen's existing "Coming back is what counts"
-  handles the welcome.
+- **Resume** — first session/tick dated ON OR AFTER the breather's start
+  ends it (live or retro), so training the same day you paused resumes you;
+  only activity strictly before the start is exempt (retro-fill last week).
+  Plus a manual **"Back to it"** in the Profile row (`Bk.end`) for undo/
+  assurance — no session required. The Done screen's "Coming back is what
+  counts" handles the welcome.
+- **Profile** — the breather row is context-aware (declare vs. "Back to
+  it"), and the card stack was restacked so user-configurable rows lead and
+  the sync group (status/now/diagnostics) drops to the bottom.
 
 Original phase-1 sketch retained below for history.
 

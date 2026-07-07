@@ -54,16 +54,17 @@ describe("activeBreak / isResting", () => {
   });
 });
 
-describe("breakEndedBy — activity strictly after start ends it", () => {
+describe("breakEndedBy — activity on-or-after start ends it", () => {
   const brk = { id: "t1", start: "2026-07-06", reason: "busy", endedAt: null };
 
-  it("a session the next day (or later) ends it", () => {
+  it("training the same day you paused (or later) resumes the rhythm", () => {
+    expect(breakEndedBy(brk, "2026-07-06")).toBe(true); // same day — the fix
     expect(breakEndedBy(brk, "2026-07-07")).toBe(true);
     expect(breakEndedBy(brk, "2026-08-01")).toBe(true);
   });
 
-  it("same-day or earlier activity does not (retro-fill last week is safe)", () => {
-    expect(breakEndedBy(brk, "2026-07-06")).toBe(false);
+  it("only activity STRICTLY BEFORE the start is exempt (retro-fill last week is safe)", () => {
+    expect(breakEndedBy(brk, "2026-07-05")).toBe(false);
     expect(breakEndedBy(brk, "2026-07-01")).toBe(false);
   });
 
@@ -95,14 +96,23 @@ describe("Bk store + sync round-trip", () => {
     getLocalProfile = storage.getLocalProfile;
   });
 
-  it("start() opens a breather; endOnActivity() closes it only for later dates", () => {
+  it("start() opens a breather; endOnActivity() resumes on same-day-or-later activity", () => {
     Bk.start(PROFILE, "travelling", { today: "2026-07-06", confirmedAt: "2026-07-06T09:00:00.000Z" });
     expect(Bk.getActive(PROFILE)?.reason).toBe("travelling");
 
-    expect(Bk.endOnActivity(PROFILE, "2026-07-06")).toBe(false); // same day
+    expect(Bk.endOnActivity(PROFILE, "2026-07-04")).toBe(false); // before the pause — exempt
     expect(Bk.getActive(PROFILE)).not.toBeNull();
-    expect(Bk.endOnActivity(PROFILE, "2026-07-08")).toBe(true);  // later
+    expect(Bk.endOnActivity(PROFILE, "2026-07-06")).toBe(true);  // same day — resumes
     expect(Bk.getActive(PROFILE)).toBeNull();
+  });
+
+  it("end() manually resumes with no activity (the 'Back to it' path)", () => {
+    Bk.start(PROFILE, "resting", { today: "2026-06-30", confirmedAt: "t1" });
+    expect(Bk.getActive(PROFILE)).not.toBeNull();
+    expect(Bk.end(PROFILE, { today: "2026-07-06" })).toBe(true);
+    expect(Bk.getActive(PROFILE)).toBeNull();
+    expect(Bk.getAll(PROFILE)[0].endedAt).toBe("2026-07-06");
+    expect(Bk.end(PROFILE)).toBe(false); // nothing open → no-op
   });
 
   it("start() closes any already-open breather first", () => {
