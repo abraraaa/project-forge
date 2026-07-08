@@ -62,17 +62,48 @@ history re-derives automatically (anatomy applied at read) but check the
 precomputed volume aggregates in trainingState. This IS the parked "Lab
 ideal rebuild" — treat it as that session.
 
-### Iconography consistency — symbols vs emoji
+### Iconography + Profile cards + colour doctrine — SPEC AGREED 2026-07-08
 
-**Status:** Parked 2026-07-08 (user report).
+**Status:** inventoried and agreed with the user; build next session in
+two phases. Everything below is decided — do not re-litigate, just build.
 
-**Report:** the app mixes typographic symbols (→ ↗ ✕ ⇄ ◔ ▶ ↕) with emoji
-(😮‍💨 😤 🔥, day icons ○ ◐ ●) with no rule about which is used where. Needs
-one pass through every surface to pick a consistent vocabulary — likely:
-typographic symbols for navigation/affordances, reserved emoji (if any)
-for the effort scale only — and apply it everywhere. Small but touches
-many files; do it as one sweep so nothing half-changes. Pairs naturally
-with the Profile card unification below.
+**KEY BUG (from the user's device screenshot):** `↗` (U+2197) renders as
+a BLUE EMOJI on iOS (dual-presentation character) while `→` renders as
+text — this is the "symbols vs emoji" mix originally reported. Fix: pin
+any kept `↗` to text with U+FE0E (text variation selector), and reduce
+`↗` usage per the rule below. Chromium renders both as text, so verify
+arrow work on DEVICE.
+
+**Phase 1 (agreed, mechanical):**
+1. Breather Profile row: remove the inline `background:"none"` that
+   overrides its own forge-glass class (ProfileScreen ~line 548) — this
+   is the flat/blank card in the screenshot.
+2. Arrow rule: `→` = acts or opens IN PLACE; `↗︎` (with U+FE0E) = leaves
+   the surface. Per-site: Bodyweight row ↗→`→`; Focus row ↗→`→`;
+   "Not set — add one ↗"→`→`; SessionScreen "Recent ↗" (opens sheet in
+   place)→`→`; diag-sync row keeps ↗ +FE0E; PerformanceLab "Share ↗"
+   keeps +FE0E (leaves app); "Watch/Search YouTube ↗" keeps +FE0E;
+   HomeScreen:230 profile link — decide by the rule (in-app route: `→`).
+   Unchanged and already consistent: → ✕ ← ✓ ↻ ⇄ ↕ ▶ ◔ ▾.
+
+**Phase 2 (agreed in principle; show exact before/after for veto first):**
+3. Effort scale: emoji faces (😮‍💨😤🔥) → the ○◐● geometry already used by
+   readiness. Rationale agreed: the whimsy job moved to the final-set
+   flash lines; geometry on buttons, personality in words. User "weakly
+   agrees" — show it before shipping.
+4. Colour doctrine (user's own model): ACTIONS one consistent style
+   (coral primary) everywhere; DOMAIN colour expressed as sheet rim/tint/
+   glow, not on the buttons (e.g. Bodyweight's sage Confirm → coral
+   button, sage rim on the sheet); STATE colours keep meaning
+   (sage=good/resting, gold=caution, rose=danger/over). Lab keeps its
+   data-segmentation variety — it's "themed", exempt.
+5. Profile cards: every interactive row identical (glass tint, bg3
+   border, 14/18 padding, arrow per rule); accent borders only for STATE
+   (resting=sage); sync status chip stays clear (non-interactive).
+
+**Register note:** "polish the human interface to remain sexy but not
+obnoxiously delicate" — keep glyphs legible-first, in-context; never
+decoration hunting for meaning.
 
 ### Profile page — card unification
 

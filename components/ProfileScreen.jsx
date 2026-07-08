@@ -320,7 +320,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <button onClick={handlePasskeyAccept} disabled={onboardingPasskeyBusy} style={{
               width: "100%", padding: "18px 24px",
-              background: T.sage, border: "none", borderRadius: T.r.lg,
+              background: T.coral, border: "none", borderRadius: T.r.lg,
               cursor: onboardingPasskeyBusy ? "default" : "pointer",
               fontFamily: T.serif, fontSize: 20, fontWeight: 400, color: T.bg0,
               boxShadow: `0 12px 40px ${T.sage}33`,
@@ -400,7 +400,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <button onClick={handleBwSave} style={{
               width: "100%", padding: "18px 24px",
-              background: T.sage, border: "none", borderRadius: T.r.lg, cursor: "pointer",
+              background: T.coral, border: "none", borderRadius: T.r.lg, cursor: "pointer",
               fontFamily: T.serif, fontSize: 20, fontWeight: 400, color: T.bg0,
               boxShadow: `0 12px 40px ${T.sage}33`,
               display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -508,8 +508,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </div>
       </Fade>
 
-      {/* Tone-of-voice card — sets expectations on data + PII */}
-      <Fade d={180}>
+      {/* Tone-of-voice card — sets expectations on data + PII. Shown only at
+          the create moment (no active profile): it's a trust pitch for the
+          door, not permanent settings furniture. */}
+      {!current && <Fade d={180}>
         <div className="forge-glass" style={{marginTop:36,padding:"18px 20px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg}}>
           <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
             No email. No phone.
@@ -521,7 +523,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             Forge keeps your data yours. A name is all we need — it syncs your streak and weights across your devices. Nothing more.
           </p>
         </div>
-      </Fade>
+      </Fade>}
 
       {/* Breather row — context-aware. When resting, it's the "Back to it"
           resume affordance (assurance: undo a pause any time, no need to
@@ -545,7 +547,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       ) : current && onOpenBreather ? (
         <Fade d={240}>
           <button onClick={onOpenBreather}
-            className="forge-glass" style={{width:"100%",textAlign:"left",marginTop:36,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",background:"none"}}>
+            className="forge-glass" style={{width:"100%",textAlign:"left",marginTop:36,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit"}}>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Need a breather?</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>Pause your rhythm while life happens</div>
@@ -570,10 +572,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                     const agoStr = daysAgo === 0 ? "today" : daysAgo === 1 ? "yesterday" : daysAgo !== null ? `${daysAgo} days ago` : "";
                     return `${bodyweight} kg${agoStr ? ` · updated ${agoStr}` : ""}`;
                   })()
-                ) : "Not set — add one ↗"}
+                ) : "Not set — add one →"}
               </div>
             </div>
-            <span style={{fontSize:14,color:T.text3}}>↗</span>
+            <span style={{fontSize:14,color:T.text3}}>→</span>
           </div>
         </Fade>
       )}
@@ -590,7 +592,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 {userFocus} · {FOCUS_SUMMARIES[userFocus] || FOCUS_SUMMARIES.Forged}
               </div>
             </div>
-            <span style={{fontSize:14,color:T.text3}}>↗</span>
+            <span style={{fontSize:14,color:T.text3}}>→</span>
           </div>
         </Fade>
       )}
@@ -616,7 +618,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 disabled={passkeyBusy}
                 style={{
                   padding:"10px 16px",
-                  background:T.sage,
+                  background:T.coral,
                   border:"none",
                   borderRadius:T.r.md,
                   fontSize:13,
@@ -681,7 +683,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Sync diagnostics</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>Local store counts + force pull/push</div>
             </div>
-            <span style={{fontSize:14,color:T.text3}}>↗</span>
+            <span style={{fontSize:14,color:T.text3}}>↗︎</span>
           </a>
         </Fade>
       )}

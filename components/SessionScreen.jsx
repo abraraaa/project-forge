@@ -287,9 +287,9 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
 // rpeToRir for v1 records — it must NOT appear in any UI.
 function RpeCard({onPick,label="How did that one move?"}){
   const opts=[
-    {id:"easy",  icon:"😮‍💨",label:"Easy",  sub:"More in the tank",color:T.sage},
-    {id:"normal",icon:"😤", label:"Normal",sub:"Working effort",   color:T.gold},
-    {id:"cooked",icon:"🔥", label:"Cooked",sub:"Nothing left",     color:T.rose},
+    {id:"easy",  icon:"○", label:"Easy",  sub:"More in the tank",color:T.sage},
+    {id:"normal",icon:"◐", label:"Normal",sub:"Working effort",   color:T.gold},
+    {id:"cooked",icon:"●", label:"Cooked",sub:"Nothing left",     color:T.rose},
   ];
   return (
     <div style={{margin:"14px 20px 0",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,padding:"16px 18px",animation:`fadeSlide 240ms ${T.ease}`}}>
@@ -297,7 +297,7 @@ function RpeCard({onPick,label="How did that one move?"}){
       <div style={{display:"flex",gap:8}}>
         {opts.map(o=>(
           <div key={o.id} onClick={()=>onPick(o.id)} style={{flex:1,padding:"12px 6px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.md,cursor:"pointer",textAlign:"center",transition:`all 180ms ${T.ease}`}}>
-            <div style={{fontSize:20,marginBottom:4}}>{o.icon}</div>
+            <div style={{fontSize:20,marginBottom:4,color:o.color}}>{o.icon}</div>
             <div style={{fontFamily:T.serif,fontSize:15,fontWeight:400,color:T.text1}}>{o.label}</div>
             <div style={{fontSize:10,color:T.text3,marginTop:2,lineHeight:1.3}}>{o.sub}</div>
           </div>
@@ -472,7 +472,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             <button onClick={()=>setHistoryOpen(true)}
               aria-label={`Recent history for ${activeEx?.name}`}
               style={{marginLeft:"auto",padding:"3px 8px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.sm,cursor:"pointer",fontSize:10,color:T.text3,fontFamily:T.sans,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-              Recent ↗
+              Recent →
             </button>
           )}
         </div>
@@ -626,7 +626,7 @@ function VideoEmbed({vid,name}){
             : `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} form`)}`}
           target="_blank" rel="noopener noreferrer"
           style={{fontSize:12,color:T.coral,fontWeight:500,textDecoration:"none"}}>
-          {vid?"Watch on YouTube ↗":"Search YouTube ↗"}
+          {vid?"Watch on YouTube ↗︎":"Search YouTube ↗︎"}
         </a>
       </div>
     );
