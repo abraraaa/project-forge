@@ -316,6 +316,30 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   transition-duration: 60ms;
 }
 
+/* Grain under the finger (tactility batch 3 — PROTOTYPE, Home only).
+   A localised warm lift at the exact touch point: fast bloom on press
+   (80ms), slow exhale on release (~480ms). Deliberately none of the
+   territory that burned before — no mix-blend-mode, no masking, no
+   transform; just an opacity-animated radial gradient on a pseudo-
+   element, so the grain overlay above it reads as warming locally.
+   --gx/--gy are set from the pointer by useGrainTouch (lib/a11y.js). */
+.forge-grain-touch { position: relative; }
+.forge-grain-touch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(130px circle at var(--gx, 50%) var(--gy, 50%),
+              rgba(242, 200, 158, 0.13), transparent 72%);
+  opacity: 0;
+  transition: opacity 480ms ease;
+}
+.forge-grain-touch.forge-grain-on::after {
+  opacity: 1;
+  transition-duration: 80ms;
+}
+
 /* ─── Desktop ambient backdrop (≥768px) ────────────────────────────────────
    Mobile-first design with maxWidth:430 on screen containers leaves a phone-
    sized column floating on flat background at desktop sizes — reads as
