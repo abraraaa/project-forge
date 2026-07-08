@@ -382,7 +382,13 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const weightCaption = WEIGHT_CAPTIONS[loadType] || null;
 
   return (
-    <div style={{minHeight:"100vh",maxWidth:430,margin:"0 auto",position:"relative",overflow:"clip",paddingBottom:40}}>
+    /* Three-zone column: identity (top, natural height) — numbers (centred
+       by the flex spacers) — actions (pinned to the thumb, bottom). Same
+       type scale as before; only the space is redistributed. 100dvh, not
+       100vh: in Safari-browser the URL bar makes 100vh overshoot and would
+       push the pinned actions below the fold. Short screens degrade
+       gracefully — the spacers collapse and it stacks like the old layout. */
+    <div style={{minHeight:"100dvh",maxWidth:430,margin:"0 auto",position:"relative",overflow:"clip",display:"flex",flexDirection:"column",paddingBottom:"calc(24px + env(safe-area-inset-bottom,0px))"}}>
       <div style={{position:"absolute",top:-80,right:-80,width:340,height:320,background:`radial-gradient(circle,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       <div style={{height:1,background:T.bg3}}>
         <div style={{height:"100%",width:`${progress}%`,background:T.coral,transition:`width 600ms ${T.ease}`}}/>
@@ -441,7 +447,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           </Fade>
         )}
       </div>
-      <div style={{padding:"22px 20px 0"}}>
+      <div style={{flex:1,minHeight:16}}/>
+      <div style={{padding:"0 20px"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase"}}>Set {setNum} of {block.sets}</div>
           {loadTypeSubtitle && (
@@ -497,6 +504,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           <div key={i} style={{flex:1,height:3,borderRadius:2,background:i<setNum-1?T.coral:T.bg3,transition:`background 300ms ${T.ease}`}}/>
         ))}
       </div>
+      <div style={{flex:1,minHeight:16}}/>
       {/* RPE pick = the set-confirm moment. haptic.commit on submission gives
           it weight — same gesture that ends every set on every platform. */}
       {awaitRpe&&<RpeCard onPick={(r)=>{haptic.commit();onCommit(r);}}/>}
@@ -533,6 +541,20 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 </div>
               )
           )}
+          {/* Superset awareness reads BEFORE the action it explains — the
+              partner card sits above Log, and Log stays last, closest to
+              the thumb. */}
+          {isSS&&(
+            <Card style={{margin:"14px 20px 0",padding:"14px 18px"}}>
+              <div style={{fontSize:10,fontWeight:500,color:T.text4,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:6}}>
+                {phase==="A"?"Immediately after →":"Just completed ✓"}
+              </div>
+              <div style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:phase==="A"?T.text2:T.text4,lineHeight:1.15}}>{partnerEx?.name}</div>
+              <div style={{fontSize:12,color:T.text4,marginTop:4}}>
+                {partnerEx?.weight!==null&&getW(partnerEx)?`${getW(partnerEx)} kg  ·  `:""}{getR(partnerEx)} reps
+              </div>
+            </Card>
+          )}
           <button className="forge-press" onClick={()=>{haptic.tap();onLog();}} style={{margin:"12px 20px 0",width:"calc(100% - 40px)",padding:"18px 24px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:`0 8px 28px ${s.glow}`}}>
             <span style={{fontFamily:T.serif,fontSize:20,fontWeight:400,color:T.bg0}}>
               {isSS?(phase==="A"?"Log A — into B":"Log B — round done"):"Log set"}
@@ -540,17 +562,6 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             <span style={{fontSize:18,color:T.bg0}}>+</span>
           </button>
         </>
-      )}
-      {isSS&&!blocking&&(
-        <Card style={{margin:"14px 20px 0",padding:"14px 18px"}}>
-          <div style={{fontSize:10,fontWeight:500,color:T.text4,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:6}}>
-            {phase==="A"?"Immediately after →":"Just completed ✓"}
-          </div>
-          <div style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:phase==="A"?T.text2:T.text4,lineHeight:1.15}}>{partnerEx?.name}</div>
-          <div style={{fontSize:12,color:T.text4,marginTop:4}}>
-            {partnerEx?.weight!==null&&getW(partnerEx)?`${getW(partnerEx)} kg  ·  `:""}{getR(partnerEx)} reps
-          </div>
-        </Card>
       )}
       {editTarget&&<DrumEditOverlay target={editTarget} workingWeights={workingWeights} setWW={setWW} workingReps={workingReps} setWR={setWR} block={block} onClose={()=>setEditTarget(null)}/>}
       {swapEx&&<SwapOverlay activeEx={activeEx} swapKey={swapKey} onSwap={onSwap} onClose={()=>setSwapEx(null)}/>}
