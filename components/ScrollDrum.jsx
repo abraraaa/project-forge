@@ -11,6 +11,7 @@
 
 import { useMemo, useRef, useEffect, useCallback } from "react";
 import { T } from "@/lib/tokens";
+import { haptic } from "@/lib/a11y";
 
 // "settle" beat after a flick stops. Tap-to-jump still works for fine control.
 export default function ScrollDrum({value,onChange,step=1.25,min=0,max=500,integer=false,label="",unit=null}){
@@ -36,15 +37,21 @@ export default function ScrollDrum({value,onChange,step=1.25,min=0,max=500,integ
     const raf=requestAnimationFrame(()=>{ if(ref.current) ref.current.scrollTop=selectedIdx*ITEM_H; });
     return()=>cancelAnimationFrame(raf);
   },[selectedIdx]);
+  const moved=useRef(false);
   const onScroll=useCallback(()=>{
     if(!ref.current) return;
     scrolling.current=true;
     const frac=ref.current.scrollTop/ITEM_H;
     const idx=Math.min(Math.round(frac),values.length-1);
     const next=values[Math.max(0,idx)];
-    if(next!==undefined&&Math.abs(next-current)>(integer?0.1:0.01)) onChange(next);
+    if(next!==undefined&&Math.abs(next-current)>(integer?0.1:0.01)){ onChange(next); moved.current=true; }
     clearTimeout(timer.current);
-    timer.current=setTimeout(()=>{scrolling.current=false;},150);
+    timer.current=setTimeout(()=>{
+      scrolling.current=false;
+      // Settle beat only when the flick actually landed somewhere new —
+      // a nudge that returns to the same value stays silent.
+      if(moved.current){ moved.current=false; haptic.settle(); }
+    },150);
   },[values,current,onChange,integer]);
   const fmt=(v)=>{
     if(integer) return String(Math.round(v));

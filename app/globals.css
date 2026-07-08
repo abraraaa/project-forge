@@ -286,6 +286,36 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ─── Tactility — warm press, slow release ─────────────────────────────────
+   Surfaces should give at the moment of touch. Press is near-instant (60ms
+   into the pressed state); release relaxes back over ~340ms, so letting go
+   feels like the surface breathing back rather than snapping.
+
+   Two variants, one hard rule:
+   - .forge-press       scale + warmth. Mid-page cards and buttons ONLY.
+                        NEVER on a bottom-anchored sheet or its root element:
+                        a transform makes iOS composite the sheet and clip
+                        the safe-area zone (the proven chin bug — see
+                        BreatherModal's header).
+   - .forge-press-warm  warmth only, no transform. Safe anywhere, including
+                        controls inside bottom sheets.
+
+   Elements with an inline `transition` keep their own timing (inline wins);
+   the pressed state itself still applies. */
+.forge-press,
+.forge-press-warm {
+  transition: transform 340ms cubic-bezier(0.22, 1, 0.36, 1), filter 340ms ease;
+}
+.forge-press:active {
+  transform: scale(0.985);
+  filter: brightness(1.07) saturate(1.04);
+  transition-duration: 60ms;
+}
+.forge-press-warm:active {
+  filter: brightness(1.07) saturate(1.04);
+  transition-duration: 60ms;
+}
+
 /* ─── Desktop ambient backdrop (≥768px) ────────────────────────────────────
    Mobile-first design with maxWidth:430 on screen containers leaves a phone-
    sized column floating on flat background at desktop sizes — reads as

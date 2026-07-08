@@ -68,7 +68,7 @@ function BodyweightEditModalInner({kg, setKg, onClose, onSave, isFirstTime}){
 
         {/* Single sage CTA — semantically aligned (BW is a passive measurement,
             not a training action; coral is reserved for training-action surfaces). */}
-        <button onClick={()=>{onSave(kg);onClose();}} style={{width:"100%",padding:"16px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:18,fontWeight:400,color:T.bg0,boxShadow:`0 8px 28px ${T.coral}26`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <button className="forge-press-warm" onClick={()=>{onSave(kg);onClose();}} style={{width:"100%",padding:"16px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:18,fontWeight:400,color:T.bg0,boxShadow:`0 8px 28px ${T.coral}26`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <span>Confirm</span>
           <span style={{fontSize:16}}>→</span>
         </button>

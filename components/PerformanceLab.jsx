@@ -7,6 +7,7 @@ import {
 } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
 import { T } from "@/lib/tokens";
+import { haptic } from "@/lib/a11y";
 import GlossarySheet, { GlossaryTrigger } from "@/components/GlossarySheet";
 import { renderShareCard, shareCanvas } from "@/lib/share-card";
 
@@ -248,7 +249,7 @@ function LiftSelector({ lifts, active, onSelect }) {
         {lifts.map(lift => {
           const on = lift === active;
           return (
-            <button key={lift} onClick={() => onSelect(lift)}
+            <button key={lift} className="forge-press" onClick={() => { haptic.toggle(); onSelect(lift); }}
               style={{padding:"6px 12px", background: on ? T.coral : T.bg3, border:`1px solid ${on ? T.coral : T.bg4}`, borderRadius:T.r.pill, cursor:"pointer", fontSize:11, fontWeight:500, color: on ? T.bg0 : T.text2, whiteSpace:"nowrap", fontFamily:T.sans, transition:`all 180ms ${T.ease}`}}>
               {lift}
             </button>

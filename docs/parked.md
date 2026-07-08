@@ -13,8 +13,11 @@ specific next step that would unblock it.
 
 ### Tactility pass — "the reach, not the flourish"
 
-**Status:** Parked 2026-07-08 (from a Grok design review the user shared;
-ideas not fully bottomed out but judged genuinely impactful).
+**Status:** Batches 1+2 SHIPPED 2026-07-08 (`.forge-press` /
+`.forge-press-warm` in globals.css; `toggle` + `settle` haptics in
+lib/a11y.js; wired across session, home, profile, breather, BW modal,
+Lab lift chips). Batch 3 (grain under finger) stays parked —
+prototype-first, one surface, device verify together.
 
 **Brief:** surfaces should feel warm and inviting at the moment of touch —
 press states that give, contact that responds. Not glass slabs, not fake

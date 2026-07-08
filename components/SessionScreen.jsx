@@ -235,7 +235,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {opts.map((o,i)=>(
           <Fade key={o.id} d={80+i*50}>
-            <div onClick={()=>{ setReadiness(o.id); if (o.id !== "cooked") setReason(null); }} style={{padding:"18px 20px",borderRadius:T.r.lg,cursor:"pointer",background:readiness===o.id?`${o.color}12`:T.bg2,border:`1px solid ${readiness===o.id?o.color+"55":T.bg3}`,display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 200ms ${T.ease}`}}>
+            <div className="forge-press" onClick={()=>{ haptic.toggle(); setReadiness(o.id); if (o.id !== "cooked") setReason(null); }} style={{padding:"18px 20px",borderRadius:T.r.lg,cursor:"pointer",background:readiness===o.id?`${o.color}12`:T.bg2,border:`1px solid ${readiness===o.id?o.color+"55":T.bg3}`,display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 200ms ${T.ease}`}}>
               <div style={{display:"flex",alignItems:"center",gap:16}}>
                 <LevelDot fill={o.fill} color={o.color} size={16}/>
                 <div>
@@ -265,7 +265,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
               {reasons.map(r => {
                 const sel = reason === r.id;
                 return (
-                  <div key={r.id} onClick={()=>setReason(sel ? null : r.id)}
+                  <div key={r.id} className="forge-press" onClick={()=>{haptic.toggle();setReason(sel ? null : r.id);}}
                     style={{padding:"8px 14px",borderRadius:T.r.pill,cursor:"pointer",background:sel?`${T.rose}18`:T.bg2,border:`1px solid ${sel?T.rose+"55":T.bg3}`,fontSize:13,fontFamily:T.serif,fontWeight:300,color:sel?T.text1:T.text2,transition:`all 180ms ${T.ease}`}}>
                     {r.label}
                   </div>
@@ -277,7 +277,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
       )}
 
       <Fade d={280}>
-        <button onClick={readiness?onStart:undefined} style={{marginTop:28,width:"100%",padding:"18px 24px",background:readiness?T.coral:T.bg2,border:`1px solid ${readiness?T.coral:T.bg3}`,borderRadius:T.r.lg,cursor:readiness?"pointer":"default",fontFamily:T.serif,fontSize:20,fontWeight:400,color:readiness?T.bg0:T.text4,transition:`all 220ms ${T.ease}`,boxShadow:readiness?`0 12px 40px ${T.strength.glow}`:"none"}}>
+        <button className={readiness?"forge-press":undefined} onClick={readiness?onStart:undefined} style={{marginTop:28,width:"100%",padding:"18px 24px",background:readiness?T.coral:T.bg2,border:`1px solid ${readiness?T.coral:T.bg3}`,borderRadius:T.r.lg,cursor:readiness?"pointer":"default",fontFamily:T.serif,fontSize:20,fontWeight:400,color:readiness?T.bg0:T.text4,transition:`all 220ms ${T.ease}`,boxShadow:readiness?`0 12px 40px ${T.strength.glow}`:"none"}}>
           Start session →
         </button>
       </Fade>
@@ -301,7 +301,7 @@ function RpeCard({onPick,label="How did that one move?"}){
       <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>{label}</div>
       <div style={{display:"flex",gap:8}}>
         {opts.map(o=>(
-          <div key={o.id} onClick={()=>onPick(o.id)} style={{flex:1,padding:"12px 6px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.md,cursor:"pointer",textAlign:"center",transition:`all 180ms ${T.ease}`}}>
+          <div key={o.id} className="forge-press" onClick={()=>onPick(o.id)} style={{flex:1,padding:"12px 6px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.md,cursor:"pointer",textAlign:"center",transition:`all 180ms ${T.ease}`}}>
             <div style={{marginBottom:6,display:"flex",justifyContent:"center"}}><LevelDot fill={o.fill} color={o.color}/></div>
             <div style={{fontFamily:T.serif,fontSize:15,fontWeight:400,color:T.text1}}>{o.label}</div>
             <div style={{fontSize:10,color:T.text3,marginTop:2,lineHeight:1.3}}>{o.sub}</div>
@@ -533,7 +533,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 </div>
               )
           )}
-          <button onClick={()=>{haptic.tap();onLog();}} style={{margin:"12px 20px 0",width:"calc(100% - 40px)",padding:"18px 24px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:`0 8px 28px ${s.glow}`}}>
+          <button className="forge-press" onClick={()=>{haptic.tap();onLog();}} style={{margin:"12px 20px 0",width:"calc(100% - 40px)",padding:"18px 24px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:`0 8px 28px ${s.glow}`}}>
             <span style={{fontFamily:T.serif,fontSize:20,fontWeight:400,color:T.bg0}}>
               {isSS?(phase==="A"?"Log A — into B":"Log B — round done"):"Log set"}
             </span>
@@ -824,7 +824,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
         </Fade>
       )}
       <Fade d={260}>
-        <button onClick={onHome} style={{marginTop:20,width:"100%",padding:"18px 24px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:20,fontWeight:400,color:T.bg0,boxShadow:`0 12px 40px ${T.strength.glow}`}}>
+        <button className="forge-press" onClick={onHome} style={{marginTop:20,width:"100%",padding:"18px 24px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:20,fontWeight:400,color:T.bg0,boxShadow:`0 12px 40px ${T.strength.glow}`}}>
           Back to home →
         </button>
       </Fade>
