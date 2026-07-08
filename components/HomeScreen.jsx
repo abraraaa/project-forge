@@ -12,7 +12,7 @@
 import { useState, useEffect, useRef } from "react";
 import { T } from "@/lib/tokens";
 import { Fade, Card, Tag } from "@/components/ui";
-import { useModalA11y } from "@/lib/a11y";
+import { useModalA11y, useGrainTouch } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, SESSIONS, applyFocusToSession, applyRotationToSession } from "@/lib/programme";
 import { deloadCardCopy } from "@/lib/progression";
 import { formatTonnage } from "@/lib/analytics";
@@ -32,6 +32,10 @@ function formatAgo(ms) {
 
 export default
 function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge}){
+  // Grain-under-finger prototype (tactility batch 3) — Home only until
+  // device-verified. One hook instance; handlers read e.currentTarget so
+  // the same spread works on every card.
+  const grain = useGrainTouch();
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -378,7 +382,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Session complete. See you next time.</span>
               </div>
             ) : isViewingToday ? (
-              <button onClick={onBegin} style={{
+              <button {...grain} className={`${grain.className} forge-press`} onClick={onBegin} style={{
                 margin:"16px 24px 0",width:"calc(100% - 48px)",
                 padding:"18px 24px",background:accent.main,border:"none",
                 borderRadius:T.r.lg,cursor:"pointer",
@@ -434,7 +438,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Done. Rhythm kept.</span>
             </div>
           ) : (
-            <button onClick={()=>onMarkDayDone(viewDateStr)} style={{
+            <button className="forge-press" onClick={()=>onMarkDayDone(viewDateStr)} style={{
               margin:"12px 24px 0",width:"calc(100% - 48px)",
               padding:"16px 20px",background:"transparent",
               border:`1px solid ${accent.main}`,borderRadius:T.r.lg,cursor:"pointer",
@@ -474,7 +478,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                   <span style={{fontFamily:T.serif,fontSize:15,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Bonus banked. Animal.</span>
                 </div>
               ) : (
-                <button onClick={()=>onMarkBonusDone(viewDateStr)} aria-label="Mark bonus complete" style={{
+                <button className="forge-press" onClick={()=>onMarkBonusDone(viewDateStr)} aria-label="Mark bonus complete" style={{
                   width:"100%",padding:"12px 16px",background:"transparent",
                   border:`1px solid ${accent.main}66`,borderRadius:T.r.md,cursor:"pointer",
                   display:"flex",alignItems:"center",justifyContent:"space-between",
@@ -507,11 +511,11 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               </div>
             </div>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={onResumeDraft}
+              <button className="forge-press" onClick={onResumeDraft}
                 style={{flex:1,padding:"12px 16px",background:T.coral,border:"none",borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:16,fontWeight:400,color:T.bg0}}>
                 Resume →
               </button>
-              <button onClick={onDiscardDraft}
+              <button className="forge-press" onClick={onDiscardDraft}
                 style={{padding:"12px 16px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.sans,fontSize:13,fontWeight:500,color:T.text3}}>
                 Discard
               </button>
@@ -523,7 +527,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       {/* BW re-prompt card — surfaces when bodyweight is stale (>14 days or never set) */}
       {showBwCard && (
         <Fade d={180}>
-          <div onClick={onOpenBwEdit}
+          <div {...grain} className={`${grain.className} forge-press`} onClick={onOpenBwEdit}
             style={{margin:"20px 24px 0",padding:"18px 20px",background:`${T.sage}0E`,border:`1px solid ${T.sage}40`,borderRadius:T.r.lg,cursor:"pointer"}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1}}>
@@ -563,11 +567,11 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 {copy.body}
               </div>
               <div style={{display:"flex",gap:10}}>
-                <button onClick={onAcceptDeload}
+                <button className="forge-press" onClick={onAcceptDeload}
                   style={{flex:1,padding:"12px 16px",background:T.coral,border:"none",borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.bg0}}>
                   Run the deload →
                 </button>
-                <button onClick={onDismissDeload}
+                <button className="forge-press" onClick={onDismissDeload}
                   style={{flexShrink:0,padding:"12px 16px",background:"transparent",border:`1px solid ${T.bg3}`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.sans,fontSize:13,color:T.text3}}>
                   Not yet
                 </button>
@@ -583,7 +587,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           a small celebration beat, not a permanent counter. */}
       {tonnageMilestone && (
         <Fade d={200}>
-          <button onClick={onDismissTonnageMilestone}
+          <button className="forge-press" onClick={onDismissTonnageMilestone}
             aria-label={`Milestone: ${formatTonnage(tonnageMilestone)} moved — tap to dismiss`}
             style={{display:"block",width:"calc(100% - 48px)",margin:"20px 24px 0",padding:"16px 20px",background:`${T.gold}0F`,border:`1px solid ${T.gold}3A`,borderRadius:T.r.lg,textAlign:"left",cursor:"pointer",fontFamily:"inherit"}}>
             <div style={{fontSize:11,fontWeight:500,color:T.gold,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>
@@ -637,7 +641,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               <button onClick={onDismissAbsenceNudge} aria-label="Dismiss"
                 style={{flexShrink:0,background:"none",border:"none",padding:"4px 8px",cursor:"pointer",fontSize:14,color:T.text3,fontFamily:T.sans}}>✕</button>
             </div>
-            <button onClick={onOpenBreather}
+            <button className="forge-press" onClick={onOpenBreather}
               style={{marginTop:14,padding:"9px 16px",background:"none",border:`1px solid ${T.gold}66`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.gold}}>
               Take a breather
             </button>
@@ -777,7 +781,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                     : "Your body has adapted. New exercises, same muscle targets."}
                 </div>
               </div>
-              <button onClick={handleRotateTap} style={{flexShrink:0,marginTop:2,padding:"10px 16px",background:T.gold,border:"none",borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.bg0}}>
+              <button className="forge-press" onClick={handleRotateTap} style={{flexShrink:0,marginTop:2,padding:"10px 16px",background:T.gold,border:"none",borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.bg0}}>
                 {offerRotationChoice ? "Choose →" : "Rotate →"}
               </button>
             </div>
@@ -787,7 +791,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 
       {/* Performance Lab entry — always visible, becomes active once data exists */}
       <Fade d={260}>
-        <div onClick={onPerformance}
+        <div {...grain} className={`${grain.className} forge-press`} onClick={onPerformance}
           style={{margin:"20px 24px 0",padding:"18px 20px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:`all 200ms ${T.ease}`}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>

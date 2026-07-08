@@ -412,7 +412,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
         <Fade d={200}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <button onClick={handleBwSave} style={{
+            <button className="forge-press" onClick={handleBwSave} style={{
               width: "100%", padding: "18px 24px",
               background: T.coral, border: "none", borderRadius: T.r.lg, cursor: "pointer",
               fontFamily: T.serif, fontSize: 20, fontWeight: 400, color: T.bg0,
@@ -484,7 +484,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 </div>
               )}
             </div>
-            <button onClick={handleSubmit} disabled={!canSubmit}
+            <button className={canSubmit?"forge-press":undefined} onClick={handleSubmit} disabled={!canSubmit}
               style={{padding:"14px 20px",background:canSubmit?T.coral:T.bg3,border:"none",borderRadius:T.r.md,cursor:canSubmit?"pointer":"default",fontFamily:T.serif,fontSize:18,fontWeight:400,color:canSubmit?T.bg0:T.text4,transition:`all 200ms ${T.ease}`}}>
               {submitting ? "…" : "→"}
             </button>
@@ -553,7 +553,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 {restingReason ? `${reasonLabel(restingReason)} · your rhythm's paused` : "Your rhythm's paused"}
               </div>
             </div>
-            <button onClick={onEndBreather}
+            <button className="forge-press" onClick={onEndBreather}
               style={{flexShrink:0,padding:"8px 14px",background:"none",border:`1px solid ${T.sage}66`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.sage}}>
               Back to it
             </button>
@@ -562,7 +562,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       ) : current && onOpenBreather ? (
         <Fade d={240}>
           <button onClick={onOpenBreather}
-            className="forge-glass" style={{width:"100%",textAlign:"left",marginTop:36,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit"}}>
+            className="forge-glass forge-press" style={{width:"100%",textAlign:"left",marginTop:36,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit"}}>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Need a breather?</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>Pause your rhythm while life happens</div>
@@ -576,7 +576,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && setBwEditOpen && (
         <Fade d={260}>
           <div onClick={()=>setBwEditOpen(true)}
-            className="forge-glass" style={{marginTop:16,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
+            className="forge-glass forge-press" style={{marginTop:16,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Bodyweight</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>
@@ -600,7 +600,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && onEditFocus && (
         <Fade d={270}>
           <div onClick={onEditFocus}
-            className="forge-glass" style={{marginTop:12,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
+            className="forge-glass forge-press" style={{marginTop:12,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Training focus</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>

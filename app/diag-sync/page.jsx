@@ -23,6 +23,7 @@ import {
   backgroundSync, blobPull, blobPush, flushPendingPushes,
   getLocalProfile,
 } from "@/lib/storage";
+import { LIBRARY } from "@/lib/library";
 
 function fmtTs(ts) {
   if (!ts) return "never";
@@ -289,7 +290,7 @@ export default function DiagSync() {
 
   if (!profile) {
     return (
-      <div style={{ padding: 24, color: "#EDEBE7", fontFamily: "system-ui" }}>
+      <div style={{ padding: 24, maxWidth: 430, margin: "0 auto", color: "#EDEBE7", fontFamily: "system-ui" }}>
         <div style={{ fontSize: 22, marginBottom: 8 }}>Sync diagnostic</div>
         <div style={{ color: "#A09890" }}>
           No active profile. Sign in via the main app first, then return here.
@@ -301,6 +302,8 @@ export default function DiagSync() {
   return (
     <div style={{
       minHeight: "100vh",
+      maxWidth: 430,
+      margin: "0 auto",
       padding: "52px 24px 48px",
       // Transparent over the .forge-page substrate (grain + base) — an
       // opaque #131110 here covered the grain and mismatched both the
@@ -415,6 +418,23 @@ export default function DiagSync() {
           <div style={{ marginTop: 6 }}><strong>Re-fold legacy</strong> — clears the projection-done flag and re-runs Days._foldLegacy to project dayDone/bonusDone/history into Day entries. Idempotent on existing Day entries (preserves them); only fills in missing dates.</div>
         </div>
       </Section>
+
+      {/* For whoever reads a sync diagnostic all the way to the end: a door.
+          The exercise library is deliberately unlinked anywhere else in the
+          app — this line is its only in-app entrance. An easter egg, not a
+          nav item; keep it dressed as a readout row. */}
+      <div style={{
+        display: "flex", justifyContent: "space-between",
+        padding: "8px 0", marginTop: 8, fontSize: 13,
+      }}>
+        <span style={{ color: "#6B6560" }}>exercise index</span>
+        <Link href="/library" style={{
+          fontFamily: "ui-monospace, monospace", color: "#6B6560",
+          textDecoration: "none",
+        }}>
+          {LIBRARY.length} entries mapped →
+        </Link>
+      </div>
     </div>
   );
 }
