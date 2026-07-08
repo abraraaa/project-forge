@@ -11,6 +11,71 @@ specific next step that would unblock it.
 
 ## Active parking list
 
+### Tactility pass — "the reach, not the flourish"
+
+**Status:** Parked 2026-07-08 (from a Grok design review the user shared;
+ideas not fully bottomed out but judged genuinely impactful).
+
+**Brief:** surfaces should feel warm and inviting at the moment of touch —
+press states that give, contact that responds. Not glass slabs, not fake
+leather. The grain/glass/rim-light system already carries most of it; the
+gap is yield and temperature at the point of contact.
+
+**Batches, in order of safety:**
+1. SAFE, cheap: extend the haptic vocabulary (chip toggle, drum settle) and
+   warm press states via colour + a slightly slower release curve. Pure CSS
+   + existing haptic module.
+2. SAFE with one hard rule: a small press scale (~0.985) on cards and
+   primary buttons — but NEVER on a bottom-anchored sheet. A scale is a
+   transform; a transform makes iOS composite the sheet and clip the
+   safe-area (the proven chin bug, 2026-07-07, see BreatherModal header).
+3. UNKNOWN, prototype-first: grain that responds under the finger
+   (localised warm lift on tap). Touches masking + blend layers — exactly
+   the territory that has burned credits before. Build on ONE surface,
+   verify on device together, then decide rollout. Per CLAUDE.md.
+
+### Lab muscle taxonomy — collapse the surface, split the regions
+
+**Status:** Parked 2026-07-08 (same review; needs a dedicated session with
+a short design doc approved before any code — this is a data restructure,
+not a tweak).
+
+**Three connected ideas:**
+1. **Collapse delt heads in the Lab rows.** The chart already collapses
+   (DISPLAY_BUCKET); the per-muscle ROW list is deliberately granular
+   because MEV/MAV/MRV are defined per head. A merged "Shoulders" row must
+   decide how to report its band — proposal: aggregate sets + the WORST
+   head's band state, expandable for the split. Engine stays granular.
+2. **Traps gap is real** (verified: no TRAPS key in MUSCLES) — shrug/
+   carry/deadlift trap work currently leaks into Back.
+3. **Region split: Upper Back / Lower Back / Shoulders.** Sharper levers
+   for focus personalisation (Strong→hinge volume, Sculpt→upper-back
+   thickness). PUSHBACK recorded: evidence-based sources don't give lower
+   back an MEV/MRV — nobody programs erector volume directly. A Lower Back
+   row with bands would nag "under target" for a muscle users shouldn't
+   chase. If split, Lower Back is informational (no bands) or stays
+   internal.
+
+**Scope warning:** re-weighting EXERCISE_ANATOMY across 166 exercises +
+volume landmarks + analytics + Lab display + focus scoring move together;
+history re-derives automatically (anatomy applied at read) but check the
+precomputed volume aggregates in trainingState. This IS the parked "Lab
+ideal rebuild" — treat it as that session.
+
+### Profile page — card unification
+
+**Status:** Parked 2026-07-08 (user report).
+
+**Report:** the Profile cards are inconsistent — some have blank
+backgrounds, some don't; drill-ins vary in UI and colour treatment. Rule
+for the pass: interactive cards share one consistent treatment (background,
+border, drill-in affordance); the ONLY intentionally "clear" element is the
+sync status chip, because it's a status readout, not an interactive card.
+
+**Next step:** inventory every Profile card + its drill-in (breather,
+bodyweight, focus, passkey, sync group, wipe), table the inconsistencies,
+agree the single treatment, apply in one pass.
+
 ### Microcopy & tone-of-voice pass — "quietly sexy", sensation-forward
 
 **Status:** RESOLVED 2026-07-06 — both passes shipped same day. First
@@ -377,22 +442,38 @@ not urgent).
 match against the three causes, apply the matching fix. Also give
 /diag-sync a "← Home" back nav while in there.
 
-### In-session RIR threshold hints (power-user affordance)
+### In-session RIR feedback — redesigned 2026-07-08, awaiting copy sign-off
 
-**Status:** Parked 2026-07-04 (from the Copilot v1.5 review, item 9).
+**Status:** Direction changed in review. The original shape (a standing
+instructional hint under the RPE card, "Easy or Normal on full reps adds
+weight") was REJECTED — a permanent line is more annoying than helpful,
+and instructional copy reads like an ad jingle, off-voice.
 
-**Context:** The progression engine's ADD thresholds vary by exercise
-category (e.g. lower_compound needs RIR ≥ 2, power ≥ 3) but the session
-screen never says so — the engine reads as "quietly smarter" by design,
-and for most users that opacity is the feature. For power users, though,
-a tiny affordance ("2 reps in reserve adds weight next time") turns the
-RPE tap from a mood report into a lever they understand.
+**Approved direction (user's design):** the moment appears ONLY on the
+final set of an exercise. The user taps their effort; a subtle line
+flashes with what to expect next time; they move on. Outcome, not lecture
+— the consequence surfaces exactly when it's decided, which is the
+"quietly smarter" contract done properly.
 
-**Next step:** Design call first, not code: does surfacing the mechanism
-break the "prescriptive, not punitive" voice? If it survives that test,
-the shape is a one-line hint under the RPE card (RpeCard already takes a
-`label` prop), sourced from the same category-threshold table the engine
-uses so it can never drift. Belongs with the session-screen polish pass.
+**Honesty constraint for the build:** the real decision happens at
+session finalise with more context (deload state, stalls, recovery).
+The flash must never promise what the engine might not deliver — so it
+only speaks in the unambiguous case (full reps + effort at/above the
+category threshold, no active deload) and stays silent otherwise. No
+exact numbers (step size can vary); two or three quiet words.
+
+**Next step:** copy sign-off (proposals with the user), then build:
+compute from the just-tapped effort + logged reps via the same
+ADD_THRESHOLD_RIR table the engine uses; render as a brief fade in the
+set-confirm transition, last set only, never on superset rounds.
+
+**Related close-out (2026-07-07): the PWABuilder service-worker flag is a
+FALSE NEGATIVE — verified.** /sw.js serves correctly (200,
+application/javascript) but registration lives in a post-hydration client
+chunk, so the scanner never sees "serviceWorker" in the initial HTML. The
+worker demonstrably works (sync runs through it). Decision: no patch —
+adding a duplicate inline registration purely to satisfy an audit tool is
+score-chasing. Closed.
 
 ### Progression history window depth (12 sessions) — v2 question
 
