@@ -330,14 +330,17 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: radial-gradient(130px circle at var(--gx, 50%) var(--gy, 50%),
-              rgba(242, 200, 158, 0.13), transparent 72%);
+  /* Radius spills well past the fingertip and alpha is set for "clearly
+     there once pointed out" — the first cut (130px @ 0.13) hid entirely
+     under the finger and read as nothing on device. */
+  background: radial-gradient(220px circle at var(--gx, 50%) var(--gy, 50%),
+              rgba(242, 200, 158, 0.22), transparent 72%);
   opacity: 0;
   transition: opacity 480ms ease;
 }
 .forge-grain-touch.forge-grain-on::after {
   opacity: 1;
-  transition-duration: 80ms;
+  transition-duration: 60ms;
 }
 
 /* ─── Desktop ambient backdrop (≥768px) ────────────────────────────────────
