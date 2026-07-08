@@ -289,7 +289,7 @@ export default function DiagSync() {
 
   if (!profile) {
     return (
-      <div style={{ padding: 24, color: "#EDEBE7", fontFamily: "system-ui" }}>
+      <div style={{ padding: 24, maxWidth: 430, margin: "0 auto", color: "#EDEBE7", fontFamily: "system-ui" }}>
         <div style={{ fontSize: 22, marginBottom: 8 }}>Sync diagnostic</div>
         <div style={{ color: "#A09890" }}>
           No active profile. Sign in via the main app first, then return here.
@@ -301,6 +301,8 @@ export default function DiagSync() {
   return (
     <div style={{
       minHeight: "100vh",
+      maxWidth: 430,
+      margin: "0 auto",
       padding: "52px 24px 48px",
       // Transparent over the .forge-page substrate (grain + base) — an
       // opaque #131110 here covered the grain and mismatched both the

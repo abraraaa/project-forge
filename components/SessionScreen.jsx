@@ -225,7 +225,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
     {id:"other",       label:"Something else"},
   ];
   return (
-    <div style={{minHeight:"100vh",padding:"72px 24px 0"}}>
+    <div style={{minHeight:"100vh",maxWidth:430,margin:"0 auto",padding:"72px 24px 0"}}>
       <Fade d={0}>
         <div style={{fontFamily:T.serif,fontSize:34,fontWeight:300,lineHeight:1.2,marginBottom:8}}>
           How are you<br/><span style={{fontStyle:"italic",color:T.coral}}>feeling today?</span>
@@ -382,7 +382,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const weightCaption = WEIGHT_CAPTIONS[loadType] || null;
 
   return (
-    <div style={{minHeight:"100vh",position:"relative",overflow:"clip",paddingBottom:40}}>
+    <div style={{minHeight:"100vh",maxWidth:430,margin:"0 auto",position:"relative",overflow:"clip",paddingBottom:40}}>
       <div style={{position:"absolute",top:-80,right:-80,width:340,height:320,background:`radial-gradient(circle,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       <div style={{height:1,background:T.bg3}}>
         <div style={{height:"100%",width:`${progress}%`,background:T.coral,transition:`width 600ms ${T.ease}`}}/>
@@ -768,7 +768,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
   useEffect(() => SyncStatus.subscribe(setSyncState), []);
 
   return (
-    <div style={{minHeight:"100vh",padding:"72px 24px 0",position:"relative",overflow:"clip"}}>
+    <div style={{minHeight:"100vh",maxWidth:430,margin:"0 auto",padding:"72px 24px 0",position:"relative",overflow:"clip"}}>
       {/* Victory gradient — warm peach wash from top-centre down. A small
           non-patronising triumph beat at the moment the user has just put
           the work in. Two stacked layers: a tight glow above the headline +

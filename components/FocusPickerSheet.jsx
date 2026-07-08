@@ -10,7 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
-import { useModalA11y } from "@/lib/a11y";
+import { useModalA11y, haptic } from "@/lib/a11y";
 import { T } from "@/lib/tokens";
 import { FOCUS_OPTIONS, FOCUS_SUMMARIES, DEFAULT_FOCUS } from "@/lib/programme";
 
@@ -40,7 +40,7 @@ export default function FocusPickerSheet({ current, onSave, onCancel }) {
           {FOCUS_OPTIONS.map(f => {
             const active = draft === f;
             return (
-              <button key={f} onClick={()=>setDraft(f)}
+              <button key={f} className="forge-press-warm" onClick={()=>{haptic.toggle();setDraft(f);}}
                 aria-pressed={active}
                 style={{padding:"14px 16px",background:active?`${T.gold}14`:T.bg3,border:`1px solid ${active?T.gold:T.bg4}`,borderRadius:T.r.md,cursor:"pointer",textAlign:"left",transition:`all 160ms ${T.ease}`}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
@@ -64,8 +64,10 @@ export default function FocusPickerSheet({ current, onSave, onCancel }) {
             style={{flex:1,padding:"14px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",fontSize:13,color:T.text2,fontFamily:T.sans}}>
             Cancel
           </button>
-          <button onClick={()=>onSave(draft)} disabled={!changed}
-            style={{flex:2,padding:"14px",background:changed?T.gold:T.bg3,border:"none",borderRadius:T.r.lg,cursor:changed?"pointer":"default",fontFamily:T.serif,fontSize:16,fontWeight:400,color:changed?T.bg0:T.text3,opacity:changed?1:0.6}}>
+          {/* Coral, not gold — gold is the focus DOMAIN tint (pills, rim,
+              notice); actions are consistently coral across the app. */}
+          <button className={changed?"forge-press-warm":undefined} onClick={()=>onSave(draft)} disabled={!changed}
+            style={{flex:2,padding:"14px",background:changed?T.coral:T.bg3,border:"none",borderRadius:T.r.lg,cursor:changed?"pointer":"default",fontFamily:T.serif,fontSize:16,fontWeight:400,color:changed?T.bg0:T.text3,opacity:changed?1:0.6}}>
             Save focus
           </button>
         </div>

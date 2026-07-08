@@ -39,7 +39,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
   const isEmpty = counts.total === 0;
 
   return (
-    <div style={{minHeight:"100vh", paddingBottom:48, position:"relative", overflow:"clip"}}>
+    <div style={{minHeight:"100vh", maxWidth:430, margin:"0 auto", paddingBottom:48, position:"relative", overflow:"clip"}}>
       {/* Header — ambient glow. top:80 (was 0): the substrate-edge rule.
           The shell clips at its top edge (overflow: clip), which in the
           PWA sits exactly at the safe-area line — any glow luminance at
