@@ -16,8 +16,10 @@ specific next step that would unblock it.
 **Status:** Batches 1+2 SHIPPED 2026-07-08 (`.forge-press` /
 `.forge-press-warm` in globals.css; `toggle` + `settle` haptics in
 lib/a11y.js; wired across session, home, profile, breather, BW modal,
-Lab lift chips). Batch 3 (grain under finger) stays parked —
-prototype-first, one surface, device verify together.
+Lab lift chips). Batch 3 (grain under finger) PROTOTYPING as of
+2026-07-08: live on Home's three big surfaces via useGrainTouch +
+.forge-grain-touch — no blend modes/masking/transforms, opacity-only.
+Awaiting device verdict; roll back = remove the hook wiring on Home.
 
 **Brief:** surfaces should feel warm and inviting at the moment of touch —
 press states that give, contact that responds. Not glass slabs, not fake
