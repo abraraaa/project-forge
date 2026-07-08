@@ -45,7 +45,9 @@ import {
   completeDeload, shouldAutoCompleteDeload, decrementRecoveryCounter,
   deloadDayLabel,
 } from "@/lib/progression";
-import { getLiftProfile, getLoadType } from "@/lib/lift-translations";
+import { getLiftProfile, getLoadType, parseTimedReps } from "@/lib/lift-translations";
+import { pickFlashLine } from "@/lib/set-flash";
+import { T } from "@/lib/tokens";
 import { haptic } from "@/lib/a11y";
 import { withNavTransition } from "@/lib/nav-transitions";
 import { computeVolumeAggregates } from "@/lib/analytics";
@@ -288,7 +290,43 @@ export default function SessionHost() {
     }
   }, [block, isSS, phase, sessionSwaps, workingWeights, workingReps, resolveExFn, profile, bodyweight, bwPromptedThisSession]);
 
+  // Final-set flash — one quiet line after rating the LAST set of an
+  // exercise (lib/set-flash.js: no repeats this session, Easy falls back to
+  // Normal on short reps, bar lines skipped for bodyweight). Lives here, not
+  // in SessionScreen, so it survives the block advance and still lands when
+  // finishSession() swaps to the done screen. Cascade: the commit advances
+  // the screen instantly, then the line fades in ~450ms later onto the
+  // settled view, holds, and fades out — never blocking, never tappable.
+  const [setFlash, setSetFlash]       = useState(null);
+  const [flashLeaving, setFlashLeaving] = useState(false);
+  const usedFlashRef  = useRef(new Set());
+  const flashTimersRef = useRef([]);
+  useEffect(() => () => flashTimersRef.current.forEach(clearTimeout), []);
+  const maybeFlash = (rpe) => {
+    if (setNum !== block.sets || isSS) return; // last set of a plain block only
+    const timed  = parseTimedReps(activeEx?.reps);
+    const target = timed ? timed.seconds : parseInt(activeEx?.reps, 10);
+    const done   = getR(activeEx);
+    const fullReps = !Number.isFinite(target) || (typeof done === "number" ? done >= target : true);
+    const line = pickFlashLine(rpe, {
+      fullReps,
+      barLoaded: getLoadType(activeEx) !== "bodyweight",
+      used: usedFlashRef.current,
+    });
+    if (!line) return;
+    usedFlashRef.current.add(line);
+    flashTimersRef.current.forEach(clearTimeout);
+    setFlashLeaving(false);
+    setSetFlash(null);
+    flashTimersRef.current = [
+      setTimeout(() => setSetFlash(line), 450),  // let the screen swap settle
+      setTimeout(() => setFlashLeaving(true), 3200),
+      setTimeout(() => { setSetFlash(null); setFlashLeaving(false); }, 3800),
+    ];
+  };
+
   const commitLog = (rpe) => {
+    maybeFlash(rpe);
     const exes = isSS
       ? [resolveExFn(block.id, "A", block.exA), resolveExFn(block.id, "B", block.exB)]
       : [resolveExFn(block.id, null, block.ex)];
@@ -610,6 +648,16 @@ export default function SessionHost() {
         />
       )}
       <BodyweightEditModal open={bwEditOpen} onClose={() => setBwEditOpen(false)} currentKg={bodyweight} onSave={updateBodyweight} />
+      {/* Final-set flash toast. Centred with left/right insets (no transform
+          on the positioned element — fadeSlide's translateY would override
+          translateX centring); the rise animation sits on the inner span.
+          Non-interactive, floats 96px above the safe area — never paints the
+          viewport edge, so the sheet/chin constraint doesn't apply. */}
+      {setFlash && (
+        <div style={{ position: "fixed", left: 0, right: 0, margin: "0 auto", width: "calc(100% - 64px)", maxWidth: 366, bottom: "calc(env(safe-area-inset-bottom,0px) + 96px)", pointerEvents: "none", zIndex: 60, textAlign: "center", opacity: flashLeaving ? 0 : 1, transition: "opacity 600ms ease" }}>
+          <span style={{ display: "inline-block", animation: `fadeSlide 400ms ${T.ease}`, fontFamily: T.serif, fontStyle: "italic", fontSize: 16, fontWeight: 300, color: T.gold, lineHeight: 1.45, textShadow: "0 2px 12px rgba(10,9,8,0.8)" }}>{setFlash}</span>
+        </div>
+      )}
     </ErrorBoundary>
   );
 }
