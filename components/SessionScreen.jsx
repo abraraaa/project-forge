@@ -21,6 +21,7 @@ import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
 import { getLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
+import { pickFlashLine } from "@/lib/set-flash";
 
 // ─── Session overview sheet ──────────────────────────────────────────────────
 // Mid-session escape hatch: list every block in today's session, show which
@@ -354,6 +355,32 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
     () => recentForExercise(history, activeEx?.name, 3),
     [history, activeEx?.name]
   );
+  // Final-set flash — one quiet line after rating the LAST set of an
+  // exercise (lib/set-flash.js: no repeats this session, Easy falls back to
+  // Normal on short reps, bar lines skipped for bodyweight). Two-phase
+  // opacity so it fades out rather than vanishing.
+  const [setFlash,setSetFlash]=useState(null);
+  const [flashLeaving,setFlashLeaving]=useState(false);
+  const usedFlashRef=useRef(new Set());
+  const flashTimersRef=useRef([]);
+  useEffect(()=>()=>flashTimersRef.current.forEach(clearTimeout),[]);
+  const maybeFlash=(rpe)=>{
+    if(setNum!==block.sets||isSS) return; // last set of a plain block only
+    const timed=parseTimedReps(activeEx?.reps);
+    const target=timed?timed.seconds:parseInt(activeEx?.reps,10);
+    const done=getR(activeEx);
+    const fullReps=!Number.isFinite(target)||(typeof done==="number"?done>=target:true);
+    const line=pickFlashLine(rpe,{fullReps,barLoaded:loadType!=="bodyweight",used:usedFlashRef.current});
+    if(!line) return;
+    usedFlashRef.current.add(line);
+    flashTimersRef.current.forEach(clearTimeout);
+    setFlashLeaving(false);
+    setSetFlash(line);
+    flashTimersRef.current=[
+      setTimeout(()=>setFlashLeaving(true),1700),
+      setTimeout(()=>setSetFlash(null),2200),
+    ];
+  };
   const showRestHint=!isSS;
   const restMins =Math.floor(restRemain/60),restSecs=restRemain%60;
   const restStr  =`${restMins}:${String(restSecs).padStart(2,"0")}`;
@@ -493,7 +520,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
       </div>
       {/* RPE pick = the set-confirm moment. haptic.commit on submission gives
           it weight — same gesture that ends every set on every platform. */}
-      {awaitRpe&&<RpeCard onPick={(r)=>{haptic.commit();onCommit(r);}} label="How was that set?"/>}
+      {awaitRpe&&<RpeCard onPick={(r)=>{haptic.commit();maybeFlash(r);onCommit(r);}}/>}
       {ssRoundDone&&<RpeCard onPick={(r)=>{haptic.commit();onCommit(r);}} label={`Round ${setNum} of ${block.sets} — rate the effort`}/>}
       {!blocking&&(
         <>
@@ -545,6 +572,14 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             {partnerEx?.weight!==null&&getW(partnerEx)?`${getW(partnerEx)} kg  ·  `:""}{getR(partnerEx)} reps
           </div>
         </Card>
+      )}
+      {/* Final-set flash — same fixed-toast pattern as the retro toast
+          (translateX centring, no background, taps pass through). Sits
+          above the safe area; no paint at the viewport edge. */}
+      {setFlash&&(
+        <div style={{position:"fixed",left:"50%",bottom:"calc(env(safe-area-inset-bottom,0px) + 96px)",transform:"translateX(-50%)",width:"calc(100% - 64px)",maxWidth:366,pointerEvents:"none",zIndex:60,textAlign:"center",opacity:flashLeaving?0:1,transition:"opacity 500ms ease",animation:`fadeSlide 300ms ${T.ease}`}}>
+          <span style={{fontFamily:T.serif,fontStyle:"italic",fontSize:16,fontWeight:300,color:T.gold,lineHeight:1.45,textShadow:"0 2px 12px rgba(10,9,8,0.8)"}}>{setFlash}</span>
+        </div>
       )}
       {editTarget&&<DrumEditOverlay target={editTarget} workingWeights={workingWeights} setWW={setWW} workingReps={workingReps} setWR={setWR} block={block} onClose={()=>setEditTarget(null)}/>}
       {swapEx&&<SwapOverlay activeEx={activeEx} swapKey={swapKey} onSwap={onSwap} onClose={()=>setSwapEx(null)}/>}
