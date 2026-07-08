@@ -11,7 +11,7 @@
 // route will move, one concern at a time.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { T } from "@/lib/tokens";
 import { Fade, Card, Tag } from "@/components/ui";
 import { useModalA11y, haptic } from "@/lib/a11y";
@@ -118,6 +118,12 @@ export function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJum
   );
 }
 
+// Level dots — the text glyphs (U+25CB/25D0/25CF) render at different sizes
+// per font, so readiness/effort dots are DRAWN: same box, three fills.
+function LevelDot({fill,color,size=15}){
+  return <span aria-hidden="true" style={{width:size,height:size,borderRadius:"50%",display:"inline-block",flexShrink:0,boxSizing:"border-box",border:`2px solid ${color}`,background:fill==="full"?color:fill==="half"?`linear-gradient(90deg, ${color} 50%, transparent 50%)`:"transparent"}}/>;
+}
+
 // ─── Recent-history sanity-check sheet ──────────────────────────────────────
 // In-session helper: shows the last N performances of the active exercise so
 // the user can sanity-check the engine's recommended weight against what they
@@ -204,9 +210,9 @@ function RecentHistorySheet({ exerciseName, recent, onCancel }) {
 
 export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart}){
   const opts=[
-    {id:"fresh", icon:"○",label:"Fresh", sub:"Full programme. The good kind of heavy.", color:T.sage},
-    {id:"normal",icon:"◐",label:"Normal",sub:"The work, as written.",              color:T.gold},
-    {id:"cooked",icon:"●",label:"Cooked",sub:"Deload weights · trimmed volume.",   color:T.rose},
+    {id:"fresh", fill:"none",label:"Fresh", sub:"Full programme. The good kind of heavy.", color:T.sage},
+    {id:"normal",fill:"half",label:"Normal",sub:"The work, as written.",              color:T.gold},
+    {id:"cooked",fill:"full",label:"Cooked",sub:"Deload weights · trimmed volume.",   color:T.rose},
   ];
   // Short, enum-only reasons. Fed into session record so patterns can surface.
   // Only surfaces when readiness is "cooked" — the one state where context
@@ -232,7 +238,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
           <Fade key={o.id} d={80+i*50}>
             <div onClick={()=>{ setReadiness(o.id); if (o.id !== "cooked") setReason(null); }} style={{padding:"18px 20px",borderRadius:T.r.lg,cursor:"pointer",background:readiness===o.id?`${o.color}12`:T.bg2,border:`1px solid ${readiness===o.id?o.color+"55":T.bg3}`,display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 200ms ${T.ease}`}}>
               <div style={{display:"flex",alignItems:"center",gap:16}}>
-                <span style={{fontSize:20,color:o.color,opacity:0.8}}>{o.icon}</span>
+                <LevelDot fill={o.fill} color={o.color} size={16}/>
                 <div>
                   <div style={{fontFamily:T.serif,fontSize:20,fontWeight:400}}>{o.label}</div>
                   <div style={{fontSize:12,color:T.text3,marginTop:2}}>{o.sub}</div>
@@ -287,9 +293,9 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
 // rpeToRir for v1 records — it must NOT appear in any UI.
 function RpeCard({onPick,label="How did that one move?"}){
   const opts=[
-    {id:"easy",  icon:"○", label:"Easy",  sub:"More in the tank",color:T.sage},
-    {id:"normal",icon:"◐", label:"Normal",sub:"Working effort",   color:T.gold},
-    {id:"cooked",icon:"●", label:"Cooked",sub:"Nothing left",     color:T.rose},
+    {id:"easy",  fill:"none", label:"Easy",  sub:"More in the tank",color:T.sage},
+    {id:"normal",fill:"half", label:"Normal",sub:"Working effort",   color:T.gold},
+    {id:"cooked",fill:"full", label:"Cooked",sub:"Nothing left",     color:T.rose},
   ];
   return (
     <div style={{margin:"14px 20px 0",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,padding:"16px 18px",animation:`fadeSlide 240ms ${T.ease}`}}>
@@ -297,7 +303,7 @@ function RpeCard({onPick,label="How did that one move?"}){
       <div style={{display:"flex",gap:8}}>
         {opts.map(o=>(
           <div key={o.id} onClick={()=>onPick(o.id)} style={{flex:1,padding:"12px 6px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.md,cursor:"pointer",textAlign:"center",transition:`all 180ms ${T.ease}`}}>
-            <div style={{fontSize:20,marginBottom:4,color:o.color}}>{o.icon}</div>
+            <div style={{marginBottom:6,display:"flex",justifyContent:"center"}}><LevelDot fill={o.fill} color={o.color}/></div>
             <div style={{fontFamily:T.serif,fontSize:15,fontWeight:400,color:T.text1}}>{o.label}</div>
             <div style={{fontSize:10,color:T.text3,marginTop:2,lineHeight:1.3}}>{o.sub}</div>
           </div>
