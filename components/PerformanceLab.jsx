@@ -121,7 +121,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
                   style={{background:"none", border:"none", padding:"6px 0", cursor:"pointer", fontSize:12, color:T.text3, fontFamily:T.sans, letterSpacing:"0.04em", flexShrink:0}}
                   aria-label={`Share ${activeLift} trend`}
                 >
-                  Share ↗
+                  Share ↗︎
                 </button>
               }
             >

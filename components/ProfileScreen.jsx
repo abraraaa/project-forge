@@ -545,7 +545,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       ) : current && onOpenBreather ? (
         <Fade d={240}>
           <button onClick={onOpenBreather}
-            className="forge-glass" style={{width:"100%",textAlign:"left",marginTop:36,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",background:"none"}}>
+            className="forge-glass" style={{width:"100%",textAlign:"left",marginTop:36,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit"}}>
             <div>
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Need a breather?</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>Pause your rhythm while life happens</div>
@@ -570,10 +570,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                     const agoStr = daysAgo === 0 ? "today" : daysAgo === 1 ? "yesterday" : daysAgo !== null ? `${daysAgo} days ago` : "";
                     return `${bodyweight} kg${agoStr ? ` · updated ${agoStr}` : ""}`;
                   })()
-                ) : "Not set — add one ↗"}
+                ) : "Not set — add one →"}
               </div>
             </div>
-            <span style={{fontSize:14,color:T.text3}}>↗</span>
+            <span style={{fontSize:14,color:T.text3}}>→</span>
           </div>
         </Fade>
       )}
@@ -590,7 +590,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 {userFocus} · {FOCUS_SUMMARIES[userFocus] || FOCUS_SUMMARIES.Forged}
               </div>
             </div>
-            <span style={{fontSize:14,color:T.text3}}>↗</span>
+            <span style={{fontSize:14,color:T.text3}}>→</span>
           </div>
         </Fade>
       )}
@@ -681,7 +681,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Sync diagnostics</div>
               <div style={{fontSize:11,color:T.text3,marginTop:2}}>Local store counts + force pull/push</div>
             </div>
-            <span style={{fontSize:14,color:T.text3}}>↗</span>
+            <span style={{fontSize:14,color:T.text3}}>↗︎</span>
           </a>
         </Fade>
       )}

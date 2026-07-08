@@ -472,7 +472,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             <button onClick={()=>setHistoryOpen(true)}
               aria-label={`Recent history for ${activeEx?.name}`}
               style={{marginLeft:"auto",padding:"3px 8px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.sm,cursor:"pointer",fontSize:10,color:T.text3,fontFamily:T.sans,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-              Recent ↗
+              Recent →
             </button>
           )}
         </div>
@@ -626,7 +626,7 @@ function VideoEmbed({vid,name}){
             : `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} form`)}`}
           target="_blank" rel="noopener noreferrer"
           style={{fontSize:12,color:T.coral,fontWeight:500,textDecoration:"none"}}>
-          {vid?"Watch on YouTube ↗":"Search YouTube ↗"}
+          {vid?"Watch on YouTube ↗︎":"Search YouTube ↗︎"}
         </a>
       </div>
     );

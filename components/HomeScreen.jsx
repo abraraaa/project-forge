@@ -227,7 +227,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               ) : syncState === "error" ? (
                 <span style={{width:6,height:6,borderRadius:"50%",background:T.coral,opacity:0.6}}/>
               ) : null}
-              <span style={{marginLeft:2}}>↗</span>
+              <span style={{marginLeft:2}}>→</span>
             </button>
           </div>
         </div>
