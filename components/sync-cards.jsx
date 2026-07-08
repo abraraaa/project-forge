@@ -56,12 +56,13 @@ export function SyncStatusCard({ profile }) {
     error: T.coral,
   };
 
+  // Deliberately CLEAR — a status readout, not an interactive card (per the
+  // 2026-07-08 unification: only actionable rows get the glass treatment).
+  // Padding keeps the text aligned with card interiors.
   return (
-    <div className="forge-glass" style={{
+    <div style={{
       marginTop: 16,
       padding: "14px 18px",
-      border: `1px solid ${T.bg3}`,
-      borderRadius: T.r.lg,
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",

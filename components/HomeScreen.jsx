@@ -564,7 +564,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               </div>
               <div style={{display:"flex",gap:10}}>
                 <button onClick={onAcceptDeload}
-                  style={{flex:1,padding:"12px 16px",background:T.sage,border:"none",borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.bg0}}>
+                  style={{flex:1,padding:"12px 16px",background:T.coral,border:"none",borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.bg0}}>
                   Run the deload →
                 </button>
                 <button onClick={onDismissDeload}
@@ -720,7 +720,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 style={{flexShrink:0,background:"none",border:"none",padding:"4px 8px",cursor:"pointer",fontSize:14,color:T.text3,fontFamily:T.sans}}>✕</button>
             </div>
             <button onClick={onPnRegister} disabled={pnBusy}
-              style={{width:"100%",padding:"12px 16px",background:T.sage,border:"none",borderRadius:T.r.md,cursor:pnBusy?"default":"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.bg0,opacity:pnBusy?0.6:1}}>
+              style={{width:"100%",padding:"12px 16px",background:T.coral,border:"none",borderRadius:T.r.md,cursor:pnBusy?"default":"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.bg0,opacity:pnBusy?0.6:1}}>
               {pnBusy ? "Setting up…" : "Set up passkey →"}
             </button>
             {pnError && (
