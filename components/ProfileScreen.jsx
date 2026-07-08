@@ -25,11 +25,18 @@ import ScrollDrum from "@/components/ScrollDrum";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
 import TakenNameModal from "@/components/TakenNameModal";
 
+// Mirrors the server rule (validateProfile in app/api/sync/route.js): path
+// separators and control characters are rejected there with a 400, and the
+// 64-char hard cap matches PROFILE_MAX_LEN. Catching them here means a plain
+// message at the input instead of a dead-end "network hiccup" on submit.
+const NAME_BLOCKED_RE = /[/\\\u0000-\u001F\u007F]/;
+const NAME_MAX_LEN = 64;
+
 export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,onOpenBreather,resting=false,restingReason=null,onEndBreather}){
   const [name,setName]=useState("");
   const [confirmWipe,setConfirmWipe]=useState(null);
   const [showTakenHelp,setShowTakenHelp]=useState(false);
-  // availability: "idle" | "checking" | "available" | "taken" | "network-err"
+  // availability: "idle" | "checking" | "available" | "taken" | "invalid" | "network-err"
   const [availability,setAvailability]=useState("idle");
   const [submitting,setSubmitting]=useState(false);
   const [submitError,setSubmitError]=useState(null);
@@ -172,6 +179,12 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       clearTimeout(checkTimerRef.current);
       return;
     }
+    // Blocked characters — no point asking the server, it would 400 anyway.
+    if (NAME_BLOCKED_RE.test(trimmed)) {
+      setAvailability("invalid");
+      clearTimeout(checkTimerRef.current);
+      return;
+    }
     // If it's an existing local profile, it's "ours" — treat as available
     if (existing.some(e => e.toLowerCase() === trimmed.toLowerCase())) {
       setAvailability("available");
@@ -231,6 +244,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
     if (availability === "checking")     return { colour: T.text3, icon: "…",  label: "checking" };
     if (availability === "available")    return { colour: T.sage,  icon: "✓",  label: existing.some(e=>e.toLowerCase()===name.trim().toLowerCase()) ? "on this device" : "available" };
     if (availability === "taken")        return { colour: T.rose,  icon: "✕",  label: "taken" };
+    if (availability === "invalid")      return { colour: T.rose,  icon: "✕",  label: "invalid" };
     if (availability === "network-err")  return { colour: T.gold,  icon: "?",  label: "offline — try anyway" };
     return null;
   };
@@ -460,9 +474,9 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             <div style={{flex:1,position:"relative"}}>
               <input value={name} onChange={e=>{setName(e.target.value); setSubmitError(null);}}
                 onKeyDown={e=>{if(e.key==="Enter"&&canSubmit) handleSubmit();}}
-                placeholder="Your name"
+                placeholder="Your name" maxLength={NAME_MAX_LEN}
                 autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck="false"
-                style={{width:"100%",background:T.bg2,border:`1px solid ${availability==="taken"?T.rose+"55":availability==="available"?T.sage+"55":T.bg3}`,borderRadius:T.r.md,padding:"14px 48px 14px 16px",fontFamily:T.serif,fontSize:18,fontWeight:300,color:T.text1,outline:"none",caretColor:T.coral,transition:`border 180ms ${T.ease}`}}
+                style={{width:"100%",background:T.bg2,border:`1px solid ${availability==="taken"||availability==="invalid"?T.rose+"55":availability==="available"?T.sage+"55":T.bg3}`,borderRadius:T.r.md,padding:"14px 48px 14px 16px",fontFamily:T.serif,fontSize:18,fontWeight:300,color:T.text1,outline:"none",caretColor:T.coral,transition:`border 180ms ${T.ease}`}}
               />
               {pip && (
                 <div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",display:"flex",alignItems:"center",gap:6,pointerEvents:"none"}}>
@@ -483,6 +497,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <span>{pip.label === "available" && "Available · this will be your username"}
                     {pip.label === "on this device" && "Welcome back"}
                     {pip.label === "taken" && "Already taken on Forge"}
+                    {pip.label === "invalid" && "That name won't travel — no slashes (/ or \\)"}
                     {pip.label === "checking" && "Checking…"}
                     {pip.label === "offline — try anyway" && "Couldn't check online — you can still proceed"}
               </span>
