@@ -94,9 +94,11 @@ describe("Days — current-week read projections (cutover read source)", () => {
   const NOW = new Date("2026-06-17T12:00:00");
 
   it("projectCurrentWeek maps completions to weekday indices (0=Mon)", () => {
-    // Monday strength session, Tuesday cardio tick.
+    // Monday strength session; Tuesday tick matching its scheduled type
+    // (default WEEK Tuesday = zone2 — a mismatched tick must NOT count,
+    // see the schedule-edit truthfulness suite below).
     Days.set("alice", "2026-06-15", { completedType: "strength", sessionId: "s1" });
-    Days.set("alice", "2026-06-16", { completedType: "cardio" });
+    Days.set("alice", "2026-06-16", { completedType: "zone2" });
     const proj = Days.projectCurrentWeek("alice", { now: NOW });
     expect(proj.complete[0]).toBe(true);  // Monday
     expect(proj.complete[1]).toBe(true);  // Tuesday
@@ -321,5 +323,33 @@ describe("Days — lazy projection from legacy stores", () => {
     expect(all["2026-06-15"].completedType).toBe("strength");
     // Bonus mark survives the repair (spread preserves it).
     expect(all["2026-06-15"].marks.bonus).toBe(true);
+  });
+});
+
+// Schedule-edit truthfulness (user report 2026-07-09): a manual tick only
+// satisfies its OWN type against the currently-effective schedule; a real
+// strength session (sessionId) satisfies any day. Prevents the false
+// positive: tick cardio, flip the day to strength, day showed complete.
+describe("projectCurrentWeek — completion must match the effective type", () => {
+  const PROFILE = "schedmatch";
+  const isoOfDow = (i) => { // i = 0..6 Monday-start, current week
+    const d = new Date(); d.setHours(0,0,0,0);
+    const shift = d.getDay() === 0 ? -6 : 1 - d.getDay();
+    d.setDate(d.getDate() + shift + i);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  };
+
+  it("a tick of the wrong type does not complete the day; matching type and sessionId do", async () => {
+    localStorage.clear();
+    const { Days } = await import("../lib/storage.js");
+    // Default WEEK: index 1 = zone2. A cardio tick there must NOT complete it.
+    Days.set(PROFILE, isoOfDow(1), { scheduledType: "cardio", completedType: "cardio" });
+    expect(Days.projectCurrentWeek(PROFILE).complete[1]).toBeUndefined();
+    // Matching type completes.
+    Days.set(PROFILE, isoOfDow(1), { completedType: "zone2" });
+    expect(Days.projectCurrentWeek(PROFILE).complete[1]).toBe(true);
+    // A real strength session satisfies any day (index 3 = cardio in WEEK).
+    Days.set(PROFILE, isoOfDow(3), { scheduledType: "strength", completedType: "strength", sessionId: "x" });
+    expect(Days.projectCurrentWeek(PROFILE).complete[3]).toBe(true);
   });
 });
