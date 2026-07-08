@@ -62,6 +62,18 @@ history re-derives automatically (anatomy applied at read) but check the
 precomputed volume aggregates in trainingState. This IS the parked "Lab
 ideal rebuild" — treat it as that session.
 
+### Iconography consistency — symbols vs emoji
+
+**Status:** Parked 2026-07-08 (user report).
+
+**Report:** the app mixes typographic symbols (→ ↗ ✕ ⇄ ◔ ▶ ↕) with emoji
+(😮‍💨 😤 🔥, day icons ○ ◐ ●) with no rule about which is used where. Needs
+one pass through every surface to pick a consistent vocabulary — likely:
+typographic symbols for navigation/affordances, reserved emoji (if any)
+for the effort scale only — and apply it everywhere. Small but touches
+many files; do it as one sweep so nothing half-changes. Pairs naturally
+with the Profile card unification below.
+
 ### Profile page — card unification
 
 **Status:** Parked 2026-07-08 (user report).
