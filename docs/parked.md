@@ -11,6 +11,34 @@ specific next step that would unblock it.
 
 ## Active parking list
 
+### Possible rebrand — "Forge" is diluted in fitness
+
+**Status:** Parked 2026-07-08 (user's call). Revisit when the current
+domain ownership lapses, roughly **March/April 2027**.
+
+**Context:** "Forge" as a strength-training name is heavily diluted
+across the fitness space. No urgency — the product identity (voice,
+palette, grain) carries more brand than the word does — but worth a
+proper naming session before committing to another year of domain +
+SEO equity on theforged.fit.
+
+**Scope map for whenever this lands** (rebrand is mostly cosmetic, with
+two landmines that look like rename targets and must NOT change):
+- **NEVER rename:** the `forge:` localStorage key prefix and the
+  `forge/profiles/` blob paths. They're internal, invisible to users,
+  and renaming them silently orphans every existing user's local data
+  and cloud blobs. They can stay "forge" forever under any brand.
+- Safe, mechanical: display strings, PWA manifest (name/short_name/
+  icons), share-card wordmark, opengraph image, README, onboarding copy.
+- Costly, plan-first: domain + 166 library-page canonicals/sitemap
+  (301s from theforged.fit, re-index takes months — move early, not
+  last), the PolyForm license branding-reservation clause names the
+  brand, and installed PWAs keep the old name/icon until users
+  reinstall (manifest updates don't rename an installed app on iOS).
+
+**Unblock:** a naming session + domain check, ~Feb 2027, before the
+lapse date so the 301 window starts while the old domain still serves.
+
 ### Tactility pass — "the reach, not the flourish"
 
 **Status:** Batches 1+2 SHIPPED 2026-07-08 (`.forge-press` /
