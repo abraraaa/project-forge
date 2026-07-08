@@ -23,6 +23,7 @@ import {
   backgroundSync, blobPull, blobPush, flushPendingPushes,
   getLocalProfile,
 } from "@/lib/storage";
+import { LIBRARY } from "@/lib/library";
 
 function fmtTs(ts) {
   if (!ts) return "never";
@@ -417,6 +418,23 @@ export default function DiagSync() {
           <div style={{ marginTop: 6 }}><strong>Re-fold legacy</strong> — clears the projection-done flag and re-runs Days._foldLegacy to project dayDone/bonusDone/history into Day entries. Idempotent on existing Day entries (preserves them); only fills in missing dates.</div>
         </div>
       </Section>
+
+      {/* For whoever reads a sync diagnostic all the way to the end: a door.
+          The exercise library is deliberately unlinked anywhere else in the
+          app — this line is its only in-app entrance. An easter egg, not a
+          nav item; keep it dressed as a readout row. */}
+      <div style={{
+        display: "flex", justifyContent: "space-between",
+        padding: "8px 0", marginTop: 8, fontSize: 13,
+      }}>
+        <span style={{ color: "#6B6560" }}>exercise index</span>
+        <Link href="/library" style={{
+          fontFamily: "ui-monospace, monospace", color: "#6B6560",
+          textDecoration: "none",
+        }}>
+          {LIBRARY.length} entries mapped →
+        </Link>
+      </div>
     </div>
   );
 }
