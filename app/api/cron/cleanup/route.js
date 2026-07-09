@@ -15,8 +15,9 @@
 // any suffixed legacy blobs left over from the pre-migration era. Once all
 // legacy data is gone, this cron is a no-op — but it stays as defence-in-depth.
 //
-// Auth: Bearer CRON_SECRET (Vercel-injected for cron-triggered requests).
-// Manual invocations from outside Vercel without the secret are rejected.
+// Auth: Bearer CRON_SECRET — a user-configured env var that Vercel attaches
+// to cron-triggered requests (it is NOT auto-generated; the job fails loud
+// until the operator sets it). Manual invocations without it are rejected.
 //
 // Cost shape: list() is paginated 250-per-call; del() supports batch delete.
 // At realistic scale (~10 users × ~2 canonical blobs + occasional legacy
@@ -26,19 +27,27 @@
 import { list, del } from "@vercel/blob";
 import { NextResponse } from "next/server";
 
-// Canonical blob paths per profile — these are the ONLY blobs that should
-// exist post-migration. Anything else under forge/profiles/{name}/ is an
-// orphan eligible for deletion.
-const CANONICAL_BASENAMES = new Set(["meta.json", "history.json"]);
+// Deletion is ALLOW-LISTED TO KNOWN GARBAGE, never "anything unexpected".
+// The previous model deleted every blob whose basename wasn't meta.json /
+// history.json — and on the first night CRON_SECRET was configured
+// (2026-07-09) that wiped every profile's credentials.json, i.e. all
+// registered passkeys, because the canonical set predated WebAuthn and was
+// never updated. A cleanup job must enumerate the garbage it was built to
+// remove; an unknown basename is someone's data and gets KEPT.
+//
+// The only known garbage: suffixed meta/history blobs from the
+// addRandomSuffix era (same shapes app/api/sync/route.js migrates from).
+const LEGACY_ORPHAN_RES = [/\/meta-[^/]+\.json$/, /\/history-[^/]+\.json$/];
+export const isLegacyOrphan = (pathname) => LEGACY_ORPHAN_RES.some((re) => re.test(pathname));
 
 export async function GET(request) {
   // ── Auth: require Bearer CRON_SECRET ────────────────────────────────────
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
-    // No CRON_SECRET configured — fail loud so operators notice. Vercel
-    // automatically sets this for cron-triggered requests; missing means
-    // misconfigured project.
+    // No CRON_SECRET configured — fail loud so operators notice. The env
+    // var must be set by the operator (Vercel attaches it to cron requests
+    // but never generates it); missing means misconfigured project.
     console.error("[forge:cron-cleanup] CRON_SECRET not configured");
     return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
   }
@@ -63,18 +72,10 @@ export async function GET(request) {
 
       stats.scanned += result.blobs.length;
 
-      // Identify orphans — blobs whose pathname doesn't end in one of the
-      // canonical basenames. The pathname shape we want is:
-      //   forge/profiles/{encodedName}/meta.json
-      //   forge/profiles/{encodedName}/history.json
-      // Anything with a random suffix appended (e.g. meta-aBc1Z9.json) or
-      // any other unexpected basename is an orphan.
-      const orphans = result.blobs.filter(b => {
-        // Extract basename — last segment after the final "/"
-        const lastSlash = b.pathname.lastIndexOf("/");
-        const basename = lastSlash >= 0 ? b.pathname.slice(lastSlash + 1) : b.pathname;
-        return !CANONICAL_BASENAMES.has(basename);
-      });
+      // Only blobs matching the known legacy-orphan shapes are deletable.
+      // Everything else — canonical files, credentials.json, anything a
+      // future feature writes — is kept unconditionally.
+      const orphans = result.blobs.filter(b => isLegacyOrphan(b.pathname));
 
       stats.kept += result.blobs.length - orphans.length;
 
