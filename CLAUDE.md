@@ -85,6 +85,18 @@ never the janitor itself. No dry-run existed. Deleted blobs are
 unrecoverable. Every rule above would have stopped it — the sweeper is now
 deleted rather than guarded, per the design goal.
 
+## Third fix in the same territory → down tools and name the system.
+
+When the same class of defect draws its third patch — third layout fight,
+third sync seam, third chin — the next deliverable is NOT a fourth patch.
+It's a short architecture note: what do these fixes have in common, what
+contract is missing, what change would make the whole class stop occurring.
+Local fixes feel like velocity; a recurring class is the system asking for
+design. House preference, long established: do the painful essential work
+early, not when it's harder. (Learned at ~PR 200, most of them appearance
+fixes, when "every screen negotiates raw with the viewport" was finally
+named as the common cause instead of shipping layout patch #31.)
+
 ## House mechanics (already in force — don't relearn the hard way)
 
 - **Rebase gate on every push:** `git fetch origin main && git merge-base
