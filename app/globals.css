@@ -291,27 +291,21 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
    into the pressed state); release relaxes back over ~340ms, so letting go
    feels like the surface breathing back rather than snapping.
 
-   Two variants, one hard rule:
-   - .forge-press       scale + warmth. Mid-page cards and buttons ONLY.
-                        NEVER on a bottom-anchored sheet or its root element:
-                        a transform makes iOS composite the sheet and clip
-                        the safe-area zone (the proven chin bug — see
-                        BreatherModal's header).
-   - .forge-press-warm  warmth only, no transform. Safe anywhere, including
-                        controls inside bottom sheets.
+   One hard rule, learned twice now: bottom-anchored sheets get NO press
+   visuals at all — not on the sheet, not on its children. transform AND
+   filter are both composited properties in WebKit; a `.forge-press-warm`
+   variant (filter-only) on sheet controls reintroduced the safe-area chin
+   in Safari-browser on sheet entry (2026-07-08), the same clipping the
+   drag transform caused on 07-07. Sheet controls keep haptics only.
 
+   .forge-press — scale + warmth for MID-PAGE cards and buttons only.
    Elements with an inline `transition` keep their own timing (inline wins);
    the pressed state itself still applies. */
-.forge-press,
-.forge-press-warm {
+.forge-press {
   transition: transform 340ms cubic-bezier(0.22, 1, 0.36, 1), filter 340ms ease;
 }
 .forge-press:active {
   transform: scale(0.985);
-  filter: brightness(1.07) saturate(1.04);
-  transition-duration: 60ms;
-}
-.forge-press-warm:active {
   filter: brightness(1.07) saturate(1.04);
   transition-duration: 60ms;
 }
@@ -330,14 +324,17 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: radial-gradient(130px circle at var(--gx, 50%) var(--gy, 50%),
-              rgba(242, 200, 158, 0.13), transparent 72%);
+  /* Radius spills well past the fingertip and alpha is set for "clearly
+     there once pointed out" — the first cut (130px @ 0.13) hid entirely
+     under the finger and read as nothing on device. */
+  background: radial-gradient(220px circle at var(--gx, 50%) var(--gy, 50%),
+              rgba(242, 200, 158, 0.22), transparent 72%);
   opacity: 0;
   transition: opacity 480ms ease;
 }
 .forge-grain-touch.forge-grain-on::after {
   opacity: 1;
-  transition-duration: 80ms;
+  transition-duration: 60ms;
 }
 
 /* ─── Desktop ambient backdrop (≥768px) ────────────────────────────────────

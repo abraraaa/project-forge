@@ -653,8 +653,10 @@ export default function SessionHost() {
           translateX centring); the rise animation sits on the inner span.
           Non-interactive, floats 96px above the safe area — never paints the
           viewport edge, so the sheet/chin constraint doesn't apply. */}
+      {/* bottom offset clears the thumb-pinned action zone (partner card +
+          Log button) now the session layout anchors actions at the fold. */}
       {setFlash && (
-        <div style={{ position: "fixed", left: 0, right: 0, margin: "0 auto", width: "calc(100% - 64px)", maxWidth: 366, bottom: "calc(env(safe-area-inset-bottom,0px) + 96px)", pointerEvents: "none", zIndex: 60, textAlign: "center", opacity: flashLeaving ? 0 : 1, transition: "opacity 600ms ease" }}>
+        <div style={{ position: "fixed", left: 0, right: 0, margin: "0 auto", width: "calc(100% - 64px)", maxWidth: 366, bottom: "calc(env(safe-area-inset-bottom,0px) + 190px)", pointerEvents: "none", zIndex: 60, textAlign: "center", opacity: flashLeaving ? 0 : 1, transition: "opacity 600ms ease" }}>
           <span style={{ display: "inline-block", animation: `fadeSlide 400ms ${T.ease}`, fontFamily: T.serif, fontStyle: "italic", fontSize: 16, fontWeight: 300, color: T.gold, lineHeight: 1.45, textShadow: "0 2px 12px rgba(10,9,8,0.8)" }}>{setFlash}</span>
         </div>
       )}

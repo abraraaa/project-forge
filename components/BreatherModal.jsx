@@ -48,7 +48,7 @@ export default function BreatherModal({ onConfirm, onCancel }) {
           {REASONS.map((r) => {
             const on = reason === r.id;
             return (
-              <button key={r.id} className="forge-press-warm" onClick={() => { haptic.toggle(); setReason(on ? null : r.id); }}
+              <button key={r.id} onClick={() => { haptic.toggle(); setReason(on ? null : r.id); }}
                 style={{ padding: "9px 14px", background: on ? T.coral : T.bg3, border: `1px solid ${on ? T.coral : T.bg4}`, borderRadius: T.r.pill, cursor: "pointer", fontSize: 13, fontWeight: 500, color: on ? T.bg0 : T.text2, fontFamily: T.sans, transition: `all 160ms ${T.ease}` }}>
                 {r.label}
               </button>
@@ -56,7 +56,7 @@ export default function BreatherModal({ onConfirm, onCancel }) {
           })}
         </div>
 
-        <button className="forge-press-warm" onClick={() => { haptic.commit(); onConfirm(reason); }}
+        <button onClick={() => { haptic.commit(); onConfirm(reason); }}
           style={{ width: "100%", padding: "15px 20px", background: T.coral, border: "none", borderRadius: T.r.lg, cursor: "pointer", fontFamily: T.serif, fontSize: 18, fontWeight: 400, color: T.bg0, boxShadow: `0 12px 40px ${T.strength.glow}` }}>
           Breathe easy
         </button>
