@@ -80,13 +80,17 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       if (checkedProfilesRef.current.has(profile)) return;
       checkedProfilesRef.current.add(profile);
       const has = await hasPasskey(profile);
-      // Only update if not already true (preserves local registration state)
+      // null = check failed — keep whatever we knew rather than storing a
+      // guess. Only update if not already true (preserves local
+      // registration state).
+      if (has === null) return;
       setProfileHasPasskey(prev => prev[profile] === true ? prev : { ...prev, [profile]: has });
     });
     // Also explicitly check current profile if not checked
     if (current && !checkedProfilesRef.current.has(current)) {
       checkedProfilesRef.current.add(current);
       hasPasskey(current).then(has => {
+        if (has === null) return;
         setProfileHasPasskey(prev => prev[current] === true ? prev : { ...prev, [current]: has });
       });
     }
@@ -613,7 +617,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       )}
 
       {/* Passkey setup card — only show if WebAuthn is supported and profile doesn't have one */}
-      {current && webAuthnSupported && !profileHasPasskey[current] && (
+      {/* Setup card only on a CONFIRMED "no passkey" — unknown (check
+          failed / still in flight) shows nothing. Nagging off a failed
+          check reads as "sync broke". */}
+      {current && webAuthnSupported && profileHasPasskey[current] === false && (
         <Fade d={280}>
           <div className="forge-glass" style={{marginTop:16,padding:"18px 20px",border:`1px solid ${T.sage}33`,borderRadius:T.r.lg}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
