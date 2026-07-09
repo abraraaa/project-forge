@@ -382,13 +382,18 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const weightCaption = WEIGHT_CAPTIONS[loadType] || null;
 
   return (
-    /* Three-zone column: identity (top, natural height) — numbers (centred
-       by the flex spacers) — actions (pinned to the thumb, bottom). Same
-       type scale as before; only the space is redistributed. 100dvh, not
-       100vh: in Safari-browser the URL bar makes 100vh overshoot and would
-       push the pinned actions below the fold. Short screens degrade
-       gracefully — the spacers collapse and it stacks like the old layout. */
-    <div style={{minHeight:"100dvh",maxWidth:430,margin:"0 auto",position:"relative",overflow:"clip",display:"flex",flexDirection:"column",paddingBottom:"calc(24px + env(safe-area-inset-bottom,0px))"}}>
+    /* Three-zone column: identity (top, natural height) — numbers (upper-
+       middle) — actions (pinned to the thumb, bottom). Same type scale as
+       before; only the space is redistributed.
+
+       Height maths: .forge-page (the routed-content wrapper) already pads
+       the top by env(safe-area-inset-top), so a 100dvh root here overflows
+       the viewport by exactly that inset — on device the Log button fell
+       below the fold and the screen scrolled (2026-07-09). The root must
+       subtract the inset it sits below. dvh, not vh, so Safari-browser's
+       URL bar is accounted for. Short screens degrade gracefully — the
+       spacers collapse and it stacks like the old layout. */
+    <div style={{minHeight:"calc(100dvh - env(safe-area-inset-top, 0px))",maxWidth:430,margin:"0 auto",position:"relative",overflow:"clip",display:"flex",flexDirection:"column",paddingBottom:"calc(24px + env(safe-area-inset-bottom,0px))"}}>
       <div style={{position:"absolute",top:-80,right:-80,width:340,height:320,background:`radial-gradient(circle,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       <div style={{height:1,background:T.bg3}}>
         <div style={{height:"100%",width:`${progress}%`,background:T.coral,transition:`width 600ms ${T.ease}`}}/>
@@ -447,7 +452,10 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           </Fade>
         )}
       </div>
-      <div style={{flex:1,minHeight:16}}/>
+      {/* Capped spacer — the numbers stay in the upper-middle rather than
+          drifting to dead-centre on tall screens; the uncapped spacer below
+          absorbs the rest and does the pinning. */}
+      <div style={{flex:1,minHeight:16,maxHeight:96}}/>
       <div style={{padding:"0 20px"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase"}}>Set {setNum} of {block.sets}</div>
