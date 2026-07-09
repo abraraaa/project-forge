@@ -467,8 +467,10 @@ export default function ForgeApp(){
     });
     hasPasskey(activeProfile).then(has => {
       setPnHasPasskey(has);
-      // If they already have a passkey, the nudge is moot — hide forever.
-      if (has) setPnStage("hidden");
+      // true → they have one, nudge is moot. null → the check failed;
+      // don't nag off an unknown (hidden this session, re-checked next).
+      // Only a confirmed false lets the nudge run its staging.
+      if (has !== false) setPnStage("hidden");
     });
 
     return () => {

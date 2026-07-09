@@ -42,6 +42,61 @@ safe-area layout?* — genuinely something I don't know how to do well yet),
 and parked it together. Instead I burned credits reaching a revert. The
 feature is parkable (revisit ~iOS 27); the lesson is not.
 
+## Destructive operations — the wipe protocol
+
+**TELL THE BOSS BEFORE ISSUING WIPE COMMANDS. Every time. No exceptions.**
+Before writing any code that deletes, overwrites, or migrates stored user
+data — blob deletes, localStorage wipes, schema rewrites, "cleanups" — say,
+in plain words: *"this will issue delete commands against X."* Deletion
+never rides silently inside an unrelated change, never ships as a helpful
+side quest, never gets summarised away. If the diff contains `del(`,
+`removeItem`, `DROP`, or their moral equivalents touching user data, the
+conversation names it before the code exists.
+
+Then, in order, none skippable:
+
+1. **Dry-run before teeth.** The first version of anything destructive
+   reports what it WOULD delete and deletes nothing. The boss reads the
+   actual kill list from the real store before the destructive path gains
+   a separate, explicit enable switch.
+2. **Census the blast area.** Enumerate what actually lives in the target
+   namespace TODAY — list the real store, don't recite what the code
+   "should" have written. Prove the operation can't touch what it doesn't
+   own (prefix-scoped, trailing slash, the lot).
+3. **Enumerate garbage, never goodness.** Deletion matches known-junk
+   patterns explicitly. "Delete everything except what I recognise" is
+   forbidden — the store WILL grow past any snapshot of what's recognised.
+4. **No standing delete authority.** Design so sweepers are never needed:
+   deterministic paths, overwrite-in-place, delete-on-use. A scheduled job
+   with delete permissions is a wipe waiting for a config change to arm it.
+   (The design goal is to build without ever needing a sweeper — if one
+   seems needed, that's a design smell to raise, not a cron to write.)
+
+## Real example (2026-07-09) — why the wipe protocol exists
+
+The cleanup cron deleted every blob under `forge/profiles/` that wasn't on
+its list of known-good filenames. The list was written before passkeys
+existed; `credentials.json` was never added; the cron sat unarmed for weeks
+behind a missing CRON_SECRET, then an unrelated ops fix armed it and its
+first-ever run deleted every user's passkey credentials AND the only copies
+of unmigrated profiles (37 blobs, one run, zero errors). The user had asked
+repeatedly about protecting the blob; every answer addressed accumulation,
+never the janitor itself. No dry-run existed. Deleted blobs are
+unrecoverable. Every rule above would have stopped it — the sweeper is now
+deleted rather than guarded, per the design goal.
+
+## Third fix in the same territory → down tools and name the system.
+
+When the same class of defect draws its third patch — third layout fight,
+third sync seam, third chin — the next deliverable is NOT a fourth patch.
+It's a short architecture note: what do these fixes have in common, what
+contract is missing, what change would make the whole class stop occurring.
+Local fixes feel like velocity; a recurring class is the system asking for
+design. House preference, long established: do the painful essential work
+early, not when it's harder. (Learned at ~PR 200, most of them appearance
+fixes, when "every screen negotiates raw with the viewport" was finally
+named as the common cause instead of shipping layout patch #31.)
+
 ## House mechanics (already in force — don't relearn the hard way)
 
 - **Rebase gate on every push:** `git fetch origin main && git merge-base
