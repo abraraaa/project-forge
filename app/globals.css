@@ -332,7 +332,9 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   opacity: 0;
   transition: opacity 480ms ease;
 }
-.forge-grain-touch.forge-grain-on::after {
+/* Attribute, not a class — React re-renders rewrite className and were
+   wiping the print mid-tap; foreign attributes survive React's diffing. */
+.forge-grain-touch[data-grain-on]::after {
   opacity: 1;
   transition-duration: 60ms;
 }
