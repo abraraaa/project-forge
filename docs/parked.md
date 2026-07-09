@@ -11,6 +11,37 @@ specific next step that would unblock it.
 
 ## Active parking list
 
+### Shell-owns-the-viewport rearchitecture — NEXT UP, gated on chin evidence
+
+**Status:** Agreed 2026-07-09. Blocked only on the /diag-chin device pass.
+
+**Problem (the named system):** every screen negotiates raw with the
+viewport — each carries its own guesses about insets, heights, and chrome.
+Dozens of appearance PRs (chin bestiary, 100vh/dvh fights, safe-area
+calcs) are symptoms of the missing contract, not independent platform
+quirks.
+
+**Design:** `.forge-page` becomes the single owner of chrome accounting —
+a flex column sized to the viewport with its safe-area padding inside the
+box. Screens that want "fill the viewport exactly" (session) say `flex: 1`;
+scroll-shaped screens flow as before. No child ever touches
+env(safe-area-inset-*) for height maths again.
+
+**Order of work (none skippable):**
+1. User runs `/diag-chin` in Safari browser — which of the four sheet
+   recipes band tells us whether iOS changed its chrome sampling. The
+   answer feeds the shell design; don't design blind to it.
+2. Baseline screenshot matrix BEFORE any change: every route ×
+   {browser, PWA} × key states.
+3. The shell change ships alone in its own PR.
+4. Same matrix after; visual diff. Risk register = the globals.css scar
+   comments (chrome sampling, natural-root-scroller requirement, grain
+   stacking/isolation, negative-z paint) — each re-verified explicitly.
+5. Session screen then uses `flex: 1` (its calc(100dvh − inset) workaround
+   was dropped from the queue unmerged, by design).
+6. THEN the intimacy pass rebuilds on the new foundation (grain print
+   below, press-state refinements).
+
 ### Possible rebrand — "Forge" is diluted in fitness
 
 **Status:** Parked 2026-07-08 (user's call). Revisit when the current
@@ -44,10 +75,27 @@ lapse date so the 301 window starts while the old domain still serves.
 **Status:** Batches 1+2 SHIPPED 2026-07-08 (`.forge-press` /
 `.forge-press-warm` in globals.css; `toggle` + `settle` haptics in
 lib/a11y.js; wired across session, home, profile, breather, BW modal,
-Lab lift chips). Batch 3 (grain under finger) PROTOTYPING as of
-2026-07-08: live on Home's three big surfaces via useGrainTouch +
-.forge-grain-touch — no blend modes/masking/transforms, opacity-only.
-Awaiting device verdict; roll back = remove the hook wiring on Home.
+Lab lift chips). Batch 3 (grain under finger) — prototype shipped
+2026-07-08 is IMPERCEPTIBLE by mechanism; the fix is written, verified
+in Chromium (2026-07-09), and DEFERRED to the intimacy pass on the new
+shell (see rearchitecture entry above). Rebuild knowledge, so nothing
+is re-derived:
+- **Why the shipped version shows nothing:** every wired Home card
+  re-renders Home on tap (modal opens / route changes) and React
+  rewrites className, wiping the imperatively-added `forge-grain-on`
+  class ~80ms in. Also a real tap is ~70ms, so clearing on pointerup
+  killed the bloom before full warmth.
+- **The fix, both halves:** (1) mark the print with a DATA ATTRIBUTE
+  (`data-grain-on`), not a class — React's diffing never touches
+  attributes it didn't render (the --gx/--gy custom props already
+  survive for the same reason). CSS:
+  `.forge-grain-touch[data-grain-on]::after`. (2) Commit the print on
+  touch: release schedules removal for 420ms AFTER pointerdown, so a
+  quick tap buys the full 60ms bloom + 480ms exhale (~0.9s visible);
+  a long hold releases naturally on lift.
+- Values that read well: 220px radius, rgba(242,200,158,0.22).
+- Verified by event trace: set at pointerdown, timer removal at +420ms
+  from useGrainTouch, mid-press screenshot shows the bloom clearly.
 
 **Brief:** surfaces should feel warm and inviting at the moment of touch —
 press states that give, contact that responds. Not glass slabs, not fake
