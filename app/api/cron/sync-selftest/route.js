@@ -12,8 +12,9 @@
 // invisible to the unit suite and only a live PUT-then-GET catches it.
 // Writes under a unique throwaway profile and deletes it in `finally`.
 //
-// Auth: Bearer CRON_SECRET (Vercel-injected for cron-triggered requests) —
-// same guard as the cleanup cron. Visibility: Vercel cron logs + monitoring;
+// Auth: Bearer CRON_SECRET — a user-configured env var that Vercel attaches
+// to cron-triggered requests (it is NOT auto-generated; the job fails loud
+// until the operator sets it). Visibility: Vercel cron logs + monitoring;
 // a failing run returns 500 with the failed check names and logs them.
 //
 // Triggered by Vercel Cron (see vercel.json), daily. No GitHub involvement.
