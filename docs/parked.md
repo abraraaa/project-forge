@@ -26,6 +26,11 @@ a flex column sized to the viewport with its safe-area padding inside the
 box. Screens that want "fill the viewport exactly" (session) say `flex: 1`;
 scroll-shaped screens flow as before. No child ever touches
 env(safe-area-inset-*) for height maths again.
+Safari 27 note (2026-07-10, user base is on the beta): `height: stretch`
+ships in 27 — "fill available space accounting for margins" — and may
+replace the flex plumbing for the fill-viewport case entirely, behind
+@supports. Evaluate during design; WebKit explicitly recommends it over
+the -webkit-fill-available class of hack.
 
 **Order of work (none skippable):**
 1. User runs `/diag-chin` in Safari browser — which of the four sheet
@@ -41,6 +46,34 @@ env(safe-area-inset-*) for height maths again.
    was dropped from the queue unmerged, by design).
 6. THEN the intimacy pass rebuilds on the new foundation (grain print
    below, press-state refinements).
+
+### Status bar goes black while modals are open (browser)
+
+**Status:** Parked 2026-07-10 as a DESIGN decision, not a bug. Safari
+extends the page's top-edge pixels into the status zone; with a sheet
+open those pixels are the scrim dim (rgba(10,9,8,0.82) over near-black),
+so the zone renders effectively black. That's the dim faithfully
+extended — native sheets behave the same — but the user flags it as odd
+combined with the darkened page ("letterboxing"). Any fix is a choice
+about scrim tone/strength (e.g. lighter dim, or a dim that fades near
+the top edge), to be made with eyes on device, not a sampler hunt. The
+bottom-zone counterpart is SOLVED by the sheet-ground gradient
+(.forge-sheet-ground, globals.css) — sheets fade into the #1D1A19
+chrome tone so every sampler mode reads as one composition.
+
+### Safari 27 opportunistic follow-ups (user base is on the beta)
+
+- **ScrollDrum feel:** 27 fixes scroll-snap overshoot-to-farther-point
+  and re-snap-after-layout. Any drum quirk reports: retest on current
+  beta before tuning our code.
+- **SW static routing:** declare /_next/static/* as service-worker
+  bypass (addRoutes) — the cache-first logic for hashed assets becomes
+  browser-native. Small win, do alongside the next SW change.
+- **Scroll anchoring:** ships in 27 and may absorb the parked +55px
+  restoration drift (Home lazy-hydration inserts content above the
+  viewport). If adopting deliberately, add overflow-anchor: none
+  anywhere we manage scroll programmatically (ScrollDrum) so the
+  browser and our code don't fight.
 
 ### Possible rebrand — "Forge" is diluted in fitness
 
@@ -496,7 +529,14 @@ before.
 
 ### Grain "pops in" on route switch to /profile
 
-**Status:** REOPENED 2026-07-06 — device says the pop-in is unchanged, so
+**Status:** REOPENED 2026-07-06 — RETEST FIRST (2026-07-10): Safari 27
+beta fixes View Transition snapshots being stored in sRGB (bug
+167634138) — our grain is a screen-blend on a wide-gamut display, so an
+sRGB snapshot would shift tone during every transition and pop back on
+completion, matching this symptom exactly and explaining why Chromium
+never reproduces it. The user base is on the 27 beta already: check the
+pop-in on device before any further investigation — likely closes free.
+Prior status: device says the pop-in is unchanged, so
 the two shipped changes below were hygiene, not the cure. Next session:
 reproduce with Safari devtools on-device (Web Inspector timeline over the
 transition) rather than headless Chromium; the remaining suspects are
