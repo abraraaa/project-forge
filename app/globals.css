@@ -280,6 +280,35 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   to   { opacity: 1; }
 }
 
+/* ─── Sheet grounding — chin immunity ──────────────────────────────────────
+   Every bottom sheet fades its lowest ~48px (+ safe-area) into the
+   chrome-sampling tone (#1D1A19 — the same tone html/body carry for
+   Safari's chrome extension). Whatever the toolbar-zone sampler does —
+   extend the sheet's edge pixels (static sheets), fall back to body tone
+   (its stated design, WebKit 301756), or paint an opaque black slab
+   (observed on transform-entering sheets, Safari 26/27 beta, 2026-07-10) —
+   the junction reads as one composition: a sheet grounded in the dark.
+   The sampler's behaviour becomes irrelevant rather than negotiated, and
+   slideUp survives on every sheet in every display mode. Overlay pseudo so
+   inline sheet backgrounds are untouched; the zone is content-free bottom
+   padding on every sheet; pointer-events pass through. */
+.forge-sheet-ground { position: relative; }
+.forge-sheet-ground::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: calc(48px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to bottom, rgba(29, 26, 25, 0) 0%, #1D1A19 92%);
+  pointer-events: none;
+}
+
+/* Cross-document view transitions — MPA navigations (/library page-to-page,
+   full page loads) get a crossfade instead of a hard cut. Two lines, pure
+   progressive enhancement (webkit.org/blog/16967); same-document App Router
+   transitions are driven separately by the ViewTransition boundary and are
+   unaffected. */
+@view-transition { navigation: auto; }
+
 /* Toast slide-in from top — used by retro completion + passkey success */
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(-12px); }
