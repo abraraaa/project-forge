@@ -9,6 +9,9 @@ specific next step that would unblock it.
 
 ---
 
+> **Execution order lives in `docs/roadmap.md`.** This file is the detailed
+> backlog (what/why per item); the roadmap is the phased sequence (when).
+
 ## Active parking list
 
 ### Shell-owns-the-viewport rearchitecture — NEXT UP, gated on chin evidence
@@ -178,8 +181,9 @@ ideal rebuild" — treat it as that session.
 
 ### Iconography + Profile cards + colour doctrine — SPEC AGREED 2026-07-08
 
-**Status:** inventoried and agreed with the user; build next session in
-two phases. Everything below is decided — do not re-litigate, just build.
+**Status:** SHIPPED 2026-07-08 in the Interface Sweep (PR #195, commits
+ae8050f phase 1 + 139f0a4 phase 2). Kept here as the doctrine reference;
+the build is done. Original spec below.
 
 **KEY BUG (from the user's device screenshot):** `↗` (U+2197) renders as
 a BLUE EMOJI on iOS (dual-presentation character) while `→` renders as
@@ -221,7 +225,9 @@ decoration hunting for meaning.
 
 ### Profile page — card unification
 
-**Status:** Parked 2026-07-08 (user report).
+**Status:** SHIPPED 2026-07-08 in the Interface Sweep (PR #195). Original
+report below, kept for the doctrine.
+Prior: Parked 2026-07-08 (user report).
 
 **Report:** the Profile cards are inconsistent — some have blank
 backgrounds, some don't; drill-ins vary in UI and colour treatment. Rule
