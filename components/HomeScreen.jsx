@@ -12,7 +12,7 @@
 import { useState, useEffect, useRef } from "react";
 import { T } from "@/lib/tokens";
 import { Fade, Card, Tag } from "@/components/ui";
-import { useModalA11y, useGrainTouch } from "@/lib/a11y";
+import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, SESSIONS, applyFocusToSession, applyRotationToSession } from "@/lib/programme";
 import { deloadCardCopy } from "@/lib/progression";
 import { formatTonnage } from "@/lib/analytics";
@@ -32,10 +32,11 @@ function formatAgo(ms) {
 
 export default
 function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge}){
-  // Grain-under-finger prototype (tactility batch 3) — Home only until
-  // device-verified. One hook instance; handlers read e.currentTarget so
-  // the same spread works on every card.
-  const grain = useGrainTouch();
+  // Grain-under-finger (tactility batch 3) reverted off Home 2026-07-10:
+  // the shipped prototype was imperceptible by mechanism (React re-render
+  // clobbered the class mid-tap). The WORKING fix (data-attribute +
+  // commit-on-tap) is recorded in parked.md and returns in the Phase 3
+  // intimacy pass, on the new shell. useGrainTouch stays exported for it.
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -382,7 +383,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Session complete. See you next time.</span>
               </div>
             ) : isViewingToday ? (
-              <button {...grain} className={`${grain.className} forge-press`} onClick={onBegin} style={{
+              <button className="forge-press" onClick={onBegin} style={{
                 margin:"16px 24px 0",width:"calc(100% - 48px)",
                 padding:"18px 24px",background:accent.main,border:"none",
                 borderRadius:T.r.lg,cursor:"pointer",
@@ -527,7 +528,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       {/* BW re-prompt card — surfaces when bodyweight is stale (>14 days or never set) */}
       {showBwCard && (
         <Fade d={180}>
-          <div {...grain} className={`${grain.className} forge-press`} onClick={onOpenBwEdit}
+          <div className="forge-press" onClick={onOpenBwEdit}
             style={{margin:"20px 24px 0",padding:"18px 20px",background:`${T.sage}0E`,border:`1px solid ${T.sage}40`,borderRadius:T.r.lg,cursor:"pointer"}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1}}>
@@ -791,7 +792,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 
       {/* Performance Lab entry — always visible, becomes active once data exists */}
       <Fade d={260}>
-        <div {...grain} className={`${grain.className} forge-press`} onClick={onPerformance}
+        <div className="forge-press" onClick={onPerformance}
           style={{margin:"20px 24px 0",padding:"18px 20px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:`all 200ms ${T.ease}`}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
@@ -855,7 +856,7 @@ function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFo
   return (
     <div onKeyDown={onKeyDown} onClick={onCancel} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
-        style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        className="forge-sheet-ground" style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:10,fontWeight:500,color:T.gold,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
           {weeksOnBlock} weeks on this block
         </div>

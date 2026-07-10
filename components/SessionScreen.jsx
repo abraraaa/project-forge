@@ -61,7 +61,7 @@ export function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJum
   return (
     <div onKeyDown={onKeyDown} onClick={onCancel} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
-        style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        className="forge-sheet-ground" style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
           {session.name}
         </div>
@@ -164,7 +164,7 @@ function RecentHistorySheet({ exerciseName, recent, onCancel }) {
     <div onKeyDown={onKeyDown} onClick={onCancel}
       className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
-        style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        className="forge-sheet-ground" style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"28px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
           Recent history
         </div>
@@ -382,13 +382,20 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const weightCaption = WEIGHT_CAPTIONS[loadType] || null;
 
   return (
-    /* Three-zone column: identity (top, natural height) — numbers (centred
-       by the flex spacers) — actions (pinned to the thumb, bottom). Same
-       type scale as before; only the space is redistributed. 100dvh, not
-       100vh: in Safari-browser the URL bar makes 100vh overshoot and would
-       push the pinned actions below the fold. Short screens degrade
-       gracefully — the spacers collapse and it stacks like the old layout. */
-    <div style={{minHeight:"100dvh",maxWidth:430,margin:"0 auto",position:"relative",overflow:"clip",display:"flex",flexDirection:"column",paddingBottom:"calc(24px + env(safe-area-inset-bottom,0px))"}}>
+    /* Three-zone column: identity (top, natural height) — numbers (upper-
+       middle) — actions (pinned to the thumb, bottom). Same type scale as
+       before; only the space is redistributed.
+
+       Height maths: .forge-page (the routed-content wrapper) already pads
+       the top by env(safe-area-inset-top) in standalone, so a bare 100dvh
+       root here overflows the viewport by exactly that inset — on device
+       the Log button fell below the fold and the screen scrolled. The root
+       subtracts the inset it sits below. dvh not vh so Safari-browser's URL
+       bar is accounted for. INTERIM: superseded by height:stretch once the
+       shell owns viewport accounting (see parked.md shell rearchitecture).
+       Short screens (split-screen, flip covers) degrade gracefully — the
+       spacers collapse and it stacks like the old layout. */
+    <div style={{minHeight:"calc(100dvh - env(safe-area-inset-top, 0px))",maxWidth:430,margin:"0 auto",position:"relative",overflow:"clip",display:"flex",flexDirection:"column",paddingBottom:"calc(24px + env(safe-area-inset-bottom,0px))"}}>
       <div style={{position:"absolute",top:-80,right:-80,width:340,height:320,background:`radial-gradient(circle,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       <div style={{height:1,background:T.bg3}}>
         <div style={{height:"100%",width:`${progress}%`,background:T.coral,transition:`width 600ms ${T.ease}`}}/>
@@ -447,7 +454,10 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           </Fade>
         )}
       </div>
-      <div style={{flex:1,minHeight:16}}/>
+      {/* Capped spacer — numbers hold the upper-middle rather than drifting
+          to dead-centre on tall screens; the uncapped spacer below absorbs
+          the rest and does the thumb-pinning. */}
+      <div style={{flex:1,minHeight:16,maxHeight:96}}/>
       <div style={{padding:"0 20px"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase"}}>Set {setNum} of {block.sets}</div>
@@ -567,7 +577,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
       {swapEx&&<SwapOverlay activeEx={activeEx} swapKey={swapKey} onSwap={onSwap} onClose={()=>setSwapEx(null)}/>}
       {showVid&&vidEx&&(
         <div onClick={()=>setShowVid(false)} className="forge-scrim forge-scrim-video" style={{overscrollBehavior:"contain",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:24,width:"100%",maxWidth:430,borderTop:`1px solid ${T.coral}33`,animation:`slideUp 280ms ${T.ease}`}}>
+          <div onClick={e=>e.stopPropagation()} className="forge-sheet-ground" style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:24,width:"100%",maxWidth:430,borderTop:`1px solid ${T.coral}33`,animation:`slideUp 280ms ${T.ease}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
               <div>
                 <div style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>{vidEx.name}</div>
@@ -647,7 +657,7 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
   const titleId = "swap-overlay-title";
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px 36px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground" style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px 36px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
           <div>
             <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Swap exercise</div>
@@ -712,7 +722,7 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
   const weightStep = weightStepForLoadType(lt);
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground" style={{background:T.bg2,borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,padding:"24px 24px 32px",width:"100%",maxWidth:430,borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
           <div><div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>{target.exName}</div>
           <div style={{fontSize:12,color:T.text3,marginTop:4}}>Scroll to adjust</div></div>
