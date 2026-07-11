@@ -61,11 +61,11 @@ Scroll drift fixed ("works beautifully"), sync unaffected, cue + drum good.
 ## Phase 2 — Shell-owns-the-viewport rearchitecture (the keystone) · DESIGN AGREED
 
 DESIGN AGREED in review 2026-07-11 (chat, not a doc — house rule: the repo
-declares what the code is; rationale ships as scar comments beside code).
+declares what the code is; rationale ships as warning comments beside code).
 The agreement: the shell (.forge-page) becomes the only owner of viewport
 height, safe-area, and display mode; every screen is either scroll
 (default, unchanged) or fill (session). Height unit resolved EMPIRICALLY
-on device (stretch vs the recorded PWA cold-start dvh scar). Next:
+on device (stretch vs the recorded PWA cold-start dvh bug). Next:
 baseline screenshot matrix, then the shell PR alone.
 Unblocked (chin evidence is in). Absorbs three things at once so they're not
 patched separately: the interim session `calc`, `height: stretch`, and Phase-1
@@ -150,7 +150,7 @@ the -webkit-fill-available class of hack.
 2. Baseline screenshot matrix BEFORE any change: every route ×
    {browser, PWA} × key states.
 3. The shell change ships alone in its own PR.
-4. Same matrix after; visual diff. Risk register = the globals.css scar
+4. Same matrix after; visual diff. Risk register = the globals.css warning
    comments (chrome sampling, natural-root-scroller requirement, grain
    stacking/isolation, negative-z paint) — each re-verified explicitly.
 5. Session screen then uses `flex: 1` (its calc(100dvh − inset) workaround
