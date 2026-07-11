@@ -14,7 +14,7 @@ specific next step that would unblock it.
 Crystallised 2026-07-10 after a full census; folded into this file 2026-07-11
 (one backlog file, per review). Update the phase a moved item lives in.
 
-## Phase 0 — Heal main (live regressions + honest backlog) · IN PROGRESS
+## Phase 0 — Heal main · DONE 2026-07-11 (PRs #204–#205 merged, device-verified)
 
 Bugs shipped by recent work, fixed here; plus making the backlog trustworthy.
 
@@ -41,10 +41,9 @@ Bugs shipped by recent work, fixed here; plus making the backlog trustworthy.
 **User-owned ops (not code):** merge #204 · re-add `CRON_SECRET` · re-register
 passkey · status-bar dim taste call · device passes (chin, grain pop-in retest).
 
-## Phase 1 — Self-contained WebKit-27 performance wins (small, parallel-safe)
+## Phase 1 — WebKit-27 performance wins · DONE 2026-07-11 (PR #206, device-verified)
 
-Training data predates WebKit 27; each item implemented to spec behind
-`@supports` and **verified on real Safari by device pass**, not asserted.
+Scroll drift fixed ("works beautifully"), sync unaffected, cue + drum good.
 
 - **Scroll modernisation.** Adopt scroll anchoring (`overflow-anchor`, `none` on
   ScrollDrum) → closes the parked +55px restoration drift. Convert the Lab
@@ -57,10 +56,12 @@ Training data predates WebKit 27; each item implemented to spec behind
   break after each deploy. That bypass needs precache-manifest work first
   (revisit with the next SW change). `?nosw=1` hatch + SW_VERSION bump kept.
 - **Grain pop-in retest** (device) — Safari 27's sRGB VT-snapshot fix may have
-  closed it for free.
+  closed it for free. (Still owed — fold into the Phase 2 device pass.)
 
-## Phase 2 — Shell-owns-the-viewport rearchitecture (the keystone)
+## Phase 2 — Shell-owns-the-viewport rearchitecture (the keystone) · DESIGN IN REVIEW
 
+Design note: **docs/shell-viewport.md** (2026-07-11) — awaiting approval;
+main open question is the height-unit ladder vs the PWA cold-start dvh scar.
 Unblocked (chin evidence is in). Absorbs three things at once so they're not
 patched separately: the interim session `calc`, `height: stretch`, and Phase-1
 scroll anchoring. **Design note first → review → build → device screenshot
@@ -156,11 +157,9 @@ and blends into both, as the top edge always did.
 - **SW static routing:** declare /_next/static/* as service-worker
   bypass (addRoutes) — the cache-first logic for hashed assets becomes
   browser-native. Small win, do alongside the next SW change.
-- **Scroll anchoring:** ships in 27 and may absorb the parked +55px
-  restoration drift (Home lazy-hydration inserts content above the
-  viewport). If adopting deliberately, add overflow-anchor: none
-  anywhere we manage scroll programmatically (ScrollDrum) so the
-  browser and our code don't fight.
+- **Scroll anchoring — DONE, device-verified 2026-07-11 (PR #206):**
+  the +55px restoration drift is FIXED ("works beautifully") by leaving
+  anchoring on app-wide with overflow-anchor: none on ScrollDrum only.
 
 ### Possible rebrand — "Forge" is diluted in fitness
 
