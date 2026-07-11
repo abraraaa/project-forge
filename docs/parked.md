@@ -58,10 +58,15 @@ Scroll drift fixed ("works beautifully"), sync unaffected, cue + drum good.
 - **Grain pop-in retest** (device) — Safari 27's sRGB VT-snapshot fix may have
   closed it for free. (Still owed — fold into the Phase 2 device pass.)
 
-## Phase 2 — Shell-owns-the-viewport rearchitecture (the keystone) · DESIGN IN REVIEW
+## Phase 2 — Shell-owns-the-viewport rearchitecture (the keystone) · DESIGN AGREED
 
-Design note: **docs/shell-viewport.md** (2026-07-11) — awaiting approval;
-main open question is the height-unit ladder vs the PWA cold-start dvh scar.
+DESIGN AGREED in review 2026-07-11 (chat, not a doc — house rule: the repo
+declares what the code is; rationale ships as scar comments beside code).
+The agreement: the shell (.forge-page) becomes the only owner of viewport
+height, safe-area, and display mode; every screen is either scroll
+(default, unchanged) or fill (session). Height unit resolved EMPIRICALLY
+on device (stretch vs the recorded PWA cold-start dvh scar). Next:
+baseline screenshot matrix, then the shell PR alone.
 Unblocked (chin evidence is in). Absorbs three things at once so they're not
 patched separately: the interim session `calc`, `height: stretch`, and Phase-1
 scroll anchoring. **Design note first → review → build → device screenshot
