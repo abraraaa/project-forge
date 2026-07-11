@@ -18,7 +18,7 @@
 // Bump SW_VERSION on every meaningful change so the activate handler cleans
 // up older caches. Old caches are deleted by prefix match on every activate.
 
-const SW_VERSION  = "0.4.0-day-repair-cache-bust";
+const SW_VERSION  = "0.5.0-static-routing";
 const STATIC_CACHE = `forge-static-${SW_VERSION}`;
 const HTML_CACHE   = `forge-html-${SW_VERSION}`;
 
@@ -35,6 +35,38 @@ const PRECACHE_URLS = [
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
+
+  // ── Static routing (Safari 27+ / spec'd addRoutes) ────────────────────
+  // Routes the browser applies WITHOUT waking this worker. Scope is
+  // deliberately limited to rules that are semantics-identical to the
+  // fetch router below:
+  //   - /api/*  → network. The router already early-returns for /api (auth
+  //     + sync must always see fresh server state), so today the worker
+  //     wakes only to decline. This removes the wake from every sync call.
+  //   - The tiny PRECACHE set → cache (miss falls back to network per
+  //     spec). These are install-time cached, so hits are guaranteed in
+  //     steady state; on the rare miss the only delta vs cacheFirst is no
+  //     re-population, acceptable for four stable files.
+  // NOT routed: /_next/static/*. A "cache" route never runs the fetch
+  // handler, so runtime caching would never populate — offline statics
+  // would silently break after each deploy. That bypass needs precache-
+  // manifest work first (parked). Feature-guarded: browsers without
+  // addRoutes just use the fetch router for everything, as today.
+  if ("addRoutes" in event) {
+    try {
+      event.addRoutes([
+        { condition: { urlPattern: { pathname: "/api/*" } }, source: "network" },
+        { condition: { urlPattern: { pathname: "/manifest.json" } }, source: "cache" },
+        { condition: { urlPattern: { pathname: "/forge-glass-192.png" } }, source: "cache" },
+        { condition: { urlPattern: { pathname: "/forge-glass-512.png" } }, source: "cache" },
+        { condition: { urlPattern: { pathname: "/apple-touch-icon.png" } }, source: "cache" },
+      ]).catch((err) => console.warn("[sw] addRoutes rejected:", err));
+    } catch (err) {
+      // Malformed-rule errors must never block install.
+      console.warn("[sw] addRoutes failed:", err);
+    }
+  }
+
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then((cache) => cache.addAll(PRECACHE_URLS))

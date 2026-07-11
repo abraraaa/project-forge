@@ -326,6 +326,26 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
    unaffected. */
 @view-transition { navigation: auto; }
 
+/* ─── Lab scroll-cue fade — scroll-driven, compositor-side ─────────────────
+   Replaces the per-frame JS window scroll listener ScrollCue carried.
+   Fades the chevron out across the first 120px of root scroll. Shorthand
+   first, timeline after (the shorthand resets animation-timeline — same
+   scar as the glow drift above). scroll(root) explicitly: the cue is
+   position:fixed, so the nearest scroller lookup must not bind elsewhere.
+   Outside @supports the cue simply stays visible at rest — the affordance
+   never disappears, only the fade is progressive. */
+@supports (animation-timeline: scroll()) {
+  .lab-scroll-cue-wrap {
+    animation: labCueFade linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 120px;
+  }
+}
+@keyframes labCueFade {
+  from { opacity: 0.72; }
+  to   { opacity: 0; }
+}
+
 /* Toast slide-in from top — used by retro completion + passkey success */
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(-12px); }
