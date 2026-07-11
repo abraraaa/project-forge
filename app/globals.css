@@ -280,26 +280,43 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   to   { opacity: 1; }
 }
 
-/* ─── Sheet grounding — chin immunity ──────────────────────────────────────
-   Every bottom sheet fades its lowest ~48px (+ safe-area) into the
-   chrome-sampling tone (#1D1A19 — the same tone html/body carry for
-   Safari's chrome extension). Whatever the toolbar-zone sampler does —
-   extend the sheet's edge pixels (static sheets), fall back to body tone
-   (its stated design, WebKit 301756), or paint an opaque black slab
-   (observed on transform-entering sheets, Safari 26/27 beta, 2026-07-10) —
-   the junction reads as one composition: a sheet grounded in the dark.
-   The sampler's behaviour becomes irrelevant rather than negotiated, and
-   slideUp survives on every sheet in every display mode. Overlay pseudo so
-   inline sheet backgrounds are untouched; the zone is content-free bottom
-   padding on every sheet; pointer-events pass through. */
-.forge-sheet-ground { position: relative; }
-.forge-sheet-ground::after {
-  content: "";
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: calc(48px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(to bottom, rgba(29, 26, 25, 0) 0%, #1D1A19 92%);
-  pointer-events: none;
+/* ─── Sheet grammar per edge-ownership (the chin resolution) ───────────────
+   iOS only blends chrome zones with surfaces the page permanently owns
+   (body tone, the scrim dim) — it punishes a transient, animated sheet
+   parked flush against the bottom edge (opaque black slab on transform
+   entrances; five device passes, Safari 26/27 beta, 2026-07-08→10). Our
+   own top edge proved the rule: it blends perfectly because the SCRIM
+   borders it, not the sheet.
+
+   So the sheet grammar follows who owns the edge:
+   - BROWSER (default below): sheets are DETACHED floating cards — rounded
+     on all four corners, a small margin above the toolbar zone, sitting on
+     the dim. The scrim borders both chrome zones and extends into both,
+     exactly like the top edge already does. No sampler negotiation, and
+     the slideUp rise is safe again (a transform on a non-edge-bordering
+     element is outside the slab trigger).
+   - STANDALONE PWA (media query below): flush, full-bleed, byte-identical
+     to the original design — no toolbar exists; we own every pixel.
+
+   The gradient "grounding" experiment is deleted — it couldn't recolour
+   Safari's slab and visually broke the buttons sitting in its fade zone.
+
+   !important debt, deliberate and scoped: sheet roots carry inline
+   borderRadius/maxWidth (17 call sites), and this display-mode fork must
+   win over them from one place. The shell rearchitecture (parked.md)
+   owns the proper cleanup — move sheet chrome fully into this class. */
+.forge-sheet-ground {
+  position: relative;
+  border-radius: 20px !important;
+  max-width: min(430px, calc(100% - 24px)) !important;
+  margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+}
+@media (display-mode: standalone) {
+  .forge-sheet-ground {
+    border-radius: 20px 20px 0 0 !important;
+    max-width: 430px !important;
+    margin-bottom: 0;
+  }
 }
 
 /* Cross-document view transitions — MPA navigations (/library page-to-page,
