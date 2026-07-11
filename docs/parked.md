@@ -76,9 +76,27 @@ matrix.** Acceptance criteria include non-standard-shape robustness:
 
 ## Phase 3 — Intimacy pass (rides on the new shell)
 
+- **Opening act: the De-Claude audit.** Distinctiveness sweep — every
+  user-facing string against a written tells-list (em-dash density, hype
+  verbs, exclamations, title-case, "seamlessly/effortlessly", reassurance
+  verbosity), every surface against the default-ness test ("would this
+  look at home in a template app?"). Output: findings doc for user veto →
+  one copy/polish PR. Durable half: a README design principle beside the
+  voice register — "if a choice would survive unnoticed in a template
+  app, it needs a stated reason to exist here." The user's eye is the
+  judge; Claude enumerates (its defaults are the contamination source).
 - Grain-under-finger (batch 3) re-applied — fix already written + Chromium-
   verified (data-attribute + commit-on-tap; 220px / 0.22 / 420ms hold).
 - Press-state refinements.
+- **Stationary-field experiment (fixed-background feel).** The pre-July-3
+  GrainOverlay was position:fixed — panes flowed over a stationary field —
+  and was deliberately made scroll-with-content because a fixed
+  edge-bordering layer triggers Safari's chrome slabs (WebKit 301756).
+  Modern escape hatch: counter-translate the (non-fixed) grain at exactly
+  scroll speed via a scroll-driven animation — compositor-threaded on the
+  users' engine, element never fixed, slab law never re-engaged.
+  Prototype-first with diag-style device verification before any rollout;
+  if it fails, the glow-drift parallax remains the depth treatment.
 
 ## Phase 4 — Performance Lab rebuild + muscle taxonomy (dedicated session)
 
