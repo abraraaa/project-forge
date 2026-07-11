@@ -79,6 +79,24 @@ input, button, textarea, select { font: inherit; }
    a stacking context, so the grain keeps blending against the page base. */
 .forge-page {
   position: relative;
+  /* ── The shell owns the viewport (Phase 2) ────────────────────────────
+     .forge-page is the ONLY element that knows viewport height, safe-area
+     insets, and display mode. Screens declare a shape instead: scroll
+     (default — a flex item that sizes to content; the root scrolls) or
+     fill (.forge-fill below — occupies exactly the remaining viewport).
+     No screen may use vh/dvh or env(safe-area-inset-*) for height maths.
+
+     Height ladder, constrained by two device-recorded facts:
+     - 100dvh reports wrong values on PWA cold start until the device
+       rotates (see html/body comment above) → 100vh is the floor.
+     - 100vh overshoots in browser under the dynamic toolbar → dvh only
+       in non-standalone.
+     - stretch (Safari 27) is correct by construction IN BROWSER —
+       device-verified. In standalone it is NOT layered on: whether
+       stretch shares dvh's cold-start bug is unverified, and the 100vh
+       floor is already exactly right there (no toolbar exists). */
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   /* The page substrate paints HERE, not on body. Two reasons, both found
      on device: (1) body's box is only 100vh tall, so anything painted on
@@ -102,6 +120,29 @@ input, button, textarea, select { font: inherit; }
      Fixed-position descendants (modals, toasts) are NOT clipped: a plain
      position: relative ancestor is not their containing block. */
   overflow-x: clip;
+}
+@media not (display-mode: standalone) {
+  .forge-page { min-height: 100dvh; }
+  @supports (min-height: stretch) {
+    .forge-page { min-height: stretch; }
+  }
+}
+
+/* Flex items do NOT stretch when they carry cross-axis auto margins — and
+   every screen root centres with `margin: 0 auto`. Without this rule they
+   shrink-wrap to content width (readiness measured 364px instead of 393
+   during the Phase 2 matrix diff). Full width restores block-era geometry;
+   each root's own max-width + auto margins still cap and centre on wide
+   viewports. Applies to the grain child too, harmlessly (it was 100%). */
+.forge-page > * { width: 100%; }
+
+/* Fill shape: the screen occupies exactly the viewport space the shell
+   provides (session). flex-grow fills; flex-shrink 0 + basis auto means a
+   short viewport (split-screen, flip cover) degrades to scrolling rather
+   than crushing content. Everything else defaults to scroll shape — plain
+   flex items sizing to content. */
+.forge-fill {
+  flex: 1 0 auto;
 }
 
 /* ─── Modal scrims (Safari 26 chrome-safe) ─────────────────────────────────
@@ -301,20 +342,19 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
    The gradient "grounding" experiment is deleted — it couldn't recolour
    Safari's slab and visually broke the buttons sitting in its fade zone.
 
-   !important debt, deliberate and scoped: sheet roots carry inline
-   borderRadius/maxWidth (17 call sites), and this display-mode fork must
-   win over them from one place. The shell rearchitecture (parked.md)
-   owns the proper cleanup — move sheet chrome fully into this class. */
+   Sheet chrome (radius, width cap, edge margin) is owned HERE, not by the
+   17 sheet roots — they carry layout/paint only. The former !important
+   overrides are gone with the inline styles they fought (Phase 2). */
 .forge-sheet-ground {
   position: relative;
-  border-radius: 20px !important;
-  max-width: min(430px, calc(100% - 24px)) !important;
+  border-radius: 20px;
+  max-width: min(430px, calc(100% - 24px));
   margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
 }
 @media (display-mode: standalone) {
   .forge-sheet-ground {
-    border-radius: 20px 20px 0 0 !important;
-    max-width: 430px !important;
+    border-radius: 20px 20px 0 0;
+    max-width: 430px;
     margin-bottom: 0;
   }
 }
