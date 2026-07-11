@@ -32,7 +32,7 @@ export default function BreatherModal({ onConfirm, onCancel }) {
       style={{ overscrollBehavior: "contain", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="forge-sheet-ground" style={{ background: T.bg2, borderRadius: `${T.r.lg}px ${T.r.lg}px 0 0`, padding: "28px 24px calc(32px + env(safe-area-inset-bottom))", width: "100%", maxWidth: 430, borderTop: `1px solid ${T.bg3}`, animation: `slideUp 280ms ${T.ease}`, outline: "none" }}>
+        className="forge-sheet-ground" style={{ background: T.bg2, padding: "28px 24px calc(32px + env(safe-area-inset-bottom))", width: "100%", borderTop: `1px solid ${T.bg3}`, animation: `slideUp 280ms ${T.ease}`, outline: "none" }}>
         <div id={titleId} style={{ fontFamily: T.serif, fontSize: 26, fontWeight: 300, lineHeight: 1.2, marginBottom: 10 }}>
           Need a <span style={{ fontStyle: "italic", color: T.coral }}>breather?</span>
         </div>
