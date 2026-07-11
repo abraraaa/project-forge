@@ -178,23 +178,25 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
 // motion-ok, static under reduced-motion. Legible-not-ambient on purpose —
 // a whisper-faint fallback fails the sunlight case it exists for.
 function ScrollCue() {
-  const [hidden, setHidden] = useState(true);
+  // Overflow gating stays in JS (it's a layout question, checked on mount +
+  // resize only). The scroll-position FADE moved to a CSS scroll() timeline
+  // (.lab-scroll-cue-wrap in globals.css) — WebKit runs it compositor-side,
+  // so the per-frame window scroll listener this component used to carry is
+  // gone. Browsers without scroll timelines keep the cue visible at rest
+  // (the @supports gate only removes the fade, never the affordance).
+  const [overflows, setOverflows] = useState(false);
   useEffect(() => {
-    const overflows = () => document.documentElement.scrollHeight > window.innerHeight + 24;
-    const update = () => setHidden(window.scrollY > 24 || !overflows());
+    const update = () => setOverflows(document.documentElement.scrollHeight > window.innerHeight + 24);
     update();
-    window.addEventListener("scroll", update, { passive: true });
     window.addEventListener("resize", update);
-    return () => {
-      window.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
+    return () => window.removeEventListener("resize", update);
   }, []);
+  if (!overflows) return null;
   return (
-    <div aria-hidden="true" style={{
+    <div aria-hidden="true" className="lab-scroll-cue-wrap" style={{
       position: "fixed", left: "50%", bottom: "calc(env(safe-area-inset-bottom, 0px) + 22px)",
       transform: "translateX(-50%)", pointerEvents: "none", zIndex: 20,
-      opacity: hidden ? 0 : 0.72, transition: "opacity 420ms ease",
+      opacity: 0.72,
     }}>
       <svg className="lab-scroll-cue" width="26" height="15" viewBox="0 0 26 15" fill="none">
         <path d="M2 2.5 L13 12 L24 2.5" stroke={T.coral} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>

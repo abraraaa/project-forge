@@ -68,7 +68,10 @@ export default function ScrollDrum({value,onChange,step=1.25,min=0,max=500,integ
         <div style={{position:"absolute",top:"50%",left:0,right:0,height:ITEM_H,transform:"translateY(-50%)",background:`${T.coral}18`,borderTop:`1px solid ${T.coral}40`,borderBottom:`1px solid ${T.coral}40`,boxShadow:`inset 0 6px 14px -10px ${T.coral}66, inset 0 -6px 14px -10px ${T.coral}66`,pointerEvents:"none",zIndex:1,borderRadius:T.r.sm}}/>
         <div style={{position:"absolute",top:0,left:0,right:0,height:ITEM_H*1.8,background:`linear-gradient(to bottom,${T.bg2} 24%,transparent)`,pointerEvents:"none",zIndex:2}}/>
         <div style={{position:"absolute",bottom:0,left:0,right:0,height:ITEM_H*1.8,background:`linear-gradient(to top,${T.bg2} 24%,transparent)`,pointerEvents:"none",zIndex:2}}/>
-        <div ref={ref} onScroll={onScroll} style={{height:"100%",overflowY:"scroll",scrollSnapType:"y mandatory",scrollbarWidth:"none",paddingTop:ITEM_H*half,paddingBottom:ITEM_H*half,boxSizing:"content-box"}}>
+        {/* overflowAnchor none: Safari 27 ships scroll anchoring, and the
+            drum positions its scroller programmatically (settle effect
+            above) — the browser's anchoring must not fight the snap maths. */}
+        <div ref={ref} onScroll={onScroll} style={{height:"100%",overflowY:"scroll",overflowAnchor:"none",scrollSnapType:"y mandatory",scrollbarWidth:"none",paddingTop:ITEM_H*half,paddingBottom:ITEM_H*half,boxSizing:"content-box"}}>
           <style>{`*::-webkit-scrollbar{display:none}`}</style>
           {values.map((v,i)=>(
             <div key={i} onClick={()=>onChange(v)} style={{height:ITEM_H,scrollSnapAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
