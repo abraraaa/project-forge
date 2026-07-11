@@ -49,11 +49,13 @@ Training data predates WebKit 27; each item implemented to spec behind
 - **Scroll modernisation.** Adopt scroll anchoring (`overflow-anchor`, `none` on
   ScrollDrum) → closes the parked +55px restoration drift. Convert the Lab
   scroll-cue from a JS `window` scroll listener to a CSS `view()` timeline.
-- **SW static routing.** Declare `/_next/static/*` as `addRoutes` bypass →
-  faster app-shell. Perf change, not security — but the SW is the durable
-  component (stale SW caused the "no difference in preview" confusion), so it
-  keeps the `?nosw=1` hatch and the `SW_VERSION` bump, and only ever *skips*
-  the SW for immutable assets, never serves something different.
+- **SW static routing — SHIPPED (Phase 1 PR), rescoped by research.**
+  Routed: `/api/*` → network (semantics-identical; the worker no longer
+  wakes for every sync call) and the precache set → cache. NOT routed:
+  `/_next/static/*` — a "cache" route never runs the fetch handler, so
+  runtime caching would never populate and offline statics would silently
+  break after each deploy. That bypass needs precache-manifest work first
+  (revisit with the next SW change). `?nosw=1` hatch + SW_VERSION bump kept.
 - **Grain pop-in retest** (device) — Safari 27's sRGB VT-snapshot fix may have
   closed it for free.
 
@@ -117,9 +119,10 @@ replace the flex plumbing for the fill-viewport case entirely, behind
 the -webkit-fill-available class of hack.
 
 **Order of work (none skippable):**
-1. User runs `/diag-chin` in Safari browser — which of the four sheet
-   recipes band tells us whether iOS changed its chrome sampling. The
-   answer feeds the shell design; don't design blind to it.
+1. DONE — the /diag-chin instrument answered it across five device
+   passes (sheet-level transform entrances trigger the slab; detachment
+   sidesteps it; verdicts in the Phase-0 entries above). The instrument
+   is deleted per its charter (2026-07-11).
 2. Baseline screenshot matrix BEFORE any change: every route ×
    {browser, PWA} × key states.
 3. The shell change ships alone in its own PR.
