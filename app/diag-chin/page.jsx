@@ -79,10 +79,11 @@ function FloatingReadout({ openId, history }) {
 // Two sheet components so the useModalA11y hook (whose focus save/restore
 // side effects run from its mere presence) exists ONLY in the a11y variants
 // — otherwise B and H stop being clean controls.
-function SheetBody({ id, anim, a11y, containerRef }) {
+function SheetBody({ id, anim, a11y, containerRef, ground }) {
   return (
     <div data-diag-sheet ref={containerRef || undefined} onClick={(e) => e.stopPropagation()}
       {...(a11y ? { role: "dialog", "aria-modal": "true", tabIndex: -1 } : {})}
+      className={ground ? "forge-sheet-ground" : undefined}
       style={{ ...SHEET_BASE, animation: anim ? "slideUp 280ms cubic-bezier(0.22,1,0.36,1)" : "none" }}>
       <div style={{ fontSize: 20, fontWeight: 300, marginBottom: 8 }}>Variant {id}</div>
       <p style={{ fontSize: 13, color: "#A09890", lineHeight: 1.6 }}>
@@ -94,11 +95,11 @@ function SheetBody({ id, anim, a11y, containerRef }) {
   );
 }
 
-function PlainVariantSheet({ id, onClose, anim }) {
+function PlainVariantSheet({ id, onClose, anim, ground }) {
   return (
     <div className="forge-scrim" onClick={onClose}
       style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 300 }}>
-      <SheetBody id={id} anim={anim} a11y={false} />
+      <SheetBody id={id} anim={anim} a11y={false} ground={ground} />
     </div>
   );
 }
@@ -118,6 +119,7 @@ const VARIANTS = {
   H: { label: "H — B + slideUp entrance animation", anim: true, a11y: false },
   J: { label: "J — B + REAL useModalA11y (focus restore on close)", anim: false, a11y: true },
   K: { label: "K — B + slideUp + useModalA11y (BreatherModal's combo)", anim: true, a11y: true },
+  T: { label: "T — DETACHED card + slideUp (the production treatment)", anim: true, a11y: false, ground: true },
   R: { label: "R — the REAL BreatherModal component, as shipped", anim: null, a11y: null },
 };
 
@@ -152,7 +154,7 @@ export default function DiagChin() {
       {open && open !== "R" && (
         VARIANTS[open].a11y
           ? <A11yVariantSheet id={open} onClose={() => setOpen(null)} anim={VARIANTS[open].anim} />
-          : <PlainVariantSheet id={open} onClose={() => setOpen(null)} anim={VARIANTS[open].anim} />
+          : <PlainVariantSheet id={open} onClose={() => setOpen(null)} anim={VARIANTS[open].anim} ground={VARIANTS[open].ground} />
       )}
     </div>
   );
