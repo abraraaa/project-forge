@@ -414,6 +414,52 @@ describe("updateLiftStateFromSession", () => {
     expect(next.consecutiveHolds).toBe(0);
   });
 
+  it("a partial session (fewer logged sets than prescribed) HOLDs — never DROP_10", () => {
+    // 1 clean set logged of 3 prescribed. The old evaluation counted the two
+    // unlogged sets as 0 reps → 67% shortfall → MISSED_HEAVY → DROP_10.
+    const exercise = {
+      name: "Barbell Back Squat",
+      prescribed: { reps: 5, sets: 3 },
+      sets: [{ weight: 100, effectiveLoad: 100, reps: 5, rir: 2 }],
+    };
+    expect(__test__.evaluatePerformance(exercise)).toBe("PERFORMED_PARTIAL");
+    const movement = __test__.decideMovement("PERFORMED_PARTIAL", 2, 2, "normal");
+    expect(movement.decision).toBe("HOLD");
+    expect(movement.reason).toBe("partial_session");
+  });
+
+  it("a partial session whose logged sets genuinely missed still evaluates the misses", () => {
+    // 2 of 3 sets logged, both badly short — real evidence of failure at
+    // this weight, judged against the logged sets only.
+    const exercise = {
+      name: "Barbell Back Squat",
+      prescribed: { reps: 5, sets: 3 },
+      sets: [
+        { weight: 100, effectiveLoad: 100, reps: 3, rir: 0 },
+        { weight: 100, effectiveLoad: 100, reps: 2, rir: 0 },
+      ],
+    };
+    // Shortfall 5 of 10 logged-target reps = 50% > 30% → heavy.
+    expect(__test__.evaluatePerformance(exercise)).toBe("MISSED_HEAVY");
+  });
+
+  it("cooked HOLDs freeze consecutiveHolds instead of incrementing", () => {
+    const prev = { consecutiveHolds: 2, sessionsCount: 5, history: [] };
+    const cookedRecord = { date: "2026-07-10", readiness: "cooked" };
+    const exercise = { name: "Barbell Back Squat", sets: [{ weight: 100, reps: 5, rir: 0, est1rm: 116 }] };
+    const prescription = { decision: "HOLD", weight: 100, reps: 5, sets: 3, rationale: [] };
+    const next = updateLiftStateFromSession(prev, cookedRecord, exercise, prescription);
+    // Frozen at 2 — not bumped to 3 (which would flip stallSignal to "stall").
+    expect(next.consecutiveHolds).toBe(2);
+    expect(next.stallSignal).toBe("mild");
+
+    // A normal-readiness HOLD still increments.
+    const normalRecord = { date: "2026-07-12", readiness: "normal" };
+    const after = updateLiftStateFromSession(next, normalRecord, exercise, prescription);
+    expect(after.consecutiveHolds).toBe(3);
+    expect(after.stallSignal).toBe("stall");
+  });
+
   it("increments consecutiveHolds on HOLD decision", () => {
     const initial = { currentWeight: 100, currentRepRange: { reps: 5, sets: 3 }, bestE1RM: 117, consecutiveHolds: 1, stallSignal: null, history: [] };
     const session = buildSession({});
