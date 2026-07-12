@@ -498,7 +498,13 @@ export default function SessionHost() {
 
               if (stillInDeload) {
                 prescription = computeDeloadPrescription(ex.name, liftState, context);
-              } else if (liftState?.inRecoveryUntil > 0 && !justCompletedDeload) {
+              } else if (liftState?.inRecoveryUntil > 0) {
+                // Also true on the auto-close session (justCompletedDeload):
+                // completeDeload just set inRecoveryUntil=3, so the NEXT
+                // session gets the pre-deload-anchored re-entry instead of a
+                // standard prescription computed off deloaded weights. The
+                // counter decrement below stays skipped for it — that session
+                // happened inside the deload window, not in recovery.
                 prescription = computeRecoveryPrescription(ex.name, liftState, fullHistory, context);
               } else {
                 prescription = computeNextPrescription({

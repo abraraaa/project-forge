@@ -1042,7 +1042,10 @@ export default function ForgeApp(){
 
             if (stillInDeload) {
               prescription = computeDeloadPrescription(ex.name, liftState, context);
-            } else if (liftState?.inRecoveryUntil > 0 && !justCompletedDeload) {
+            } else if (liftState?.inRecoveryUntil > 0) {
+              // Includes the auto-close session — same reasoning as the live
+              // finalise path in SessionHost: the re-entry anchors to the
+              // pre-deload snapshot, and the decrement below stays skipped.
               prescription = computeRecoveryPrescription(ex.name, liftState, fullHistory, context);
             } else {
               prescription = computeNextPrescription({
