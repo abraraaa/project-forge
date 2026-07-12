@@ -158,6 +158,23 @@ the -webkit-fill-available class of hack.
 6. THEN the intimacy pass rebuilds on the new foundation (grain print
    below, press-state refinements).
 
+### Schedule + programme block are device-global but sync per-profile
+
+**Status:** Parked 2026-07-12 during the progression/schedule audit, with
+the boss's nod ("we'll talk when we get there").
+
+**Problem:** `forge:weekConfig` and `forge:programmeBlock` are one key per
+DEVICE (deliberate, documented in storage.js), but both ride in the
+per-profile blob meta and merge on sync. On a device with two profiles,
+profile A's schedule edit lands in the shared device key, which profile B
+then pushes to B's blob — schedules cross-contaminate between profiles
+through sync.
+
+**Why parked:** invisible for the actual user base (one profile per
+person/device), and the fix is a storage migration (per-profile keys +
+legacy-key fold) with real blast area for zero felt benefit today. If
+multi-profile devices ever become real, this is the first thing to lift.
+
 ### Status bar goes black while modals are open (browser)
 
 **Status:** Parked 2026-07-10 as a DESIGN decision, not a bug. Safari
