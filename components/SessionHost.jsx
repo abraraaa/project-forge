@@ -31,7 +31,7 @@ import { track } from "@vercel/analytics";
 import {
   P, H, W, PB, F, TS, BW, Days, Bk, D, SessionIntent,
   newDraftLog, logSet, finaliseDraft, bumpStreak, scaleForReadiness,
-  startingWeightForLift, blobPush, pushNow,
+  startingWeightForLift, blobPush, pushNow, recordCompletion,
 } from "@/lib/storage";
 import {
   SESSIONS, EXERCISE_POOLS,
@@ -440,24 +440,17 @@ export default function SessionHost() {
       if (draftLogRef.current) {
         sessionRecord = finaliseDraft(draftLogRef.current);
         H.append(profile, sessionRecord);
-        const effective = W.getEffectiveOn(sessionRecord.date);
-        const dowMon = (() => {
-          const [y, m, d] = sessionRecord.date.split("-").map(Number);
-          const js = new Date(y, m - 1, d).getDay();
-          return js === 0 ? 6 : js - 1;
-        })();
-        // Legacy week-strip mark — same record-date weekday as Days below
-        // (see the midnight-straddle note above).
-        P.markDayDone(profile, dowMon);
-        const scheduledType = effective && effective[dowMon] ? effective[dowMon].type : "strength";
-        Days.set(profile, sessionRecord.date, {
-          scheduledType,
-          completedType: "strength",
+        // Days write + schedule stamping + breather resumption in one call —
+        // keyed on the RECORD's date (midnight-straddle note above). The
+        // legacy P.markDayDone write that used to sit here is gone: it
+        // resolved the record's weekday in the CURRENT week at wall-clock
+        // time, so a Sun→Mon straddle marked a dayDone date six days in the
+        // future, which _foldLegacy then minted into a phantom Day entry on
+        // the next sync. No reader consumed it — all reads are Days-backed.
+        recordCompletion(profile, sessionRecord.date, {
+          kind: "session",
           sessionId: sessionRecord.id,
         });
-        // A session dated after an open breather's start resumes the rhythm
-        // (lib/breaks.js). Home re-reads Bk on mount, so the badge un-rests.
-        Bk.endOnActivity(profile, sessionRecord.date);
         draftLogRef.current = null;
       }
       D.clear(profile);

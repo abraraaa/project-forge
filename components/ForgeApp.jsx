@@ -10,7 +10,7 @@ import {
   sessionMetaForDate, findUntickedRecent, } from "@/lib/programme";
 import {
   SessionIntent,
-  LS, P, PB, W, F, H, BW, PN, Days, Bk, bumpStreak,
+  LS, P, PB, W, F, H, BW, PN, Days, Bk, bumpStreak, recordCompletion,
   computeRhythm, detectRecoveryPattern,
   blobPush, flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
   enableAutoSync, disableAutoSync, pushNow, weeksSince, dateOfWeekdayIdxInCurrentWeek,
@@ -600,31 +600,13 @@ export default function ForgeApp(){
     } else {
       dateStr = todayDate;
     }
-    // Write the Day entity (now the read source). scheduledType comes from
-    // the schedule effective on that date — preserves truthful interpretation
-    // even if the user retroactively edits the schedule later. For the
-    // non-strength tick path, completedType === scheduledType (the user just
-    // confirmed they did the scheduled thing).
-    //
-    // CRITICAL fallback: W.getEffectiveOn returns null when no schedule edit
-    // log exists (i.e., the user has been using the default schedule the
-    // whole time — the most common state). Without this fallback, scheduled
-    // and completed types both become null, and Days.manualTickDates filters
-    // out entries with null completedType — so the retro picker keeps
-    // surfacing the same day as "missed" no matter how many times the user
-    // taps Mark ✓. (User reported: "missed workout flow keeps bringing up
-    // the same cardio days from last week." This was the cause.)
-    const dowMon = (() => {
-      const [y, m, d] = dateStr.split("-").map(Number);
-      const js = new Date(y, m - 1, d).getDay();
-      return js === 0 ? 6 : js - 1;
-    })();
-    const effective = W.getEffectiveOn(dateStr) || WEEK;
-    const scheduledType = effective[dowMon]?.type || null;
-    Days.set(activeProfile, dateStr, {
-      scheduledType,
-      completedType: scheduledType,
-    });
+    // One-call completion: schedule stamping (effective on THAT date, with
+    // the default-week fallback — see recordCompletion in lib/storage.js for
+    // why both matter), the Days write, and breather resumption (a tick dated
+    // after an open breather's start resumes the rhythm; a retro-fill for a
+    // day BEFORE it confirmed leaves the breather intact).
+    const res = recordCompletion(activeProfile, dateStr, { kind: "tick" });
+    if (res?.endedBreak) setBreaks(Bk.getAll(activeProfile));
     // Refresh React state from the unified Day projection.
     const proj = Days.projectCurrentWeek(activeProfile);
     setWeekDone(proj.complete);
@@ -633,9 +615,6 @@ export default function ForgeApp(){
       const newStreak = bumpStreak(activeProfile);
       setStreak(newStreak);
     }
-    // A tick dated after an open breather's start resumes the rhythm (a
-    // retro-fill for a day BEFORE it confirmed leaves the breather intact).
-    if (Bk.endOnActivity(activeProfile, dateStr)) setBreaks(Bk.getAll(activeProfile));
     pushNow(activeProfile);
   },[activeProfile]);
 
@@ -654,23 +633,12 @@ export default function ForgeApp(){
       const day = String(d.getDate()).padStart(2, "0");
       return `${y}-${m}-${day}`;
     })();
-    // Stamp scheduledType from the effective schedule (or WEEK fallback
-    // if no edit log). Without this, bonus-only entries land with null
-    // scheduledType — indistinguishable from the buggy null/null Mark ✓
-    // writes, forcing the repair migration to guess. Writing scheduledType
-    // here gives the repair a clean signal: scheduledType set +
-    // completedType null = legit bonus-only, leave alone.
-    const dowMon = (() => {
-      const [y, m, d] = today.split("-").map(Number);
-      const js = new Date(y, m - 1, d).getDay();
-      return js === 0 ? 6 : js - 1;
-    })();
-    const effective = W.getEffectiveOn(today) || WEEK;
-    const scheduledType = effective[dowMon]?.type || null;
-    Days.set(activeProfile, today, {
-      scheduledType,
-      marks: { bonus: true },
-    });
+    // recordCompletion stamps scheduledType even for bonus-only entries.
+    // Without it they'd land with null scheduledType — indistinguishable
+    // from the buggy null/null Mark ✓ writes, forcing the repair migration
+    // to guess. Bonus never sets completedType, never bumps rhythm, never
+    // resumes a breather — extras, not adherence.
+    recordCompletion(activeProfile, today, { kind: "bonus" });
     // Refresh React state from the unified Day projection.
     setBonusDone(Days.projectCurrentWeek(activeProfile).bonus);
     pushNow(activeProfile);
@@ -985,19 +953,17 @@ export default function ForgeApp(){
       sessionRecord.retrospective = true;
 
       H.append(activeProfile, sessionRecord);
-      // Dual-write to Days. Same shape as the live-session path above.
-      {
-        const effective = W.getEffectiveOn(sessionRecord.date);
-        const [y, m, d] = sessionRecord.date.split("-").map(Number);
-        const js = new Date(y, m - 1, d).getDay();
-        const dowMon = js === 0 ? 6 : js - 1;
-        const scheduledType = effective && effective[dowMon] ? effective[dowMon].type : "strength";
-        Days.set(activeProfile, sessionRecord.date, {
-          scheduledType,
-          completedType: "strength",
-          sessionId: sessionRecord.id,
-        });
-      }
+      // One-call completion — same path as live finalise. This is also what
+      // makes a retro strength session resume an open breather: training on
+      // or after the breather's start counts whether logged live or from
+      // memory (lib/breaks.js contract). The old hand-rolled Days.set here
+      // skipped Bk.endOnActivity, so a session trained during a breather but
+      // logged a day later left the app showing "resting" indefinitely.
+      const completion = recordCompletion(activeProfile, sessionRecord.date, {
+        kind: "session",
+        sessionId: sessionRecord.id,
+      });
+      if (completion?.endedBreak) setBreaks(Bk.getAll(activeProfile));
       setHistory(H.get(activeProfile));
       // Refresh the unified Day projection so a retro-logged strength day
       // marks the strip dot in the same tick. No legacy dayDone write —
