@@ -909,7 +909,7 @@ function StreakBadge({rhythm, resting=false}){
   const window  = rhythm?.window || 28;
   const over = completed > expected;
   const primary = over ? `${expected}+` : `${completed}`;
-  const secondary = over ? "of 12 · strong" : `of ${expected}`;
+  const secondary = over ? `of ${expected} · strong` : `of ${expected}`;
   return (
     <div style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.pill,padding:"8px 16px",display:"flex",alignItems:"center",gap:8}}>
       <span style={{fontFamily:T.serif,fontSize:22,fontWeight:400,color:T.gold,lineHeight:1}}>{primary}</span>
