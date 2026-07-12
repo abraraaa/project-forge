@@ -31,10 +31,16 @@
 // timestamps) can only be judged against NOW: keys dated in the future
 // are reported too.
 //
-// Auth: Bearer CRON_SECRET — same operator-configured secret as the sync
-// self-test. Usage:
-//   curl -H "Authorization: Bearer $CRON_SECRET" \
-//        https://theforged.fit/api/diag/phantom-census
+// Auth: Bearer CRON_SECRET. Invoked as a Vercel Cron (vercel.json), where
+// Vercel injects the header itself — CRON_SECRET is a sensitive env var,
+// write-only by design, and NOBODY holds a copy to curl with. The census
+// result is therefore console.logged in full so it can be read from the
+// function's runtime logs; the JSON response is kept for completeness but
+// no client can reach it without the secret.
+//
+// CHARTER: this is an instrument, not a feature. Once the census has been
+// read and the phantom question settled, the cron entry AND this route are
+// deleted (same end as diag-chin).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextResponse } from "next/server";
@@ -107,12 +113,16 @@ export async function GET(request) {
     }
   } while (cursor);
 
-  return NextResponse.json({
+  const report = {
     dryRun: true,
     generatedAt: new Date().toISOString(),
     profilesScanned,
     daysEntriesScanned: entriesScanned,
     phantoms: findings.length,
     findings,
-  });
+  };
+  // Full report into the runtime logs — the read path for a write-only
+  // secret world (see the auth note above).
+  console.log("[forge:phantom-census]", JSON.stringify(report));
+  return NextResponse.json(report);
 }
