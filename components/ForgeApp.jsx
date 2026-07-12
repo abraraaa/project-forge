@@ -26,6 +26,7 @@ import {
   updateLiftStateFromSession,
   updateMuscleAnchorFromSession,
   reconcileLiftStateWithSession,
+  isLatestSessionForLift,
   // Phase 3
   shouldOfferDeload,
   computeDeloadPrescription,
@@ -1025,9 +1026,18 @@ export default function ForgeApp(){
 
         for (const block of sessionRecord.blocks || []) {
           for (const ex of block.exercises || []) {
+            // A retro record sorts into chronological position, so it can be
+            // OLDER than the newest session for this lift. In that case the
+            // record joins history but must not touch lift state — the state
+            // writers below assume their session is the latest evidence and
+            // would regress currentWeight to a week-old top set and bump
+            // stall/session counters out of order.
+            const isLatestForLift = isLatestSessionForLift(fullHistory, sessionRecord.id, ex.name);
             // Reconcile before reading — see same comment on the live path.
             const rawLiftState  = trainingState.lifts?.[ex.name] || null;
-            const liftState     = reconcileLiftStateWithSession(rawLiftState, ex);
+            const liftState     = isLatestForLift
+              ? reconcileLiftStateWithSession(rawLiftState, ex)
+              : rawLiftState;
             const profile       = getLiftProfile(ex.name);
             const anchorMuscle  = profile.primaryMuscle;
             const muscleAnchor  = anchorMuscle
@@ -1061,7 +1071,10 @@ export default function ForgeApp(){
               wwUpdates[ex.name] = prescription.weight;
             }
 
-            if (stillInDeload && liftState) {
+            if (!isLatestForLift) {
+              // Older backfill: history has the record; lift state and
+              // anchors stay anchored to the newer live evidence.
+            } else if (stillInDeload && liftState) {
               const lastHistEntry = {
                 date: sessionRecord.date,
                 weight: ex.sets?.[0]?.weight ?? null,
@@ -1084,7 +1097,7 @@ export default function ForgeApp(){
               TS.updateLift(activeProfile, ex.name, counterAdjusted);
             }
 
-            if (anchorMuscle && profile.progressesByLoad && !stillInDeload) {
+            if (isLatestForLift && anchorMuscle && profile.progressesByLoad && !stillInDeload) {
               const currentAnchor = TS.get(activeProfile).muscleAnchors?.[anchorMuscle] || null;
               const newAnchor     = updateMuscleAnchorFromSession(currentAnchor, sessionRecord, ex);
               if (newAnchor) TS.updateMuscleAnchor(activeProfile, anchorMuscle, newAnchor);

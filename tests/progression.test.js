@@ -19,6 +19,7 @@ import {
   computeNextPrescription,
   updateLiftStateFromSession,
   reconcileLiftStateWithSession,
+  isLatestSessionForLift,
   // Phase 3
   detectDeloadSignals,
   shouldOfferDeload,
@@ -928,6 +929,36 @@ describe("Engine bug — stale liftState seed reconciliation", () => {
 // ────────────────────────────────────────────────────────────────────────────
 // 10. Starting-weight helpers — BW% multipliers for main lifts (Task 5)
 // ────────────────────────────────────────────────────────────────────────────
+describe("isLatestSessionForLift — retro out-of-order guard", () => {
+  const mk = (id, lifts) => ({
+    id, date: id.slice(0, 10), session: "strength-a",
+    blocks: [{ type: "main", exercises: lifts.map(name => ({ name, sets: [] })) }],
+  });
+
+  it("a retro record older than a live session for the same lift is not latest", () => {
+    const history = [
+      mk("2026-07-08T12:00:00.000Z", ["Barbell Back Squat"]),   // retro (noon UTC)
+      mk("2026-07-11T18:30:00.000Z", ["Barbell Back Squat"]),   // live, newer
+    ];
+    expect(isLatestSessionForLift(history, "2026-07-08T12:00:00.000Z", "Barbell Back Squat")).toBe(false);
+    expect(isLatestSessionForLift(history, "2026-07-11T18:30:00.000Z", "Barbell Back Squat")).toBe(true);
+  });
+
+  it("a newer session that doesn't contain the lift doesn't block the backfill", () => {
+    const history = [
+      mk("2026-07-08T12:00:00.000Z", ["Barbell Back Squat"]),
+      mk("2026-07-11T18:30:00.000Z", ["Barbell Bench Press"]),  // newer, different lift
+    ];
+    expect(isLatestSessionForLift(history, "2026-07-08T12:00:00.000Z", "Barbell Back Squat")).toBe(true);
+  });
+
+  it("tolerates empty history and missing ids", () => {
+    expect(isLatestSessionForLift([], "2026-07-08T12:00:00.000Z", "Barbell Back Squat")).toBe(true);
+    expect(isLatestSessionForLift(null, "2026-07-08T12:00:00.000Z", "Barbell Back Squat")).toBe(true);
+    expect(isLatestSessionForLift([{ blocks: [] }], "2026-07-08T12:00:00.000Z", "Barbell Back Squat")).toBe(true);
+  });
+});
+
 describe("startingWeightForLift — BW% seeded starts", () => {
   it("computes Back Squat at 0.75 × bodyweight, rounded to 2.5kg", () => {
     expect(startingWeightForLift("Barbell Back Squat", 80)).toBe(60);   // 60.0
