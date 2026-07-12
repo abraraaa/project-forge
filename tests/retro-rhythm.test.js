@@ -124,6 +124,28 @@ describe("retro log → rhythm count", () => {
   });
 });
 
+// ─── Rhythm expectations: schedule-aware ─────────────────────────────────────
+describe("computeRhythm — schedule-aware expectations", () => {
+  it("expected derives from the user's weekly strength days × 4", () => {
+    expect(computeRhythm([], { weeklyStrengthDays: 2 }).expected).toBe(8);   // 2-day plan can reach 100%
+    expect(computeRhythm([], { weeklyStrengthDays: 4 }).expected).toBe(16);  // 4-day plan held to its own bar
+    expect(computeRhythm([]).expected).toBe(12);                             // default = historic 3×/week
+    expect(computeRhythm([], { weeklyStrengthDays: 0 }).expected).toBe(12);  // degenerate → default, never /0
+  });
+
+  it("counts distinct days, not records — two sessions in one day are one day", () => {
+    // Yesterday, so both timestamps are inside the window regardless of the
+    // wall-clock hour the test runs at (t <= now filters future ids).
+    const d = new Date(Date.now() - 86400000);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const history = [
+      { id: `${iso}T09:00:00.000Z`, date: iso, session: "strength-a" },
+      { id: `${iso}T18:00:00.000Z`, date: iso, session: "strength-a" },
+    ];
+    expect(computeRhythm(history).completed).toBe(1);
+  });
+});
+
 // ─── Rhythm scope: strength-only ────────────────────────────────────────────
 // User hypothesised "I've swapped a cardio day to Friday — does marking it
 // hit the streak badge?" The badge is meant to count strength sessions

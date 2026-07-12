@@ -233,8 +233,6 @@ export default function ForgeApp(){
     return SyncStatus.subscribe(status => setSyncState(status.state));
   }, []);
 
-  // Rhythm — derived from history, no persistence needed
-  const rhythm = useMemo(() => computeRhythm(history), [history]);
   const recoveryNudge = useMemo(
     () => (recoveryDismissed ? null : detectRecoveryPattern(history)),
     [history, recoveryDismissed]
@@ -295,6 +293,15 @@ export default function ForgeApp(){
   const [userWeek, setUserWeek] = useState(() => W.get() || WEEK);
 
   const strengthDaySessions = useMemo(() => deriveStrengthDaySessions(userWeek), [userWeek]);
+  // Rhythm — derived from history against the USER'S schedule (expected =
+  // weekly strength days × 4), no persistence needed. Lives below userWeek
+  // so the memo can read it.
+  const rhythm = useMemo(
+    () => computeRhythm(history, {
+      weeklyStrengthDays: userWeek.filter((d) => d?.type === "strength").length,
+    }),
+    [history, userWeek]
+  );
   // Single source of truth for catch-up state. dayDone is date-keyed
   // (`{ "2026-06-13": true, ... }`) — strength session finalises write it,
   // the Mark ✓ path writes it explicitly. findUntickedRecent returns the
