@@ -301,8 +301,17 @@ export default function ForgeApp(){
   // actionable list (date + type + "log"/"tick" hint). Link surfaces when
   // length > 0; picker drives off the same list; count goes into the
   // editorial label so the user knows the scope up front.
+  // weekFor: each past date is judged under the schedule IN FORCE on it
+  // (W.getEffectiveOn), falling back to the default WEEK for dates before
+  // any edit existed. A static `week: userWeek` here reinterpreted the
+  // whole 7-day window under today's schedule — edit the week and past
+  // days changed meaning: wrong tick/log actions, phantom "missed" days.
+  // userWeek stays in the dep list so schedule saves recompute the list.
   const untickedDays = useMemo(
-    () => findUntickedRecent(history, 7, dayDone, { week: userWeek }),
+    () => findUntickedRecent(history, 7, dayDone, {
+      week: userWeek,
+      weekFor: (d) => W.getEffectiveOn(d) || WEEK,
+    }),
     [history, dayDone, userWeek]
   );
   const hasRetroGaps = untickedDays.length > 0;
@@ -872,7 +881,12 @@ export default function ForgeApp(){
   // fires once per retrospective submission.
   const handleSubmitRetro = (payload) => {
     if (!activeProfile || !retroDate) return;
-    const meta = sessionMetaForDate(retroDate, userWeek);
+    // The schedule IN FORCE on the retro date decides what that day was —
+    // not today's config. Under today's week a retro day whose slot has
+    // since been edited away from strength was refused here outright, and
+    // one whose strength letter moved got the wrong A/B/C session.
+    const retroWeek = W.getEffectiveOn(retroDate) || WEEK;
+    const meta = sessionMetaForDate(retroDate, retroWeek);
     if (!meta || meta.type !== "strength") return;
 
     const sessionDef = SESSIONS[meta.sessionIdx];
@@ -1205,7 +1219,7 @@ export default function ForgeApp(){
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
       {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={()=>setAbsenceNudgeDismissed(true)}/>}
       {breatherOpen           && <BreatherModal onConfirm={handleStartBreather} onCancel={()=>setBreatherOpen(false)}/>}
-      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} userWeek={userWeek} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
+      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}
@@ -1757,8 +1771,10 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
 // the selected date. Auto-fill across cells in a row; tap any cell to override
 // via the existing ScrollDrum overlay. Skip toggle per exercise. One RPE
 // applied to all sets in an exercise.
-function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingReps, userWeek=WEEK, onCancel, onSubmit}){
-  const meta = useMemo(() => sessionMetaForDate(date, userWeek), [date, userWeek]);
+// effectiveWeek = the schedule in force ON `date` (resolved by the host via
+// W.getEffectiveOn) — never today's config; see handleSubmitRetro.
+function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingReps, effectiveWeek=WEEK, onCancel, onSubmit}){
+  const meta = useMemo(() => sessionMetaForDate(date, effectiveWeek), [date, effectiveWeek]);
   const sessionDef = meta?.type === "strength" ? SESSIONS[meta.sessionIdx] : null;
 
   // Flatten blocks into a single exercise list, but keep a back-reference to
