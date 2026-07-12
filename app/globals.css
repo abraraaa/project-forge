@@ -416,9 +416,9 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   transition-duration: 60ms;
 }
 
-/* Grain under the finger (tactility batch 3 — PROTOTYPE, Home only).
+/* Grain under the finger (tactility batch 3 — Home until device-verified).
    A localised warm lift at the exact touch point: fast bloom on press
-   (80ms), slow exhale on release (~480ms). Deliberately none of the
+   (60ms), slow exhale on release (~480ms). Deliberately none of the
    territory that burned before — no mix-blend-mode, no masking, no
    transform; just an opacity-animated radial gradient on a pseudo-
    element, so the grain overlay above it reads as warming locally.
@@ -438,7 +438,9 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   opacity: 0;
   transition: opacity 480ms ease;
 }
-.forge-grain-touch.forge-grain-on::after {
+/* Attribute, not class — React re-renders rewrite className mid-tap and
+   wiped a class-based print (see the mechanism notes on useGrainTouch). */
+.forge-grain-touch[data-grain-on]::after {
   opacity: 1;
   transition-duration: 60ms;
 }
