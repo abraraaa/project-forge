@@ -14,7 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { recordCompletion, Days, W, Bk } from "../lib/storage.js";
+import { recordCompletion, Days, W, Bk, mergeDayEntries } from "../lib/storage.js";
 import { WEEK } from "../lib/programme.js";
 
 const PROFILE = "test-rc";
@@ -107,6 +107,54 @@ describe("recordCompletion — breather resolution", () => {
     const res = recordCompletion(PROFILE, "2026-07-08", { kind: "bonus" });
     expect(res.endedBreak).toBe(false);
     expect(Bk.getActive(PROFILE)).not.toBeNull();
+  });
+});
+
+describe("mergeDayEntries — field-aware cross-device merge", () => {
+  it("a bonus mark on one device and a completion on the other both survive", () => {
+    const local = {
+      "2026-07-08": {
+        date: "2026-07-08", scheduledType: "cardio", completedType: "cardio",
+        sessionId: null, marks: {}, updatedAt: "2026-07-08T10:00:00.000Z",
+      },
+    };
+    const remote = {
+      "2026-07-08": {
+        date: "2026-07-08", scheduledType: "cardio",
+        marks: { bonus: true }, updatedAt: "2026-07-08T18:00:00.000Z",
+      },
+    };
+    const merged = mergeDayEntries(local, remote);
+    const entry = merged["2026-07-08"];
+    // Whole-entry latest-wins used to let the (newer) bonus-only write
+    // erase the completion. Both facts must survive.
+    expect(entry.completedType).toBe("cardio");
+    expect(entry.marks.bonus).toBe(true);
+  });
+
+  it("winner's fields beat the loser's on genuine per-field conflicts", () => {
+    const local = {
+      "2026-07-08": {
+        date: "2026-07-08", scheduledType: "cardio", completedType: "cardio",
+        sessionId: null, marks: {}, updatedAt: "2026-07-08T10:00:00.000Z",
+      },
+    };
+    const remote = {
+      "2026-07-08": {
+        date: "2026-07-08", scheduledType: "strength", completedType: "strength",
+        sessionId: "s1", marks: {}, updatedAt: "2026-07-08T18:00:00.000Z",
+      },
+    };
+    const entry = mergeDayEntries(local, remote)["2026-07-08"];
+    expect(entry.completedType).toBe("strength");
+    expect(entry.sessionId).toBe("s1");
+  });
+
+  it("dates present on only one side pass through untouched", () => {
+    const local  = { "2026-07-01": { date: "2026-07-01", completedType: "cardio", updatedAt: "x" } };
+    const remote = { "2026-07-02": { date: "2026-07-02", completedType: "hiit",  updatedAt: "y" } };
+    const merged = mergeDayEntries(local, remote);
+    expect(Object.keys(merged).sort()).toEqual(["2026-07-01", "2026-07-02"]);
   });
 });
 
