@@ -19,6 +19,7 @@ import {
   computeNextPrescription,
   updateLiftStateFromSession,
   reconcileLiftStateWithSession,
+  isLatestSessionForLift,
   // Phase 3
   detectDeloadSignals,
   shouldOfferDeload,
@@ -414,6 +415,52 @@ describe("updateLiftStateFromSession", () => {
     expect(next.consecutiveHolds).toBe(0);
   });
 
+  it("a partial session (fewer logged sets than prescribed) HOLDs — never DROP_10", () => {
+    // 1 clean set logged of 3 prescribed. The old evaluation counted the two
+    // unlogged sets as 0 reps → 67% shortfall → MISSED_HEAVY → DROP_10.
+    const exercise = {
+      name: "Barbell Back Squat",
+      prescribed: { reps: 5, sets: 3 },
+      sets: [{ weight: 100, effectiveLoad: 100, reps: 5, rir: 2 }],
+    };
+    expect(__test__.evaluatePerformance(exercise)).toBe("PERFORMED_PARTIAL");
+    const movement = __test__.decideMovement("PERFORMED_PARTIAL", 2, 2, "normal");
+    expect(movement.decision).toBe("HOLD");
+    expect(movement.reason).toBe("partial_session");
+  });
+
+  it("a partial session whose logged sets genuinely missed still evaluates the misses", () => {
+    // 2 of 3 sets logged, both badly short — real evidence of failure at
+    // this weight, judged against the logged sets only.
+    const exercise = {
+      name: "Barbell Back Squat",
+      prescribed: { reps: 5, sets: 3 },
+      sets: [
+        { weight: 100, effectiveLoad: 100, reps: 3, rir: 0 },
+        { weight: 100, effectiveLoad: 100, reps: 2, rir: 0 },
+      ],
+    };
+    // Shortfall 5 of 10 logged-target reps = 50% > 30% → heavy.
+    expect(__test__.evaluatePerformance(exercise)).toBe("MISSED_HEAVY");
+  });
+
+  it("cooked HOLDs freeze consecutiveHolds instead of incrementing", () => {
+    const prev = { consecutiveHolds: 2, sessionsCount: 5, history: [] };
+    const cookedRecord = { date: "2026-07-10", readiness: "cooked" };
+    const exercise = { name: "Barbell Back Squat", sets: [{ weight: 100, reps: 5, rir: 0, est1rm: 116 }] };
+    const prescription = { decision: "HOLD", weight: 100, reps: 5, sets: 3, rationale: [] };
+    const next = updateLiftStateFromSession(prev, cookedRecord, exercise, prescription);
+    // Frozen at 2 — not bumped to 3 (which would flip stallSignal to "stall").
+    expect(next.consecutiveHolds).toBe(2);
+    expect(next.stallSignal).toBe("mild");
+
+    // A normal-readiness HOLD still increments.
+    const normalRecord = { date: "2026-07-12", readiness: "normal" };
+    const after = updateLiftStateFromSession(next, normalRecord, exercise, prescription);
+    expect(after.consecutiveHolds).toBe(3);
+    expect(after.stallSignal).toBe("stall");
+  });
+
   it("increments consecutiveHolds on HOLD decision", () => {
     const initial = { currentWeight: 100, currentRepRange: { reps: 5, sets: 3 }, bestE1RM: 117, consecutiveHolds: 1, stallSignal: null, history: [] };
     const session = buildSession({});
@@ -607,17 +654,82 @@ describe("Phase 3 — shouldAutoCompleteDeload", () => {
 });
 
 describe("Phase 3 — computeRecoveryPrescription", () => {
-  it("rebuilds at 110% of deloaded weight (rounds to nearest 1.25kg plate)", () => {
+  it("re-enters at 90% of the PRE-DELOAD snapshot, not off the deloaded weight", () => {
     const liftState = {
-      currentWeight: 65, // deloaded
+      currentWeight: 65, // deloaded — reconciled down by the deload sessions
       preDeloadWeight: 100,
       currentRepRange: { reps: 5, sets: 3 },
       inRecoveryUntil: 3,
     };
     const result = computeRecoveryPrescription("Barbell Back Squat", liftState, [], {});
-    // 65 × 1.10 = 71.5, rounds to nearest 1.25 plate → 71.25kg.
-    expect(result.weight).toBe(71.25);
+    // 100 × 0.90 = 90 — anchored to the snapshot. The old currentWeight × 1.10
+    // formula re-entered at 71.25kg and needed ~10 weeks of step ADDs to
+    // regain what the deload cost.
+    expect(result.weight).toBe(90);
     expect(result.decision).toBe("RECOVERY");
+  });
+
+  it("a rested-through deload re-enters at 90%, never jumps above pre-deload", () => {
+    // User never logged a deload session: currentWeight still equals the
+    // snapshot. currentWeight × 1.10 would prescribe 110 straight after a
+    // week off; the anchor must keep re-entry below the pre-deload weight.
+    const liftState = {
+      currentWeight: 100,
+      preDeloadWeight: 100,
+      currentRepRange: { reps: 5, sets: 3 },
+      inRecoveryUntil: 3,
+    };
+    const result = computeRecoveryPrescription("Barbell Back Squat", liftState, [], {});
+    expect(result.weight).toBe(90);
+    expect(result.weight).toBeLessThan(liftState.preDeloadWeight);
+  });
+
+  it("falls back to deloaded × 1.10 only when no snapshot exists (legacy state)", () => {
+    const liftState = {
+      currentWeight: 65,
+      preDeloadWeight: null,
+      currentRepRange: { reps: 5, sets: 3 },
+      inRecoveryUntil: 3,
+    };
+    const result = computeRecoveryPrescription("Barbell Back Squat", liftState, [], {});
+    expect(result.weight).toBe(71.25);
+  });
+
+  it("recovery trajectory: deload → re-entry → standard ADDs approach pre-deload within the window", () => {
+    // Walk the whole arc for a 100kg squatter who trains through the deload.
+    // This is the integration-shaped test the unit suite was missing — every
+    // step function passed alone while the composed trajectory collapsed.
+    const pre = { currentWeight: 100, currentRepRange: { reps: 5, sets: 3 } };
+    let ts = { lifts: { "Barbell Back Squat": pre }, mesocycle: {} };
+    ts = startDeload(ts, { type: "stall_convergence", lifts: ["Barbell Back Squat"] });
+    // Deload sessions reconcile currentWeight down to the performed 65%.
+    ts.lifts["Barbell Back Squat"].currentWeight = 65;
+    ts = completeDeload(ts);
+    const lift = ts.lifts["Barbell Back Squat"];
+    expect(lift.preDeloadWeight).toBe(100);
+
+    // Recovery session 1 prescription.
+    const r1 = computeRecoveryPrescription("Barbell Back Squat", lift, [], {});
+    expect(r1.weight).toBe(90);
+
+    // Performed cleanly at 90 → sessions 2-3 run standard logic; each clean
+    // session ADDs a lower_compound step (2.5kg): 90 → 92.5 → 95. By the end
+    // of the 3-session window the lift is within one ADD-step-per-week of
+    // pre-deload, not stranded at ~72%.
+    const afterR1 = { ...lift, currentWeight: 90, inRecoveryUntil: 2 };
+    const hist = [{
+      id: "2026-07-10T10:00:00.000Z", date: "2026-07-10", session: "strength-a", readiness: "normal",
+      blocks: [{ type: "main", exercises: [{ name: "Barbell Back Squat",
+        prescribed: { reps: 5, sets: 3 },
+        sets: [
+          { weight: 90, effectiveLoad: 90, reps: 5, rir: 2 },
+          { weight: 90, effectiveLoad: 90, reps: 5, rir: 2 },
+          { weight: 90, effectiveLoad: 90, reps: 5, rir: 2 },
+        ] }] }],
+    }];
+    const r2 = computeRecoveryPrescription("Barbell Back Squat", afterR1, hist, {});
+    expect(r2.weight).toBe(92.5);
+    expect(r2.mesocyclePhase).toBe("recovery");
   });
 });
 
@@ -817,6 +929,36 @@ describe("Engine bug — stale liftState seed reconciliation", () => {
 // ────────────────────────────────────────────────────────────────────────────
 // 10. Starting-weight helpers — BW% multipliers for main lifts (Task 5)
 // ────────────────────────────────────────────────────────────────────────────
+describe("isLatestSessionForLift — retro out-of-order guard", () => {
+  const mk = (id, lifts) => ({
+    id, date: id.slice(0, 10), session: "strength-a",
+    blocks: [{ type: "main", exercises: lifts.map(name => ({ name, sets: [] })) }],
+  });
+
+  it("a retro record older than a live session for the same lift is not latest", () => {
+    const history = [
+      mk("2026-07-08T12:00:00.000Z", ["Barbell Back Squat"]),   // retro (noon UTC)
+      mk("2026-07-11T18:30:00.000Z", ["Barbell Back Squat"]),   // live, newer
+    ];
+    expect(isLatestSessionForLift(history, "2026-07-08T12:00:00.000Z", "Barbell Back Squat")).toBe(false);
+    expect(isLatestSessionForLift(history, "2026-07-11T18:30:00.000Z", "Barbell Back Squat")).toBe(true);
+  });
+
+  it("a newer session that doesn't contain the lift doesn't block the backfill", () => {
+    const history = [
+      mk("2026-07-08T12:00:00.000Z", ["Barbell Back Squat"]),
+      mk("2026-07-11T18:30:00.000Z", ["Barbell Bench Press"]),  // newer, different lift
+    ];
+    expect(isLatestSessionForLift(history, "2026-07-08T12:00:00.000Z", "Barbell Back Squat")).toBe(true);
+  });
+
+  it("tolerates empty history and missing ids", () => {
+    expect(isLatestSessionForLift([], "2026-07-08T12:00:00.000Z", "Barbell Back Squat")).toBe(true);
+    expect(isLatestSessionForLift(null, "2026-07-08T12:00:00.000Z", "Barbell Back Squat")).toBe(true);
+    expect(isLatestSessionForLift([{ blocks: [] }], "2026-07-08T12:00:00.000Z", "Barbell Back Squat")).toBe(true);
+  });
+});
+
 describe("startingWeightForLift — BW% seeded starts", () => {
   it("computes Back Squat at 0.75 × bodyweight, rounded to 2.5kg", () => {
     expect(startingWeightForLift("Barbell Back Squat", 80)).toBe(60);   // 60.0

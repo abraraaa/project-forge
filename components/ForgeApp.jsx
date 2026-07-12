@@ -10,7 +10,7 @@ import {
   sessionMetaForDate, findUntickedRecent, } from "@/lib/programme";
 import {
   SessionIntent,
-  LS, P, PB, W, F, H, BW, PN, Days, Bk, bumpStreak,
+  LS, P, PB, W, F, H, BW, PN, Days, Bk, bumpStreak, recordCompletion,
   computeRhythm, detectRecoveryPattern,
   blobPush, flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
   enableAutoSync, disableAutoSync, pushNow, weeksSince, dateOfWeekdayIdxInCurrentWeek,
@@ -26,6 +26,7 @@ import {
   updateLiftStateFromSession,
   updateMuscleAnchorFromSession,
   reconcileLiftStateWithSession,
+  isLatestSessionForLift,
   // Phase 3
   shouldOfferDeload,
   computeDeloadPrescription,
@@ -232,8 +233,6 @@ export default function ForgeApp(){
     return SyncStatus.subscribe(status => setSyncState(status.state));
   }, []);
 
-  // Rhythm — derived from history, no persistence needed
-  const rhythm = useMemo(() => computeRhythm(history), [history]);
   const recoveryNudge = useMemo(
     () => (recoveryDismissed ? null : detectRecoveryPattern(history)),
     [history, recoveryDismissed]
@@ -294,14 +293,32 @@ export default function ForgeApp(){
   const [userWeek, setUserWeek] = useState(() => W.get() || WEEK);
 
   const strengthDaySessions = useMemo(() => deriveStrengthDaySessions(userWeek), [userWeek]);
+  // Rhythm — derived from history against the USER'S schedule (expected =
+  // weekly strength days × 4), no persistence needed. Lives below userWeek
+  // so the memo can read it.
+  const rhythm = useMemo(
+    () => computeRhythm(history, {
+      weeklyStrengthDays: userWeek.filter((d) => d?.type === "strength").length,
+    }),
+    [history, userWeek]
+  );
   // Single source of truth for catch-up state. dayDone is date-keyed
   // (`{ "2026-06-13": true, ... }`) — strength session finalises write it,
   // the Mark ✓ path writes it explicitly. findUntickedRecent returns the
   // actionable list (date + type + "log"/"tick" hint). Link surfaces when
   // length > 0; picker drives off the same list; count goes into the
   // editorial label so the user knows the scope up front.
+  // weekFor: each past date is judged under the schedule IN FORCE on it
+  // (W.getEffectiveOn), falling back to the default WEEK for dates before
+  // any edit existed. A static `week: userWeek` here reinterpreted the
+  // whole 7-day window under today's schedule — edit the week and past
+  // days changed meaning: wrong tick/log actions, phantom "missed" days.
+  // userWeek stays in the dep list so schedule saves recompute the list.
   const untickedDays = useMemo(
-    () => findUntickedRecent(history, 7, dayDone, { week: userWeek }),
+    () => findUntickedRecent(history, 7, dayDone, {
+      week: userWeek,
+      weekFor: (d) => W.getEffectiveOn(d) || WEEK,
+    }),
     [history, dayDone, userWeek]
   );
   const hasRetroGaps = untickedDays.length > 0;
@@ -599,31 +616,13 @@ export default function ForgeApp(){
     } else {
       dateStr = todayDate;
     }
-    // Write the Day entity (now the read source). scheduledType comes from
-    // the schedule effective on that date — preserves truthful interpretation
-    // even if the user retroactively edits the schedule later. For the
-    // non-strength tick path, completedType === scheduledType (the user just
-    // confirmed they did the scheduled thing).
-    //
-    // CRITICAL fallback: W.getEffectiveOn returns null when no schedule edit
-    // log exists (i.e., the user has been using the default schedule the
-    // whole time — the most common state). Without this fallback, scheduled
-    // and completed types both become null, and Days.manualTickDates filters
-    // out entries with null completedType — so the retro picker keeps
-    // surfacing the same day as "missed" no matter how many times the user
-    // taps Mark ✓. (User reported: "missed workout flow keeps bringing up
-    // the same cardio days from last week." This was the cause.)
-    const dowMon = (() => {
-      const [y, m, d] = dateStr.split("-").map(Number);
-      const js = new Date(y, m - 1, d).getDay();
-      return js === 0 ? 6 : js - 1;
-    })();
-    const effective = W.getEffectiveOn(dateStr) || WEEK;
-    const scheduledType = effective[dowMon]?.type || null;
-    Days.set(activeProfile, dateStr, {
-      scheduledType,
-      completedType: scheduledType,
-    });
+    // One-call completion: schedule stamping (effective on THAT date, with
+    // the default-week fallback — see recordCompletion in lib/storage.js for
+    // why both matter), the Days write, and breather resumption (a tick dated
+    // after an open breather's start resumes the rhythm; a retro-fill for a
+    // day BEFORE it confirmed leaves the breather intact).
+    const res = recordCompletion(activeProfile, dateStr, { kind: "tick" });
+    if (res?.endedBreak) setBreaks(Bk.getAll(activeProfile));
     // Refresh React state from the unified Day projection.
     const proj = Days.projectCurrentWeek(activeProfile);
     setWeekDone(proj.complete);
@@ -632,9 +631,6 @@ export default function ForgeApp(){
       const newStreak = bumpStreak(activeProfile);
       setStreak(newStreak);
     }
-    // A tick dated after an open breather's start resumes the rhythm (a
-    // retro-fill for a day BEFORE it confirmed leaves the breather intact).
-    if (Bk.endOnActivity(activeProfile, dateStr)) setBreaks(Bk.getAll(activeProfile));
     pushNow(activeProfile);
   },[activeProfile]);
 
@@ -653,23 +649,12 @@ export default function ForgeApp(){
       const day = String(d.getDate()).padStart(2, "0");
       return `${y}-${m}-${day}`;
     })();
-    // Stamp scheduledType from the effective schedule (or WEEK fallback
-    // if no edit log). Without this, bonus-only entries land with null
-    // scheduledType — indistinguishable from the buggy null/null Mark ✓
-    // writes, forcing the repair migration to guess. Writing scheduledType
-    // here gives the repair a clean signal: scheduledType set +
-    // completedType null = legit bonus-only, leave alone.
-    const dowMon = (() => {
-      const [y, m, d] = today.split("-").map(Number);
-      const js = new Date(y, m - 1, d).getDay();
-      return js === 0 ? 6 : js - 1;
-    })();
-    const effective = W.getEffectiveOn(today) || WEEK;
-    const scheduledType = effective[dowMon]?.type || null;
-    Days.set(activeProfile, today, {
-      scheduledType,
-      marks: { bonus: true },
-    });
+    // recordCompletion stamps scheduledType even for bonus-only entries.
+    // Without it they'd land with null scheduledType — indistinguishable
+    // from the buggy null/null Mark ✓ writes, forcing the repair migration
+    // to guess. Bonus never sets completedType, never bumps rhythm, never
+    // resumes a breather — extras, not adherence.
+    recordCompletion(activeProfile, today, { kind: "bonus" });
     // Refresh React state from the unified Day projection.
     setBonusDone(Days.projectCurrentWeek(activeProfile).bonus);
     pushNow(activeProfile);
@@ -903,7 +888,12 @@ export default function ForgeApp(){
   // fires once per retrospective submission.
   const handleSubmitRetro = (payload) => {
     if (!activeProfile || !retroDate) return;
-    const meta = sessionMetaForDate(retroDate, userWeek);
+    // The schedule IN FORCE on the retro date decides what that day was —
+    // not today's config. Under today's week a retro day whose slot has
+    // since been edited away from strength was refused here outright, and
+    // one whose strength letter moved got the wrong A/B/C session.
+    const retroWeek = W.getEffectiveOn(retroDate) || WEEK;
+    const meta = sessionMetaForDate(retroDate, retroWeek);
     if (!meta || meta.type !== "strength") return;
 
     const sessionDef = SESSIONS[meta.sessionIdx];
@@ -984,19 +974,17 @@ export default function ForgeApp(){
       sessionRecord.retrospective = true;
 
       H.append(activeProfile, sessionRecord);
-      // Dual-write to Days. Same shape as the live-session path above.
-      {
-        const effective = W.getEffectiveOn(sessionRecord.date);
-        const [y, m, d] = sessionRecord.date.split("-").map(Number);
-        const js = new Date(y, m - 1, d).getDay();
-        const dowMon = js === 0 ? 6 : js - 1;
-        const scheduledType = effective && effective[dowMon] ? effective[dowMon].type : "strength";
-        Days.set(activeProfile, sessionRecord.date, {
-          scheduledType,
-          completedType: "strength",
-          sessionId: sessionRecord.id,
-        });
-      }
+      // One-call completion — same path as live finalise. This is also what
+      // makes a retro strength session resume an open breather: training on
+      // or after the breather's start counts whether logged live or from
+      // memory (lib/breaks.js contract). The old hand-rolled Days.set here
+      // skipped Bk.endOnActivity, so a session trained during a breather but
+      // logged a day later left the app showing "resting" indefinitely.
+      const completion = recordCompletion(activeProfile, sessionRecord.date, {
+        kind: "session",
+        sessionId: sessionRecord.id,
+      });
+      if (completion?.endedBreak) setBreaks(Bk.getAll(activeProfile));
       setHistory(H.get(activeProfile));
       // Refresh the unified Day projection so a retro-logged strength day
       // marks the strip dot in the same tick. No legacy dayDone write —
@@ -1025,9 +1013,18 @@ export default function ForgeApp(){
 
         for (const block of sessionRecord.blocks || []) {
           for (const ex of block.exercises || []) {
+            // A retro record sorts into chronological position, so it can be
+            // OLDER than the newest session for this lift. In that case the
+            // record joins history but must not touch lift state — the state
+            // writers below assume their session is the latest evidence and
+            // would regress currentWeight to a week-old top set and bump
+            // stall/session counters out of order.
+            const isLatestForLift = isLatestSessionForLift(fullHistory, sessionRecord.id, ex.name);
             // Reconcile before reading — see same comment on the live path.
             const rawLiftState  = trainingState.lifts?.[ex.name] || null;
-            const liftState     = reconcileLiftStateWithSession(rawLiftState, ex);
+            const liftState     = isLatestForLift
+              ? reconcileLiftStateWithSession(rawLiftState, ex)
+              : rawLiftState;
             const profile       = getLiftProfile(ex.name);
             const anchorMuscle  = profile.primaryMuscle;
             const muscleAnchor  = anchorMuscle
@@ -1042,7 +1039,10 @@ export default function ForgeApp(){
 
             if (stillInDeload) {
               prescription = computeDeloadPrescription(ex.name, liftState, context);
-            } else if (liftState?.inRecoveryUntil > 0 && !justCompletedDeload) {
+            } else if (liftState?.inRecoveryUntil > 0) {
+              // Includes the auto-close session — same reasoning as the live
+              // finalise path in SessionHost: the re-entry anchors to the
+              // pre-deload snapshot, and the decrement below stays skipped.
               prescription = computeRecoveryPrescription(ex.name, liftState, fullHistory, context);
             } else {
               prescription = computeNextPrescription({
@@ -1058,7 +1058,10 @@ export default function ForgeApp(){
               wwUpdates[ex.name] = prescription.weight;
             }
 
-            if (stillInDeload && liftState) {
+            if (!isLatestForLift) {
+              // Older backfill: history has the record; lift state and
+              // anchors stay anchored to the newer live evidence.
+            } else if (stillInDeload && liftState) {
               const lastHistEntry = {
                 date: sessionRecord.date,
                 weight: ex.sets?.[0]?.weight ?? null,
@@ -1081,7 +1084,7 @@ export default function ForgeApp(){
               TS.updateLift(activeProfile, ex.name, counterAdjusted);
             }
 
-            if (anchorMuscle && profile.progressesByLoad && !stillInDeload) {
+            if (isLatestForLift && anchorMuscle && profile.progressesByLoad && !stillInDeload) {
               const currentAnchor = TS.get(activeProfile).muscleAnchors?.[anchorMuscle] || null;
               const newAnchor     = updateMuscleAnchorFromSession(currentAnchor, sessionRecord, ex);
               if (newAnchor) TS.updateMuscleAnchor(activeProfile, anchorMuscle, newAnchor);
@@ -1223,7 +1226,7 @@ export default function ForgeApp(){
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
       {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={()=>setAbsenceNudgeDismissed(true)}/>}
       {breatherOpen           && <BreatherModal onConfirm={handleStartBreather} onCancel={()=>setBreatherOpen(false)}/>}
-      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} userWeek={userWeek} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
+      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}
@@ -1775,8 +1778,10 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
 // the selected date. Auto-fill across cells in a row; tap any cell to override
 // via the existing ScrollDrum overlay. Skip toggle per exercise. One RPE
 // applied to all sets in an exercise.
-function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingReps, userWeek=WEEK, onCancel, onSubmit}){
-  const meta = useMemo(() => sessionMetaForDate(date, userWeek), [date, userWeek]);
+// effectiveWeek = the schedule in force ON `date` (resolved by the host via
+// W.getEffectiveOn) — never today's config; see handleSubmitRetro.
+function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingReps, effectiveWeek=WEEK, onCancel, onSubmit}){
+  const meta = useMemo(() => sessionMetaForDate(date, effectiveWeek), [date, effectiveWeek]);
   const sessionDef = meta?.type === "strength" ? SESSIONS[meta.sessionIdx] : null;
 
   // Flatten blocks into a single exercise list, but keep a back-reference to

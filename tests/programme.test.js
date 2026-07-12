@@ -1256,3 +1256,77 @@ describe("findUntickedRecent — per-week strength cap", () => {
     }
   });
 });
+
+// ─── findRecentDays / findUntickedRecent — effective-dated schedules ────────
+// The weekFor resolver hands each past date the schedule IN FORCE on it.
+// Without it, editing the schedule reinterpreted the whole trailing window
+// under today's config: past cardio days flipped to phantom "missed
+// strength" rows, past strength days became untickable cardio.
+describe("weekFor — past days keep the meaning they had when they happened", () => {
+  const cardioWeek   = Array(7).fill({ type: "cardio" });
+  const strengthWeek = Array(7).fill({ type: "strength" });
+  const sx = (date) => ({ v: 2, id: `${date}T10:00:00.000Z`, date, session: "strength_a", blocks: [] });
+
+  it("findRecentDays types each date under the schedule effective on it", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-21T12:00:00"));
+      // Schedule was all-cardio until the 19th; edited to all-strength from
+      // the 19th. The trailing window must show 18th as cardio (old world)
+      // and 19th/20th as strength (new world).
+      const weekFor = (d) => (d >= "2026-06-19" ? strengthWeek : cardioWeek);
+      const rows = findRecentDays([], 3, { order: "asc", weekFor });
+      expect(rows.map((r) => [r.date, r.type])).toEqual([
+        ["2026-06-18", "cardio"],
+        ["2026-06-19", "strength"],
+        ["2026-06-20", "strength"],
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("findUntickedRecent offers a tick (not a strength log) for a day that was cardio back then", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-21T12:00:00"));
+      const weekFor = (d) => (d >= "2026-06-20" ? strengthWeek : cardioWeek);
+      const rows = findUntickedRecent([], 2, {}, { weekFor });
+      const byDate = Object.fromEntries(rows.map((r) => [r.date, r.action]));
+      // 19th was cardio under the schedule in force then → tick.
+      // 20th is strength under the new schedule → log.
+      expect(byDate["2026-06-19"]).toBe("tick");
+      expect(byDate["2026-06-20"]).toBe("log");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("per-week strength cap follows each week's own schedule across an edit", () => {
+    vi.useFakeTimers();
+    try {
+      // Sun 21 Jun. LAST week (Mon 8th – Sun 14th) ran under a 3-strength
+      // schedule and all 3 were logged; THIS week is edited to 6 strength
+      // days. Applying this week's cap (6) to last week would re-surface
+      // last week's satisfied days as missing.
+      vi.setSystemTime(new Date("2026-06-16T12:00:00"));
+      const threeStrengthWeek = [
+        { type: "strength" }, { type: "cardio" }, { type: "strength" },
+        { type: "cardio" },   { type: "strength" }, { type: "rest" },
+        { type: "rest" },
+      ];
+      const sixStrengthWeek = [
+        ...Array(6).fill({ type: "strength" }), { type: "rest" },
+      ];
+      const weekFor = (d) => (d >= "2026-06-15" ? sixStrengthWeek : threeStrengthWeek);
+      const history = [sx("2026-06-08"), sx("2026-06-10"), sx("2026-06-12")];
+      const rows = findUntickedRecent(history, 7, {}, { weekFor });
+      // Nothing from last week surfaces — its own cap (3) is met. Monday the
+      // 15th (this week, unlogged, strength under the new schedule) does.
+      const strengthRows = rows.filter((r) => r.type === "strength");
+      expect(strengthRows.map((r) => r.date)).toEqual(["2026-06-15"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
