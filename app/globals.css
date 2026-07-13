@@ -416,6 +416,35 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   transition-duration: 60ms;
 }
 
+/* ─── Raised surfaces (tactful neumorphism, device-judged 2026-07-13) ──────
+   Dark-field extrusion is carried by the TOP-EDGE light bevel — a warm
+   hairline where light catches, a soft shade beneath — never by drop
+   shadows (variant C read "jiggly/unstable" on device and is dead; a
+   standing debossed state, variant D, likewise). Deboss exists ONLY as
+   the pressed state: the surface gives under the finger.
+
+   SMOOTHNESS RULE, load-bearing: the shadow state swaps INSTANTLY —
+   there is deliberately no box-shadow transition. Tweening box-shadow
+   repaints per frame on iOS and read as "choppy" on device; the press
+   feel comes from .forge-press's compositor-only scale/filter tween
+   while the shadows seat crisply, like a real button. Do not add a
+   box-shadow transition here.
+
+   Compose as `forge-raised forge-press` on dark interactive cards.
+   NOT for: bottom sheets (settled grammar), the coral primary CTAs
+   (untested surface — bevel hairlines were only judged on dark cards). */
+.forge-raised {
+  background: linear-gradient(150deg, #201d1b, #171514);
+  border: none;
+  box-shadow: inset 1px 1px 0 rgba(242, 231, 215, 0.055),
+              inset -1px -1px 0 rgba(0, 0, 0, 0.35);
+}
+.forge-raised:active {
+  background: #151312;
+  box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.55),
+              inset -1px -1px 2px rgba(242, 231, 215, 0.035);
+}
+
 /* Grain under the finger (tactility batch 3 — Home until device-verified).
    A localised warm lift at the exact touch point: fast bloom on press
    (60ms), slow exhale on release (~480ms). Deliberately none of the
