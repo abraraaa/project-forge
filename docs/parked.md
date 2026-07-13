@@ -257,6 +257,17 @@ gap is yield and temperature at the point of contact.
    verify on device together, then decide rollout. Per CLAUDE.md.
 
 ### Lab muscle taxonomy — collapse the surface, split the regions
+**STAGE 3 SHIPPED 2026-07-13 (this PR):** Back retired for Lats / Upper
+Back / Erectors across all 47 affected entries + 8 pattern defaults
+(rules: vertical pulls → Lats; rows → Lats-primary with wide-grip/
+chest-supported flipping to Upper Back; hinge bracing → Erectors;
+face-pull family → Upper Back; hanging/overhead core → Lats, a
+hand-correction over the mechanical rule). Erectors is a fatigue
+ceiling (mev 0), exactly the framing adjudicated. The Lab list now
+groups by the chart's 9 buckets (Back / Shoulders / Arms expandable) —
+constant length however granular the engine gets. Baselines clean,
+solver holds 0/30 per focus under the new bands. Entry below retained
+for the original design record.
 
 **Status:** Parked 2026-07-08 (same review; needs a dedicated session with
 a short design doc approved before any code — this is a data restructure,

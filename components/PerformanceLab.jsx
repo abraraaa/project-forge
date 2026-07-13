@@ -6,6 +6,7 @@ import {
   readinessBreakdown, sessionCount, detectPlateaus,
 } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
+import { DISPLAY_BUCKET } from "@/lib/exercise-anatomy";
 import { T } from "@/lib/tokens";
 import { haptic } from "@/lib/a11y";
 import GlossarySheet, { GlossaryTrigger } from "@/components/GlossarySheet";
@@ -367,38 +368,44 @@ const BAND_LABEL = {
 // the editorial muscle ordering (legs → torso → arms → core).
 const SEVERITY = { under_mev: 0, over_mrv: 1, low: 2, optimal: 3, untargeted: 4 };
 
-// The three delt heads share identical per-head landmarks, so rendering them
-// as three sibling rows triple-printed the same story. They collapse into one
-// "Shoulders" row: aggregate sets, the WORST head's band (most actionable —
-// SEVERITY order), summed sparkline, expandable for the per-head split. The
-// ENGINE stays granular — landmarks are defined per head and the audit still
-// judges each one; this is display aggregation only, same doctrine as the
-// chart's DISPLAY_BUCKET. Traps keeps its own row: different landmarks.
-const SHOULDER_HEADS = ["Front Delts", "Side Delts", "Rear Delts"];
-
-function collapseShoulderRows(rows) {
-  const heads = rows.filter((r) => SHOULDER_HEADS.includes(r.muscle));
-  if (heads.length === 0) return rows;
-  const rest = rows.filter((r) => !SHOULDER_HEADS.includes(r.muscle));
-  const len = Math.max(0, ...heads.map((r) => r.series.length));
-  const series = Array.from({ length: len }, (_, i) =>
-    heads.reduce((s, r) => s + (r.series[i] || 0), 0));
-  const worst = heads.reduce((w, r) =>
-    (SEVERITY[r.status] ?? 99) < (SEVERITY[w.status] ?? 99) ? r : w, heads[0]);
-  const grouped = {
-    muscle: "Shoulders",
-    sets: Math.round(heads.reduce((s, r) => s + r.sets, 0) * 10) / 10,
-    target: null,          // judgement lives at head level — no bands on the sum
-    status: worst.status,  // the most actionable head speaks for the group
-    series,
-    heads,
-    worstHead: worst.muscle,
-  };
-  // Keep the group where its worst head would have sorted.
-  return [...rest, grouped];
+// The Lab list groups by the CHART'S OWN 9 buckets — one vocabulary across
+// both surfaces, and the list stays a constant length no matter how granular
+// the engine gets underneath (16 muscles as of the Back split). Any bucket
+// with more than one granular member collapses into an expandable group row:
+// aggregate sets, the WORST member's band (most actionable — SEVERITY
+// order), summed sparkline without bands (judgement lives at member level).
+// The ENGINE stays granular — the audit still judges every muscle alone;
+// this is display aggregation only. Groups today: Back (Lats / Upper Back /
+// Erectors), Shoulders (three delt heads + Traps), Arms (Biceps / Triceps /
+// Forearms).
+function collapseBucketGroups(rows) {
+  const byBucket = {};
+  for (const r of rows) {
+    const bucket = DISPLAY_BUCKET[r.muscle] || r.muscle;
+    (byBucket[bucket] ||= []).push(r);
+  }
+  const out = [];
+  for (const [bucket, members] of Object.entries(byBucket)) {
+    if (members.length === 1) { out.push(members[0]); continue; }
+    const len = Math.max(0, ...members.map((r) => r.series.length));
+    const series = Array.from({ length: len }, (_, i) =>
+      members.reduce((s, r) => s + (r.series[i] || 0), 0));
+    const worst = members.reduce((w, r) =>
+      (SEVERITY[r.status] ?? 99) < (SEVERITY[w.status] ?? 99) ? r : w, members[0]);
+    out.push({
+      muscle: bucket,
+      sets: Math.round(members.reduce((s, r) => s + r.sets, 0) * 10) / 10,
+      target: null,          // no bands on a sum — judgement lives at member level
+      status: worst.status,  // the most actionable member speaks for the group
+      series,
+      members,
+      worstMember: worst.muscle,
+    });
+  }
+  return out;
 }
 
-function ShouldersRow({ row, muted = false }) {
+function GroupRow({ row, muted = false }) {
   const [open, setOpen] = useState(false);
   const bandLabel = muted ? "resting" : (BAND_LABEL[row.status] || "");
   return (
@@ -406,13 +413,13 @@ function ShouldersRow({ row, muted = false }) {
       <button onClick={() => setOpen((o) => !o)} className="forge-press"
         aria-expanded={open}
         style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", font: "inherit" }}>
-        <MuscleRow muscle="Shoulders" caret={open ? "▾" : "▸"} sets={row.sets}
+        <MuscleRow muscle={row.muscle} caret={open ? "▾" : "▸"} sets={row.sets}
           target={null} status={row.status} series={row.series} muted={muted}
-          subtitle={muted ? "resting" : `${bandLabel} · ${row.worstHead.toLowerCase()} · per head`} />
+          subtitle={muted ? "resting" : `${bandLabel} · ${row.worstMember.toLowerCase()}`} />
       </button>
       {open && (
         <div style={{ paddingLeft: 16 }}>
-          {row.heads.map((h) => <MuscleRow key={h.muscle} {...h} muted={muted} />)}
+          {row.members.map((h) => <MuscleRow key={h.muscle} {...h} muted={muted} />)}
         </div>
       )}
     </div>
@@ -439,7 +446,7 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
     ...Object.keys(trend?.byMuscle || {}).filter(m => !AUDIT_MUSCLE_ORDER.includes(m)),
   ];
 
-  const rows = collapseShoulderRows(muscles.map(muscle => {
+  const rows = collapseBucketGroups(muscles.map(muscle => {
     const a = audit.perMuscle[muscle] || { sets: 0, target: null, status: "untargeted" };
     const series = trend?.byMuscle?.[muscle] || [];
     return { muscle, sets: a.sets, target: a.target, status: a.status, series };
@@ -467,8 +474,8 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
             in as you train. Pick it up when you&apos;re ready.
           </div>
         </div>
-        {historical.map(row => row.heads
-          ? <ShouldersRow key={row.muscle} row={row} muted />
+        {historical.map(row => row.members
+          ? <GroupRow key={row.muscle} row={row} muted />
           : <MuscleRow key={row.muscle} {...row} muted />)}
       </div>
     );
@@ -485,8 +492,8 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
 
   return (
     <div style={{padding:"2px 0 0"}}>
-      {visible.map(row => row.heads
-        ? <ShouldersRow key={row.muscle} row={row} />
+      {visible.map(row => row.members
+        ? <GroupRow key={row.muscle} row={row} />
         : <MuscleRow key={row.muscle} {...row} />)}
       <div style={{marginTop:14,fontSize:11,color:T.text4,lineHeight:1.5}}>
         Sparklines = last 8 weeks · band &amp; sets/wk = last {audit.weeksAnalysed} complete weeks · {audit.sessionsAnalysed} session{audit.sessionsAnalysed===1?"":"s"}

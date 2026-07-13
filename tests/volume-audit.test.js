@@ -115,9 +115,10 @@ describe("auditVolume", () => {
     for (const m of Object.keys(VOLUME_TARGETS)) {
       expect(perMuscle[m]).toBeDefined();
       expect(perMuscle[m].sets).toBe(0);
-      // Core and Traps have MEV 0 (indirect-volume muscles — never nag a
-      // shortfall), so zero volume is "low", not "under_mev"
-      expect(perMuscle[m].status).toBe(m === "Core" || m === "Traps" ? "low" : "under_mev");
+      // mev-0 muscles (Core, Traps, Erectors — indirect-volume, never nag a
+      // shortfall) read "low" at zero, not "under_mev"
+      const mevZero = ["Core", "Traps", "Erectors"];
+      expect(perMuscle[m].status).toBe(mevZero.includes(m) ? "low" : "under_mev");
     }
   });
 });
@@ -225,7 +226,10 @@ describe("auditHistoryVolume", () => {
     expect(a.perMuscle.Quads.status).not.toBe("under_mev");
     const underNames = a.flags.filter((f) => f.status === "under_mev").map((f) => f.muscle);
     expect(underNames).toContain("Chest");
-    expect(underNames).toContain("Back");
+    // Back split (stage 3): the untrained pull volume now flags on the
+    // banded halves rather than the retired Back key.
+    expect(underNames).toContain("Lats");
+    expect(underNames).toContain("Upper Back");
   });
 
   it("respects custom weeks parameter", () => {
