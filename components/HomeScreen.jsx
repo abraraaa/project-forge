@@ -792,8 +792,13 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 
       {/* Performance Lab entry — always visible, becomes active once data exists */}
       <Fade d={260}>
-        <div {...grain} className={`${grain.className} forge-press`} onClick={onPerformance}
-          style={{margin:"20px 24px 0",padding:"18px 20px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:`all 200ms ${T.ease}`}}>
+        {/* forge-raised: the bevel material (device-judged B2, 2026-07-13).
+            Its background/border ARE the material — the old inline bg2 +
+            border are removed, and the old `transition: all` went with them
+            (it would tween box-shadow, the exact jiggle B1 was rejected
+            for; forge-press owns the motion). */}
+        <div {...grain} className={`${grain.className} forge-press forge-raised`} onClick={onPerformance}
+          style={{margin:"20px 24px 0",padding:"18px 20px",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
               Performance lab
