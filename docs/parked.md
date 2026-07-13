@@ -932,6 +932,16 @@ Entries graduate here with the resolving commit. Keep most recent on top;
 trim entries older than the last block once they're no longer
 discussion-relevant.
 
+- **Bevel material (tactful neumorphism)** — (2026-07-13, this PR).
+  Device-judged across two rounds: B2 wins — top-edge light bevel,
+  deboss as PRESSED state only, shadows seat INSTANTLY (tweened
+  box-shadow read "unsettled/unstable" and is comment-banned in
+  globals.css; drop shadows and standing deboss rejected round 1).
+  Rollout starts with one flagship surface (Home's Performance Lab
+  card); excluded by material rule: glass cards (forge-raised's opaque
+  background would kill translucency), tinted cards (sage/accent
+  semantics), accent-outlined buttons, sheets, coral CTAs. Extend by
+  taste, one surface at a time. /diag-depth deleted per charter.
 - **Progression + schedule audit fixes** — PRs #209/#210 (2026-07-12).
   Holistic review of the engine and completion marking; every finding
   fixed or explicitly parked: post-deload re-entry anchors to the
