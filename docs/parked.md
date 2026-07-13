@@ -141,6 +141,22 @@ person/device), and the fix is a storage migration (per-profile keys +
 legacy-key fold) with real blast area for zero felt benefit today. If
 multi-profile devices ever become real, this is the first thing to lift.
 
+### programmeBlock merges whole-object across devices
+
+**Status:** Parked 2026-07-13 (rotation audit, finding 8) — same class as
+the Day-merge clobber fixed in the progression audit, lower stakes.
+
+**Problem:** cross-device merge takes the programmeBlock with the higher
+block number wholesale (remote wins ties). Two devices rotating near the
+same time: one side's config AND its exclusion history are discarded —
+no union, so up to a block of recency memory is lost and the losing
+device's rotation silently reverts on next sync.
+
+**Why parked:** worst case is a slightly staler exclusion list and one
+surprising re-pick — no data loss beyond memory, self-heals within a
+block. Field-aware merge (config latest-wins per slot, history unioned
+per slot) is the fix shape if it ever bites a real user.
+
 ### Status bar goes black while modals are open (browser)
 
 **Status:** Parked 2026-07-10 as a DESIGN decision, not a bug. Safari
