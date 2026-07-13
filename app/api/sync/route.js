@@ -1,4 +1,5 @@
 import { put, list, del, get } from "@vercel/blob";
+import { mergeMeta } from "@/lib/sync-merge";
 import { NextResponse } from "next/server";
 
 // Blob layout (case-insensitive — path uses lowercase, display name lives in meta):
@@ -244,13 +245,26 @@ export async function PUT(request) {
     // that follows.
     const { blobs } = await list({ prefix: legacyPrefix(profile) });
 
-    // ── Meta write ──────────────────────────────────────────────
-    // Deterministic path + allowOverwrite. No suffix dance, no list-then-
-    // delete pre-step (legacy cleanup is consolidated at the end).
+    // ── Meta write (merge with remote — audit S3) ───────────────
+    // History always merged server-side; meta used to overwrite wholesale,
+    // so a device pushing from stale local state DELETED the other
+    // device's meta fields. Now the existing blob merges with the incoming
+    // payload through THE merge (lib/sync-merge.js — same module the
+    // client uses), with the incoming side winning ties: a push means "I
+    // just did something". The blob is therefore always a merged superset.
+    // Costs one blob read per PUT — colocated, cheap, and the price of
+    // never losing a field. NOTE: read-merge-write is not atomic (Vercel
+    // Blob has no compare-and-swap); two simultaneous PUTs can still race,
+    // but with field stamps the loser's next push converges instead of
+    // clobbering — accepted and documented (audit S6).
     if (data.meta) {
+      const existingMeta = await readJson(metaPath(profile));
+      const mergedMeta = existingMeta && typeof existingMeta === "object"
+        ? mergeMeta(existingMeta, data.meta)
+        : data.meta;
       await put(
         metaPath(profile),
-        JSON.stringify({ ...data.meta, syncedAt: new Date().toISOString() }),
+        JSON.stringify({ ...mergedMeta, syncedAt: new Date().toISOString() }),
         { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false },
       );
       results.meta = true;
