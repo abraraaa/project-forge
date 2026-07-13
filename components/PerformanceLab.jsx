@@ -367,6 +367,58 @@ const BAND_LABEL = {
 // the editorial muscle ordering (legs → torso → arms → core).
 const SEVERITY = { under_mev: 0, over_mrv: 1, low: 2, optimal: 3, untargeted: 4 };
 
+// The three delt heads share identical per-head landmarks, so rendering them
+// as three sibling rows triple-printed the same story. They collapse into one
+// "Shoulders" row: aggregate sets, the WORST head's band (most actionable —
+// SEVERITY order), summed sparkline, expandable for the per-head split. The
+// ENGINE stays granular — landmarks are defined per head and the audit still
+// judges each one; this is display aggregation only, same doctrine as the
+// chart's DISPLAY_BUCKET. Traps keeps its own row: different landmarks.
+const SHOULDER_HEADS = ["Front Delts", "Side Delts", "Rear Delts"];
+
+function collapseShoulderRows(rows) {
+  const heads = rows.filter((r) => SHOULDER_HEADS.includes(r.muscle));
+  if (heads.length === 0) return rows;
+  const rest = rows.filter((r) => !SHOULDER_HEADS.includes(r.muscle));
+  const len = Math.max(0, ...heads.map((r) => r.series.length));
+  const series = Array.from({ length: len }, (_, i) =>
+    heads.reduce((s, r) => s + (r.series[i] || 0), 0));
+  const worst = heads.reduce((w, r) =>
+    (SEVERITY[r.status] ?? 99) < (SEVERITY[w.status] ?? 99) ? r : w, heads[0]);
+  const grouped = {
+    muscle: "Shoulders",
+    sets: Math.round(heads.reduce((s, r) => s + r.sets, 0) * 10) / 10,
+    target: null,          // judgement lives at head level — no bands on the sum
+    status: worst.status,  // the most actionable head speaks for the group
+    series,
+    heads,
+    worstHead: worst.muscle,
+  };
+  // Keep the group where its worst head would have sorted.
+  return [...rest, grouped];
+}
+
+function ShouldersRow({ row, muted = false }) {
+  const [open, setOpen] = useState(false);
+  const bandLabel = muted ? "resting" : (BAND_LABEL[row.status] || "");
+  return (
+    <div>
+      <button onClick={() => setOpen((o) => !o)} className="forge-press"
+        aria-expanded={open}
+        style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", font: "inherit" }}>
+        <MuscleRow muscle="Shoulders" caret={open ? "▾" : "▸"} sets={row.sets}
+          target={null} status={row.status} series={row.series} muted={muted}
+          subtitle={muted ? "resting" : `${bandLabel} · ${row.worstHead.toLowerCase()} · per head`} />
+      </button>
+      {open && (
+        <div style={{ paddingLeft: 16 }}>
+          {row.heads.map((h) => <MuscleRow key={h.muscle} {...h} muted={muted} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
   // New user — not enough logged history anywhere yet. Gate on TOTAL sessions
   // (not the window count, which is now recency-scoped). Encourage logging
@@ -387,11 +439,11 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
     ...Object.keys(trend?.byMuscle || {}).filter(m => !AUDIT_MUSCLE_ORDER.includes(m)),
   ];
 
-  const rows = muscles.map(muscle => {
+  const rows = collapseShoulderRows(muscles.map(muscle => {
     const a = audit.perMuscle[muscle] || { sets: 0, target: null, status: "untargeted" };
     const series = trend?.byMuscle?.[muscle] || [];
     return { muscle, sets: a.sets, target: a.target, status: a.status, series };
-  });
+  }));
 
   // "Away" — the user HAS a training history, but the recent window is empty.
   // The sparklines STAY: eight weeks of history (including the fade-out) is
@@ -415,7 +467,9 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
             in as you train. Pick it up when you&apos;re ready.
           </div>
         </div>
-        {historical.map(row => <MuscleRow key={row.muscle} {...row} muted />)}
+        {historical.map(row => row.heads
+          ? <ShouldersRow key={row.muscle} row={row} muted />
+          : <MuscleRow key={row.muscle} {...row} muted />)}
       </div>
     );
   }
@@ -431,7 +485,9 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
 
   return (
     <div style={{padding:"2px 0 0"}}>
-      {visible.map(row => <MuscleRow key={row.muscle} {...row} />)}
+      {visible.map(row => row.heads
+        ? <ShouldersRow key={row.muscle} row={row} />
+        : <MuscleRow key={row.muscle} {...row} />)}
       <div style={{marginTop:14,fontSize:11,color:T.text4,lineHeight:1.5}}>
         Sparklines = last 8 weeks · band &amp; sets/wk = last {audit.weeksAnalysed} complete weeks · {audit.sessionsAnalysed} session{audit.sessionsAnalysed===1?"":"s"}
       </div>
@@ -442,10 +498,12 @@ function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
   );
 }
 
-function MuscleRow({ muscle, sets, target, status, series, muted = false }) {
+function MuscleRow({ muscle, sets, target, status, series, muted = false, subtitle = null, caret = null }) {
   // Muted = the "away" presentation: the sparkline keeps telling the 8-week
   // story, but the band judgement is suspended (neutral colour, "resting"
   // label) — no alarm styling while the user is deliberately/otherwise off.
+  // subtitle overrides the label line (the collapsed Shoulders row names its
+  // worst head instead of a landmark pair); caret is its expand affordance.
   const colour = muted ? T.text4 : (BAND_COLOUR[status] || T.text4);
   const bandLabel = muted ? "resting" : (BAND_LABEL[status] || "");
   // Right side: sparkline. Reference bands (MEV/MAV/MRV) drawn behind the
@@ -464,14 +522,15 @@ function MuscleRow({ muscle, sets, target, status, series, muted = false }) {
         <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:3}}>
           <span style={{width:8,height:8,borderRadius:"50%",background:colour,display:"inline-block",flexShrink:0}} aria-hidden="true"/>
           <span style={{fontSize:13,fontWeight:500,color:T.text1,letterSpacing:"0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{muscle}</span>
+          {caret && <span aria-hidden="true" style={{fontSize:10,color:T.text3,flexShrink:0}}>{caret}</span>}
           <span style={{fontSize:12,color:T.text3,fontVariantNumeric:"tabular-nums",marginLeft:"auto",flexShrink:0}}>
             {sets}<span style={{color:T.text4}}> /wk</span>
           </span>
         </div>
         <div style={{fontSize:10,color:colour,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:500}}>
-          {target
+          {subtitle ?? (target
             ? `${bandLabel} · MEV ${target.mev} · MRV ${target.mrv}`
-            : bandLabel}
+            : bandLabel)}
         </div>
       </div>
       <Sparkline series={series} target={target} colour={colour} />

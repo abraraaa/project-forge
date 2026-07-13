@@ -115,8 +115,9 @@ describe("auditVolume", () => {
     for (const m of Object.keys(VOLUME_TARGETS)) {
       expect(perMuscle[m]).toBeDefined();
       expect(perMuscle[m].sets).toBe(0);
-      // Core has MEV 0, so zero volume is "low", not "under_mev"
-      expect(perMuscle[m].status).toBe(m === "Core" ? "low" : "under_mev");
+      // Core and Traps have MEV 0 (indirect-volume muscles — never nag a
+      // shortfall), so zero volume is "low", not "under_mev"
+      expect(perMuscle[m].status).toBe(m === "Core" || m === "Traps" ? "low" : "under_mev");
     }
   });
 });
