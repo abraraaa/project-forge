@@ -33,7 +33,7 @@ export default function FocusPickerSheet({ current, onSave, onCancel }) {
           What are you training for?
         </div>
         <p style={{fontSize:13,color:T.text3,marginBottom:18,lineHeight:1.5}}>
-          Every focus trains your whole body. A focus sets the <em>shape</em> of your week — where each muscle sits in its training band — and rotation solves for it. Main lifts never change.
+          Every focus trains your whole body. A focus sets the <em>shape</em> of your week: where each muscle sits in its training band. Rotation solves for it. Main lifts never change.
         </p>
 
         <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>

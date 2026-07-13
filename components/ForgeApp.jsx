@@ -918,7 +918,7 @@ export default function ForgeApp(){
     if (H.get(activeProfile).some(r => r.id === dupeId)) {
       setRetroToast({
         date: meta.dateLabel,
-        sessionName: "Already logged — no changes made",
+        sessionName: "Already logged. No changes made",
       });
       setRetroDate(null);
       setScreen("home");
@@ -1428,7 +1428,7 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
   };
   const strengthCount = draft.filter(d => d.type === "strength").length;
   const warning =
-    strengthCount === 0 ? "No strength days — your programme won't progress." :
+    strengthCount === 0 ? "No strength days. Your programme won't progress." :
     strengthCount < 3   ? `Only ${strengthCount} strength day${strengthCount===1?"":"s"} — sessions B/C won't be reached.` :
     strengthCount > 3   ? `${strengthCount} strength days — A/B/C will cycle to fill (4th = A again).` :
     null;
@@ -1560,7 +1560,7 @@ function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
 
         {solved && (
           <div style={{fontSize:12,color:T.sage,fontStyle:"italic",fontFamily:T.serif,marginBottom:14,lineHeight:1.5}}>
-            Ready for you — each muscle group tuned to hit just how you like it.
+            Ready for you. Each muscle group tuned to hit just how you like it.
           </div>
         )}
         {unsolved && (
@@ -1627,7 +1627,7 @@ function RotationSummaryModal({summary,onContinue}){
         </p>
         {solvedLine && (
           <div style={{fontSize:12,color:T.sage,fontStyle:"italic",fontFamily:T.serif,marginBottom:14,lineHeight:1.5}}>
-            Ready for you — each muscle group tuned to hit just how you like it.
+            Ready for you. Each muscle group tuned to hit just how you like it.
           </div>
         )}
         {topDeltas.length > 0 && (
@@ -1791,7 +1791,7 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
                 </div>
                 {!draftBlocks && (isLog
                   ? <span style={{fontSize:13,fontWeight:500,color:T.coral,letterSpacing:"0.04em"}}>Log →</span>
-                  : <span style={{fontSize:13,fontWeight:500,color:T.sage,letterSpacing:"0.04em"}}>Yes — done</span>
+                  : <span style={{fontSize:13,fontWeight:500,color:T.sage,letterSpacing:"0.04em"}}>Yes, done</span>
                 )}
               </div>
             );

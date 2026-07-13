@@ -865,7 +865,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
           ) : (
             <>
               <span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:T.gold}}/>
-              Saved locally — will sync when online
+              Saved locally · syncs when online
             </>
           )}
         </div>

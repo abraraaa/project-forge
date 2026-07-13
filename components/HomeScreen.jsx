@@ -876,7 +876,7 @@ function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFo
         <button onClick={onChangeFocus}
           style={{padding:"16px 18px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.md,cursor:"pointer",textAlign:"left",transition:`all 160ms ${T.ease}`}}>
           <div style={{fontFamily:T.serif,fontSize:17,fontWeight:300,color:T.text1,marginBottom:4}}>2. Change focus</div>
-          <div style={{fontSize:12,color:T.text2,lineHeight:1.5}}>Switch to a different goal — Forged / Strong / Sculpt. Accessories re-rotate with the new bias.</div>
+          <div style={{fontSize:12,color:T.text2,lineHeight:1.5}}>Switch to a different goal (Forged / Strong / Sculpt). Accessories re-rotate with the new bias.</div>
         </button>
 
         <button onClick={onCancel}
