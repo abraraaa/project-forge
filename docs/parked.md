@@ -141,6 +141,22 @@ person/device), and the fix is a storage migration (per-profile keys +
 legacy-key fold) with real blast area for zero felt benefit today. If
 multi-profile devices ever become real, this is the first thing to lift.
 
+### programmeBlock merges whole-object across devices
+
+**Status:** Parked 2026-07-13 (rotation audit, finding 8) — same class as
+the Day-merge clobber fixed in the progression audit, lower stakes.
+
+**Problem:** cross-device merge takes the programmeBlock with the higher
+block number wholesale (remote wins ties). Two devices rotating near the
+same time: one side's config AND its exclusion history are discarded —
+no union, so up to a block of recency memory is lost and the losing
+device's rotation silently reverts on next sync.
+
+**Why parked:** worst case is a slightly staler exclusion list and one
+surprising re-pick — no data loss beyond memory, self-heals within a
+block. Field-aware merge (config latest-wins per slot, history unioned
+per slot) is the fix shape if it ever bites a real user.
+
 ### Status bar goes black while modals are open (browser)
 
 **Status:** Parked 2026-07-10 as a DESIGN decision, not a bug. Safari
@@ -241,6 +257,17 @@ gap is yield and temperature at the point of contact.
    verify on device together, then decide rollout. Per CLAUDE.md.
 
 ### Lab muscle taxonomy — collapse the surface, split the regions
+**STAGE 3 SHIPPED 2026-07-13 (this PR):** Back retired for Lats / Upper
+Back / Erectors across all 47 affected entries + 8 pattern defaults
+(rules: vertical pulls → Lats; rows → Lats-primary with wide-grip/
+chest-supported flipping to Upper Back; hinge bracing → Erectors;
+face-pull family → Upper Back; hanging/overhead core → Lats, a
+hand-correction over the mechanical rule). Erectors is a fatigue
+ceiling (mev 0), exactly the framing adjudicated. The Lab list now
+groups by the chart's 9 buckets (Back / Shoulders / Arms expandable) —
+constant length however granular the engine gets. Baselines clean,
+solver holds 0/30 per focus under the new bands. Entry below retained
+for the original design record.
 
 **Status:** Parked 2026-07-08 (same review; needs a dedicated session with
 a short design doc approved before any code — this is a data restructure,
