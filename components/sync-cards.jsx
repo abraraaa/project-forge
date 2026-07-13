@@ -44,8 +44,8 @@ export function SyncStatusCard({ profile }) {
 
   const stateLabel = {
     idle: "Synced",
-    pulling: "Syncing...",
-    pushing: "Saving...",
+    pulling: "Syncing…",
+    pushing: "Saving…",
     error: "Offline",
   };
 

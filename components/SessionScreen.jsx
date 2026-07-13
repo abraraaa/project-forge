@@ -845,7 +845,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
       )}
       <Fade d={260}>
         <button className="forge-press" onClick={onHome} style={{marginTop:20,width:"100%",padding:"18px 24px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:20,fontWeight:400,color:T.bg0,boxShadow:`0 12px 40px ${T.strength.glow}`}}>
-          Back to home →
+          Home →
         </button>
       </Fade>
 
@@ -860,7 +860,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
           ) : syncState.state === "pulling" ? (
             <>
               <span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:T.steel,animation:"pulse 1s ease-in-out infinite"}}/>
-              Syncing...
+              Syncing…
             </>
           ) : (
             <>

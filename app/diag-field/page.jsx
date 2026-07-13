@@ -43,7 +43,7 @@
 // remains the depth treatment and this deletes with a parked.md verdict.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { T } from "@/lib/tokens";
 
 const VARIANTS = [
@@ -92,10 +92,18 @@ const DIAG_CSS = `
 }
 `;
 
+const noopSubscribe = () => () => {};
+
 export default function DiagFieldPage() {
   const [variant, setVariant] = useState("control");
   const [hud, setHud] = useState(true);
-  const [supported, setSupported] = useState(null);
+  // One-shot environment read, hydration-safe: server snapshot is null
+  // (unknown), client snapshot is the real engine answer.
+  const supported = useSyncExternalStore(
+    noopSubscribe,
+    () => CSS.supports("animation-timeline: scroll(root)"),
+    () => null,
+  );
   const hudRef = useRef(null);
 
   // Drive the REAL production grain layer (mounted by the shell) so the
@@ -115,12 +123,6 @@ export default function DiagFieldPage() {
     if (variant === "fixed-bg") grain.classList.add("diag-fixed-bg");
     return () => grain.classList.remove(...ALL_CLASSES);
   }, [variant]);
-
-  useEffect(() => {
-    setSupported(
-      typeof CSS !== "undefined" && CSS.supports("animation-timeline: scroll(root)"),
-    );
-  }, []);
 
   // Numeric readout — rAF loop writing straight to the DOM node (no React
   // state at scroll frequency). drift = innerTranslateY − scrollY; 0 = held.

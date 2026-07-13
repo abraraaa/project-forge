@@ -380,7 +380,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             {isViewingToday && weekDone[todayIdx] ? (
               <div style={{margin:"16px 24px 0",padding:"16px 20px",background:`${accent.main}10`,border:`1px solid ${accent.main}40`,borderRadius:T.r.lg,display:"flex",alignItems:"center",gap:12}}>
                 <span style={{fontSize:18,color:accent.main}}>✓</span>
-                <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Session complete. See you next time.</span>
+                <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Session complete. You&apos;ll feel that tomorrow.</span>
               </div>
             ) : isViewingToday ? (
               <button {...grain} className={`${grain.className} forge-press`} onClick={onBegin} style={{

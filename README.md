@@ -113,6 +113,8 @@ These are non-negotiable without explicit sign-off. They've each saved or unwoun
 
 11. **The voice: quietly sexy, innate — never patched in.** Microcopy references the *sensation* of training (bar speed, breath, the good kind of heavy) in the serif italic, while instruction stays in the sans. Five gates, in order: clarity first (a user at RPE 9 parses every line in one pass — the mid-set test); sensation, not hype (no cheerleading, no exclamation marks, no gym-bro register); prescriptive, not punitive; quiet confidence (short declaratives); and positioning lives at the edges ("Unveil the best you." in metadata/manifest/README, "Train with intention." as the imperative anchor) — inside the app it shows, it doesn't pitch. Purely operational surfaces (/diag-*) carry zero atmosphere by design. The register review that set this doctrine lives in PR #186.
 
+12. **The template test.** If a choice — a word, a glyph, a layout, a loading line — would survive unnoticed in a template app, it needs a stated reason to exist here. Claude's defaults are the contamination source, so Claude enumerates and the user's eye judges; the De-Claude audit (2026-07-12) is the standing sweep. Typewriter tics count: three-dot `...` never ships where the app's own register would set `…`.
+
 ## Programme model
 
 `SESSIONS` (`lib/programme.js`) is the three-day template:
