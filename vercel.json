@@ -4,10 +4,6 @@
     {
       "path": "/api/cron/sync-selftest",
       "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/diag/phantom-census",
-      "schedule": "23 * * * *"
     }
   ],
   "headers": [
