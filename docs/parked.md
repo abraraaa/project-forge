@@ -79,10 +79,16 @@ choice.
   design principle ("if a choice would survive unnoticed in a template
   app, it needs a stated reason to exist here"). The user's eye is the
   judge; Claude enumerates (its defaults are the contamination source).
-- Grain-under-finger (batch 3) — RE-APPLIED 2026-07-12 with the fixed
-  mechanism (data-attribute + commit-on-tap; 220px / 0.22 / 420ms hold),
-  Chromium event-trace verified against the historic re-render failure.
-  DEVICE PASS PENDING (feel check on Home's three surfaces).
+- Grain-under-finger (batch 3) — DEVICE VERDICT 2026-07-13:
+  imperceptible on iOS (boss: "imperceptible, or does nothing on
+  iOS"). KEPT AS SHIPPED by boss ruling — the mechanism is verified in
+  Chromium (attribute survives the re-render, opacity 0→1→0 on
+  schedule, bloom visible in screenshots), so desktop/Chromium users
+  get it; iOS gets nothing visible and that's accepted rather than
+  chased. Honesty note: the Chromium validation proves the mechanism
+  fires, not that eyes notice 0.22-alpha warmth on an OLED — the
+  device is the only instrument for that question, and it has spoken.
+  No further credits here.
 - Press-state refinements — no agreed spec yet; define together before
   building (deliberately not freestyled).
 - **Stationary-field experiment — CLOSED 2026-07-13, device verdict:
