@@ -681,7 +681,15 @@ before.
 
 ### Grain "pops in" on route switch to /profile
 
-**Status:** REOPENED 2026-07-06 — RETEST FIRST (2026-07-10): Safari 27
+**Status:** CLOSED 2026-07-13 — device retest confirms the pop-in is
+GONE, exactly as the retest note predicted: Safari 27 fixed View
+Transition snapshots being stored in sRGB (bug 167634138), and our
+grain is a screen-blend on a wide-gamut display, so the sRGB snapshot
+was shifting tone during every transition and popping back on
+completion. Zero Forge code changed; the platform healed it. (Which is
+why Chromium never reproduced it.) Prior status below for history.
+
+**Prior status:** REOPENED 2026-07-06 — RETEST FIRST (2026-07-10): Safari 27
 beta fixes View Transition snapshots being stored in sRGB (bug
 167634138) — our grain is a screen-blend on a wide-gamut display, so an
 sRGB snapshot would shift tone during every transition and pop back on
