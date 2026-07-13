@@ -85,16 +85,19 @@ choice.
   DEVICE PASS PENDING (feel check on Home's three surfaces).
 - Press-state refinements — no agreed spec yet; define together before
   building (deliberately not freestyled).
-- **Stationary-field experiment.** INSTRUMENT SHIPPED 2026-07-12 —
-  /diag-field drives the real grain layer with variants: hold via
-  clipped inner counter-translation (lvh / dvh) and background-
-  attachment: fixed. Chromium verifies the hold at −0.1px drift with
-  stable document height (the naive element-translate version fails by
-  feedback loop — it grows the scroll range that drives it; the clip is
-  load-bearing, see the route header). DEVICE VERDICT PENDING: slab law
-  (browser top + bottom, PWA), lvh-vs-dvh drift, pop-in. If all fail,
-  glow-drift parallax remains the depth treatment and the route deletes
-  with the verdict recorded here.
+- **Stationary-field experiment — CLOSED 2026-07-13, device verdict:
+  IMPERCEPTIBLE.** The mechanism worked (clipped inner counter-
+  translation, −0.1px drift, stable docHeight — the naive element-
+  translate fails by feedback loop, it grows the scroll range that
+  drives it) but the premise fails perceptually: Portra-fine grain at
+  12% opacity carries no position information the eye can track, so
+  locked-to-scroll vs locked-to-viewport is indistinguishable on
+  device. Coarsening the grain to serve the effect would invert
+  priorities — the fineness IS the aesthetic. Implication recorded:
+  the remembered pre-July-3 "stationary field" feel was the FIXED GLOW
+  LAYERS, not the grain, and that job already lives on as the
+  glow-drift parallax. Instrument deleted per charter; depth budget
+  moves to the bevel vocabulary (/diag-depth, verdict pending).
 
 ## Phase 4 — Performance Lab rebuild + muscle taxonomy (dedicated session)
 
