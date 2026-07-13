@@ -745,7 +745,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 marginBottom:12,
               }}
             >
-              {passkeyBusy ? "Verifying..." : "Authenticate"}
+              {passkeyBusy ? "Verifying…" : "Authenticate"}
             </button>
             <button
               onClick={()=>{setNeedsPasskeyAuth(null);setPasskeyError(null);}}

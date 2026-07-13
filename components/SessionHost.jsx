@@ -31,7 +31,7 @@ import { track } from "@vercel/analytics";
 import {
   P, H, W, PB, F, TS, BW, Days, Bk, D, SessionIntent,
   newDraftLog, logSet, finaliseDraft, bumpStreak, scaleForReadiness,
-  startingWeightForLift, blobPush, pushNow, recordCompletion,
+  startingWeightForLift, blobPush, pushNow, recordCompletion, rpeToRir,
 } from "@/lib/storage";
 import {
   SESSIONS, EXERCISE_POOLS,
@@ -45,7 +45,7 @@ import {
   completeDeload, shouldAutoCompleteDeload, decrementRecoveryCounter,
   deloadDayLabel,
 } from "@/lib/progression";
-import { getLiftProfile, getLoadType, parseTimedReps } from "@/lib/lift-translations";
+import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR } from "@/lib/lift-translations";
 import { pickFlashLine } from "@/lib/set-flash";
 import { T } from "@/lib/tokens";
 import { haptic } from "@/lib/a11y";
@@ -308,10 +308,27 @@ export default function SessionHost() {
     const target = timed ? timed.seconds : parseInt(activeEx?.reps, 10);
     const done   = getR(activeEx);
     const fullReps = !Number.isFinite(target) || (typeof done === "number" ? done >= target : true);
+    // Unambiguous-ADD certification for the consequence lines ("Next time,
+    // heavier."): full reps + effort at/above this lift's ADD threshold +
+    // no active deload + lift not in post-deload recovery. Same
+    // ADD_THRESHOLD_RIR table the engine reads at finalise; every
+    // ambiguous case (deload, recovery, sub-threshold effort) falls back
+    // to acknowledgement lines that promise nothing — the flash must
+    // never say what the engine might not deliver.
+    let addLikely = false;
+    try {
+      if (fullReps && !activeDeload && activeEx?.name) {
+        const rir = rpeToRir(rpe);
+        const threshold = ADD_THRESHOLD_RIR[getLiftProfile(activeEx.name).category] ?? 2;
+        const inRecovery = (TS.get(profile)?.lifts?.[activeEx.name]?.inRecoveryUntil ?? 0) > 0;
+        addLikely = rir !== null && rir >= threshold && !inRecovery;
+      }
+    } catch { /* certification is best-effort — silence beats a wrong promise */ }
     const line = pickFlashLine(rpe, {
       fullReps,
       barLoaded: getLoadType(activeEx) !== "bodyweight",
       used: usedFlashRef.current,
+      addLikely,
     });
     if (!line) return;
     usedFlashRef.current.add(line);

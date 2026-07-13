@@ -29,6 +29,32 @@ describe("the bank", () => {
   });
 });
 
+describe("addLikely — the certified-consequence pool", () => {
+  const add = texts("add");
+
+  it("speaks the consequence only when the caller certifies addLikely", () => {
+    for (let i = 0; i < 12; i++) {
+      expect(add).toContain(pickFlashLine("easy", { fullReps: true, addLikely: true }));
+    }
+  });
+
+  it("normal effort with addLikely also qualifies (threshold lives caller-side)", () => {
+    expect(add).toContain(pickFlashLine("normal", { fullReps: true, addLikely: true }));
+  });
+
+  it("never promises on cooked, short reps, or without certification", () => {
+    for (let i = 0; i < 12; i++) {
+      expect(add).not.toContain(pickFlashLine("cooked", { fullReps: true, addLikely: true }));
+      expect(add).not.toContain(pickFlashLine("easy", { fullReps: false, addLikely: true }));
+      expect(add).not.toContain(pickFlashLine("easy", { fullReps: true }));
+    }
+  });
+
+  it("the struck line stays struck; pool is the two signed-off lines", () => {
+    expect(add).toEqual(["Next time, heavier.", "It goes up from here."]);
+  });
+});
+
 describe("pickFlashLine", () => {
   it("returns a line from the matching level", () => {
     for (let i = 0; i < 20; i++) {

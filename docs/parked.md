@@ -58,50 +58,43 @@ Scroll drift fixed ("works beautifully"), sync unaffected, cue + drum good.
 - **Grain pop-in retest** (device) — Safari 27's sRGB VT-snapshot fix may have
   closed it for free. (Still owed — fold into the Phase 2 device pass.)
 
-## Phase 2 — Shell-owns-the-viewport rearchitecture (the keystone) · DESIGN AGREED
+## Phase 2 — Shell-owns-the-viewport rearchitecture (the keystone) · DONE 2026-07-12
 
-DESIGN AGREED in review 2026-07-11 (chat, not a doc — house rule: the repo
-declares what the code is; rationale ships as warning comments beside code).
-The agreement: the shell (.forge-page) becomes the only owner of viewport
-height, safe-area, and display mode; every screen is either scroll
-(default, unchanged) or fill (session). Height unit resolved EMPIRICALLY
-on device (stretch vs the recorded PWA cold-start dvh bug). Next:
-baseline screenshot matrix, then the shell PR alone.
-Unblocked (chin evidence is in). Absorbs three things at once so they're not
-patched separately: the interim session `calc`, `height: stretch`, and Phase-1
-scroll anchoring. **Design note first → review → build → device screenshot
-matrix.** Acceptance criteria include non-standard-shape robustness:
-- Never break at tiny heights (split-screen, flip covers) — the general form of
-  the session-overflow class.
-- Never hide behind an inset (safe-area discipline, unified in the shell).
-- Look intentional in a large canvas (desktop ambient backdrop already does
-  this; extends to foldable-unfolded for free).
-- **Fold-crease avoidance: explicitly out of scope** (product owns the opinion —
-  one centered column; we accept it may sit near a crease).
+Shipped in PR #208, merged and device-verified ("PWA navigates
+beautifully"; fresh-install manifest check clean). The shell
+(.forge-page) is the only owner of viewport height, safe-area, and
+display mode; screens declare scroll (default) or fill (.forge-fill).
+Height ladder resolved empirically: 100vh floor everywhere; dvh +
+stretch (@supports) in BROWSER only — 100dvh lies on PWA cold start
+until rotation (device-recorded). Rationale lives as warning comments
+in globals.css, per house rule. Acceptance criteria (tiny heights,
+inset discipline, large-canvas intentionality) verified in the
+screenshot matrix; fold-crease avoidance stayed out of scope by
+choice.
 
-## Phase 3 — Intimacy pass (rides on the new shell)
+## Phase 3 — Intimacy pass (rides on the new shell) · IN FLIGHT 2026-07-12
 
-- **Opening act: the De-Claude audit.** Distinctiveness sweep — every
-  user-facing string against a written tells-list (em-dash density, hype
-  verbs, exclamations, title-case, "seamlessly/effortlessly", reassurance
-  verbosity), every surface against the default-ness test ("would this
-  look at home in a template app?"). Output: findings doc for user veto →
-  one copy/polish PR. Durable half: a README design principle beside the
-  voice register — "if a choice would survive unnoticed in a template
-  app, it needs a stated reason to exist here." The user's eye is the
+- **Opening act: the De-Claude audit.** IN FLIGHT — findings sweep run
+  2026-07-12, awaiting user veto; then one copy/polish PR + the README
+  design principle ("if a choice would survive unnoticed in a template
+  app, it needs a stated reason to exist here"). The user's eye is the
   judge; Claude enumerates (its defaults are the contamination source).
-- Grain-under-finger (batch 3) re-applied — fix already written + Chromium-
-  verified (data-attribute + commit-on-tap; 220px / 0.22 / 420ms hold).
-- Press-state refinements.
-- **Stationary-field experiment (fixed-background feel).** The pre-July-3
-  GrainOverlay was position:fixed — panes flowed over a stationary field —
-  and was deliberately made scroll-with-content because a fixed
-  edge-bordering layer triggers Safari's chrome slabs (WebKit 301756).
-  Modern escape hatch: counter-translate the (non-fixed) grain at exactly
-  scroll speed via a scroll-driven animation — compositor-threaded on the
-  users' engine, element never fixed, slab law never re-engaged.
-  Prototype-first with diag-style device verification before any rollout;
-  if it fails, the glow-drift parallax remains the depth treatment.
+- Grain-under-finger (batch 3) — RE-APPLIED 2026-07-12 with the fixed
+  mechanism (data-attribute + commit-on-tap; 220px / 0.22 / 420ms hold),
+  Chromium event-trace verified against the historic re-render failure.
+  DEVICE PASS PENDING (feel check on Home's three surfaces).
+- Press-state refinements — no agreed spec yet; define together before
+  building (deliberately not freestyled).
+- **Stationary-field experiment.** INSTRUMENT SHIPPED 2026-07-12 —
+  /diag-field drives the real grain layer with variants: hold via
+  clipped inner counter-translation (lvh / dvh) and background-
+  attachment: fixed. Chromium verifies the hold at −0.1px drift with
+  stable document height (the naive element-translate version fails by
+  feedback loop — it grows the scroll range that drives it; the clip is
+  load-bearing, see the route header). DEVICE VERDICT PENDING: slab law
+  (browser top + bottom, PWA), lvh-vs-dvh drift, pop-in. If all fail,
+  glow-drift parallax remains the depth treatment and the route deletes
+  with the verdict recorded here.
 
 ## Phase 4 — Performance Lab rebuild + muscle taxonomy (dedicated session)
 
@@ -114,49 +107,22 @@ alignment, currently-off modelling all shipped). This is enhancement, not repair
 
 ## Phase 5 — Long tail (as-and-when)
 
-PWA manifest enrichment · in-session RIR copy (blocked on sign-off) · progression
-history-window depth v2 · diag-sync wider repair scenarios · rebrand (~2027).
+In-session RIR copy (proposals delivered 2026-07-12, blocked on sign-off) ·
+progression history-window depth v2 · diag-sync wider repair scenarios ·
+rebrand (~2027). PWA manifest enrichment CLOSED 2026-07-12 — see the
+reconciled entry below.
 
 ---
 
 ## Active parking list
 
-### Shell-owns-the-viewport rearchitecture — NEXT UP, gated on chin evidence
+### Shell-owns-the-viewport rearchitecture — SHIPPED 2026-07-12 (PR #208)
 
-**Status:** Agreed 2026-07-09. Blocked only on the /diag-chin device pass.
-
-**Problem (the named system):** every screen negotiates raw with the
-viewport — each carries its own guesses about insets, heights, and chrome.
-Dozens of appearance PRs (chin bestiary, 100vh/dvh fights, safe-area
-calcs) are symptoms of the missing contract, not independent platform
-quirks.
-
-**Design:** `.forge-page` becomes the single owner of chrome accounting —
-a flex column sized to the viewport with its safe-area padding inside the
-box. Screens that want "fill the viewport exactly" (session) say `flex: 1`;
-scroll-shaped screens flow as before. No child ever touches
-env(safe-area-inset-*) for height maths again.
-Safari 27 note (2026-07-10, user base is on the beta): `height: stretch`
-ships in 27 — "fill available space accounting for margins" — and may
-replace the flex plumbing for the fill-viewport case entirely, behind
-@supports. Evaluate during design; WebKit explicitly recommends it over
-the -webkit-fill-available class of hack.
-
-**Order of work (none skippable):**
-1. DONE — the /diag-chin instrument answered it across five device
-   passes (sheet-level transform entrances trigger the slab; detachment
-   sidesteps it; verdicts in the Phase-0 entries above). The instrument
-   is deleted per its charter (2026-07-11).
-2. Baseline screenshot matrix BEFORE any change: every route ×
-   {browser, PWA} × key states.
-3. The shell change ships alone in its own PR.
-4. Same matrix after; visual diff. Risk register = the globals.css warning
-   comments (chrome sampling, natural-root-scroller requirement, grain
-   stacking/isolation, negative-z paint) — each re-verified explicitly.
-5. Session screen then uses `flex: 1` (its calc(100dvh − inset) workaround
-   was dropped from the queue unmerged, by design).
-6. THEN the intimacy pass rebuilds on the new foundation (grain print
-   below, press-state refinements).
+Merged and device-verified; full detail in the Phase 2 roadmap entry
+above. The order of work was honoured end-to-end (matrix before, shell
+PR alone, matrix after, risk register re-verified, session on
+.forge-fill). Kept as a one-line pointer because the doctrine now lives
+where it should: warning comments in globals.css.
 
 ### Schedule + programme block are device-global but sync per-profile
 
@@ -234,11 +200,11 @@ lapse date so the 301 window starts while the old domain still serves.
 **Status:** Batches 1+2 SHIPPED 2026-07-08 (`.forge-press` /
 `.forge-press-warm` in globals.css; `toggle` + `settle` haptics in
 lib/a11y.js; wired across session, home, profile, breather, BW modal,
-Lab lift chips). Batch 3 (grain under finger) — prototype shipped
-2026-07-08 is IMPERCEPTIBLE by mechanism; the fix is written, verified
-in Chromium (2026-07-09), and DEFERRED to the intimacy pass on the new
-shell (see rearchitecture entry above). Rebuild knowledge, so nothing
-is re-derived:
+Lab lift chips). Batch 3 (grain under finger) — RE-APPLIED 2026-07-12
+with the fixed mechanism, Chromium-verified against the historic
+re-render failure; device feel-check pending. The mechanism notes now
+live as warning comments on useGrainTouch (lib/a11y.js); the rebuild
+knowledge below is retained for history:
 - **Why the shipped version shows nothing:** every wired Home card
   re-renders Home on tap (modal opens / route changes) and React
   rewrites className, wiping the imperatively-added `forge-grain-on`
@@ -445,7 +411,18 @@ with suppressHydrationWarning.
 
 ### PWA manifest + app-capabilities enrichment (PWABuilder gaps)
 
-**Status:** Identified via PWABuilder audit; deferred until after PR3.
+**Status:** CLOSED 2026-07-12. Everything with real user value shipped
+(`categories`, `shortcuts`, `screenshots`, chrome-tone alignment — see
+Progress below); the SW flag was verified a PWABuilder false negative
+(2026-07-07, decision recorded below); and the remaining capabilities
+are declined on the merits, not deferred: `share_target` is INBOUND
+share (receive content from other apps) — off-brand for "deliberately
+not social"; `file_handlers` / `protocol_handlers` / `widgets` /
+`edge_side_panel` have no user flow to serve. Adding fields to raise an
+audit score is score-chasing. Reopen only if a real flow appears.
+Original context below for history.
+
+**Original status:** Identified via PWABuilder audit; deferred until after PR3.
 
 **Context:** PWABuilder scored Forge 16/45 on manifest fields and flagged
 Service Worker + App Capabilities. Breakdown:
@@ -901,6 +878,20 @@ Entries graduate here with the resolving commit. Keep most recent on top;
 trim entries older than the last block once they're no longer
 discussion-relevant.
 
+- **Progression + schedule audit fixes** — PRs #209/#210 (2026-07-12).
+  Holistic review of the engine and completion marking; every finding
+  fixed or explicitly parked: post-deload re-entry anchors to the
+  pre-deload snapshot (was rebuilding off deloaded weight), partial
+  sessions HOLD, cooked HOLDs freeze the stall counter, retro backfills
+  can't pollute lift state, recordCompletion() unifies the four
+  completion write paths (retro logs now resume breathers; the legacy
+  midnight-straddle write deleted), retro surface reads effective-dated
+  schedules, rhythm follows the user's week, Day merge is field-aware.
+  Phantom census ran read-only as a Vercel Cron per the wipe protocol.
+- **Shell-owns-the-viewport (Phase 2 keystone)** — PR #208 (2026-07-12).
+  See the Phase 2 roadmap entry.
+- **Grain under the finger, mechanism fixed** — (2026-07-12, this PR).
+  Data-attribute print + commit-on-tap; device feel-check pending.
 - **Bonus-only Day entry write fix** — `8431f42` (2026-06-22).
   `handleMarkBonusDone` now derives + stamps `scheduledType` from the
   effective schedule (or `WEEK` fallback) alongside the bonus mark. Closes

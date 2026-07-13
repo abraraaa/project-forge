@@ -78,7 +78,7 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
           <div style={{fontFamily:T.serif,fontSize:22,fontWeight:300,color:T.text1}}>
             Welcome back, {name}
           </div>
-          <p style={{fontSize:13,color:T.text3,marginTop:8}}>Loading your data...</p>
+          <p style={{fontSize:13,color:T.text3,marginTop:8}}>Fetching your stuff…</p>
         </div>
       </div>
     );
@@ -93,7 +93,7 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
           Is this you?
         </div>
         <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.2,marginBottom:12}}>
-          {hasProfilePasskey === null ? "Checking..." : hasProfilePasskey ? "Sign in with passkey" : "Signing in on a new device"}
+          {hasProfilePasskey === null ? "Checking…" : hasProfilePasskey ? "Sign in with passkey" : "Signing in on a new device"}
         </div>
 
         {/* If profile has passkey and WebAuthn is supported, show sign-in option */}
@@ -126,7 +126,7 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
                 marginBottom:16,
               }}
             >
-              {passkeyBusy ? "Verifying..." : "Sign in with passkey"}
+              {passkeyBusy ? "Verifying…" : "Sign in with passkey"}
             </button>
 
             <p style={{fontSize:11,color:T.text4,textAlign:"center",lineHeight:1.5}}>
