@@ -401,16 +401,13 @@ export default function ForgeApp(){
     setBreaks(Bk.getAll(activeProfile));
     setHistory(local.history || []);
 
-    // Retry any failed pushes from previous sessions
-    flushPendingPushes((profile) => ({
-      meta: {
-        weights: P.getWeights(profile),
-        reps: P.getReps(profile),
-        streak: P.getStreak(profile),
-        programmeBlock: PB.get(),
-      },
-      history: H.get(profile),
-    }));
+    // Retry any failed pushes from previous sessions. NO payload argument,
+    // deliberately: this call once hand-built {weights, reps, streak,
+    // programmeBlock} — and because the server overwrites meta wholesale,
+    // every app-open retry DELETED days/schedule/focus/bodyweight/
+    // trainingState/breaks from the blob (sync audit S1). The default
+    // builder is getLocalProfile, the principle-0 single source.
+    flushPendingPushes();
 
     // Cancellation flag — if this effect cleans up (e.g. user switches
     // profiles before the sync resolves), we ignore the late callback to
