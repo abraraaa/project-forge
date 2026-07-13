@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   WEEK, SESSIONS, deriveStrengthDaySessions,
-  rotateAccessories, rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
+  rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
   dedupeRotationConfig,
   ROTATION_AUTO, DEFAULT_FOCUS, // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
   sessionMetaForDate, findUntickedRecent, } from "@/lib/programme";
@@ -38,6 +38,7 @@ import {
   shouldAutoCompleteDeload,
 } from "@/lib/progression";
 import { getLiftProfile, sanitiseWorkingWeights, getLoadType, weightStepForLoadType } from "@/lib/lift-translations";
+import { solveRotation } from "@/lib/rotation-solver";
 import {
   isPlatformAuthenticatorAvailable,
   registerPasskey, hasPasskey,
@@ -719,13 +720,22 @@ export default function ForgeApp(){
   const computeRotationPreview = () => {
     const oldConfig = programmeBlock.config;
     const updatedHistory = pushHistoryBlock(programmeBlock.history, oldConfig);
-    const newConfig = rotateAccessories(updatedHistory, { focus: userFocus });
+    // Volume-solving rotation (lib/rotation-solver.js): the focus's target
+    // volume shape is the objective, bands are hard constraints, and the
+    // temperature keeps picks varied inside the good region. Replaces the
+    // legacy dice (rotateAccessories), which walked 65–71% of rotations out
+    // of at least one MEV..MRV band — measured, 2026-07-13 audit.
+    const { config: newConfig, report } = solveRotation({
+      history: updatedHistory,
+      focus: userFocus,
+    });
     return {
       oldConfig,
       newConfig,
       updatedHistory,
       changes: rotationDiff(oldConfig, newConfig),
       stimulusDelta: computeRotationStimulusDelta(oldConfig, newConfig),
+      report,
     };
   };
 
@@ -908,7 +918,7 @@ export default function ForgeApp(){
     if (H.get(activeProfile).some(r => r.id === dupeId)) {
       setRetroToast({
         date: meta.dateLabel,
-        sessionName: "Already logged — no changes made",
+        sessionName: "Already logged. No changes made",
       });
       setRetroDate(null);
       setScreen("home");
@@ -1418,7 +1428,7 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
   };
   const strengthCount = draft.filter(d => d.type === "strength").length;
   const warning =
-    strengthCount === 0 ? "No strength days — your programme won't progress." :
+    strengthCount === 0 ? "No strength days. Your programme won't progress." :
     strengthCount < 3   ? `Only ${strengthCount} strength day${strengthCount===1?"":"s"} — sessions B/C won't be reached.` :
     strengthCount > 3   ? `${strengthCount} strength days — A/B/C will cycle to fill (4th = A again).` :
     null;
@@ -1496,9 +1506,15 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
 // Roll again is secondary outlined).
 function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
   const { gold } = T;
-  const { changes = [], stimulusDelta = [] } = preview || {};
+  const { changes = [], stimulusDelta = [], report = null } = preview || {};
   const count = changes.length;
   const topDeltas = stimulusDelta.slice(0, 4);
+  // The solver's verdict, surfaced at decision time — the quietly-smarter
+  // contract made visible. outOfBand is [] on virtually every solve (the
+  // band contract is tested); the non-empty branch is the honest fallback
+  // for a history-constrained week where no in-band config exists.
+  const solved = report && report.outOfBand?.length === 0;
+  const unsolved = report && report.outOfBand?.length > 0;
   const { containerRef, onKeyDown } = useModalA11y(onCancel);
   const titleId = "rotation-preview-title";
 
@@ -1542,6 +1558,17 @@ function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
           </div>
         )}
 
+        {solved && (
+          <div style={{fontSize:12,color:T.sage,fontStyle:"italic",fontFamily:T.serif,marginBottom:14,lineHeight:1.5}}>
+            Ready for you. Each muscle group tuned to hit just how you like it.
+          </div>
+        )}
+        {unsolved && (
+          <div style={{fontSize:12,color:T.gold,fontStyle:"italic",fontFamily:T.serif,marginBottom:14,lineHeight:1.5}}>
+            This roll couldn&apos;t fully balance {report.outOfBand.join(", ")} — roll again, or confirm knowing that.
+          </div>
+        )}
+
         <div style={{flex:1,overflowY:"auto",marginBottom:18,marginRight:-8,paddingRight:8}}>
           {changes.map((c, i) => (
             <div key={c.slot} style={{padding:"12px 0",borderBottom:i<count-1?`1px solid ${T.bg3}`:"none"}}>
@@ -1581,6 +1608,7 @@ function RotationSummaryModal({summary,onContinue}){
   const count = summary.changes.length;
   // Top 4 by magnitude — enough to tell the story, not enough to overwhelm.
   const topDeltas = (summary.stimulusDelta || []).slice(0, 4);
+  const solvedLine = summary.report && summary.report.outOfBand?.length === 0;
   // Auto-rotation summary is non-dismissible (user must Continue) — no onClose
   // wired to the a11y hook; Escape is intentionally inert here.
   const { containerRef, onKeyDown } = useModalA11y(null);
@@ -1597,6 +1625,11 @@ function RotationSummaryModal({summary,onContinue}){
         <p style={{fontSize:13,color:T.text2,marginBottom:topDeltas.length?14:20,lineHeight:1.6}}>
           {count} {count===1?"accessory":"accessories"} swapped to keep the stimulus fresh. Main lifts stay the same — progressive overload continues.
         </p>
+        {solvedLine && (
+          <div style={{fontSize:12,color:T.sage,fontStyle:"italic",fontFamily:T.serif,marginBottom:14,lineHeight:1.5}}>
+            Ready for you. Each muscle group tuned to hit just how you like it.
+          </div>
+        )}
         {topDeltas.length > 0 && (
           <div style={{marginBottom:20}}>
             <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
@@ -1758,7 +1791,7 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
                 </div>
                 {!draftBlocks && (isLog
                   ? <span style={{fontSize:13,fontWeight:500,color:T.coral,letterSpacing:"0.04em"}}>Log →</span>
-                  : <span style={{fontSize:13,fontWeight:500,color:T.sage,letterSpacing:"0.04em"}}>Yes — done</span>
+                  : <span style={{fontSize:13,fontWeight:500,color:T.sage,letterSpacing:"0.04em"}}>Yes, done</span>
                 )}
               </div>
             );

@@ -60,7 +60,7 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
     expect(screen.getByText("Z2 — 60 min")).toBeTruthy();
   });
 
-  it("'Yes — done' tap calls onTickDate with the row's ISO DATE STRING", () => {
+  it("'Yes, done' tap calls onTickDate with the row's ISO DATE STRING", () => {
     // Confirms honest intent: "yes I did this" → write dayDone[date].
     // Date-keyed so cross-week back-marking works without fragility.
     const onTickDate = vi.fn();
@@ -73,7 +73,7 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
         onClose={() => {}}
       />
     );
-    fireEvent.click(screen.getByText("Yes — done"));
+    fireEvent.click(screen.getByText("Yes, done"));
     expect(onTickDate).toHaveBeenCalledTimes(1);
     expect(onTickDate.mock.calls[0][0]).toBe("2026-06-12");
   });
@@ -106,7 +106,7 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
       />
     );
     expect(screen.getByText("Z2 — 60 min")).toBeTruthy();
-    fireEvent.click(screen.getByText("Yes — done"));
+    fireEvent.click(screen.getByText("Yes, done"));
     // Z2 row gone, strength row still there — no auto-close, no "all caught
     // up" celebration. The user closes manually when they're done.
     expect(screen.queryByText("Z2 — 60 min")).toBeNull();
@@ -130,7 +130,7 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
         onClose={onClose}
       />
     );
-    fireEvent.click(screen.getByText("Yes — done"));
+    fireEvent.click(screen.getByText("Yes, done"));
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByText("Well kept.")).toBeTruthy();
     expect(screen.queryByText("Nothing pending.")).toBeNull();
@@ -166,7 +166,7 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
       />
     );
     // No tappable affordance rendered when a draft is in progress
-    expect(screen.queryByText("Yes — done")).toBeNull();
+    expect(screen.queryByText("Yes, done")).toBeNull();
     expect(screen.getByText("Finish your live session first")).toBeTruthy();
   });
 });

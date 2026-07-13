@@ -249,7 +249,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
     if (availability === "available")    return { colour: T.sage,  icon: "✓",  label: existing.some(e=>e.toLowerCase()===name.trim().toLowerCase()) ? "on this device" : "available" };
     if (availability === "taken")        return { colour: T.rose,  icon: "✕",  label: "taken" };
     if (availability === "invalid")      return { colour: T.rose,  icon: "✕",  label: "invalid" };
-    if (availability === "network-err")  return { colour: T.gold,  icon: "?",  label: "offline — try anyway" };
+    if (availability === "network-err")  return { colour: T.gold,  icon: "?",  label: "offline · try anyway" };
     return null;
   };
   const pip = availabilityPip();
@@ -501,9 +501,9 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <span>{pip.label === "available" && "Available · this will be your username"}
                     {pip.label === "on this device" && "Welcome back"}
                     {pip.label === "taken" && "Already taken on Forge"}
-                    {pip.label === "invalid" && "That name won't travel — no slashes (/ or \\)"}
+                    {pip.label === "invalid" && "That name won't travel: no slashes (/ or \\)"}
                     {pip.label === "checking" && "Checking…"}
-                    {pip.label === "offline — try anyway" && "Couldn't check online — you can still proceed"}
+                    {pip.label === "offline · try anyway" && "Couldn't check online. You can still proceed"}
               </span>
             ) : (
               <span style={{color:T.text4}}>2+ characters. Case doesn't matter.</span>
@@ -591,7 +591,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                     const agoStr = daysAgo === 0 ? "today" : daysAgo === 1 ? "yesterday" : daysAgo !== null ? `${daysAgo} days ago` : "";
                     return `${bodyweight} kg${agoStr ? ` · updated ${agoStr}` : ""}`;
                   })()
-                ) : "Not set — add one →"}
+                ) : "Not set · add one →"}
               </div>
             </div>
             <span style={{fontSize:14,color:T.text3}}>→</span>
@@ -791,7 +791,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 onClick={()=>wipeProfile(confirmWipe,{cloud:true})}
                 style={{padding:"16px",background:`${T.rose}18`,border:`1px solid ${T.rose}55`,borderRadius:T.r.lg,cursor:wipeBusy?"default":"pointer",textAlign:"left",opacity:wipeBusy?0.5:1}}>
                 <div style={{fontFamily:T.serif,fontSize:16,fontWeight:400,color:T.rose,lineHeight:1.3,marginBottom:3}}>
-                  {wipeBusy ? "Wiping…" : "Full wipe — cloud & device"}
+                  {wipeBusy ? "Wiping…" : "Full wipe · cloud & device"}
                 </div>
                 <div style={{fontSize:12,color:T.text3,lineHeight:1.5}}>
                   Deletes all weights, history, and the name claim. Can't be undone.
