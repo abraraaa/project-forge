@@ -246,6 +246,16 @@ gap is yield and temperature at the point of contact.
 a short design doc approved before any code — this is a data restructure,
 not a tweak).
 
+**External-review inputs, adjudicated 2026-07-13 (multi-LLM pass, merged
+and corrected by hand):** the region split is CONFIRMED as the right shape —
+Lats `6/14/22` + Upper Back `6/16/22` as starting landmarks (RP-consistent,
+not independently cited — starting values, not gospel), and Erectors join as
+a FATIGUE CEILING, not a hypertrophy target: `mev 0 / mav 6 / mrv 12`,
+tracked only to warn when a mesocycle is axially top-heavy. Adductors and
+rotator cuff are EXCLUDED (unanimous 3-of-3) — adduction work routes to Core
+consistently. Per-exercise Lats-vs-Upper-Back weights were NOT adjudicated;
+that re-weighting is this session's work when it opens.
+
 **Three connected ideas:**
 1. **Collapse delt heads in the Lab rows.** The chart already collapses
    (DISPLAY_BUCKET); the per-muscle ROW list is deliberately granular
