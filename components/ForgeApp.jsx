@@ -1560,7 +1560,7 @@ function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
 
         {solved && (
           <div style={{fontSize:12,color:T.sage,fontStyle:"italic",fontFamily:T.serif,marginBottom:14,lineHeight:1.5}}>
-            Solved for your focus — every muscle lands inside its training band.
+            Ready for you — each muscle group tuned to hit just how you like it.
           </div>
         )}
         {unsolved && (
@@ -1627,7 +1627,7 @@ function RotationSummaryModal({summary,onContinue}){
         </p>
         {solvedLine && (
           <div style={{fontSize:12,color:T.sage,fontStyle:"italic",fontFamily:T.serif,marginBottom:14,lineHeight:1.5}}>
-            Solved for your focus — every muscle lands inside its training band.
+            Ready for you — each muscle group tuned to hit just how you like it.
           </div>
         )}
         {topDeltas.length > 0 && (
