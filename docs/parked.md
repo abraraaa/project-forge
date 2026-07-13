@@ -79,22 +79,31 @@ choice.
   design principle ("if a choice would survive unnoticed in a template
   app, it needs a stated reason to exist here"). The user's eye is the
   judge; Claude enumerates (its defaults are the contamination source).
-- Grain-under-finger (batch 3) — RE-APPLIED 2026-07-12 with the fixed
-  mechanism (data-attribute + commit-on-tap; 220px / 0.22 / 420ms hold),
-  Chromium event-trace verified against the historic re-render failure.
-  DEVICE PASS PENDING (feel check on Home's three surfaces).
+- Grain-under-finger (batch 3) — DEVICE VERDICT 2026-07-13:
+  imperceptible on iOS (boss: "imperceptible, or does nothing on
+  iOS"). KEPT AS SHIPPED by boss ruling — the mechanism is verified in
+  Chromium (attribute survives the re-render, opacity 0→1→0 on
+  schedule, bloom visible in screenshots), so desktop/Chromium users
+  get it; iOS gets nothing visible and that's accepted rather than
+  chased. Honesty note: the Chromium validation proves the mechanism
+  fires, not that eyes notice 0.22-alpha warmth on an OLED — the
+  device is the only instrument for that question, and it has spoken.
+  No further credits here.
 - Press-state refinements — no agreed spec yet; define together before
   building (deliberately not freestyled).
-- **Stationary-field experiment.** INSTRUMENT SHIPPED 2026-07-12 —
-  /diag-field drives the real grain layer with variants: hold via
-  clipped inner counter-translation (lvh / dvh) and background-
-  attachment: fixed. Chromium verifies the hold at −0.1px drift with
-  stable document height (the naive element-translate version fails by
-  feedback loop — it grows the scroll range that drives it; the clip is
-  load-bearing, see the route header). DEVICE VERDICT PENDING: slab law
-  (browser top + bottom, PWA), lvh-vs-dvh drift, pop-in. If all fail,
-  glow-drift parallax remains the depth treatment and the route deletes
-  with the verdict recorded here.
+- **Stationary-field experiment — CLOSED 2026-07-13, device verdict:
+  IMPERCEPTIBLE.** The mechanism worked (clipped inner counter-
+  translation, −0.1px drift, stable docHeight — the naive element-
+  translate fails by feedback loop, it grows the scroll range that
+  drives it) but the premise fails perceptually: Portra-fine grain at
+  12% opacity carries no position information the eye can track, so
+  locked-to-scroll vs locked-to-viewport is indistinguishable on
+  device. Coarsening the grain to serve the effect would invert
+  priorities — the fineness IS the aesthetic. Implication recorded:
+  the remembered pre-July-3 "stationary field" feel was the FIXED GLOW
+  LAYERS, not the grain, and that job already lives on as the
+  glow-drift parallax. Instrument deleted per charter; depth budget
+  moves to the bevel vocabulary (/diag-depth, verdict pending).
 
 ## Phase 4 — Performance Lab rebuild + muscle taxonomy (dedicated session)
 
@@ -672,7 +681,15 @@ before.
 
 ### Grain "pops in" on route switch to /profile
 
-**Status:** REOPENED 2026-07-06 — RETEST FIRST (2026-07-10): Safari 27
+**Status:** CLOSED 2026-07-13 — device retest confirms the pop-in is
+GONE, exactly as the retest note predicted: Safari 27 fixed View
+Transition snapshots being stored in sRGB (bug 167634138), and our
+grain is a screen-blend on a wide-gamut display, so the sRGB snapshot
+was shifting tone during every transition and popping back on
+completion. Zero Forge code changed; the platform healed it. (Which is
+why Chromium never reproduced it.) Prior status below for history.
+
+**Prior status:** REOPENED 2026-07-06 — RETEST FIRST (2026-07-10): Safari 27
 beta fixes View Transition snapshots being stored in sRGB (bug
 167634138) — our grain is a screen-blend on a wide-gamut display, so an
 sRGB snapshot would shift tone during every transition and pop back on
