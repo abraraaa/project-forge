@@ -269,6 +269,18 @@ MySQL HeatWave in databases, Wayve in UK autonomous driving; neither
 in class, neither with this spelling), social handles, app-name
 collisions. Candidate recorded, not crowned — the session decides.
 
+**Aesthetic-gravity note (boss's objection, 2026-07-14):** the name has
+two readings — noon heatwave (bright, summer, neon; the 'y' even nods
+toward synthwave culture) and NIGHT heat (embers, skin, sauna glow) —
+and only the second matches the shipped aesthetic. Coral-and-gold on
+near-black IS heat in the dark, and "Forge" proves a heat-noun can
+follow the art direction rather than lead it. But the cost is real and
+ongoing: with this name the darkness must be ASSERTED in every first
+impression (wordmark, OG image, tile, landing) — brightness becomes
+the default drift instead of a choice. Session test: render candidate
+wordmarks over the actual home screen; the eye decides in five seconds
+whether the pixels already own the name.
+
 **Status:** RESCHEDULED 2026-07-14 (boss's call): rollout this WINTER,
 full switchover complete before the domain lapses (~March/April 2027).
 Working timeline: naming session ~Nov/Dec 2026 → mechanical pass over
