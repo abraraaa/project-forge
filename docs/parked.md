@@ -87,14 +87,12 @@ choice.
   fires, not that eyes notice 0.22-alpha warmth on an OLED — the
   device is the only instrument for that question, and it has spoken.
   No further credits here.
-- Press-state refinements — SPEC PROPOSED 2026-07-14, awaiting nod
-  (codifies current behaviour rather than inventing): a press is the
-  compositor-only scale 0.985 + warmth tween (.forge-press); raised
-  surfaces additionally SEAT — instant shadow inversion, never a
-  box-shadow transition (device-proven); sheets never transform (chin
-  law); haptics stay per the lib/a11y vocabulary. Extensions are
-  per-surface taste calls, not new mechanics. Nod = the item closes
-  with the spec as doctrine.
+- Press-state refinements — CLOSED 2026-07-14, spec nodded into
+  DOCTRINE: a press is the compositor-only scale 0.985 + warmth tween
+  (.forge-press); raised surfaces additionally SEAT — instant shadow
+  inversion, never a box-shadow transition (device-proven); sheets
+  never transform (chin law); haptics per the lib/a11y vocabulary.
+  Extensions are per-surface taste calls, not new mechanics.
 - **Stationary-field experiment — CLOSED 2026-07-13, device verdict:
   IMPERCEPTIBLE.** The mechanism worked (clipped inner counter-
   translation, −0.1px drift, stable docHeight — the naive element-
@@ -124,9 +122,16 @@ choice.
 
 ## Phase 5 — Long tail (as-and-when)
 
-Progression history-window depth v2 (parked ON DATA by design — revisit
-with 6+ months of real history) · diag-sync wider repair scenarios
-(parked until a regression warrants generalising) · rebrand (~2027).
+Progression history-window depth v2 — INSTRUMENTED 2026-07-14: the
+gate is now observable (windowPressure in lib/analytics.js, surfaced
+on /diag-sync); the decision arms itself the day any lift's flat run
+outgrows the 12-entry window, instead of waiting on a hunch. · diag-
+sync repairs — REFRAMED 2026-07-14: instead of waiting for a
+regression, every paid-for data-shape bug class is now a standing
+READ-ONLY invariant (lib/store-health.js, surfaced on /diag-sync) —
+detection is continuous; repairs stay one-shot reviewed migrations per
+the wipe doctrine. · rebrand (~2027, calendar-gated — the scope map is
+written; nothing sensible to do before the naming session).
 In-session RIR copy SHIPPED 2026-07-13 (certified-ADD consequence
 flash). PWA manifest enrichment CLOSED 2026-07-12 — see the reconciled
 entry below.
