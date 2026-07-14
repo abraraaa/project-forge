@@ -72,13 +72,11 @@ inset discipline, large-canvas intentionality) verified in the
 screenshot matrix; fold-crease avoidance stayed out of scope by
 choice.
 
-## Phase 3 — Intimacy pass (rides on the new shell) · IN FLIGHT 2026-07-12
+## Phase 3 — Intimacy pass (rides on the new shell) · DONE 2026-07-13
 
-- **Opening act: the De-Claude audit.** IN FLIGHT — findings sweep run
-  2026-07-12, awaiting user veto; then one copy/polish PR + the README
-  design principle ("if a choice would survive unnoticed in a template
-  app, it needs a stated reason to exist here"). The user's eye is the
-  judge; Claude enumerates (its defaults are the contamination source).
+- **De-Claude audit — DONE.** Findings vetoed 2026-07-13, copy pass
+  shipped (ellipses, template strings, dash discipline), README gained
+  design principle 12 (the template test). The register held.
 - Grain-under-finger (batch 3) — DEVICE VERDICT 2026-07-13:
   imperceptible on iOS (boss: "imperceptible, or does nothing on
   iOS"). KEPT AS SHIPPED by boss ruling — the mechanism is verified in
@@ -89,8 +87,12 @@ choice.
   fires, not that eyes notice 0.22-alpha warmth on an OLED — the
   device is the only instrument for that question, and it has spoken.
   No further credits here.
-- Press-state refinements — no agreed spec yet; define together before
-  building (deliberately not freestyled).
+- Press-state refinements — CLOSED 2026-07-14, spec nodded into
+  DOCTRINE: a press is the compositor-only scale 0.985 + warmth tween
+  (.forge-press); raised surfaces additionally SEAT — instant shadow
+  inversion, never a box-shadow transition (device-proven); sheets
+  never transform (chin law); haptics per the lib/a11y vocabulary.
+  Extensions are per-surface taste calls, not new mechanics.
 - **Stationary-field experiment — CLOSED 2026-07-13, device verdict:
   IMPERCEPTIBLE.** The mechanism worked (clipped inner counter-
   translation, −0.1px drift, stable docHeight — the naive element-
@@ -105,21 +107,51 @@ choice.
   glow-drift parallax. Instrument deleted per charter; depth budget
   moves to the bevel vocabulary (/diag-depth, verdict pending).
 
-## Phase 4 — Performance Lab rebuild + muscle taxonomy (dedicated session)
+## Phase 4 — Performance Lab rebuild + muscle taxonomy · DONE 2026-07-14
 
-Correctness is already fixed (the 2026-07-01 bug list — MEV window, grid
-alignment, currently-off modelling all shipped). This is enhancement, not repair:
-- Data restructure (delt-head collapse, traps gap, Upper/Lower Back/Shoulders;
-  lower back informational, no bands).
-- Consistency-grid presentation rethink (the one open design residual from the
-  correctness list).
+- Data restructure — DONE 2026-07-13 across three stages (traps key,
+  Shoulders row collapse, the Back split into Lats / Upper Back /
+  Erectors) with panel-adjudicated landmarks; the Lab list groups by
+  the chart's 9 buckets.
+- Consistency-grid rethink — SHIPPED 2026-07-14: the per-day heatmap
+  (which invited exactly the day-level guilt the rhythm doctrine
+  refuses) is replaced by a 12-week rhythm strip — distinct training
+  days per week vs the user's own schedule quota, current week ringed,
+  away-muted like the volume card. Also fixed in passing: the old grid
+  built its week columns from toISOString(), the UTC-shift class.
+
+## Phase 6 — Intimacy pass II · QUEUED 2026-07-14 (the savoured one)
+
+Named honestly: Phase 3 got RESOLVED, not performed — its items closed
+as verdicts and codifications while the week's energy was audit-shaped.
+This is the slow pass the boss actually enjoys, done at its own tempo,
+together: sit with every surface and judge FEEL, not correctness. The
+shape (no build until the sitting is done):
+- A surface walk — every screen and moment (done screen, breather,
+  focus picker, week editor, onboarding, Lab) — with notes on where
+  type breathes wrong, where a beat lands flat, where spacing crowds.
+- Bevel-extension candidates surfaced FROM the walk (which surfaces
+  ask for the material), not from a list.
+- Micro-moment inventory: entrances, settles, flashes — anything that
+  deserves the flash-cascade treatment it hasn't had.
+- Boss's eye is the instrument throughout; Claude enumerates and
+  builds only after verdicts. Device passes per change, small PRs.
 
 ## Phase 5 — Long tail (as-and-when)
 
-In-session RIR copy (proposals delivered 2026-07-12, blocked on sign-off) ·
-progression history-window depth v2 · diag-sync wider repair scenarios ·
-rebrand (~2027). PWA manifest enrichment CLOSED 2026-07-12 — see the
-reconciled entry below.
+Progression history-window depth v2 — INSTRUMENTED 2026-07-14: the
+gate is now observable (windowPressure in lib/analytics.js, surfaced
+on /diag-sync); the decision arms itself the day any lift's flat run
+outgrows the 12-entry window, instead of waiting on a hunch. · diag-
+sync repairs — REFRAMED 2026-07-14: instead of waiting for a
+regression, every paid-for data-shape bug class is now a standing
+READ-ONLY invariant (lib/store-health.js, surfaced on /diag-sync) —
+detection is continuous; repairs stay one-shot reviewed migrations per
+the wipe doctrine. · rebrand (~2027, calendar-gated — the scope map is
+written; nothing sensible to do before the naming session).
+In-session RIR copy SHIPPED 2026-07-13 (certified-ADD consequence
+flash). PWA manifest enrichment CLOSED 2026-07-12 — see the reconciled
+entry below.
 
 ---
 
@@ -152,7 +184,13 @@ multi-profile devices ever become real, this is the first thing to lift.
 
 ### programmeBlock merges whole-object across devices
 
-**Status:** Parked 2026-07-13 (rotation audit, finding 8) — same class as
+**Status:** FIXED 2026-07-14 (this PR) — the sync-merge module made it
+cheap: equal block numbers tie-break config by updatedAt (PB.save now
+stamps mutations; the sync path doesn't re-stamp) and the per-slot
+exclusion history UNIONS, so neither device's rotation memory is lost.
+Higher block number still wins wholesale. Original entry below.
+
+**Original status:** Parked 2026-07-13 (rotation audit, finding 8) — same class as
 the Day-merge clobber fixed in the progression audit, lower stakes.
 
 **Problem:** cross-device merge takes the programmeBlock with the higher
@@ -216,10 +254,16 @@ and blends into both, as the top edge always did.
   the +55px restoration drift is FIXED ("works beautifully") by leaving
   anchoring on app-wide with overflow-anchor: none on ScrollDrum only.
 
-### Possible rebrand — "Forge" is diluted in fitness
+### Rebrand — "Forge" is diluted in fitness · SCHEDULED winter 2026/27
 
-**Status:** Parked 2026-07-08 (user's call). Revisit when the current
-domain ownership lapses, roughly **March/April 2027**.
+**Status:** RESCHEDULED 2026-07-14 (boss's call): rollout this WINTER,
+full switchover complete before the domain lapses (~March/April 2027).
+Working timeline: naming session ~Nov/Dec 2026 → mechanical pass over
+winter (display strings, PWA manifest, share-card wordmark, OG image,
+README, onboarding copy) → domain 301s start EARLY in the window so
+re-indexing of the 166 library canonicals completes while theforged.fit
+still serves. Installed PWAs keep the old name/icon until reinstall
+(iOS manifest law) — plan the comms line for that.
 
 **Context:** "Forge" as a strength-training name is heavily diluted
 across the fitness space. No urgency — the product identity (voice,
@@ -956,6 +1000,16 @@ Entries graduate here with the resolving commit. Keep most recent on top;
 trim entries older than the last block once they're no longer
 discussion-relevant.
 
+- **Closing sweep** — (2026-07-14, this PR). The 12-week rhythm strip
+  replaces the consistency heatmap (weeks, not days; UTC date bug fixed
+  in passing); programmeBlock same-number races now merge field-aware
+  (rotation finding 8 unparked — config by stamp, exclusion history
+  unioned); press-state spec proposed; backlog reconciled to reality.
+  Deliberately STILL parked, with reasons: device-global weekConfig/PB
+  cross-profile migration (real blast area, invisible for the user
+  base), progression window v2 (data-gated by design), status-bar dim
+  (boss's device taste call), bevel extensions (boss's taste,
+  surface-at-a-time).
 - **Sync/merge audit fixes (S1–S6)** — (2026-07-13, this PR). One
   payload builder (getLocalProfile) for every push retry — the partial
   app-open retry was DELETING six meta fields from the blob; per-key

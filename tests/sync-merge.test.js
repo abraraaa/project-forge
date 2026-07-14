@@ -13,7 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
-import { mergeMeta, mergeProfileData } from "../lib/sync-merge.js";
+import { mergeMeta, mergeProfileData, mergeProgrammeBlock } from "../lib/sync-merge.js";
 
 const T1 = "2026-07-13T10:00:00.000Z";
 const T2 = "2026-07-13T18:00:00.000Z"; // later
@@ -92,6 +92,33 @@ describe("S3 — server direction: incoming partial payloads never delete", () =
     expect(m.bodyweight.kg).toBe(80);
     expect(m.trainingState.lifts.Squat.currentWeight).toBe(100);
     expect(m.programmeBlock.number).toBe(2); // incoming's real change lands
+  });
+});
+
+describe("mergeProgrammeBlock — the same-block race unions memory", () => {
+  it("higher block number still wins wholesale", () => {
+    const older = { number: 3, config: { a: { name: "X" } }, history: { a: ["X"] } };
+    const newer = { number: 4, config: { a: { name: "Y" } }, history: { a: ["Y"] } };
+    expect(mergeProgrammeBlock(older, newer).number).toBe(4);
+    expect(mergeProgrammeBlock(newer, older).number).toBe(4);
+  });
+
+  it("equal numbers: newer updatedAt's config wins, exclusion history unions", () => {
+    const l = { number: 3, updatedAt: T2, config: { a: { name: "Y" } },
+      history: { "s1": ["Y", "X"], "s2": ["P"] } };
+    const r = { number: 3, updatedAt: T1, config: { a: { name: "Z" } },
+      history: { "s1": ["Z"], "s3": ["Q"] } };
+    const m = mergeProgrammeBlock(l, r);
+    expect(m.config.a.name).toBe("Y");          // newer stamp wins the config
+    expect(m.history.s1).toEqual(["Y", "X", "Z"]); // union, winner order first, capped 3
+    expect(m.history.s2).toEqual(["P"]);        // loser-only slots survive
+    expect(m.history.s3).toEqual(["Q"]);
+  });
+
+  it("legacy single-string history entries normalise to arrays", () => {
+    const l = { number: 2, updatedAt: T2, history: { s1: "OldPick" } };
+    const r = { number: 2, updatedAt: T1, history: { s1: ["NewPick"] } };
+    expect(mergeProgrammeBlock(l, r).history.s1).toEqual(["OldPick", "NewPick"]);
   });
 });
 

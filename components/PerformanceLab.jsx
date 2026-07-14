@@ -2,10 +2,12 @@
 
 import { useMemo, useState, useEffect } from "react";
 import {
-  mainLiftTrend, weeklyVolumeByMuscle, consistencyGrid,
+  mainLiftTrend, weeklyVolumeByMuscle, weeklyRhythm,
   readinessBreakdown, sessionCount, detectPlateaus,
 } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
+import { W } from "@/lib/storage";
+import { WEEK } from "@/lib/programme";
 import { DISPLAY_BUCKET } from "@/lib/exercise-anatomy";
 import { T } from "@/lib/tokens";
 import { haptic } from "@/lib/a11y";
@@ -15,7 +17,13 @@ import { renderShareCard, shareCanvas } from "@/lib/share-card";
 // ─── Main export ──────────────────────────────────────────────────────────────
 export default function PerformanceLab({ history, onBack, resting = false }) {
   const trends  = useMemo(() => mainLiftTrend(history),   [history]);
-  const grid    = useMemo(() => consistencyGrid(history, 12), [history]);
+  const rhythmWeeks = useMemo(() => weeklyRhythm(history, 12), [history]);
+  // The strip reads against the user's OWN weekly quota (schedule-aware,
+  // same doctrine as computeRhythm) — a 2-day plan fills its cells at 2.
+  const weeklyQuota = useMemo(() => {
+    const week = W.get() || WEEK;
+    return Math.max(1, week.filter((d) => d?.type === "strength").length);
+  }, []);
   const readiness = useMemo(() => readinessBreakdown(history), [history]);
   const counts    = useMemo(() => sessionCount(history),       [history]);
   const plateaus  = useMemo(() => detectPlateaus(history),     [history]);
@@ -147,9 +155,12 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
             <VolumeLandscape trend={volumeTrend} audit={volumeAudit} totalSessions={counts.total} />
           </Card>
 
-          {/* Consistency heatmap */}
-          <Card title="Consistency" subtitle="Last 12 weeks">
-            <ConsistencyGrid grid={grid} />
+          {/* Rhythm strip — weeks, not days (rhythm doctrine; the per-day
+              heatmap invited exactly the day-level guilt the register
+              refuses). Muted when the recent window is empty, matching the
+              volume card's away treatment. */}
+          <Card title="Rhythm" subtitle={`Last 12 weeks · vs ${weeklyQuota} strength day${weeklyQuota === 1 ? "" : "s"}/wk`}>
+            <RhythmStrip weeks={rhythmWeeks} quota={weeklyQuota} muted={volumeAudit.away} />
           </Card>
 
           {/* Readiness breakdown */}
@@ -584,44 +595,45 @@ function Sparkline({ series, target, colour }) {
   );
 }
 
-// ─── Consistency grid (GitHub-style heatmap) ─────────────────────────────────
-// Day labels live INSIDE the SVG, in the same coordinate system as the cells.
-// They used to be a fixed-pixel HTML flex column beside a width-scaled SVG —
-// the SVG stretched to the card width so its rows rendered taller than 14px,
-// and each successive label drifted further from its row (the reported
-// "day lettering doesn't align" bug). Sharing one viewBox means labels and
-// cells scale together, so alignment holds at any width.
-function ConsistencyGrid({ grid }) {
-  const CELL = 14, GAP = 3, LABEL_W = 13;
-  if (!grid || grid.length === 0) return null;
-  const W = LABEL_W + grid.length * (CELL + GAP) - GAP;
-  const H = 7 * (CELL + GAP) - GAP;
-  const DAYS = ["M","T","W","T","F","S","S"]; // Monday-start, matches col.days (d=0 is weekStart Monday)
+// ─── Rhythm strip (12-week adherence) ────────────────────────────────────────
+// One cell per week, filled by distinct training days vs the user's weekly
+// quota. Current week gets the ring (it's still being written). No per-day
+// cells by design — see weeklyRhythm in lib/analytics.js.
+function RhythmStrip({ weeks, quota, muted = false }) {
+  if (!weeks || weeks.length === 0) return null;
+  const CELL_H = 34, GAP = 5;
+  const colour = muted ? T.text4 : T.gold;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:"auto", display:"block"}}>
-      {DAYS.map((d, i) => (
-        <text key={i}
-          x={0} y={i * (CELL + GAP) + CELL / 2}
-          dominantBaseline="central"
-          fontSize={9} fontWeight={500} fill={T.text4} fontFamily="inherit"
-        >{d}</text>
-      ))}
-      {grid.map((col, ci) => (
-        col.days.map((day, di) => {
-          const fill = day.trained
-            ? (day.cooked ? T.rose : T.sage)
-            : T.bg3;
+    <div>
+      <div style={{ display: "flex", gap: GAP, alignItems: "flex-end" }}>
+        {weeks.map((w, i) => {
+          const frac = Math.min(1, w.days / quota);
+          const current = i === weeks.length - 1;
           return (
-            <rect key={`${ci}-${di}`}
-              x={LABEL_W + ci * (CELL + GAP)} y={di * (CELL + GAP)}
-              width={CELL} height={CELL} rx={3}
-              fill={fill}
-              fillOpacity={day.trained ? (day.cooked ? 0.9 : 1) : 1}
-            />
+            <div key={w.weekStart} title={`${w.weekStart} · ${w.days} day${w.days === 1 ? "" : "s"}`}
+              style={{
+                flex: 1, height: CELL_H, borderRadius: 6, position: "relative",
+                background: T.bg3, overflow: "hidden",
+                boxShadow: current ? `inset 0 0 0 1px ${colour}88` : "none",
+              }}>
+              <div style={{
+                position: "absolute", left: 0, right: 0, bottom: 0,
+                height: `${Math.round(frac * 100)}%`,
+                background: colour,
+                opacity: muted ? 0.35 : 0.28 + 0.62 * frac,
+              }}/>
+            </div>
           );
-        })
-      ))}
-    </svg>
+        })}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 10, color: T.text4 }}>
+        <span>12 weeks ago</span>
+        <span>this week</span>
+      </div>
+      <div style={{ marginTop: 10, fontSize: 12, color: T.text3, fontStyle: "italic", fontFamily: T.serif, lineHeight: 1.5 }}>
+        Weeks build it. No single day decides.
+      </div>
+    </div>
   );
 }
 

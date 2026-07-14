@@ -23,6 +23,8 @@ import {
   backgroundSync, blobPull, blobPush, flushPendingPushes,
   getLocalProfile,
 } from "@/lib/storage";
+import { checkStoreHealth, collectStoreSnapshot } from "@/lib/store-health";
+import { windowPressure } from "@/lib/analytics";
 import { LIBRARY } from "@/lib/library";
 
 function fmtTs(ts) {
@@ -107,6 +109,11 @@ export default function DiagSync() {
   // diagnostic surface. Suppress lint warning on missing key fields here;
   // intentional decision rather than oversight. Returning null when
   // profile is missing so the early-return below works.
+  // Read-only instruments (Phase 5 reframing, 2026-07-14): invariant
+  // results + window pressure, derived fresh per render like the snapshot.
+  const health = !profile ? [] : checkStoreHealth(collectStoreSnapshot(profile));
+  const pressure = !profile ? { lifts: [], binding: false } : windowPressure(H.get(profile));
+
   const snapshot = !profile ? null : {
     historyCount: H.get(profile).length,
     daysCount: Object.keys(Days.getAll(profile)).length,
@@ -358,6 +365,39 @@ export default function DiagSync() {
         <div style={{ display: "flex", gap: 8 }}>
           <Button onClick={onResetCache} busy={busy === "reset"} variant="danger">Reset cache &amp; reload</Button>
         </div>
+      </Section>
+
+      {/* Store health — every paid-for data-shape bug, checked forever.
+          READ-ONLY by doctrine: detection is continuous, repairs stay
+          one-shot reviewed migrations (wipe protocol). */}
+      <Section title="Store health (read-only invariants)">
+        {health.map((h) => (
+          <Row key={h.check}
+            label={h.check}
+            value={h.ok ? "ok" : `FAIL${h.detail ? ` · ${h.detail}` : ""}`}
+            dim={h.ok}
+          />
+        ))}
+      </Section>
+
+      {/* Window pressure — the progression-v2 gate made observable. The
+          engine's per-lift window is 12; the decision arms the day any
+          lift's flat run outgrows it. */}
+      <Section title="Progression window pressure">
+        <Row label="verdict"
+          value={pressure.binding
+            ? "BINDING — a flat run outgrew the 12-entry window; the v2 decision is armed"
+            : "not yet binding — no pattern outgrows the window"}
+          dim={!pressure.binding}
+        />
+        {pressure.lifts.slice(0, 6).map((l) => (
+          <Row key={l.name}
+            label={l.name}
+            value={`${l.sessions} sessions · longest flat run ${l.longestFlatRun}${l.saturated ? " · window saturated" : ""}`}
+            dim={!l.exceedsWindow}
+          />
+        ))}
+        {pressure.lifts.length === 0 && <Row label="—" value="no main-lift history yet" dim />}
       </Section>
 
       <Section title="Day entries (latest 20)">
