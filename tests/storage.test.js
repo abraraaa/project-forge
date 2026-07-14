@@ -111,8 +111,11 @@ describe("storage durability contract", () => {
     }
   });
 
-  it("every SYNCED meta store has a merge rule in mergeProfileData", () => {
-    const mergeFn = sliceFunction(storageSrc, "mergeProfileData");
+  it("every SYNCED meta store has a merge rule in mergeMeta (lib/sync-merge.js)", () => {
+    // The merge moved to lib/sync-merge.js (shared with the server PUT
+    // route, sync audit S3) — the contract check follows it.
+    const mergeSrc = readFileSync(new URL("../lib/sync-merge.js", import.meta.url), "utf-8");
+    const mergeFn = sliceFunction(mergeSrc, "mergeMeta");
     const required = ["weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus", "bodyweight", "trainingState", "days", "breaks"];
     for (const field of required) {
       expect(mergeFn.includes(field), `mergeProfileData must declare a merge rule for meta.${field}`).toBe(true);

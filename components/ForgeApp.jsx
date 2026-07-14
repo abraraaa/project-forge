@@ -13,6 +13,7 @@ import {
   LS, P, PB, W, F, H, BW, PN, Days, Bk, bumpStreak, recordCompletion,
   computeRhythm, detectRecoveryPattern,
   blobPush, flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
+  ensurePersistentStorage,
   enableAutoSync, disableAutoSync, pushNow, weeksSince, dateOfWeekdayIdxInCurrentWeek,
   newDraftLog, logSet, finaliseDraft, D, TS,
   startingWeightForLift,
@@ -401,16 +402,17 @@ export default function ForgeApp(){
     setBreaks(Bk.getAll(activeProfile));
     setHistory(local.history || []);
 
-    // Retry any failed pushes from previous sessions
-    flushPendingPushes((profile) => ({
-      meta: {
-        weights: P.getWeights(profile),
-        reps: P.getReps(profile),
-        streak: P.getStreak(profile),
-        programmeBlock: PB.get(),
-      },
-      history: H.get(profile),
-    }));
+    // Retry any failed pushes from previous sessions. NO payload argument,
+    // deliberately: this call once hand-built {weights, reps, streak,
+    // programmeBlock} — and because the server overwrites meta wholesale,
+    // every app-open retry DELETED days/schedule/focus/bodyweight/
+    // trainingState/breaks from the blob (sync audit S1). The default
+    // builder is getLocalProfile, the principle-0 single source.
+    flushPendingPushes();
+
+    // Protect local storage from iOS eviction — local is the recovery
+    // source, so persistence is survivability, not luxury. Fire-and-forget.
+    ensurePersistentStorage();
 
     // Cancellation flag — if this effect cleans up (e.g. user switches
     // profiles before the sync resolves), we ignore the late callback to
@@ -421,7 +423,12 @@ export default function ForgeApp(){
     const onSyncUpdate = ({ meta, history: remoteHistory }) => {
       if (cancelled) return;
       // Blob had newer data — update React state silently (clamping any
-      // wildly-out-of-range weights along the way; see sanitiseWorkingWeights)
+      // wildly-out-of-range weights along the way; see sanitiseWorkingWeights).
+      // EVERY synced field refreshes, not just the original four: the old
+      // callback ignored days/breaks/focus/schedule/bodyweight, so a pull
+      // landed those in localStorage while the screen kept stale state
+      // until remount (sync audit S4). persistToLocal already wrote LS —
+      // this only mirrors the canonical local stores into React.
       if (meta.weights) {
         const sanitised = sanitiseWorkingWeights(meta.weights);
         if (sanitised !== meta.weights) P.saveWeights(activeProfile, sanitised);
@@ -431,6 +438,18 @@ export default function ForgeApp(){
       if (meta.streak?.count) setStreak(meta.streak.count);
       if (meta.programmeBlock) setProgrammeBlock(meta.programmeBlock);
       if (remoteHistory?.length) setHistory(remoteHistory);
+      setUserWeek(W.get() || WEEK);
+      setUserFocus(F.get(activeProfile));
+      setBreaks(Bk.getAll(activeProfile));
+      const proj = Days.projectCurrentWeek(activeProfile);
+      setWeekDone(proj.complete);
+      setBonusDone(proj.bonus);
+      setDayDone(Days.manualTickDates(activeProfile));
+      const bw = BW.getKg(activeProfile);
+      if (bw) setBodyweightState(bw);
+      const ts = TS.get(activeProfile);
+      setActiveDeload(ts?.mesocycle?.activeDeload || null);
+      setDeloadOffer(shouldOfferDeload(ts, H.get(activeProfile)));
     };
 
     // BLOCKING sync — await blob round-trip before unblocking the UI. On

@@ -182,6 +182,30 @@ and blends into both, as the top edge always did.
 
 ### Safari 27 opportunistic follow-ups (user base is on the beta)
 
+- **v2 research-doc verdicts (2026-07-13, cross-model-reviewed edition):**
+  the static-routing three-tier correction CONFIRMS our shipped
+  architecture — public/sw.js already routes /api/* → network (tier 2),
+  the install-time precache set → cache (tier 1), and leaves the
+  dynamic middle to the fetch listener (tier 3); no shell asset was
+  ever network-routed, and the recorded refusal to cache-route
+  /_next/static (a cache-source route never populates) stands
+  compatible with tier 1. The §8 iOS-26 fixed-overlay bug does NOT
+  apply to the "Restoring" hydration view — it is in-flow inside the
+  shell, not fixed; the chin-law architecture inoculated us. Rec 8
+  (Blob.slice grep) re-confirmed absent. Customizable <select>
+  (base-select) assessed N/A today — Forge has zero <select> elements
+  (pickers are button-lists by design); revisit only if a real
+  dropdown ever ships. Safari MCP server is local-Mac tooling for the
+  boss's own Claude Code setup, not wireable from remote sessions.
+- **Sync-layer verdicts (2026-07-13, against the WebKit research):**
+  `navigator.storage.persist()` ADOPTED (Safari 17+; protects the
+  local-first cache from iOS eviction — local is the recovery source).
+  **Background Sync API: RULED OUT** — unavailable on Apple platforms,
+  do not re-propose; PQ retries stay app-lifecycle-driven.
+  `Blob.slice()` rounding change: N/A, verified — no client-side blob
+  chunking exists. IndexedDB/FileSystemHandle improvements: N/A, no IDB
+  usage.
+
 - **ScrollDrum feel:** 27 fixes scroll-snap overshoot-to-farther-point
   and re-snap-after-layout. Any drum quirk reports: retest on current
   beta before tuning our code.
@@ -932,6 +956,19 @@ Entries graduate here with the resolving commit. Keep most recent on top;
 trim entries older than the last block once they're no longer
 discussion-relevant.
 
+- **Sync/merge audit fixes (S1–S6)** — (2026-07-13, this PR). One
+  payload builder (getLocalProfile) for every push retry — the partial
+  app-open retry was DELETING six meta fields from the blob; per-key
+  timestamps for weights/reps + stamps for focus/trainingState so a
+  stale blob can no longer regress offline training on pull; THE merge
+  extracted to lib/sync-merge.js and run by the server PUT route too,
+  so blob meta is always a merged superset (history's id-union model,
+  applied to everything); exact self-normalised change detection; the
+  sync UI callback refreshes every synced field; storage persistence
+  requested. Read-merge-write races accepted + documented (no blob CAS)
+  — field stamps make losers converge. Live-proven nightly: the sync
+  self-test now PUTs a partial S1-class payload and asserts nothing
+  disappears.
 - **Bevel material (tactful neumorphism)** — (2026-07-13, this PR).
   Device-judged across two rounds: B2 wins — top-edge light bevel,
   deboss as PRESSED state only, shadows seat INSTANTLY (tweened

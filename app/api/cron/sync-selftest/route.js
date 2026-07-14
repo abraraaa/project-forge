@@ -71,6 +71,19 @@ export async function GET(request) {
       { id: "2026-07-05T10:00:00.000Z", date: "2026-07-05", type: "strength" }, // new
     ] } }))).json();
     check("history merges by id (no clobber, no dup)", merged?.history?.count === 2);
+
+    // Server-side META merge (sync audit S3): a second PUT carrying a
+    // PARTIAL meta payload — the S1 bug class — must not delete fields the
+    // blob already holds. Before the fix this overwrote meta wholesale.
+    const dayKey = "2026-07-02";
+    await syncPUT(jsonReq("PUT", { profile, data: { meta: {
+      ...meta,
+      days: { [dayKey]: { date: dayKey, scheduledType: "cardio", completedType: "cardio", sessionId: null, marks: {}, updatedAt: new Date().toISOString() } },
+    } } }));
+    await syncPUT(jsonReq("PUT", { profile, data: { meta: { weights: { "Hex Bar Deadlift": 112.5 }, reps: {}, streak: { count: 3, lastDate: "2026-07-04" }, programmeBlock: { number: 1 } } } }));
+    const afterPartial = await (await syncGET(getReq({ profile }))).json();
+    check("partial meta PUT merges — existing days survive", afterPartial?.meta?.days?.[dayKey]?.completedType === "cardio");
+    check("partial meta PUT merges — incoming change lands", afterPartial?.meta?.weights?.["Hex Bar Deadlift"] === 112.5);
   } catch (e) {
     check(`threw: ${e?.message || e}`, false);
   } finally {
