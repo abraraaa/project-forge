@@ -256,6 +256,19 @@ and blends into both, as the top edge always did.
 
 ### Rebrand — "Forge" is diluted in fitness · SCHEDULED winter 2026/27
 
+**Candidate on record (2026-07-14): "Heatwayve".** Domains checked:
+.fit at $2.99 (buy-as-option recommended — matches the .fit
+convention), .co $29.99, .io $37.99 (skippable for a PWA). The case:
+heat + wave = warmth + rhythm — the two concepts the product is built
+from (the warmth doctrine in the material system, the rhythm doctrine
+in the engine); zero collisions in fitness; the 'y' makes it ownable.
+The tax: "with a y" on every spoken mention; SEO must cover the
+plain-spelling query too. Diligence owed at the naming session:
+class-relevant trademark search (adjacent neighbours exist — Oracle
+MySQL HeatWave in databases, Wayve in UK autonomous driving; neither
+in class, neither with this spelling), social handles, app-name
+collisions. Candidate recorded, not crowned — the session decides.
+
 **Status:** RESCHEDULED 2026-07-14 (boss's call): rollout this WINTER,
 full switchover complete before the domain lapses (~March/April 2027).
 Working timeline: naming session ~Nov/Dec 2026 → mechanical pass over
