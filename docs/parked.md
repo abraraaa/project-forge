@@ -120,6 +120,23 @@ choice.
   away-muted like the volume card. Also fixed in passing: the old grid
   built its week columns from toISOString(), the UTC-shift class.
 
+## Phase 6 — Intimacy pass II · QUEUED 2026-07-14 (the savoured one)
+
+Named honestly: Phase 3 got RESOLVED, not performed — its items closed
+as verdicts and codifications while the week's energy was audit-shaped.
+This is the slow pass the boss actually enjoys, done at its own tempo,
+together: sit with every surface and judge FEEL, not correctness. The
+shape (no build until the sitting is done):
+- A surface walk — every screen and moment (done screen, breather,
+  focus picker, week editor, onboarding, Lab) — with notes on where
+  type breathes wrong, where a beat lands flat, where spacing crowds.
+- Bevel-extension candidates surfaced FROM the walk (which surfaces
+  ask for the material), not from a list.
+- Micro-moment inventory: entrances, settles, flashes — anything that
+  deserves the flash-cascade treatment it hasn't had.
+- Boss's eye is the instrument throughout; Claude enumerates and
+  builds only after verdicts. Device passes per change, small PRs.
+
 ## Phase 5 — Long tail (as-and-when)
 
 Progression history-window depth v2 — INSTRUMENTED 2026-07-14: the
@@ -237,10 +254,16 @@ and blends into both, as the top edge always did.
   the +55px restoration drift is FIXED ("works beautifully") by leaving
   anchoring on app-wide with overflow-anchor: none on ScrollDrum only.
 
-### Possible rebrand — "Forge" is diluted in fitness
+### Rebrand — "Forge" is diluted in fitness · SCHEDULED winter 2026/27
 
-**Status:** Parked 2026-07-08 (user's call). Revisit when the current
-domain ownership lapses, roughly **March/April 2027**.
+**Status:** RESCHEDULED 2026-07-14 (boss's call): rollout this WINTER,
+full switchover complete before the domain lapses (~March/April 2027).
+Working timeline: naming session ~Nov/Dec 2026 → mechanical pass over
+winter (display strings, PWA manifest, share-card wordmark, OG image,
+README, onboarding copy) → domain 301s start EARLY in the window so
+re-indexing of the 166 library canonicals completes while theforged.fit
+still serves. Installed PWAs keep the old name/icon until reinstall
+(iOS manifest law) — plan the comms line for that.
 
 **Context:** "Forge" as a strength-training name is heavily diluted
 across the fitness space. No urgency — the product identity (voice,
