@@ -281,6 +281,15 @@ the default drift instead of a choice. Session test: render candidate
 wordmarks over the actual home screen; the eye decides in five seconds
 whether the pixels already own the name.
 
+**Verdict (2026-07-14, same day):** boss leans away — prefers
+single-syllable or shorter names, and the deliberate misspelling
+"feels ripe for mistyping" (a typing tax on top of the spoken
+"with a y" tax). He may still pick up heatwayve.fit ($2.99) as cheap
+optionality after playing it back. Candidate stays on record with
+reduced weight, and the naming-session brief gains a standing filter
+from it: **short, hard to mistype, no spelling tax** — screen every
+future candidate against that before the aesthetic questions.
+
 **Status:** RESCHEDULED 2026-07-14 (boss's call): rollout this WINTER,
 full switchover complete before the domain lapses (~March/April 2027).
 Working timeline: naming session ~Nov/Dec 2026 → mechanical pass over
