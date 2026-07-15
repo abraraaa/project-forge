@@ -20,6 +20,7 @@ import {
 } from "@/lib/storage";
 import { absencesFromHistory, weeklySlotsFromWeek } from "@/lib/absence";
 import { activeBreak } from "@/lib/breaks";
+import { todayLocalIso } from "@/lib/dates";
 import BreatherModal from "@/components/BreatherModal";
 import { T, MUSCLE_COLOURS } from "@/lib/tokens";
 import {
@@ -763,7 +764,7 @@ export default function ForgeApp(){
   const commitRotationPreview = (preview, showSummary = true) => {
     const next = {
       number: programmeBlock.number + 1,
-      startDate: new Date().toISOString().slice(0,10),
+      startDate: todayLocalIso(),
       config: preview.newConfig,
       history: preview.updatedHistory,
     };
