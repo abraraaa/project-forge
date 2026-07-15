@@ -1,107 +1,119 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import crypto from "crypto";
+import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import { readJsonDirect, readJsonByPrefix, deleteByPrefix } from "@/lib/blob-utils";
+import { rpConfigFromRequest, verifyAuthToken, hasRealPasskey } from "@/lib/auth-server";
 
-// Verify WebAuthn registration and store credential
+// Verify WebAuthn registration and store the credential's PUBLIC KEY.
 // POST /api/auth/register-verify
-// Body: { profile: string, credential: { id, rawId, type, response: { clientDataJSON, attestationObject } } }
+// Body: { profile, credential: { id, rawId, type, response: { clientDataJSON, attestationObject } }, authToken? }
+//
+// The attestation is now really verified (challenge, origin, rpId, user
+// verification) and the parsed public key is stored so authentication can
+// check signatures. Two gaps this closes vs. the prior "trust the browser"
+// version:
+//   1. No key was stored, so login could never verify a signature (forgeable).
+//   2. Registration was unauthenticated, so an attacker could staple their own
+//      passkey onto someone else's already-protected profile (credential
+//      stuffing). Adding a credential to a profile that ALREADY holds a
+//      verifiable one now requires proving control via an existing passkey
+//      (an authToken from login-verify). The FIRST passkey stays open — it is
+//      the bootstrap claim, with nothing yet to authenticate against, and it
+//      grants an attacker no delete power they didn't already have on an
+//      unprotected profile.
 
 const normalise = (name) => String(name || "").trim().toLowerCase();
-// Note: Vercel Blob addRandomSuffix inserts BEFORE extension
 const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
-// Full path for writing new credentials (will get suffix added)
+// addRandomSuffix inserts BEFORE the extension, so this is the write path.
 const credentialsPath = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials.json`;
-
-function base64urlToBuffer(base64url) {
-  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-  const padLen = (4 - (base64.length % 4)) % 4;
-  const padded = base64 + "=".repeat(padLen);
-  const binary = Buffer.from(padded, "base64");
-  return binary;
-}
 
 export async function POST(request) {
   try {
-    const { profile, credential } = await request.json();
+    const { profile, credential, authToken } = await request.json();
     if (!profile || !credential) {
       return NextResponse.json({ error: "Missing profile or credential" }, { status: 400 });
     }
 
-    const userId = crypto
-      .createHash("sha256")
-      .update(normalise(profile))
-      .digest("base64url");
+    const userId = crypto.createHash("sha256").update(normalise(profile)).digest("base64url");
 
-    // Retrieve and validate the challenge (challenges use addRandomSuffix: false, so use direct read)
+    // Retrieve + validate the single-use challenge.
     const challengeKey = `forge/challenges/${userId}`;
     const challengeData = await readJsonDirect(challengeKey);
-    
     if (!challengeData) {
       return NextResponse.json({ error: "No pending registration" }, { status: 400 });
     }
-    
     if (Date.now() > challengeData.expires) {
       return NextResponse.json({ error: "Registration expired" }, { status: 400 });
     }
-
     if (challengeData.profile !== normalise(profile)) {
       return NextResponse.json({ error: "Profile mismatch" }, { status: 400 });
     }
 
-    // Parse clientDataJSON to verify challenge
-    const clientDataJSON = JSON.parse(base64urlToBuffer(credential.response.clientDataJSON).toString());
-    
-    if (clientDataJSON.challenge !== challengeData.challenge) {
-      return NextResponse.json({ error: "Challenge mismatch" }, { status: 400 });
+    // Anti-stuffing gate: adding a credential to a profile that already holds a
+    // VERIFIABLE passkey requires proving control of an existing one. Keyless
+    // legacy credentials do not count as protection (see lib/auth-server.js),
+    // so a legacy user can re-register freely and heal into a real credential.
+    const existing = (await readJsonByPrefix(credentialsPrefix(profile))) || { credentials: [] };
+    if (hasRealPasskey(existing)) {
+      const ok = await verifyAuthToken(profile, authToken);
+      if (!ok) {
+        return NextResponse.json(
+          {
+            error: "This profile is already protected by a passkey. Authenticate with your existing passkey before adding another.",
+            requiresAuth: true,
+          },
+          { status: 401 },
+        );
+      }
     }
 
-    if (clientDataJSON.type !== "webauthn.create") {
-      return NextResponse.json({ error: "Invalid operation type" }, { status: 400 });
+    // Really verify the attestation and extract the public key.
+    const { rpId, expectedOrigin } = rpConfigFromRequest(request);
+    let verification;
+    try {
+      verification = await verifyRegistrationResponse({
+        response: { ...credential, clientExtensionResults: credential.clientExtensionResults || {} },
+        expectedChallenge: challengeData.challenge,
+        expectedOrigin,
+        expectedRPID: rpId,
+        requireUserVerification: true,
+      });
+    } catch (e) {
+      return NextResponse.json({ error: `Registration verification failed: ${e.message}` }, { status: 400 });
+    }
+    if (!verification.verified || !verification.registrationInfo) {
+      return NextResponse.json({ error: "Registration could not be verified" }, { status: 400 });
     }
 
-    // In a production app, you'd parse the attestationObject to extract the public key.
-    // For this minimal implementation, we store the credential ID and trust the browser.
-    // The credential ID is sufficient for authentication since we verify via the browser.
-
-    // Load existing credentials
-    const existing = await readJsonByPrefix(credentialsPrefix(profile)) || { credentials: [] };
-    
-    // Add new credential
+    const vc = verification.registrationInfo.credential;
     const newCredential = {
-      id: credential.id,
-      rawId: credential.rawId,
-      type: credential.type,
+      id: vc.id,
+      // Uint8Array → base64url for JSON storage; decoded back on login.
+      publicKey: Buffer.from(vc.publicKey).toString("base64url"),
+      counter: vc.counter,
+      transports: vc.transports || credential.response?.transports || [],
       createdAt: new Date().toISOString(),
-      // Store the attestation for potential future verification
-      attestationObject: credential.response.attestationObject,
     };
 
-    // Prevent duplicates
-    const updated = {
-      credentials: [
-        ...existing.credentials.filter(c => c.id !== credential.id),
-        newCredential,
-      ],
-    };
+    // Keep other REAL credentials (minus any id collision), DROP keyless legacy
+    // placeholders — a successful real registration supersedes them so the
+    // profile ends up with only verifiable credentials.
+    const kept = existing.credentials.filter((c) => c && c.publicKey && c.id !== vc.id);
+    const updated = { credentials: [...kept, newCredential] };
 
-    // Clean up old credentials file if exists
+    // Overwrite-in-place semantics: clear the old suffixed blob, write the new.
     await deleteByPrefix(credentialsPrefix(profile));
-
-    // Save credentials
     await put(credentialsPath(profile), JSON.stringify(updated), {
       access: "private",
       contentType: "application/json",
       addRandomSuffix: true,
     });
 
-    // Clean up challenge
+    // Consume the challenge.
     await deleteByPrefix(challengeKey);
 
-    return NextResponse.json({
-      ok: true,
-      credentialId: credential.id,
-    });
+    return NextResponse.json({ ok: true, credentialId: vc.id });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

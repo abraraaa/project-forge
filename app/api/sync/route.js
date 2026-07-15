@@ -1,5 +1,7 @@
 import { put, list, del, get } from "@vercel/blob";
 import { mergeMeta } from "@/lib/sync-merge";
+import { readJsonByPrefix } from "@/lib/blob-utils";
+import { hasRealPasskey } from "@/lib/auth-server";
 import { NextResponse } from "next/server";
 
 // Blob layout (case-insensitive — path uses lowercase, display name lives in meta):
@@ -385,12 +387,18 @@ export async function DELETE(request) {
     const v = validateProfile(profile);
     if (!v.ok) return NextResponse.json({ error: v.reason }, { status: 400 });
 
-    // Check if this profile has passkeys
-    const credentialsPrefix = `forge/profiles/${encodeURIComponent(normalise(profile))}/credentials.json`;
-    const { blobs: credBlobs } = await list({ prefix: credentialsPrefix });
-    const hasPasskeys = credBlobs.length > 0;
+    // Gate deletion on a VERIFIABLE passkey. Read the credentials doc (blobs
+    // carry a random suffix, so match the extensionless prefix — the old
+    // `credentials.json` prefix never matched `credentials-XXX.json`, which
+    // silently left this gate open) and require auth only when a real,
+    // key-bearing credential exists. Keyless legacy credentials don't lock a
+    // user out; they can re-register to re-protect. See lib/auth-server.js.
+    const credData = await readJsonByPrefix(
+      `forge/profiles/${encodeURIComponent(normalise(profile))}/credentials`,
+    );
+    const hasPasskeys = hasRealPasskey(credData);
 
-    // If passkeys exist, require auth token
+    // If a real passkey exists, require a valid auth token.
     if (hasPasskeys) {
       if (!authToken) {
         return NextResponse.json(
