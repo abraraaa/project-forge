@@ -556,6 +556,25 @@ describe("bonusForDay", () => {
     const names = CARDIO_BONUS_POOL.map((b) => b.name);
     expect(new Set(names).size).toBe(names.length);
   });
+
+  it("never repeats within a full pool lap, including month boundaries", () => {
+    // The staleness guarantee: consecutive dates cycle the pool, so any
+    // window of pool-length consecutive days shows every bonus exactly once.
+    // The old string hash failed this across month rollovers (2 3 2 3).
+    const len = CARDIO_BONUS_POOL.length;
+    const d = new Date(Date.UTC(2026, 6, 25)); // spans July→August
+    const seen = [];
+    for (let i = 0; i < len; i++) {
+      seen.push(bonusForDay(d.toISOString().slice(0, 10), "cardio").name);
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    expect(new Set(seen).size).toBe(len);
+  });
+
+  it("pool length stays prime so a weekly slot cycles the whole pool", () => {
+    const len = CARDIO_BONUS_POOL.length;
+    for (let f = 2; f * f <= len; f++) expect(len % f).toBeGreaterThan(0);
+  });
 });
 
 // ─── Training focus — accessory bias ────────────────────────────────────────

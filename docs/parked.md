@@ -256,6 +256,40 @@ and blends into both, as the top edge always did.
 
 ### Rebrand — "Forge" is diluted in fitness · SCHEDULED winter 2026/27
 
+**Candidate on record (2026-07-14): "Heatwayve".** Domains checked:
+.fit at $2.99 (buy-as-option recommended — matches the .fit
+convention), .co $29.99, .io $37.99 (skippable for a PWA). The case:
+heat + wave = warmth + rhythm — the two concepts the product is built
+from (the warmth doctrine in the material system, the rhythm doctrine
+in the engine); zero collisions in fitness; the 'y' makes it ownable.
+The tax: "with a y" on every spoken mention; SEO must cover the
+plain-spelling query too. Diligence owed at the naming session:
+class-relevant trademark search (adjacent neighbours exist — Oracle
+MySQL HeatWave in databases, Wayve in UK autonomous driving; neither
+in class, neither with this spelling), social handles, app-name
+collisions. Candidate recorded, not crowned — the session decides.
+
+**Aesthetic-gravity note (boss's objection, 2026-07-14):** the name has
+two readings — noon heatwave (bright, summer, neon; the 'y' even nods
+toward synthwave culture) and NIGHT heat (embers, skin, sauna glow) —
+and only the second matches the shipped aesthetic. Coral-and-gold on
+near-black IS heat in the dark, and "Forge" proves a heat-noun can
+follow the art direction rather than lead it. But the cost is real and
+ongoing: with this name the darkness must be ASSERTED in every first
+impression (wordmark, OG image, tile, landing) — brightness becomes
+the default drift instead of a choice. Session test: render candidate
+wordmarks over the actual home screen; the eye decides in five seconds
+whether the pixels already own the name.
+
+**Verdict (2026-07-14, same day):** boss leans away — prefers
+single-syllable or shorter names, and the deliberate misspelling
+"feels ripe for mistyping" (a typing tax on top of the spoken
+"with a y" tax). He may still pick up heatwayve.fit ($2.99) as cheap
+optionality after playing it back. Candidate stays on record with
+reduced weight, and the naming-session brief gains a standing filter
+from it: **short, hard to mistype, no spelling tax** — screen every
+future candidate against that before the aesthetic questions.
+
 **Status:** RESCHEDULED 2026-07-14 (boss's call): rollout this WINTER,
 full switchover complete before the domain lapses (~March/April 2027).
 Working timeline: naming session ~Nov/Dec 2026 → mechanical pass over
