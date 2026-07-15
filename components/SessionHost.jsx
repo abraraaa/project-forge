@@ -31,7 +31,7 @@ import { track } from "@vercel/analytics";
 import {
   P, H, W, PB, F, TS, BW, Days, Bk, D, SessionIntent,
   newDraftLog, logSet, finaliseDraft, bumpStreak, scaleForReadiness,
-  startingWeightForLift, blobPush, pushNow, recordCompletion, rpeToRir,
+  startingWeightForLift, pushNow, recordCompletion, rpeToRir,
 } from "@/lib/storage";
 import {
   SESSIONS, EXERCISE_POOLS,
@@ -597,18 +597,17 @@ export default function SessionHost() {
         });
       } catch {}
 
-      blobPush(profile, {
-        meta: {
-          weights: P.getWeights(profile),
-          reps: P.getReps(profile),
-          streak: P.getStreak(profile),
-          programmeBlock,
-          userWeek: W.getHistory(),
-          userFocus: F.get(profile),
-          days: Days.getAll(profile),
-        },
-        history: sessionRecord ? [sessionRecord] : [],
-      });
+      // Push the FULL canonical snapshot — never a hand-rolled subset.
+      // Everything this session earned is already in localStorage by now
+      // (H.append, recordCompletion, TS.updateLift/Anchor/Volume all ran
+      // above), so getLocalProfile carries it with the stamps intact.
+      // The old hand-rolled payload here omitted weightStamps/repStamps/
+      // trainingState/bodyweight/breaks: stamp-less weights read as epoch
+      // and LOST the server merge to the blob's older stamped values, and
+      // the engine state never reached the blob at all — a reinstall before
+      // the next home-visit-pull silently cold-started the engine despite a
+      // surviving history record (audit S1, re-verified 2026-07-15).
+      pushNow(profile);
     }
     setFlow("done");
   };

@@ -1,10 +1,21 @@
 // tests/forge-app-mutation-coverage.test.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Mutation-coverage audit. Asserts every handler in ForgeApp.jsx that mutates
-// a persisted store routes through one of the push helpers: pushNow() for
-// class-1 (immediate), pushDeferred() for class-2 (coalesced), or blobPush()
-// directly (session-finalise paths that build their own payload). Routing
+// Mutation-coverage audit. Asserts every handler that mutates a persisted
+// store routes through one of the TWO canonical push helpers: pushNow() for
+// class-1 (immediate) or pushDeferred() for class-2 (coalesced). Both build
+// their payload from getLocalProfile — the ONE payload builder. Routing
 // taxonomy lives in docs/push-refactor.md.
+//
+// A raw blobPush() with a hand-rolled meta subset is NOT accepted: that is the
+// audit-S1 bug class (a partial payload without weightStamps/repStamps/
+// trainingState/bodyweight loses the server merge to the blob's older stamped
+// values, and engine state never reaches the blob at all). Both session-
+// finalise paths did exactly this until 2026-07-15; this test now forbids it.
+//
+// Coverage spans BOTH hosts that own persisted mutations: ForgeApp.jsx (home +
+// retro finalise) AND SessionHost.jsx (live finalise + in-session bodyweight).
+// The live-finalise bug survived for as long as it did because this audit
+// scanned only ForgeApp — SessionHost is in scope now.
 //
 // What the durability contract test in storage.test.js asserts: the SHAPE of
 // the payload — every SYNCED field is read by getLocalProfile, written by
@@ -13,10 +24,10 @@
 // helper strands the change locally until lifecycle flush — durable in
 // theory, racy in practice.
 //
-// Approach: parse ForgeApp.jsx as text, find every line that calls a
+// Approach: parse each host as text, find every line that calls a
 // persistence-mutating primitive, locate the enclosing function body, assert
-// the body contains pushNow(), pushDeferred(), or blobPush() — or is in the
-// EXEMPT list (sync-side receivers).
+// the body contains pushNow() or pushDeferred() — or is in the EXEMPT list
+// (sync-side receivers).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
@@ -25,7 +36,10 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SOURCE = readFileSync(resolve(__dirname, "../components/ForgeApp.jsx"), "utf8");
+const HOSTS = [
+  { name: "ForgeApp.jsx", source: readFileSync(resolve(__dirname, "../components/ForgeApp.jsx"), "utf8") },
+  { name: "SessionHost.jsx", source: readFileSync(resolve(__dirname, "../components/SessionHost.jsx"), "utf8") },
+];
 
 // Persistence-mutating calls. Any line containing one of these regexes is a
 // potential push-needed site. Keep this in sync with lib/storage.js: a new
@@ -146,35 +160,36 @@ function charIdxForLine(text, lineIdx) {
   return idx;
 }
 
-describe("ForgeApp.jsx mutation coverage — every persisted mutation pushes", () => {
-  const lines = SOURCE.split("\n");
-
-  // Build the list of (lineIdx, callPattern) for every mutation site.
-  const mutationSites = [];
+function mutationSitesIn(source) {
+  const lines = source.split("\n");
+  const sites = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    // Skip comments.
-    if (/^\s*\/\//.test(line)) continue;
+    if (/^\s*\/\//.test(line)) continue; // skip comments
     if (/^\s*\*/.test(line)) continue;
     for (const pat of MUTATING_CALLS) {
       if (pat.test(line)) {
-        mutationSites.push({ lineIdx: i, line: line.trim(), pattern: pat.source });
+        sites.push({ lineIdx: i, line: line.trim(), pattern: pat.source });
         break;
       }
     }
   }
+  return { lines, sites };
+}
 
-  it("finds the expected order-of-magnitude of mutation sites (regression on regex)", () => {
-    // Sanity check: if the regex list goes empty or matches nothing, the
-    // rest of the test passes trivially. Anchor on a reasonable lower
-    // bound based on current handler count (~20+ sites across handlers).
-    expect(mutationSites.length).toBeGreaterThan(10);
+describe.each(HOSTS)("$name mutation coverage — every persisted mutation pushes", ({ name, source }) => {
+  const { lines, sites: mutationSites } = mutationSitesIn(source);
+
+  it("finds mutation sites (regression on the regex list going empty)", () => {
+    // Sanity: if the regex list matches nothing, every other assertion
+    // passes trivially. Both hosts carry several finalise-path mutations.
+    expect(mutationSites.length).toBeGreaterThan(3);
   });
 
-  it("every mutation site is in a function that pushes (snapshot OR direct blobPush)", () => {
+  it("every mutation site is in a function that routes through pushNow/pushDeferred", () => {
     const failures = [];
     for (const site of mutationSites) {
-      const decl = findEnclosingDeclaration(SOURCE, lines, site.lineIdx);
+      const decl = findEnclosingDeclaration(source, lines, site.lineIdx);
       if (!decl) {
         failures.push(`Line ${site.lineIdx + 1}: no enclosing function found for ${site.line}`);
         continue;
@@ -182,31 +197,37 @@ describe("ForgeApp.jsx mutation coverage — every persisted mutation pushes", (
       if (EXEMPT_FUNCTIONS[decl.name]) continue;
       if (decl.exemptReason && decl.exemptReason.length >= 10) continue;
 
-      const charIdx = charIdxForLine(SOURCE, decl.startIdx);
-      const endIdx = findFunctionEnd(SOURCE, charIdx);
-      const body = SOURCE.slice(charIdx, endIdx + 1);
+      const charIdx = charIdxForLine(source, decl.startIdx);
+      const endIdx = findFunctionEnd(source, charIdx);
+      const body = source.slice(charIdx, endIdx + 1);
 
+      // Only the canonical builders count. A raw blobPush() is deliberately
+      // NOT accepted — it is the hand-rolled-subset (audit-S1) escape hatch.
       const hasPushNow = /pushNow\s*\(/.test(body);
       const hasPushDeferred = /pushDeferred\s*\(/.test(body);
-      const hasDirectPush = /blobPush\s*\(\s*activeProfile/.test(body);
-      if (!hasPushNow && !hasPushDeferred && !hasDirectPush) {
+      if (!hasPushNow && !hasPushDeferred) {
+        const rawPush = /blobPush\s*\(/.test(body);
         failures.push(
           `${decl.name} (around line ${site.lineIdx + 1}) mutates persisted state ` +
-          `(${site.pattern}) but never calls pushNow(), pushDeferred(), or blobPush(). ` +
-          `Pick a class (see docs/push-refactor.md) and add the call, or — if ` +
-          `intentionally not pushing — add ${decl.name} to EXEMPT_FUNCTIONS ` +
-          `with a reason.`,
+          `(${site.pattern}) but never calls pushNow() or pushDeferred()` +
+          (rawPush
+            ? ` — it calls blobPush() directly, which is the audit-S1 hand-rolled` +
+              ` partial-payload class. Route through pushNow (getLocalProfile) instead.`
+            : `. Pick a class (see docs/push-refactor.md) and add the call, or — if ` +
+              `intentionally not pushing — add ${decl.name} to EXEMPT_FUNCTIONS with a reason.`),
         );
       }
     }
     if (failures.length) {
       throw new Error(
-        "Mutation coverage gaps found in ForgeApp.jsx:\n  " +
+        `Mutation coverage gaps found in ${name}:\n  ` +
         failures.join("\n  "),
       );
     }
   });
+});
 
+describe("mutation-coverage exemptions", () => {
   it("EXEMPT_FUNCTIONS entries all have a reason string", () => {
     for (const [name, reason] of Object.entries(EXEMPT_FUNCTIONS)) {
       expect(reason, `EXEMPT_FUNCTIONS["${name}"] must declare why it's exempt`).toBeTruthy();

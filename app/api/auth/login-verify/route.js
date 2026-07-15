@@ -1,22 +1,26 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import crypto from "crypto";
+import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { readJsonDirect, readJsonByPrefix, deleteByPrefix } from "@/lib/blob-utils";
+import { rpConfigFromRequest } from "@/lib/auth-server";
 
-// Verify WebAuthn authentication
+// Verify WebAuthn authentication and mint a short-lived auth token.
 // POST /api/auth/login-verify
-// Body: { profile: string, credential: { id, rawId, type, response: { clientDataJSON, authenticatorData, signature, userHandle } } }
+// Body: { profile, credential: { id, rawId, type, response: { clientDataJSON, authenticatorData, signature, userHandle } } }
+//
+// The assertion signature is now REALLY verified against the stored public key
+// (over authenticatorData ‖ SHA-256(clientDataJSON)), along with the challenge,
+// origin, rpId, and user-presence/verification flags. Only then is a token
+// minted. Previously the route checked the challenge and that the credential id
+// existed, then trusted the browser — but login-options hands the credential id
+// to any caller, so the token was forgeable by anyone who knew a profile name.
+// That token is the sole gate on destructive DELETE, so the padlock was
+// decorative. It isn't anymore.
 
 const normalise = (name) => String(name || "").trim().toLowerCase();
-// Note: Vercel Blob addRandomSuffix inserts BEFORE extension
 const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
-
-function base64urlToBuffer(base64url) {
-  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-  const padLen = (4 - (base64.length % 4)) % 4;
-  const padded = base64 + "=".repeat(padLen);
-  return Buffer.from(padded, "base64");
-}
+const credentialsPath = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials.json`;
 
 export async function POST(request) {
   try {
@@ -25,61 +29,87 @@ export async function POST(request) {
       return NextResponse.json({ error: "Missing profile or credential" }, { status: 400 });
     }
 
-    const userId = crypto
-      .createHash("sha256")
-      .update(normalise(profile))
-      .digest("base64url");
+    const userId = crypto.createHash("sha256").update(normalise(profile)).digest("base64url");
 
-    // Retrieve and validate the challenge (challenges use addRandomSuffix: false, so use direct read)
+    // Retrieve + validate the single-use challenge.
     const challengeKey = `forge/challenges/${userId}`;
     const challengeData = await readJsonDirect(challengeKey);
-    
     if (!challengeData) {
       return NextResponse.json({ error: "No pending authentication" }, { status: 400 });
     }
-    
     if (Date.now() > challengeData.expires) {
       return NextResponse.json({ error: "Authentication expired" }, { status: 400 });
     }
-
     if (challengeData.profile !== normalise(profile)) {
       return NextResponse.json({ error: "Profile mismatch" }, { status: 400 });
     }
 
-    // Parse clientDataJSON to verify challenge
-    const clientDataJSON = JSON.parse(base64urlToBuffer(credential.response.clientDataJSON).toString());
-    
-    if (clientDataJSON.challenge !== challengeData.challenge) {
-      return NextResponse.json({ error: "Challenge mismatch" }, { status: 400 });
-    }
-
-    if (clientDataJSON.type !== "webauthn.get") {
-      return NextResponse.json({ error: "Invalid operation type" }, { status: 400 });
-    }
-
-    // Verify the credential ID exists for this profile
+    // Find the stored credential this assertion claims to be.
     const credData = await readJsonByPrefix(credentialsPrefix(profile));
-    if (!credData?.credentials?.length) {
-      return NextResponse.json({ error: "No credentials found" }, { status: 400 });
-    }
-    
-    const matchingCred = credData.credentials.find(c => c.id === credential.id);
+    const matchingCred = credData?.credentials?.find((c) => c.id === credential.id);
     if (!matchingCred) {
       return NextResponse.json({ error: "Unknown credential" }, { status: 400 });
     }
+    if (!matchingCred.publicKey) {
+      // Legacy credential from before public keys were stored — a signature can
+      // never be verified against it. Fail closed and tell the client to
+      // re-register (which heals it into a verifiable credential).
+      return NextResponse.json(
+        { error: "This passkey predates signature verification and must be set up again.", needsReregister: true },
+        { status: 401 },
+      );
+    }
 
-    // In a full implementation, you'd verify the signature using the stored public key.
-    // For this minimal implementation, we trust that:
-    // 1. The browser verified the user (Face ID / Touch ID / Windows Hello)
-    // 2. The challenge matches what we issued
-    // 3. The credential ID matches what we stored
-    // This is secure because the credential can only be used from the registered device.
+    // Really verify the assertion signature.
+    const { rpId, expectedOrigin } = rpConfigFromRequest(request);
+    let verification;
+    try {
+      verification = await verifyAuthenticationResponse({
+        response: { ...credential, clientExtensionResults: credential.clientExtensionResults || {} },
+        expectedChallenge: challengeData.challenge,
+        expectedOrigin,
+        expectedRPID: rpId,
+        requireUserVerification: true,
+        credential: {
+          id: matchingCred.id,
+          publicKey: new Uint8Array(Buffer.from(matchingCred.publicKey, "base64url")),
+          counter: matchingCred.counter || 0,
+          transports: matchingCred.transports,
+        },
+      });
+    } catch (e) {
+      return NextResponse.json({ error: `Authentication failed: ${e.message}` }, { status: 401 });
+    }
+    if (!verification.verified) {
+      return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
+    }
 
-    // Generate a short-lived auth token for this session
+    // Clone detection: persist the advanced signature counter. Platform
+    // passkeys (Apple/Google) often report a constant 0, which the library
+    // accepts; a hardware authenticator that ever regresses its counter would
+    // have been rejected above.
+    const newCounter = verification.authenticationInfo.newCounter;
+    if (typeof newCounter === "number" && newCounter !== matchingCred.counter) {
+      try {
+        const updated = {
+          credentials: credData.credentials.map((c) =>
+            c.id === matchingCred.id ? { ...c, counter: newCounter } : c,
+          ),
+        };
+        await deleteByPrefix(credentialsPrefix(profile));
+        await put(credentialsPath(profile), JSON.stringify(updated), {
+          access: "private",
+          contentType: "application/json",
+          addRandomSuffix: true,
+        });
+      } catch {
+        // A counter-persist failure must not deny an otherwise-valid login.
+      }
+    }
+
+    // Mint the short-lived token (deterministic key, overwrite-in-place).
     const authToken = crypto.randomBytes(32).toString("base64url");
-    const tokenKey = `forge/tokens/${authToken}`;
-    
-    await put(tokenKey, JSON.stringify({
+    await put(`forge/tokens/${authToken}`, JSON.stringify({
       profile: normalise(profile),
       expires: Date.now() + 3600000, // 1 hour
       createdAt: new Date().toISOString(),
@@ -90,16 +120,10 @@ export async function POST(request) {
       allowOverwrite: true,
     });
 
-    // Clean up challenge
+    // Consume the challenge.
     await deleteByPrefix(challengeKey);
 
-    return NextResponse.json({
-      ok: true,
-      verified: true,
-      profile: normalise(profile),
-      authToken,
-      expiresIn: 3600,
-    });
+    return NextResponse.json({ ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600 });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
