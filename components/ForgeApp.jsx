@@ -12,7 +12,7 @@ import {
   SessionIntent,
   LS, P, PB, W, F, H, BW, PN, Days, Bk, bumpStreak, recordCompletion,
   computeRhythm, detectRecoveryPattern,
-  blobPush, flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
+  flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
   ensurePersistentStorage,
   enableAutoSync, disableAutoSync, pushNow, weeksSince, dateOfWeekdayIdxInCurrentWeek,
   newDraftLog, logSet, finaliseDraft, D, TS,
@@ -1148,21 +1148,13 @@ export default function ForgeApp(){
         });
       } catch {/* analytics never blocks */}
 
-      // Push to blob in background. Same reasoning as the live-finalise
-      // path: carry the full user-state so a retro submit doesn't clobber
-      // schedule/focus/tick changes that happened on this device.
-      blobPush(activeProfile, {
-        meta: {
-          weights: workingWeights,
-          reps: workingReps,
-          streak: P.getStreak(activeProfile),
-          programmeBlock,
-          userWeek: W.getHistory(),
-          userFocus: F.get(activeProfile),
-          days: Days.getAll(activeProfile),
-        },
-        history: H.get(activeProfile),
-      });
+      // Push the FULL canonical snapshot — never a hand-rolled subset.
+      // The retro engine block above already wrote history, Days, and
+      // trainingState to localStorage, so getLocalProfile carries them with
+      // stamps intact. The old hand-rolled payload here dropped weightStamps/
+      // repStamps/trainingState/bodyweight/breaks exactly like the live path
+      // did (audit S1); routing through pushNow closes both at once.
+      pushNow(activeProfile);
 
       // Confirm with toast, return to home — DoneScreen would be jarring here
       // (user is rapid-firing through past sessions, not celebrating each one).
