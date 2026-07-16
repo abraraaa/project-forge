@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import crypto from "crypto";
 import { readJsonByPrefix } from "@/lib/blob-utils";
+import { hasChallengeSecret, issueChallenge } from "@/lib/auth-server";
 
 // Generate authentication options for WebAuthn
 // POST /api/auth/login-options
@@ -29,28 +30,27 @@ export async function POST(request) {
       );
     }
 
-    // Generate a random challenge
-    const challenge = crypto.randomBytes(32).toString("base64url");
-
-    // Generate user ID
-    const userId = crypto
-      .createHash("sha256")
-      .update(normalise(profile))
-      .digest("base64url");
-
-    // Store challenge for verification (overwrite any stale challenge)
-    const challengeKey = `forge/challenges/${userId}`;
-    await put(challengeKey, JSON.stringify({ 
-      challenge, 
-      profile: normalise(profile), 
-      expires: Date.now() + 120000,
-      type: "login",
-    }), {
-      access: "private",
-      contentType: "application/json",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-    });
+    // Challenge: signed & stateless when CHALLENGE_SECRET is set (no blob
+    // round-trip → no "No pending authentication" race); otherwise fall back
+    // to the short-lived challenge blob. See lib/auth-server.js.
+    let challenge;
+    if (hasChallengeSecret()) {
+      challenge = issueChallenge(profile, "auth");
+    } else {
+      challenge = crypto.randomBytes(32).toString("base64url");
+      const userId = crypto.createHash("sha256").update(normalise(profile)).digest("base64url");
+      await put(`forge/challenges/${userId}`, JSON.stringify({
+        challenge,
+        profile: normalise(profile),
+        expires: Date.now() + 120000,
+        type: "login",
+      }), {
+        access: "private",
+        contentType: "application/json",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+      });
+    }
 
     // RP ID must be consistent between registration and authentication
     const host = request.headers.get("host") || "";

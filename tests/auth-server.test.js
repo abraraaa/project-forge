@@ -7,8 +7,8 @@
 // that binds a ceremony to its origin. All three are fail-closed by design.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
-import { rpConfigFromRequest, isTokenValid, hasRealPasskey } from "../lib/auth-server.js";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { rpConfigFromRequest, isTokenValid, hasRealPasskey, issueChallenge, verifyChallenge, hasChallengeSecret } from "../lib/auth-server.js";
 
 const reqWithHost = (host) => ({ headers: { get: (k) => (k === "host" ? host : null) } });
 
@@ -62,5 +62,58 @@ describe("hasRealPasskey — only a key-bearing credential counts", () => {
   });
   it("false when publicKey is present but empty", () => {
     expect(hasRealPasskey({ credentials: [{ id: "a", publicKey: "" }] })).toBe(false);
+  });
+});
+
+describe("stateless challenges (signed, no blob round-trip)", () => {
+  const prev = process.env.CHALLENGE_SECRET;
+  beforeEach(() => { process.env.CHALLENGE_SECRET = "test-secret-abc123"; });
+  afterEach(() => {
+    if (prev === undefined) delete process.env.CHALLENGE_SECRET;
+    else process.env.CHALLENGE_SECRET = prev;
+    vi.useRealTimers();
+  });
+
+  it("hasChallengeSecret reflects the env var", () => {
+    expect(hasChallengeSecret()).toBe(true);
+    delete process.env.CHALLENGE_SECRET;
+    expect(hasChallengeSecret()).toBe(false);
+  });
+
+  it("a freshly issued challenge verifies for the same profile + ceremony (profile normalised)", () => {
+    const c = issueChallenge("Sarah", "auth");
+    expect(verifyChallenge(c, "Sarah", "auth")).toBe(true);
+    expect(verifyChallenge(c, "sarah", "auth")).toBe(true);
+  });
+
+  it("rejects a challenge bound to a different profile or ceremony", () => {
+    const c = issueChallenge("Sarah", "auth");
+    expect(verifyChallenge(c, "Mallory", "auth")).toBe(false);
+    expect(verifyChallenge(c, "Sarah", "reg")).toBe(false);
+  });
+
+  it("rejects a tampered or garbage challenge", () => {
+    const c = issueChallenge("Sarah", "auth");
+    const parts = Buffer.from(c, "base64url").toString().split(".");
+    parts[3] = parts[3].slice(0, -1) + (parts[3].slice(-1) === "A" ? "B" : "A"); // flip a sig char
+    const tampered = Buffer.from(parts.join(".")).toString("base64url");
+    expect(verifyChallenge(tampered, "Sarah", "auth")).toBe(false);
+    expect(verifyChallenge("garbage", "Sarah", "auth")).toBe(false);
+    expect(verifyChallenge("", "Sarah", "auth")).toBe(false);
+  });
+
+  it("rejects an expired challenge (past the ~2-min TTL)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-15T00:00:00Z"));
+    const c = issueChallenge("Sarah", "auth");
+    expect(verifyChallenge(c, "Sarah", "auth")).toBe(true);
+    vi.setSystemTime(new Date("2026-07-15T00:03:00Z")); // +3 min
+    expect(verifyChallenge(c, "Sarah", "auth")).toBe(false);
+  });
+
+  it("a challenge signed under a different secret does not verify (HMAC binding)", () => {
+    const c = issueChallenge("Sarah", "auth");
+    process.env.CHALLENGE_SECRET = "a-completely-different-secret";
+    expect(verifyChallenge(c, "Sarah", "auth")).toBe(false);
   });
 });

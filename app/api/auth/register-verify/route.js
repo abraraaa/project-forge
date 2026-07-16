@@ -3,7 +3,7 @@ import { put } from "@vercel/blob";
 import crypto from "crypto";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import { readJsonDirect, readJsonByPrefix, deleteByPrefix } from "@/lib/blob-utils";
-import { rpConfigFromRequest, verifyAuthToken, hasRealPasskey } from "@/lib/auth-server";
+import { rpConfigFromRequest, verifyAuthToken, hasRealPasskey, hasChallengeSecret, verifyChallenge } from "@/lib/auth-server";
 
 // Verify WebAuthn registration and store the credential's PUBLIC KEY.
 // POST /api/auth/register-verify
@@ -35,19 +35,26 @@ export async function POST(request) {
       return NextResponse.json({ error: "Missing profile or credential" }, { status: 400 });
     }
 
+    // Challenge validation. Stateless (signed) when CHALLENGE_SECRET is set —
+    // no blob round-trip; otherwise validate the stored challenge blob.
+    const stateless = hasChallengeSecret();
     const userId = crypto.createHash("sha256").update(normalise(profile)).digest("base64url");
-
-    // Retrieve + validate the single-use challenge.
     const challengeKey = `forge/challenges/${userId}`;
-    const challengeData = await readJsonDirect(challengeKey);
-    if (!challengeData) {
-      return NextResponse.json({ error: "No pending registration" }, { status: 400 });
-    }
-    if (Date.now() > challengeData.expires) {
-      return NextResponse.json({ error: "Registration expired" }, { status: 400 });
-    }
-    if (challengeData.profile !== normalise(profile)) {
-      return NextResponse.json({ error: "Profile mismatch" }, { status: 400 });
+    let expectedChallenge;
+    if (stateless) {
+      expectedChallenge = (c) => verifyChallenge(c, profile, "reg");
+    } else {
+      const challengeData = await readJsonDirect(challengeKey);
+      if (!challengeData) {
+        return NextResponse.json({ error: "No pending registration" }, { status: 400 });
+      }
+      if (Date.now() > challengeData.expires) {
+        return NextResponse.json({ error: "Registration expired" }, { status: 400 });
+      }
+      if (challengeData.profile !== normalise(profile)) {
+        return NextResponse.json({ error: "Profile mismatch" }, { status: 400 });
+      }
+      expectedChallenge = challengeData.challenge;
     }
 
     // Anti-stuffing gate: adding a credential to a profile that already holds a
@@ -74,7 +81,7 @@ export async function POST(request) {
     try {
       verification = await verifyRegistrationResponse({
         response: { ...credential, clientExtensionResults: credential.clientExtensionResults || {} },
-        expectedChallenge: challengeData.challenge,
+        expectedChallenge,
         expectedOrigin,
         expectedRPID: rpId,
         requireUserVerification: true,
@@ -110,8 +117,8 @@ export async function POST(request) {
       addRandomSuffix: true,
     });
 
-    // Consume the challenge.
-    await deleteByPrefix(challengeKey);
+    // Consume the challenge (blob mode only — stateless challenges aren't stored).
+    if (!stateless) await deleteByPrefix(challengeKey);
 
     return NextResponse.json({ ok: true, credentialId: vc.id });
   } catch (e) {
