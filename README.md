@@ -36,7 +36,7 @@ Other scripts:
 | Framework | Next.js 16 (App Router, Turbopack) | Single Page-router page, server API routes |
 | UI | React 19 | One main component (`ForgeApp.jsx`) + `PerformanceLab.jsx` |
 | Lint | ESLint 9 flat config | `react-hooks/purity` + `set-state-in-effect` on as errors |
-| Tests | Vitest 4 | ~240 invariant + correctness tests, no React Testing Library |
+| Tests | Vitest 4 | ~570 invariant + correctness tests, plus a few component tests (React Testing Library) |
 | Storage | localStorage + Vercel Blob | Local = write-through cache; Blob = canonical |
 | Auth | WebAuthn (passkeys) via `@simplewebauthn/server` | Optional — claim a profile, sign in cross-device |
 | Hosting | Vercel | Daily cron + automatic preview deploys |
@@ -49,11 +49,11 @@ Node 22 in CI. No CSS framework — design tokens in `lib/tokens.js` + inline st
 app/                       # Next.js routes
 ├── page.jsx               # Single page mounts ForgeApp
 ├── api/sync/route.js      # Blob pull/push for profile data
-├── api/cron/cleanup/      # Daily orphan-blob cleanup
+├── api/cron/sync-selftest/ # Nightly sync self-test (no delete authority over user data)
 └── api/auth/*             # WebAuthn registration + verification
 
 components/
-├── ForgeApp.jsx           # Main client component (~4k lines, monolithic by design)
+├── ForgeApp.jsx           # Main client shell (~2.3k lines; session/lab/profile extracted to their own components)
 └── PerformanceLab.jsx     # Analytics screen — trends, volume, consistency
 
 lib/

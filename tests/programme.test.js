@@ -46,6 +46,7 @@ import {
   hasUntickedRecent,
   weekdayIdxForDate,
 } from "../lib/programme.js";
+import { getAnatomy, distributeAcrossMuscles } from "../lib/exercise-anatomy.js";
 
 // ─── Pool[0] invariant ──────────────────────────────────────────────────────
 describe("EXERCISE_POOLS pool[0] === SESSIONS default", () => {
@@ -407,6 +408,28 @@ describe("MAIN_LIFT_FUNCTIONAL_EQUIVALENTS ↔ SWAP_DB alignment", () => {
       for (const swap of SWAP_DB[lift] || []) {
         expect(approved.has(swap.name), `${lift} SWAP_DB has unapproved alt ${swap.name}`).toBe(true);
       }
+    }
+  });
+
+  // Every main-lift swap must RESOLVE in the anatomy model, or its volume
+  // falls back to the swap's raw `muscle` label — a string outside the
+  // 16-muscle vocabulary — and silently drops out of the audit and solver.
+  // "Incline BB Press" and "Weighted Dips" both did exactly this until they
+  // got anatomy entries; this guard catches the whole class for any future
+  // swap addition.
+  it("every main-lift swap resolves in the anatomy model (volume isn't dropped)", () => {
+    const unresolved = [];
+    for (const [, equivalents] of Object.entries(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS)) {
+      for (const name of equivalents) if (!getAnatomy(name)) unresolved.push(name);
+    }
+    expect(unresolved, `unresolved swaps (fall back to raw label): ${unresolved.join(", ")}`).toEqual([]);
+  });
+
+  it("the two formerly-broken Bench swaps now credit Chest as primary", () => {
+    for (const name of ["Incline BB Press", "Weighted Dips"]) {
+      const dist = distributeAcrossMuscles(name, 3, "SHOULD_NOT_BE_USED");
+      expect(dist.Chest, `${name} should credit Chest`).toBe(3);
+      expect(dist.SHOULD_NOT_BE_USED, `${name} must not fall back to its label`).toBeUndefined();
     }
   });
 
@@ -778,6 +801,22 @@ describe("applyFocusToSession", () => {
       const finBefore = SESSIONS[0].blocks.find(b => b.id === "afin");
       expect(fin.exA.reps).toBe(finBefore.exA.reps);
       expect(fin.exB.reps).toBe(finBefore.exB.reps);
+    });
+
+    it("RAISES accessory load to match 6-8 reps (no more junk light sets)", () => {
+      const before = SESSIONS[0].blocks.find(b => b.id === "ass1");
+      const out    = applyFocusToSession(SESSIONS[0], "Strong");
+      const ssvg   = out.blocks.find(b => b.id === "ass1");
+      // Both accessory sides are heavier than their higher-rep seed weight.
+      expect(ssvg.exA.weight).toBeGreaterThan(before.exA.weight);
+      expect(ssvg.exB.weight).toBeGreaterThan(before.exB.weight);
+      // Value lock (Epley-constant e1RM, rounded to 1.25kg): the Chest-Supported
+      // DB Row seed is 22kg @ 10 reps → 23.75kg @ 6-8.
+      expect(ssvg.exB.weight).toBe(23.75);
+      // Mains + finishers keep their seed load.
+      const finBefore = SESSIONS[0].blocks.find(b => b.id === "afin");
+      const fin       = out.blocks.find(b => b.id === "afin");
+      expect(fin.exA.weight).toBe(finBefore.exA.weight);
     });
 
     it("is pure — input session is not mutated", () => {

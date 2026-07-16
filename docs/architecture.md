@@ -40,7 +40,7 @@ Single date-keyed source of truth for what happened on each calendar date. Repla
 | Field | Type | Meaning |
 |---|---|---|
 | `date` | ISO YYYY-MM-DD (PK) | Calendar date |
-| `scheduledType` | strength \| z2 \| cardio \| hiit \| rest | Schedule-effective-on-date type |
+| `scheduledType` | strength \| zone2 \| cardio \| hiit \| rest | Schedule-effective-on-date type |
 | `completedType` | same set \| `null` | What actually happened |
 | `sessionId` | string \| `null` | If strength, the session record's id |
 | `marks` | `{ bonus?: true }` | Extras (cardio-day bonus, etc.) |
@@ -88,9 +88,11 @@ These are rules, not preferences. Tests enforce each.
 
 Three. Removing one needs a written argument for what now covers the failure mode it owned.
 
-1. **On mutation** — every handler that changes persisted state calls `pushUserStateSnapshot` before returning.
-2. **On `visibilitychange = hidden`** — `_flushSnapshotPush` fires from the listener in `lib/storage.js`. The user's "I'll close this for now" event.
+1. **On mutation** — every handler that changes persisted state calls `pushNow` (class-1) before returning. The routing taxonomy (class-1 immediate vs class-2 deferred) lives in `docs/push-refactor.md`.
+2. **On `visibilitychange = hidden`** — `flushDeferred` fires from the listener in `lib/storage.js`. The user's "I'll close this for now" event.
 3. **On `pagehide`** — same flush. iOS Safari's more reliable termination signal in PWA install mode.
+
+> NOTE (audit 2026-07, finding #3): the class-2 deferred tier (`pushDeferred`) currently has no callers, so save points 2–3 are effectively no-ops — every mutation routes through `pushNow`. Reconciling this is part of the open sync-payload design question (`docs/audit-2026-07.md` #2/#3), not yet resolved. `pushUserStateSnapshot`/`_flushSnapshotPush` named in earlier drafts of this doc were removed in the push refactor.
 
 ### Merge rules, per entity
 
