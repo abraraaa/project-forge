@@ -13,7 +13,7 @@ import { useState, useEffect, useRef } from "react";
 import { T } from "@/lib/tokens";
 import { Fade, Card, Tag } from "@/components/ui";
 import { useModalA11y, useGrainTouch } from "@/lib/a11y";
-import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, SESSIONS, applyFocusToSession, applyRotationToSession } from "@/lib/programme";
+import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession } from "@/lib/programme";
 import { deloadCardCopy } from "@/lib/progression";
 import { formatTonnage } from "@/lib/analytics";
 
@@ -764,8 +764,8 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         </div>
       )}
 
-      {/* Rotation nudge — surfaces after 4 weeks on a block */}
-      {weeksOnBlock >= 4 && (
+      {/* Rotation nudge — surfaces at ROTATION_OPTIONAL weeks on a block */}
+      {weeksOnBlock >= ROTATION_OPTIONAL && (
         <Fade d={200}>
           <div style={{margin:"20px 24px 0",padding:"18px 20px",background:`${T.gold}10`,border:`1px solid ${T.gold}40`,borderRadius:T.r.lg}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
