@@ -780,6 +780,22 @@ describe("applyFocusToSession", () => {
       expect(fin.exB.reps).toBe(finBefore.exB.reps);
     });
 
+    it("RAISES accessory load to match 6-8 reps (no more junk light sets)", () => {
+      const before = SESSIONS[0].blocks.find(b => b.id === "ass1");
+      const out    = applyFocusToSession(SESSIONS[0], "Strong");
+      const ssvg   = out.blocks.find(b => b.id === "ass1");
+      // Both accessory sides are heavier than their higher-rep seed weight.
+      expect(ssvg.exA.weight).toBeGreaterThan(before.exA.weight);
+      expect(ssvg.exB.weight).toBeGreaterThan(before.exB.weight);
+      // Value lock (Epley-constant e1RM, rounded to 1.25kg): the Chest-Supported
+      // DB Row seed is 22kg @ 10 reps → 23.75kg @ 6-8.
+      expect(ssvg.exB.weight).toBe(23.75);
+      // Mains + finishers keep their seed load.
+      const finBefore = SESSIONS[0].blocks.find(b => b.id === "afin");
+      const fin       = out.blocks.find(b => b.id === "afin");
+      expect(fin.exA.weight).toBe(finBefore.exA.weight);
+    });
+
     it("is pure — input session is not mutated", () => {
       const before = JSON.parse(JSON.stringify(SESSIONS[0]));
       applyFocusToSession(SESSIONS[0], "Strong");
