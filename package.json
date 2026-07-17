@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "audit:volume": "node scripts/volume-audit.mjs"
+    "audit:volume": "node scripts/volume-audit.mjs",
+    "postbuild": "node scripts/generate-sw-precache.mjs"
   },
   "dependencies": {
     "@simplewebauthn/server": "^13.3.2",
