@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import crypto from "crypto";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
-import { readJsonDirect, readJsonByPrefix, deleteByPrefix } from "@/lib/blob-utils";
+import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
 import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge } from "@/lib/auth-server";
 
 // Verify WebAuthn authentication and mint a short-lived auth token.
@@ -104,12 +104,8 @@ export async function POST(request) {
             c.id === matchingCred.id ? { ...c, counter: newCounter } : c,
           ),
         };
-        await deleteByPrefix(credentialsPrefix(profile));
-        await put(credentialsPath(profile), JSON.stringify(updated), {
-          access: "private",
-          contentType: "application/json",
-          addRandomSuffix: true,
-        });
+        // Write-first, sweep-after — see audit #6 / writeJsonReplacingPrefix.
+        await writeJsonReplacingPrefix(credentialsPrefix(profile), credentialsPath(profile), updated);
       } catch {
         // A counter-persist failure must not deny an otherwise-valid login.
       }

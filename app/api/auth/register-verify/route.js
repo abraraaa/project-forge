@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
 import crypto from "crypto";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
-import { readJsonDirect, readJsonByPrefix, deleteByPrefix } from "@/lib/blob-utils";
+import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
 import { rpConfigFromRequest, verifyAuthToken, hasRealPasskey, hasChallengeSecret, verifyChallenge } from "@/lib/auth-server";
 
 // Verify WebAuthn registration and store the credential's PUBLIC KEY.
@@ -109,13 +108,10 @@ export async function POST(request) {
     const kept = existing.credentials.filter((c) => c && c.publicKey && c.id !== vc.id);
     const updated = { credentials: [...kept, newCredential] };
 
-    // Overwrite-in-place semantics: clear the old suffixed blob, write the new.
-    await deleteByPrefix(credentialsPrefix(profile));
-    await put(credentialsPath(profile), JSON.stringify(updated), {
-      access: "private",
-      contentType: "application/json",
-      addRandomSuffix: true,
-    });
+    // Write the new credentials blob FIRST, then sweep the old one — a
+    // failure in between leaves two readable copies, never zero (audit #6;
+    // the old delete-then-write order could destroy every passkey).
+    await writeJsonReplacingPrefix(credentialsPrefix(profile), credentialsPath(profile), updated);
 
     // Consume the challenge (blob mode only — stateless challenges aren't stored).
     if (!stateless) await deleteByPrefix(challengeKey);
