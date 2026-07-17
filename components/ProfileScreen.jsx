@@ -20,6 +20,7 @@ import {
 import { FOCUS_SUMMARIES } from "@/lib/programme";
 import { reasonLabel } from "@/lib/breaks";
 import { useInlineModalA11y } from "@/lib/a11y";
+import { PROFILE_SUFFIXES, LEGACY_PROFILE_KEY_PREFIXES } from "@/lib/store-health";
 import { Fade } from "@/components/ui";
 import { SyncStatusCard, SyncNowRow } from "@/components/sync-cards";
 import ScrollDrum from "@/components/ScrollDrum";
@@ -125,8 +126,22 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         return;
       }
     }
-    // Local cleanup always runs regardless of cloud branch
-    ["weights","reps","streak","history","pendingPushes"].forEach(k=>localStorage.removeItem(`forge:${n}:${k}`));
+    // Local cleanup always runs regardless of cloud branch. Iterate the
+    // CANONICAL per-profile registry (store-health.js), not a hand-typed
+    // subset — the old 5-key list left stamps/drafts/trainingState/days
+    // behind, and those ghosts re-merged (and re-pushed) when the name was
+    // reclaimed, resurrecting the wiped profile and bleeding one user's
+    // data into the next on a shared device (audit #5).
+    PROFILE_SUFFIXES.forEach(s => localStorage.removeItem(`forge:${n}:${s}`));
+    localStorage.removeItem(`forge:${n}:pendingPushes`); // historic key, belt-and-braces
+    // Abandoned week-keyed legacy stores under this profile's namespace
+    // (explicitly enumerated patterns — never a bare prefix glob).
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && LEGACY_PROFILE_KEY_PREFIXES.some(p => k.startsWith(`forge:${n}:${p}`))) {
+        localStorage.removeItem(k);
+      }
+    }
     const updated=P.list().filter(p=>p!==n);
     LS.set("forge:profiles",updated);
     if(P.getActive()===n){ LS.set("forge:active",null); }

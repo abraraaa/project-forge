@@ -259,8 +259,22 @@ export async function PUT(request) {
     // Blob has no compare-and-swap); two simultaneous PUTs can still race,
     // but with field stamps the loser's next push converges instead of
     // clobbering — accepted and documented (audit S6).
+    // Read-failure guard (audit #7): readJson returns null for BOTH "blob
+    // doesn't exist" and "read/parse failed". Only the first may proceed —
+    // merging from nothing when the blob EXISTS but couldn't be read would
+    // overwrite the other device's fields wholesale. The up-front list tells
+    // the two apart: pathname present in the list + null read = failure →
+    // 503 so the client's pending-push queue retries later.
+    const blobExists = (path) => blobs.some((b) => b.pathname === path);
+
     if (data.meta) {
       const existingMeta = await readJson(metaPath(profile));
+      if (existingMeta === null && blobExists(metaPath(profile))) {
+        return NextResponse.json(
+          { error: "Meta blob unreadable — refusing to overwrite; retry" },
+          { status: 503 },
+        );
+      }
       const mergedMeta = existingMeta && typeof existingMeta === "object"
         ? mergeMeta(existingMeta, data.meta)
         : data.meta;
@@ -279,6 +293,15 @@ export async function PUT(request) {
     // by record id and write deterministic.
     if (Array.isArray(data.history)) {
       let existing = await readJson(historyPath(profile));
+      if (existing === null && blobExists(historyPath(profile))) {
+        // Same guard as meta: an unreadable-but-present history blob must not
+        // be treated as empty — the union merge would then "merge" from
+        // nothing and drop every record this device doesn't hold.
+        return NextResponse.json(
+          { error: "History blob unreadable — refusing to overwrite; retry" },
+          { status: 503 },
+        );
+      }
       if (!Array.isArray(existing)) {
         existing = await readLatestLegacy(blobs, LEGACY_HISTORY_RE);
       }
@@ -298,13 +321,12 @@ export async function PUT(request) {
       results.history = { count: merged.length };
     }
 
-    // Legacy suffixed blob cleanup runs in the cron job (/api/cron/cleanup),
-    // NOT in this hot path. An earlier version did it here per-PUT and was
-    // implicated in production 500s — for profiles with hundreds of pre-
-    // migration suffixed orphans, the batch `del()` either timed out the
-    // function or hit a Vercel Blob API limit. The cron is the right home
-    // for it: runs daily, paginates the list, batch-deletes in chunks,
-    // tolerates failure. PUT stays small and predictable.
+    // Legacy suffixed orphans are NOT cleaned up here (or anywhere): a
+    // per-PUT batch del() caused production 500s, and the standalone cleanup
+    // cron that replaced it was retired after the 2026-07-09 wipe incident —
+    // no standing delete authority (see CLAUDE.md). Orphans are inert:
+    // deterministic paths mean nothing reads them. PUT stays small and
+    // predictable.
 
     return NextResponse.json({ ok: true, ...results });
   } catch (e) {
