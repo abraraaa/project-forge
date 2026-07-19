@@ -12,26 +12,17 @@ import { probeDb } from "@/lib/db";
 // writes, no tables), (b) censuses the blob store per profile, (c) reports
 // proposed row counts. It deletes nothing, creates nothing, writes nothing.
 
-export async function GET(request) {
+export async function GET() {
   // Auth: Bearer header, or ?key= for browser use (boss runs this from the
   // address bar, not a terminal). Acceptable for a READ-ONLY diag: the
   // operator-held secret grants no write path here, and HTTPS keeps the
   // query string off the wire in the clear.
-  // Two accepted secrets: CRON_SECRET (machine path) or DIAG_KEY — a
-  // separate operator-created var for browser use, because Vercel's
-  // "Sensitive" flag makes CRON_SECRET unreadable after creation and the
-  // boss shouldn't have to rotate a live cron secret just to read a diag.
-  const cronSecret = process.env.CRON_SECRET;
-  const diagKey = process.env.DIAG_KEY;
-  const auth = request.headers.get("authorization") || "";
-  const key = new URL(request.url).searchParams.get("key");
-  const authorised =
-    (cronSecret && auth === `Bearer ${cronSecret}`) ||
-    (cronSecret && key === cronSecret) ||
-    (diagKey && key === diagKey);
-  if (!authorised) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Deliberately UNGATED (boss decision 2026-07-19): reads in Forge are open
+  // by design (see audit #20/#21 — no sensitive data; passkeys gate
+  // destructive ops only), and this report reveals nothing GET /api/sync
+  // doesn't already serve. A secret here would be stricter than the data
+  // itself, and keys don't get thrown around in URLs. Read-only by
+  // construction — no DDL, no writes, no deletes exist in this handler.
 
   const db = await probeDb();
 
