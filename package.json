@@ -15,6 +15,7 @@
     "postbuild": "node scripts/generate-sw-precache.mjs"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "@simplewebauthn/server": "^13.3.2",
     "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.4.0",
