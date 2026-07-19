@@ -13,9 +13,14 @@ import { probeDb } from "@/lib/db";
 // proposed row counts. It deletes nothing, creates nothing, writes nothing.
 
 export async function GET(request) {
+  // Auth: Bearer header, or ?key= for browser use (boss runs this from the
+  // address bar, not a terminal). Acceptable for a READ-ONLY diag: the
+  // operator-held secret grants no write path here, and HTTPS keeps the
+  // query string off the wire in the clear.
   const secret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization") || "";
-  if (!secret || auth !== `Bearer ${secret}`) {
+  const key = new URL(request.url).searchParams.get("key");
+  if (!secret || (auth !== `Bearer ${secret}` && key !== secret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
