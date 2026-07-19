@@ -70,10 +70,14 @@ self.__FORGE_PRECACHE = {
 - **Navigations**: network-first (unchanged), with a deeper fallback chain:
   exact match → same-pathname `ignoreSearch` match → cached `/` as
   last resort (best-effort: the client router recovers the real route).
-- Everything else unchanged, including `/api/*` network-only and the
-  Safari 27 `addRoutes` block. `/_next/static/*` stays fetch-handled (NOT
-  `addRoutes`-cache-routed) — the manifest makes precache complete for the
-  *current* build, but runtime population must still work mid-rollout.
+- **Safari 27 `addRoutes`** (completes the parked follow-up): the manifest's
+  assets are also declared as **exact-path** cache routes at install, so
+  current-build asset hits are served browser-natively without waking the
+  worker. Exact paths, never the wholesale `/_next/static/*` pattern — a
+  `cache` route never runs the fetch handler and so never populates; with
+  exact paths, mid-rollout hashes (new HTML under an old SW) miss the routes,
+  fall through to the fetch router, and `cacheFirst` populates them, so going
+  offline in that window still works. `/api/*` network-only unchanged.
 
 ### What this deliberately does not touch
 

@@ -66,19 +66,30 @@ self.addEventListener("install", (event) => {
   //     spec). These are install-time cached, so hits are guaranteed in
   //     steady state; on the rare miss the only delta vs cacheFirst is no
   //     re-population, acceptable for four stable files.
-  // NOT routed: /_next/static/*. A "cache" route never runs the fetch
-  // handler, so runtime caching would never populate — offline statics
-  // would silently break after each deploy. That bypass needs precache-
-  // manifest work first (parked). Feature-guarded: browsers without
-  // addRoutes just use the fetch router for everything, as today.
+  //   - THIS build's manifest assets → cache, as EXACT paths (the parked
+  //     "/_next/static via addRoutes" follow-up, completed now that the
+  //     precache manifest exists). Exact paths — never the wholesale
+  //     /_next/static/* pattern — because a "cache" route never runs the
+  //     fetch handler and so never populates: mid-rollout (new HTML under
+  //     an old SW) the NEW build's hashes don't match these routes, fall
+  //     through to the fetch router, and cacheFirst populates them, so
+  //     going offline in that window still works. Current-build assets are
+  //     guaranteed cached by activation (routes only apply once active,
+  //     after install's waitUntil precache completes).
+  // Feature-guarded: browsers without addRoutes just use the fetch router
+  // for everything, as today.
   if ("addRoutes" in event) {
     try {
+      const manifestAssetRoutes = (PRECACHE ? PRECACHE.assets : []).map((path) => (
+        { condition: { urlPattern: { pathname: path } }, source: "cache" }
+      ));
       event.addRoutes([
         { condition: { urlPattern: { pathname: "/api/*" } }, source: "network" },
         { condition: { urlPattern: { pathname: "/manifest.json" } }, source: "cache" },
         { condition: { urlPattern: { pathname: "/forge-glass-192.png" } }, source: "cache" },
         { condition: { urlPattern: { pathname: "/forge-glass-512.png" } }, source: "cache" },
         { condition: { urlPattern: { pathname: "/apple-touch-icon.png" } }, source: "cache" },
+        ...manifestAssetRoutes,
       ]).catch((err) => console.warn("[sw] addRoutes rejected:", err));
     } catch (err) {
       // Malformed-rule errors must never block install.
