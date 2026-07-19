@@ -17,10 +17,19 @@ export async function GET(request) {
   // address bar, not a terminal). Acceptable for a READ-ONLY diag: the
   // operator-held secret grants no write path here, and HTTPS keeps the
   // query string off the wire in the clear.
-  const secret = process.env.CRON_SECRET;
+  // Two accepted secrets: CRON_SECRET (machine path) or DIAG_KEY — a
+  // separate operator-created var for browser use, because Vercel's
+  // "Sensitive" flag makes CRON_SECRET unreadable after creation and the
+  // boss shouldn't have to rotate a live cron secret just to read a diag.
+  const cronSecret = process.env.CRON_SECRET;
+  const diagKey = process.env.DIAG_KEY;
   const auth = request.headers.get("authorization") || "";
   const key = new URL(request.url).searchParams.get("key");
-  if (!secret || (auth !== `Bearer ${secret}` && key !== secret)) {
+  const authorised =
+    (cronSecret && auth === `Bearer ${cronSecret}`) ||
+    (cronSecret && key === cronSecret) ||
+    (diagKey && key === diagKey);
+  if (!authorised) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
