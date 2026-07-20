@@ -110,3 +110,15 @@ describe("#7 — sync PUT unreadable-blob guard (code shape)", () => {
     expect((src.match(/status: 503/g) || []).length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe("db helpers (Neon step 2) — pure meta row mapping", () => {
+  it("metaRowsFrom ⇄ assembleMeta round-trips and skips undefined", async () => {
+    const { metaRowsFrom, assembleMeta } = await import("../lib/db.js");
+    const meta = { weights: { a: 1 }, streak: 3, ghost: undefined, empty: null };
+    const rows = metaRowsFrom(meta);
+    expect(rows.map((r) => r.field).sort()).toEqual(["empty", "streak", "weights"]);
+    expect(assembleMeta(rows)).toEqual({ weights: { a: 1 }, streak: 3, empty: null });
+    expect(metaRowsFrom(null)).toEqual([]);
+    expect(assembleMeta(null)).toEqual({});
+  });
+});

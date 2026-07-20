@@ -2,6 +2,7 @@ import { put, list, del, get } from "@vercel/blob";
 import { mergeMeta } from "@/lib/sync-merge";
 import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasRealPasskey } from "@/lib/auth-server";
+import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile } from "@/lib/db";
 import { NextResponse } from "next/server";
 
 // Blob layout (case-insensitive — path uses lowercase, display name lives in meta):
@@ -176,6 +177,18 @@ export async function GET(request) {
       return NextResponse.json({ exists: blobs.length > 0 });
     }
 
+    // DB-first (Neon migration step 2): if the profile has rows, serve them.
+    // Blob remains the fallback + the lazy-migration source below. A DB
+    // failure degrades to the blob path — never a 500 from this branch.
+    if (hasDb()) {
+      try {
+        const fromDb = await dbReadProfile(normalise(profile));
+        if (fromDb) return NextResponse.json(fromDb);
+      } catch (e) {
+        console.error("[forge:sync GET] db read failed, falling back to blob:", e?.message || e);
+      }
+    }
+
     // Fast path: read the deterministic paths in parallel. This is the
     // expected case for any profile written after the addRandomSuffix bug
     // was fixed.
@@ -184,8 +197,24 @@ export async function GET(request) {
       readJson(historyPath(profile)),
     ]);
 
-    // If both deterministic paths returned data, we're done.
+    // If both deterministic paths returned data, we're done — and this is
+    // the LAZY MIGRATION moment: the DB had no rows for this profile, the
+    // blob does, so backfill the DB from what we just read (idempotent:
+    // sessions ON CONFLICT DO NOTHING, meta upsert). No import ceremony,
+    // no separate endpoint; each profile migrates on its first post-deploy
+    // read. Blobs are never deleted. Failure is logged and harmless — the
+    // next read retries.
     if (metaDirect !== null && historyDirect !== null) {
+      if (hasDb()) {
+        try {
+          await dbUpsertProfile(normalise(profile), {
+            meta: metaDirect,
+            history: Array.isArray(historyDirect) ? historyDirect : [],
+          });
+        } catch (e) {
+          console.error("[forge:sync GET] lazy backfill failed:", e?.message || e);
+        }
+      }
       return NextResponse.json({
         meta: metaDirect,
         history: Array.isArray(historyDirect) ? historyDirect : [],
@@ -278,11 +307,19 @@ export async function PUT(request) {
       const mergedMeta = existingMeta && typeof existingMeta === "object"
         ? mergeMeta(existingMeta, data.meta)
         : data.meta;
+      const stamped = { ...mergedMeta, syncedAt: new Date().toISOString() };
       await put(
         metaPath(profile),
-        JSON.stringify({ ...mergedMeta, syncedAt: new Date().toISOString() }),
+        JSON.stringify(stamped),
         { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false },
       );
+      // Dual-write (Neon step 2): same MERGED object the blob got. DB
+      // failure never fails the request — blob is source-of-truth during
+      // the transition; the lazy backfill on GET reconverges.
+      if (hasDb()) {
+        try { await dbUpsertProfile(normalise(profile), { meta: stamped, history: [] }); }
+        catch (e) { console.error("[forge:sync PUT] db meta upsert failed:", e?.message || e); }
+      }
       results.meta = true;
     }
 
@@ -318,6 +355,11 @@ export async function PUT(request) {
         JSON.stringify(merged),
         { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false },
       );
+      // Dual-write (Neon step 2): immutable records, ON CONFLICT DO NOTHING.
+      if (hasDb()) {
+        try { await dbUpsertProfile(normalise(profile), { meta: {}, history: merged }); }
+        catch (e) { console.error("[forge:sync PUT] db history upsert failed:", e?.message || e); }
+      }
       results.history = { count: merged.length };
     }
 
@@ -463,7 +505,17 @@ export async function DELETE(request) {
       } catch {}
     }
 
-    // Proceed with deletion
+    // Proceed with deletion. DB rows go too (announced 2026-07-19, wipe
+    // protocol): same user-initiated, passkey-gated scope as the blob
+    // deletes below — enumerated tables, single profile, nothing else.
+    if (hasDb()) {
+      try { await dbDeleteProfile(normalise(profile)); }
+      catch (e) {
+        // Refuse a half-wipe: if DB rows survive while blobs die, the next
+        // GET would serve the "deleted" profile straight back from the DB.
+        return NextResponse.json({ error: `Delete failed (db): ${e.message}` }, { status: 500 });
+      }
+    }
     const { blobs } = await list({ prefix: legacyPrefix(profile) });
     if (!blobs.length) {
       return NextResponse.json({ ok: true, deleted: 0 });
