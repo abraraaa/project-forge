@@ -47,7 +47,8 @@ describe("photos route — privacy contract (code shape)", () => {
     expect(verbs.length).toBeGreaterThanOrEqual(2);
     // Each handler body must call gate() before doing work.
     expect((src.match(/await gate\(request\)/g) || []).length).toBe(verbs.length);
-    expect(src).toContain("verifyAuthToken");
+    expect(src).toContain("readTokenData");
+    expect(src).toContain("isTokenValid");
   });
 
   it("token travels in a header, never a URL", () => {
@@ -176,11 +177,21 @@ describe("P4 — session tokens, delete verb, scrubber additions (code shape)", 
   });
 });
 
-describe("P5 — the 30-day photo cookie (code shape)", () => {
-  it("login-verify mints a photo-scope token and sets a hardened, path-scoped cookie", () => {
+describe("P5 — the sliding 7-day photo cookie (code shape)", () => {
+  it("login-verify mints a 7-day photo-scope token and sets a hardened, path-scoped cookie", () => {
     const s = readFileSync(resolve(root, "app/api/auth/login-verify/route.js"), "utf8");
     expect(s).toContain('scope: "photos"');
+    expect(s).toContain("7 * 86400000");
     expect(s).toMatch(/httpOnly: true, secure: true, sameSite: "strict", path: "\/api\/photos"/);
+  });
+  it("the photos gate SLIDES the window: rotates cookie-carried tokens on active use", () => {
+    const s = readFileSync(resolve(root, "app/api/photos/route.js"), "utf8");
+    expect(s).toContain("ROTATE_AFTER_MS");
+    expect(s).toMatch(/data\.scope === "photos" && token === cookieToken/);
+    expect(s).toContain("withCookie");
+    // Old records lapse naturally — the rotation path must not delete tokens.
+    const gateBlock = s.slice(s.indexOf("async function gate"), s.indexOf("export async function POST"));
+    expect(gateBlock).not.toContain("del(");
   });
   it("the photos gate accepts header OR cookie; sync wipe REJECTS photo-scope tokens", () => {
     const photos = readFileSync(resolve(root, "app/api/photos/route.js"), "utf8");
