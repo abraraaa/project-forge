@@ -1,11 +1,15 @@
 "use client";
 
-// app/diag-scrub/page.jsx
+// app/locker-room/page.jsx
 // ─────────────────────────────────────────────────────────────────────────────
-// Photos P3+P4 — the progress scrubber, PROTOTYPE (diag route; Lab graduation
-// after the boss's taste pass + the joint copy pass — current strings are
-// functional drafts, flagged sterile/AI by the boss and awaiting the
-// intimacy pass).
+// THE LOCKER ROOM — Forge's body surface (boss decision 2026-07-21): the Lab
+// is what you lift; the Locker Room is what it's doing to you. Bodyweight
+// chart UNGATED on top (always metro-safe); photos are a hidden layer behind
+// "Show photos" — the toggle IS the auth boundary. Fail-modest every visit:
+// photos never render until asked. With the 30-day photo cookie (httpOnly,
+// path-scoped) the reveal is usually ZERO-prompt; the ceremony only runs
+// when the cookie is absent/expired. "Hide photos" flips back to chart-only
+// at any time. Copy: functional drafts — joint intimacy pass pending.
 //
 // Boss decisions (2026-07-21) built in:
 //   - ONE ceremony per visit: tokens ride the in-memory auth session
@@ -24,14 +28,15 @@ import { useEffect, useRef, useState } from "react";
 import { T } from "@/lib/tokens";
 import { P, BW, getLocalProfile, pushNow } from "@/lib/storage";
 import { haptic } from "@/lib/a11y";
-import { getAuthTokenWithCeremony } from "@/lib/auth-session";
+import { ensurePhotoAccess } from "@/lib/auth-session";
 import { preparePhoto, uploadPhoto, deletePhoto, fetchPhotoIndex, fetchPhotoObjectUrl } from "@/lib/photos";
 import { todayLocalIso } from "@/lib/dates";
 import ScrollDrum from "@/components/ScrollDrum";
 
-export default function DiagScrub() {
+export default function LockerRoom() {
   const [profile] = useState(() => (typeof window !== "undefined" ? P.getActive() : null));
   const [token, setToken] = useState(null);
+  const [shown, setShown] = useState(false); // "Show photos" toggle — fail-modest each visit
   const [photos, setPhotos] = useState(null);
   const [urls, setUrls] = useState({});
   const [pos, setPos] = useState(0);
@@ -53,17 +58,17 @@ export default function DiagScrub() {
     });
   };
 
-  const unlock = async () => {
+  const reveal = async () => {
     setBusy(true); setErr(null);
     try {
-      const t = await getAuthTokenWithCeremony(profile); // cached → no Face ID re-prompt
-      if (!t) { setErr("Unlock cancelled."); return; }
+      // Cookie-first: most visits need no prompt at all.
+      const { token: t, result: idx } = await ensurePhotoAccess(profile, (tok) => fetchPhotoIndex(profile, tok));
+      if (!idx?.ok) { setErr(idx?.requiresAuth ? "Unlock cancelled." : "Couldn't load your photos."); return; }
       setToken(t);
-      const idx = await fetchPhotoIndex(profile, t);
-      if (!idx.ok) { setErr("Couldn't load the photo index."); return; }
       setPhotos(idx.photos);
       setPos(Math.max(0, idx.photos.length - 1));
       for (const p of idx.photos) mintUrl(t, p.date);
+      setShown(true);
     } finally { setBusy(false); }
   };
 
@@ -164,125 +169,120 @@ export default function DiagScrub() {
     const w = 340;
     const ks = bwSeries.map((d) => d.kg);
     const kMin = Math.min(...ks), kMax = Math.max(...ks);
-    const pts = bwSeries.map((d, i) => {
+    const cpts = bwSeries.map((d, i) => {
       const x = (i / (bwSeries.length - 1)) * w;
       const y = kMax === kMin ? h / 2 : h - ((d.kg - kMin) / (kMax - kMin)) * (h - 16) - 8;
       return `${x},${y}`;
     });
     return (
       <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: h, display: "block" }}>
-        <polyline points={pts.join(" ")} fill="none" stroke={T.sage} strokeWidth="1.5" opacity="0.8" />
+        <polyline points={cpts.join(" ")} fill="none" stroke={T.sage} strokeWidth="1.5" opacity="0.8" />
       </svg>
     );
   };
 
-  if (!profile) return <main style={page}><p style={{ color: T.text3 }}>No active profile — sign in first, then revisit /diag-scrub.</p></main>;
+  if (!profile) return <main style={page}><p style={{ color: T.text3 }}>No active profile — sign in first, then come back to the Locker Room.</p></main>;
 
-  if (!photos) {
-    return (
-      <main style={page}>
-        <h1 style={{ ...serif, fontSize: 26, marginBottom: 6 }}>Progress — prototype</h1>
-        <p style={{ fontSize: 13, color: T.text3, maxWidth: 320, lineHeight: 1.6, marginBottom: 24 }}>Your photos are locked to your passkey. Unlock to explore the timeline.</p>
-        {err && <p style={{ fontSize: 12, color: T.rose, marginBottom: 12 }}>{err}</p>}
-        <button onClick={unlock} disabled={busy} style={{ ...coralBtn, opacity: busy ? 0.6 : 1 }}>{busy ? "Unlocking…" : "Unlock with passkey"}</button>
-      </main>
-    );
-  }
-
-  // Pre-photos: the page IS the bodyweight chart, scrubber invisible.
-  if (photos.length === 0) {
-    return (
-      <main style={page}>
-        {picker}
-        <h1 style={{ ...serif, fontSize: 26, marginBottom: 4 }}>Bodyweight</h1>
-        <p style={{ fontSize: 12, color: T.text3, marginBottom: 18 }}>Your weight over time. Photos join the story when you're ready.</p>
-        {bwChart(140)}
-        {err && <p style={{ fontSize: 12, color: T.rose, marginTop: 12 }}>{err}</p>}
-        <label htmlFor={PICK_ID} role="button" style={{ ...coralBtn, display: "inline-block", marginTop: 20 }}>Add your first photo</label>
-      </main>
-    );
-  }
-
-  const i0 = Math.floor(pos);
-  const i1 = Math.min(photos.length - 1, i0 + 1);
+  // ── Chart-first layout: ungated bodyweight on top, photos behind the toggle ──
+  const photosVisible = shown && photos !== null;
+  const cur = photosVisible && photos.length ? photos[Math.round(pos)] : null;
+  const i0 = photosVisible && photos.length ? Math.floor(pos) : 0;
+  const i1 = photosVisible && photos.length ? Math.min(photos.length - 1, i0 + 1) : 0;
   const frac = pos - i0;
-  const cur = photos[Math.round(pos)];
-  const weights = photos.map((p) => p.bodyweightAt).filter((w) => w != null);
+  const weights = (photos || []).map((p) => p.bodyweightAt).filter((w) => w != null);
   const wMin = weights.length ? Math.min(...weights) : 0, wMax = weights.length ? Math.max(...weights) : 1;
   const curveW = 320, curveH = 56;
-  const pts = photos.map((p, i) => {
+  const pts = (photos || []).map((p, i) => {
     const x = photos.length === 1 ? curveW / 2 : (i / (photos.length - 1)) * curveW;
     const y = p.bodyweightAt == null || wMax === wMin ? curveH / 2 : curveH - ((p.bodyweightAt - wMin) / (wMax - wMin)) * (curveH - 8) - 4;
     return { x, y };
   });
-  const markerX = photos.length === 1 ? curveW / 2 : (pos / (photos.length - 1)) * curveW;
+  const markerX = !photos?.length ? 0 : photos.length === 1 ? curveW / 2 : (pos / (photos.length - 1)) * curveW;
 
   return (
     <main style={page}>
       {picker}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-        <span style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: T.text4 }}>Oldest · {photos[0].date}</span>
-        <span style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: T.text4 }}>Most recent · {photos[photos.length - 1].date}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <h1 style={{ ...serif, fontSize: 26 }}>Locker room</h1>
+        {photosVisible ? (
+          <button onClick={() => setShown(false)} style={{ padding: "8px 14px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.md, fontSize: 12, color: T.text2, cursor: "pointer" }}>Hide photos</button>
+        ) : (
+          <button onClick={reveal} disabled={busy} style={{ padding: "8px 14px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.md, fontSize: 12, color: T.text2, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>{busy ? "One sec…" : "Show photos"}</button>
+        )}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <h1 style={{ ...serif, fontSize: 22 }}>Explore the span</h1>
-        <label htmlFor={PICK_ID} role="button" style={{ padding: "8px 14px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.md, fontSize: 12, color: T.text2, cursor: "pointer" }}>+ Add photo</label>
-      </div>
+      <p style={{ fontSize: 12, color: T.text3, marginBottom: 16 }}>Your body's story. The chart is always here; photos stay behind the door until you ask.</p>
 
-      {err && <p style={{ fontSize: 12, color: T.rose, marginBottom: 10 }}>{err}</p>}
+      {/* The always-on bodyweight chart */}
+      {bwChart(photosVisible ? 90 : 150)}
+      {err && <p style={{ fontSize: 12, color: T.rose, marginTop: 10 }}>{err}</p>}
 
-      {/* "Log today's weight too?" — gentle, declining keeps the latest tag */}
-      {askBw && (
-        <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: T.r.md, background: `${T.sage}12`, border: `1px solid ${T.sage}33` }}>
-          {showDrum ? (<>
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><ScrollDrum value={bwDraft} onChange={setBwDraft} step={0.5} min={40} max={200} unit="kg" /></div>
-            <button onClick={saveBwAndTag} disabled={busy} style={{ ...coralBtn, width: "100%" }}>{busy ? "Saving…" : "Save weight"}</button>
-          </>) : (<>
-            <span style={{ fontSize: 13, color: T.text1 }}>Photo saved. Update your bodyweight too?</span>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button onClick={() => setShowDrum(true)} style={{ ...coralBtn, padding: "10px 16px", fontSize: 14 }}>Update it</button>
-              <button onClick={() => setAskBw(null)} style={quietBtn}>Keep {photos.find((p) => p.date === askBw)?.bodyweightAt ?? "latest"} kg</button>
-            </div>
-          </>)}
+      {photosVisible && photos.length === 0 && (
+        <div style={{ marginTop: 18 }}>
+          <p style={{ fontSize: 13, color: T.text3, marginBottom: 12 }}>No photos yet — the timeline starts with one.</p>
+          <label htmlFor={PICK_ID} role="button" style={{ ...coralBtn, display: "inline-block" }}>Add your first photo</label>
         </div>
       )}
 
-      <div ref={trackRef} onPointerDown={onDrag} onPointerMove={onDrag}
-        style={{ position: "relative", width: "100%", aspectRatio: "3/4", maxHeight: "48dvh", borderRadius: T.r.xl, overflow: "hidden", background: T.bg2, touchAction: "none", marginBottom: 12 }}>
-        {urls[photos[i0].date] && (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={urls[photos[i0].date]} alt={photos[i0].date} draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 1 - frac }} />
-        )}
-        {i1 !== i0 && urls[photos[i1].date] && (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={urls[photos[i1].date]} alt={photos[i1].date} draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: frac }} />
-        )}
-        <div style={{ position: "absolute", left: 12, bottom: 12, padding: "8px 12px", borderRadius: T.r.md, background: `${T.bg0}CC`, backdropFilter: "blur(8px)" }}>
-          <div style={{ ...serif, fontSize: 18 }}>{cur?.bodyweightAt != null ? `${cur.bodyweightAt} kg` : "—"}</div>
-          <div style={{ fontSize: 10, color: T.text3, letterSpacing: "0.08em" }}>{cur?.date}</div>
+      {photosVisible && photos.length > 0 && (<>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "18px 0 4" }}>
+          <span style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: T.text4 }}>Oldest · {photos[0].date}</span>
+          <span style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: T.text4 }}>Most recent · {photos[photos.length - 1].date}</span>
         </div>
-      </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+          <label htmlFor={PICK_ID} role="button" style={{ padding: "8px 14px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.md, fontSize: 12, color: T.text2, cursor: "pointer" }}>+ Add photo</label>
+        </div>
 
-      <div onPointerDown={onDrag} onPointerMove={onDrag} style={{ touchAction: "none" }}>
-        <svg viewBox={`0 0 ${curveW} ${curveH}`} style={{ width: "100%", height: curveH, display: "block" }}>
-          <polyline points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={T.sage} strokeWidth="1.5" opacity="0.7" />
-          {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill={Math.round(pos) === i ? T.coral : T.bg4} />)}
-          <line x1={markerX} y1="0" x2={markerX} y2={curveH} stroke={T.coral} strokeWidth="1" opacity="0.8" />
-        </svg>
-      </div>
-
-      {/* The metro clause — per-photo removal behind a confirm */}
-      <div style={{ marginTop: 10 }}>
-        {confirmDelete ? (
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 12, color: T.rose }}>Remove {cur?.date} for good?</span>
-            <button onClick={doDelete} disabled={busy} style={{ padding: "8px 14px", background: `${T.rose}18`, border: `1px solid ${T.rose}55`, borderRadius: T.r.md, fontSize: 12, color: T.rose, cursor: "pointer" }}>{busy ? "Removing…" : "Remove"}</button>
-            <button onClick={() => setConfirmDelete(false)} style={quietBtn}>Keep it</button>
+        {askBw && (
+          <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: T.r.md, background: `${T.sage}12`, border: `1px solid ${T.sage}33` }}>
+            {showDrum ? (<>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><ScrollDrum value={bwDraft} onChange={setBwDraft} step={0.5} min={40} max={200} unit="kg" /></div>
+              <button onClick={saveBwAndTag} disabled={busy} style={{ ...coralBtn, width: "100%" }}>{busy ? "Saving…" : "Save weight"}</button>
+            </>) : (<>
+              <span style={{ fontSize: 13, color: T.text1 }}>Photo saved. Update your bodyweight too?</span>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button onClick={() => setShowDrum(true)} style={{ ...coralBtn, padding: "10px 16px", fontSize: 14 }}>Update it</button>
+                <button onClick={() => setAskBw(null)} style={quietBtn}>Keep {photos.find((p) => p.date === askBw)?.bodyweightAt ?? "latest"} kg</button>
+              </div>
+            </>)}
           </div>
-        ) : (
-          <button onClick={() => setConfirmDelete(true)} style={quietBtn}>Remove this photo</button>
         )}
-      </div>
+
+        <div ref={trackRef} onPointerDown={onDrag} onPointerMove={onDrag}
+          style={{ position: "relative", width: "100%", aspectRatio: "3/4", maxHeight: "46dvh", borderRadius: T.r.xl, overflow: "hidden", background: T.bg2, touchAction: "none", marginBottom: 12 }}>
+          {urls[photos[i0].date] && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={urls[photos[i0].date]} alt={photos[i0].date} draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 1 - frac }} />
+          )}
+          {i1 !== i0 && urls[photos[i1].date] && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={urls[photos[i1].date]} alt={photos[i1].date} draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: frac }} />
+          )}
+          <div style={{ position: "absolute", left: 12, bottom: 12, padding: "8px 12px", borderRadius: T.r.md, background: `${T.bg0}CC`, backdropFilter: "blur(8px)" }}>
+            <div style={{ ...serif, fontSize: 18 }}>{cur?.bodyweightAt != null ? `${cur.bodyweightAt} kg` : "—"}</div>
+            <div style={{ fontSize: 10, color: T.text3, letterSpacing: "0.08em" }}>{cur?.date}</div>
+          </div>
+        </div>
+
+        <div onPointerDown={onDrag} onPointerMove={onDrag} style={{ touchAction: "none" }}>
+          <svg viewBox={`0 0 ${curveW} ${curveH}`} style={{ width: "100%", height: curveH, display: "block" }}>
+            <polyline points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={T.sage} strokeWidth="1.5" opacity="0.7" />
+            {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill={Math.round(pos) === i ? T.coral : T.bg4} />)}
+            <line x1={markerX} y1="0" x2={markerX} y2={curveH} stroke={T.coral} strokeWidth="1" opacity="0.8" />
+          </svg>
+        </div>
+
+        <div style={{ marginTop: 10 }}>
+          {confirmDelete ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: T.rose }}>Remove {cur?.date} for good?</span>
+              <button onClick={doDelete} disabled={busy} style={{ padding: "8px 14px", background: `${T.rose}18`, border: `1px solid ${T.rose}55`, borderRadius: T.r.md, fontSize: 12, color: T.rose, cursor: "pointer" }}>{busy ? "Removing…" : "Remove"}</button>
+              <button onClick={() => setConfirmDelete(false)} style={quietBtn}>Keep it</button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} style={quietBtn}>Remove this photo</button>
+          )}
+        </div>
+      </>)}
     </main>
   );
 }

@@ -489,6 +489,14 @@ export async function DELETE(request) {
         );
       }
 
+      // Photo-scope tokens (the 30-day cookie, 2026-07-21) NEVER satisfy the
+      // wipe gate — destructive ops keep fresh-ceremony, short-lived tokens.
+      if (tokenData.scope === "photos") {
+        return NextResponse.json(
+          { error: "Fresh passkey authentication required", requiresAuth: true },
+          { status: 401 },
+        );
+      }
       if (tokenData.profile !== normalise(profile)) {
         return NextResponse.json(
           { error: "Auth token does not match profile" },

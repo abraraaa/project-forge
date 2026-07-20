@@ -205,7 +205,6 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
             <div id={titleId} style={{ fontFamily: T.serif, fontSize: 22, fontWeight: 300, lineHeight: 1.1 }}>{titles[step]}</div>
             {sub(subs[step])}
           </div>
-          <button onClick={onClose} aria-label="Close" style={{ background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.sm, padding: "6px 10px", cursor: "pointer", color: T.text2, fontSize: 13, flexShrink: 0 }}>✕</button>
         </div>
 
         {note && (
@@ -216,7 +215,12 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
             <ScrollDrum value={kg} onChange={setKg} step={0.5} min={40} max={200} unit="kg" />
           </div>
-          {cta("Confirm", confirmWeight)}
+          {/* House pattern (boss, 2026-07-21): clear Cancel/primary on the
+              bottom row — no corner ✕. Escape still closes via useModalA11y. */}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={onClose} disabled={busy} style={{ flex: 1, padding: "16px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.lg, cursor: "pointer", fontSize: 14, color: T.text2 }}>Cancel</button>
+            <div style={{ flex: 2 }}>{cta("Confirm", confirmWeight)}</div>
+          </div>
         </>)}
 
         {step === "offer" && (<>

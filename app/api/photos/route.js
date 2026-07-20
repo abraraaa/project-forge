@@ -47,7 +47,10 @@ async function gate(request) {
   if (date !== null && !DATE_RE.test(date)) {
     return { fail: NextResponse.json({ error: "Invalid date" }, { status: 400 }) };
   }
-  const token = request.headers.get("x-forge-auth");
+  // Header token (fresh ceremony) OR the 30-day photo-scope cookie —
+  // httpOnly + path-scoped to this route, set by login-verify. Cookie means
+  // the phone the user unlocked stays unlocked; the wipe never accepts it.
+  const token = request.headers.get("x-forge-auth") || request.cookies.get("forge_photos")?.value || null;
   if (!(await verifyAuthToken(profile, token))) {
     return { fail: NextResponse.json({ error: "Passkey authentication required", requiresAuth: true }, { status: 401 }) };
   }

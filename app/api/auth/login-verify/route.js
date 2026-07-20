@@ -128,7 +128,25 @@ export async function POST(request) {
     // stored, and expire on their own).
     if (!stateless) await deleteByPrefix(challengeKey);
 
-    return NextResponse.json({ ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600 });
+    // Forge's first cookie (boss call, 2026-07-21): a 30-day PHOTO-SCOPE
+    // token so people aren't re-validating daily on their own phone.
+    // httpOnly (JS can never read it — nothing plaintext to throw around),
+    // Secure, SameSite=Strict, and PATH-SCOPED to /api/photos so it never
+    // even accompanies any other request. scope:"photos" is rejected by the
+    // wipe gate — destructive ops keep fresh short-lived ceremonies.
+    const photoToken = crypto.randomBytes(32).toString("base64url");
+    await put(`forge/tokens/${photoToken}`, JSON.stringify({
+      profile: normalise(profile),
+      expires: Date.now() + 30 * 86400000,
+      scope: "photos",
+      createdAt: new Date().toISOString(),
+    }), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: true });
+
+    const res = NextResponse.json({ ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600 });
+    res.cookies.set("forge_photos", photoToken, {
+      httpOnly: true, secure: true, sameSite: "strict", path: "/api/photos", maxAge: 30 * 86400,
+    });
+    return res;
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
