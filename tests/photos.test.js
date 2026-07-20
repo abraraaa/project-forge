@@ -123,3 +123,21 @@ describe("P2 preview safety (scanner finding, 2026-07-20)", () => {
     expect(src).toMatch(/f\.type\.startsWith\("image\/"\)/);
   });
 });
+
+describe("P3 scrubber prototype (code shape)", () => {
+  const src = readFileSync(resolve(root, "app/diag-scrub/page.jsx"), "utf8");
+  it("is a diag route gated by the passkey ceremony — no ungated photo fetch", () => {
+    expect(src).toContain("authenticatePasskey");
+    // Every photo fetch call threads a token argument.
+    expect(src).not.toMatch(/fetchPhotoIndex\(profile\s*\)/);
+    expect(src).toMatch(/fetchPhotoObjectUrl\(profile, auth\.authToken/);
+  });
+  it("crossfades under the finger and snaps with the settle haptic", () => {
+    expect(src).toMatch(/opacity: 1 - frac/);
+    expect(src).toMatch(/opacity: frac/);
+    expect(src).toContain("haptic.settle()");
+  });
+  it("revokes minted object URLs on unload", () => {
+    expect(src).toContain("revokeObjectURL");
+  });
+});
