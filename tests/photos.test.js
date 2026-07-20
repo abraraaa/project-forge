@@ -72,3 +72,42 @@ describe("photos route — privacy contract (code shape)", () => {
     expect(client).not.toMatch(/[?&]token=/);
   });
 });
+
+describe("P2 capture flow — morphing-sheet contract (code shape)", () => {
+  const src = readFileSync(resolve(root, "components/BodyweightEditModal.jsx"), "utf8");
+
+  it("ONE sheet only — the flow morphs, it never stacks scrims", () => {
+    expect((src.match(/forge-scrim/g) || []).length).toBe(1);
+    expect(src).toMatch(/weight → offer → \[secure\] → camera → done|weight → offer → secure → camera → done/);
+  });
+
+  it("the weight saves BEFORE any photo step (never held hostage)", () => {
+    const confirmIdx = src.indexOf("const confirmWeight");
+    const body = src.slice(confirmIdx, src.indexOf("}", src.indexOf('setStep("offer")')));
+    expect(body.indexOf("onSave(kg)")).toBeGreaterThan(-1);
+    expect(body.indexOf("onSave(kg)")).toBeLessThan(body.indexOf('setStep("offer")'));
+  });
+
+  it("passkey-less users get INLINE setup then continue (recruitment, not refusal)", () => {
+    expect(src).toContain("registerPasskey(profileName)");
+    expect(src).toContain("authenticatePasskey(profileName)");
+    expect(src).toMatch(/has === false.*setStep\("secure"\)/s);
+  });
+
+  it("upload is anchored to the local calendar day with the weight attached", () => {
+    expect(src).toContain("todayLocalIso()");
+    expect(src).toContain("bodyweightAt: kg");
+  });
+
+  it("copy is centralised and flagged for the boss pass; decline is one tap", () => {
+    expect(src).toMatch(/COPY.*boss pass/i);
+    expect(src).toContain("offerNo");
+  });
+
+  it("all three call sites thread profileName", () => {
+    for (const f of ["components/ProfileScreen.jsx", "components/ForgeApp.jsx", "components/SessionHost.jsx"]) {
+      const caller = readFileSync(resolve(root, f), "utf8");
+      expect(caller, f).toMatch(/<BodyweightEditModal[^/]*profileName=/s);
+    }
+  });
+});
