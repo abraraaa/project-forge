@@ -848,7 +848,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       )}
 
       {/* Bodyweight edit modal — rendered here so it works within ProfileScreen's early return */}
-      <BodyweightEditModal open={bwEditOpen} onClose={()=>setBwEditOpen(false)} currentKg={bodyweight} onSave={updateBodyweight}/>
+      <BodyweightEditModal open={bwEditOpen} onClose={()=>setBwEditOpen(false)} currentKg={bodyweight} onSave={updateBodyweight} profileName={current}/>
     </div>
   );
 }

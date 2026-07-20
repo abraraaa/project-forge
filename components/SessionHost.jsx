@@ -662,7 +662,7 @@ export default function SessionHost() {
           onCancel={() => setSessionOverviewOpen(false)}
         />
       )}
-      <BodyweightEditModal open={bwEditOpen} onClose={() => setBwEditOpen(false)} currentKg={bodyweight} onSave={updateBodyweight} />
+      <BodyweightEditModal open={bwEditOpen} onClose={() => setBwEditOpen(false)} currentKg={bodyweight} onSave={updateBodyweight} profileName={profile} />
       {/* Final-set flash toast. Centred with left/right insets (no transform
           on the positioned element — fadeSlide's translateY would override
           translateX centring); the rise animation sits on the inner span.
