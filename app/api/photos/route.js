@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { put, get } from "@vercel/blob";
+import { put, get, list, del } from "@vercel/blob";
 import { verifyAuthToken } from "@/lib/auth-server";
-import { hasDb, dbUpsertPhoto, dbListPhotos } from "@/lib/db";
+import { hasDb, dbUpsertPhoto, dbListPhotos, dbDeletePhoto } from "@/lib/db";
 import { isJpegBytes, PHOTO_MAX_UPLOAD_BYTES } from "@/lib/photos";
 
 // Progress photos (P1) — the ONE gated data surface in Forge.
@@ -111,6 +111,35 @@ export async function GET(request) {
         "Content-Disposition": "inline",
       },
     });
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}
+
+// DESTRUCTIVE — announced (2026-07-21), the metro clause: remove ONE photo.
+// User-initiated from the scrubber behind a confirm, token-gated like every
+// verb here, scoped to a single (profile, date): the blob at the
+// deterministic path + its index row. Enumerated target, no glob, nothing
+// else in the namespace is touchable from this handler.
+export async function DELETE(request) {
+  try {
+    const g = await gate(request);
+    if (g.fail) return g.fail;
+    if (!g.date) return NextResponse.json({ error: "Date required" }, { status: 400 });
+
+    const path = photoPath(g.profile, g.date);
+    // Index row FIRST (same asymmetry as the profile wipe): a surviving blob
+    // with no index row is invisible and overwritable; a surviving index row
+    // with no blob would 404 in the scrubber forever.
+    await dbDeletePhoto(g.profile, g.date);
+    try {
+      const { blobs } = await list({ prefix: path });
+      const exact = blobs.filter((b) => b.pathname === path);
+      if (exact.length) await del(exact.map((b) => b.url));
+    } catch (e) {
+      return NextResponse.json({ error: `Photo removed from index; blob delete failed: ${e.message}` }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, deleted: g.date });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

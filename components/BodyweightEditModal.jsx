@@ -29,7 +29,8 @@ import { useRef, useState } from "react";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import { T } from "@/lib/tokens";
 import ScrollDrum from "@/components/ScrollDrum";
-import { hasPasskey, registerPasskey, authenticatePasskey, isWebAuthnSupported } from "@/lib/webauthn";
+import { hasPasskey, registerPasskey, isWebAuthnSupported } from "@/lib/webauthn";
+import { getAuthTokenWithCeremony } from "@/lib/auth-session";
 import { preparePhoto, uploadPhoto } from "@/lib/photos";
 import { todayLocalIso } from "@/lib/dates";
 
@@ -105,8 +106,8 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
     try {
       const has = await hasPasskey(profileName);
       if (has === false) { setStep("secure"); return; }
-      const auth = await authenticatePasskey(profileName);
-      if (auth?.verified && auth?.authToken) { setToken(auth.authToken); setStep("camera"); }
+      const t = await getAuthTokenWithCeremony(profileName);
+      if (t) { setToken(t); setStep("camera"); }
       else setNote(COPY.secureCancelled);
     } catch {
       setNote(COPY.secureCancelled);
@@ -121,8 +122,8 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
     try {
       const reg = await registerPasskey(profileName);
       if (!reg?.ok) { setNote(COPY.secureCancelled); return; }
-      const auth = await authenticatePasskey(profileName);
-      if (auth?.verified && auth?.authToken) { setToken(auth.authToken); setStep("camera"); }
+      const t = await getAuthTokenWithCeremony(profileName);
+      if (t) { setToken(t); setStep("camera"); }
       else setNote(COPY.secureCancelled);
     } catch {
       setNote(COPY.secureCancelled);

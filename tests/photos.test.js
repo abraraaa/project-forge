@@ -90,7 +90,7 @@ describe("P2 capture flow — morphing-sheet contract (code shape)", () => {
 
   it("passkey-less users get INLINE setup then continue (recruitment, not refusal)", () => {
     expect(src).toContain("registerPasskey(profileName)");
-    expect(src).toContain("authenticatePasskey(profileName)");
+    expect(src).toContain("getAuthTokenWithCeremony(profileName)");
     expect(src).toMatch(/has === false.*setStep\("secure"\)/s);
   });
 
@@ -127,10 +127,10 @@ describe("P2 preview safety (scanner finding, 2026-07-20)", () => {
 describe("P3 scrubber prototype (code shape)", () => {
   const src = readFileSync(resolve(root, "app/diag-scrub/page.jsx"), "utf8");
   it("is a diag route gated by the passkey ceremony — no ungated photo fetch", () => {
-    expect(src).toContain("authenticatePasskey");
+    expect(src).toContain("getAuthTokenWithCeremony");
     // Every photo fetch call threads a token argument.
     expect(src).not.toMatch(/fetchPhotoIndex\(profile\s*\)/);
-    expect(src).toMatch(/fetchPhotoObjectUrl\(profile, auth\.authToken/);
+    expect(src).toMatch(/fetchPhotoObjectUrl\(profile, tok/);
   });
   it("crossfades under the finger and snaps with the settle haptic", () => {
     expect(src).toMatch(/opacity: 1 - frac/);
@@ -139,5 +139,36 @@ describe("P3 scrubber prototype (code shape)", () => {
   });
   it("revokes minted object URLs on unload", () => {
     expect(src).toContain("revokeObjectURL");
+  });
+});
+
+describe("P4 — session tokens, delete verb, scrubber additions (code shape)", () => {
+  it("auth session is memory-only (no persistence of tokens)", () => {
+    const s = readFileSync(resolve(root, "lib/auth-session.js"), "utf8");
+    expect(s).toContain("new Map()");
+    expect(s).not.toMatch(/localStorage\.|sessionStorage\.|document\.cookie/); // API use, not the comment
+  });
+  it("DELETE verb exists, gated, index-row-first", () => {
+    const s = readFileSync(resolve(root, "app/api/photos/route.js"), "utf8");
+    expect(s).toContain("export async function DELETE");
+    const del = s.slice(s.indexOf("export async function DELETE"));
+    expect(del).toContain("await gate(request)");
+    expect(del.indexOf("dbDeletePhoto")).toBeLessThan(del.indexOf("del(exact"));
+  });
+  it("photo flows route through the cached ceremony, not raw authenticate", () => {
+    const bw = readFileSync(resolve(root, "components/BodyweightEditModal.jsx"), "utf8");
+    const scrub = readFileSync(resolve(root, "app/diag-scrub/page.jsx"), "utf8");
+    expect(bw).toContain("getAuthTokenWithCeremony");
+    expect(bw).not.toContain("authenticatePasskey(");
+    expect(scrub).toContain("getAuthTokenWithCeremony");
+    const signin = readFileSync(resolve(root, "components/TakenNameModal.jsx"), "utf8");
+    expect(signin).toContain("cacheAuthToken(name, result.authToken)");
+  });
+  it("scrubber: pre-photo state is the bodyweight chart; delete is behind a confirm", () => {
+    const s = readFileSync(resolve(root, "app/diag-scrub/page.jsx"), "utf8");
+    expect(s).toMatch(/photos\.length === 0/);
+    expect(s).toContain("bwChart(140)");
+    expect(s).toContain("confirmDelete");
+    expect(s).toContain("deletePhoto(profile, token, cur.date)");
   });
 });
