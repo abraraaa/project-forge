@@ -134,11 +134,20 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
   const onFilePicked = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    // MIME gate: accept= on the input is advisory only — reject non-image
+    // picks outright so nothing non-image ever reaches preview or upload.
+    if (!f.type || !f.type.startsWith("image/")) { setNote(COPY.errorPrepare); return; }
     pickedFileRef.current = f;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(f));
     setNote(null);
   };
+
+  // The preview src is only ever a browser-minted object URL — enforce that
+  // invariant at the render boundary so it's provable, not just argued
+  // (answers the "DOM text reinterpreted as HTML" scanner class: no
+  // user-authored string can reach the img src).
+  const safePreviewUrl = previewUrl && previewUrl.startsWith("blob:") ? previewUrl : null;
 
   const confirmPhoto = async () => {
     setBusy(true); setNote(null);
@@ -221,10 +230,10 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
 
         {step === "camera" && (<>
           <input id="bw-photo-input" type="file" accept="image/*" onChange={onFilePicked} style={{ display: "none" }} />
-          {previewUrl ? (<>
+          {safePreviewUrl ? (<>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewUrl} alt="Today's progress photo preview" style={{ maxWidth: "100%", maxHeight: "44vh", borderRadius: T.r.lg, objectFit: "contain" }} />
+              <img src={safePreviewUrl} alt="Today's progress photo preview" style={{ maxWidth: "100%", maxHeight: "44vh", borderRadius: T.r.lg, objectFit: "contain" }} />
             </div>
             {cta(COPY.cameraConfirm, confirmPhoto)}
             {quietLabel(COPY.cameraRetake)}

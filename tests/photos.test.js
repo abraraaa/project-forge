@@ -111,3 +111,15 @@ describe("P2 capture flow — morphing-sheet contract (code shape)", () => {
     }
   });
 });
+
+describe("P2 preview safety (scanner finding, 2026-07-20)", () => {
+  const src = readFileSync(resolve(root, "components/BodyweightEditModal.jsx"), "utf8");
+  it("img src renders only through the blob:-invariant guard", () => {
+    expect(src).toMatch(/startsWith\("blob:"\)/);
+    expect(src).toContain("src={safePreviewUrl}");
+    expect(src).not.toContain("src={previewUrl}");
+  });
+  it("non-image picks are rejected before preview or upload", () => {
+    expect(src).toMatch(/f\.type\.startsWith\("image\/"\)/);
+  });
+});
