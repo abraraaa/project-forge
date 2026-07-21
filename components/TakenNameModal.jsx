@@ -91,8 +91,6 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground" style={{background:T.bg2,padding:"28px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",borderTop:`1px solid ${T.coral}33`,animation:`slideUp 260ms ${T.ease}`,maxHeight:"92vh",overflowY:"auto",boxSizing:"border-box",position:"relative",outline:"none"}}>
-        <button onClick={onClose} aria-label="Close" style={{position:"absolute",top:14,right:14,background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,width:30,height:30,cursor:"pointer",color:T.text2,fontSize:13,padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
-
         <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8,paddingRight:40}}>
           Is this you?
         </div>
@@ -136,6 +134,8 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
             <p style={{fontSize:11,color:T.text4,textAlign:"center",lineHeight:1.5}}>
               Lost access to your passkey? Contact support to recover your account.
             </p>
+            {/* House pattern (2026-07-21): bottom-row cancel, no corner ✕ */}
+            <button onClick={onClose} style={{width:"100%",padding:"12px",background:"none",border:"none",cursor:"pointer",fontSize:13,color:T.text3,marginTop:4}}>Cancel</button>
           </>
         )}
 

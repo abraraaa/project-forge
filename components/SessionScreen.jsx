@@ -662,7 +662,6 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
             <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Swap exercise</div>
             <div id={titleId} style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:T.text2,fontStyle:"italic"}}>{activeEx?.name}</div>
           </div>
-          <button onClick={onClose} aria-label="Close" style={{background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,padding:"6px 10px",cursor:"pointer",color:T.text2,fontSize:13}}>✕</button>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10,margin:"14px 0",padding:"10px 14px",background:T.bg3,borderRadius:T.r.md,cursor:"pointer"}} onClick={()=>setTravel(p=>!p)}>
           <div style={{width:32,height:18,borderRadius:9,background:travel?T.coral:T.bg4,position:"relative",transition:`background 200ms ${T.ease}`,flexShrink:0}}>
@@ -688,6 +687,8 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
           ))}
         </div>
         <div style={{marginTop:16,fontSize:11,color:T.text4,fontStyle:"italic",fontFamily:T.serif,textAlign:"center"}}>Tap an exercise to swap for this set</div>
+        {/* House pattern (2026-07-21): actions live on the bottom row, no corner ✕ */}
+        <button onClick={onClose} style={{marginTop:14,width:"100%",padding:"14px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.lg,cursor:"pointer",fontSize:14,color:T.text2}}>Cancel</button>
       </div>
     </div>
   );
@@ -725,19 +726,23 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
           <div><div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>{target.exName}</div>
           <div style={{fontSize:12,color:T.text3,marginTop:4}}>Scroll to adjust</div></div>
-          <button onClick={onClose} aria-label="Close" style={{background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,padding:"6px 10px",cursor:"pointer",color:T.text2,fontSize:13}}>✕</button>
         </div>
         <div style={{display:"flex",gap:16,justifyContent:hasWeight?"space-between":"center"}}>
           {hasWeight&&<ScrollDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
           <ScrollDrum value={reps} onChange={setReps} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined}/>
         </div>
+        {/* House pattern (2026-07-21): Cancel/Confirm on the bottom row, no corner ✕.
+            Drum edits are LOCAL state — Cancel is a true discard. */}
+        <div style={{display:"flex",gap:10,marginTop:24}}>
+        <button onClick={onClose} style={{flex:1,padding:"16px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.lg,cursor:"pointer",fontSize:14,color:T.text2}}>Cancel</button>
         <button onClick={()=>{
           if(hasWeight) setWW(p=>({...p,[target.exName]:kg}));
           setWR(p=>({...p,[target.exName]:reps}));
           onClose();
-        }} style={{marginTop:24,width:"100%",padding:"16px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:18,fontWeight:400,color:T.bg0,boxShadow:`0 8px 28px ${T.strength.glow}`}}>
+        }} style={{flex:2,padding:"16px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:18,fontWeight:400,color:T.bg0,boxShadow:`0 8px 28px ${T.strength.glow}`}}>
           Confirm →
         </button>
+        </div>
       </div>
     </div>
   );

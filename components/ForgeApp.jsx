@@ -1744,7 +1744,6 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
                 : "Log what you actually trained. Leave the rest."}
             </div>
           </div>
-          <button onClick={onClose} aria-label="Close" style={{background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,padding:"6px 10px",cursor:"pointer",color:T.text2,fontSize:13,flexShrink:0}}>✕</button>
         </div>
 
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -1813,6 +1812,8 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
         <div style={{marginTop:16,fontSize:11,color:T.text4,fontStyle:"italic",fontFamily:T.serif,textAlign:"center",lineHeight:1.5}}>
           Only the last week. Anything older is archaeology.
         </div>
+        {/* House pattern (2026-07-21): actions live on the bottom row, no corner ✕ */}
+        <button onClick={onClose} style={{marginTop:14,width:"100%",padding:"14px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.lg,cursor:"pointer",fontSize:14,color:T.text2}}>Close</button>
       </div>
     </div>
   );
@@ -2114,7 +2115,6 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
                     Set {editor.cellIdx + 1} of {entry.sets}{editor.cellIdx === 0 ? " · auto-fills the rest" : ""}
                   </div>
                 </div>
-                <button onClick={() => setEditor(null)} aria-label="Close" style={{background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,padding:"6px 10px",cursor:"pointer",color:T.text2,fontSize:13}}>✕</button>
               </div>
 
               <div style={{display:"flex",justifyContent:"center",marginBottom:20}}>
