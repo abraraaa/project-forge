@@ -14,6 +14,7 @@ import { useModalA11y } from "@/lib/a11y";
 import { T } from "@/lib/tokens";
 import { P } from "@/lib/storage";
 import { hasPasskey, authenticatePasskey } from "@/lib/webauthn";
+import { cacheAuthToken } from "@/lib/auth-session";
 
 export default function TakenNameModal({ name, webAuthnSupported, onClose, onActivate, passkeyBusy, setPasskeyBusy, passkeyError, setPasskeyError }) {
   const [hasProfilePasskey, setHasProfilePasskey] = useState(null); // null = checking
@@ -50,6 +51,9 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
     try {
       const result = await authenticatePasskey(name);
       if (result?.verified) {
+        // Seed the in-memory auth session so photo flows don't re-prompt
+        // Face ID within the token's lifetime (one ceremony per visit).
+        if (result.authToken) cacheAuthToken(name, result.authToken);
         setAuthSuccess(true);
         // Add profile locally and activate, then call onActivate to update React state
         P.add(name);

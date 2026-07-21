@@ -31,7 +31,7 @@ function formatAgo(ms) {
 }
 
 export default
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,onLockerRoom,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge}){
   // Grain-under-finger (tactility batch 3) — Home until device-verified.
   // One hook instance; handlers read e.currentTarget so the same spread
   // works on every card. The print survives the tap-triggered re-render
@@ -816,6 +816,25 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           </div>
           <div style={{flexShrink:0,width:40,height:40,borderRadius:"50%",background:historyCount > 0 ? `${T.gold}18` : T.bg3,border:`1px solid ${historyCount > 0 ? T.gold+"55" : T.bg4}`,display:"flex",alignItems:"center",justifyContent:"center",transition:`all 200ms ${T.ease}`}}>
             <span style={{fontSize:16,color:historyCount > 0 ? T.gold : T.text3}}>→</span>
+          </div>
+        </div>
+
+        {/* Locker Room — the body surface (Lab = what you lift; Locker Room =
+            what it's doing to you). Chart is ungated; photos live behind the
+            "Show photos" door on the page itself. COPY: draft, intimacy pass
+            pending. */}
+        <div {...grain} className={`${grain.className} forge-press forge-raised`} onClick={onLockerRoom}
+          style={{margin:"12px 24px 0",padding:"14px 20px",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:3}}>
+              Locker room
+            </div>
+            <div style={{fontSize:12,color:T.text3,lineHeight:1.5,fontFamily:T.serif,fontStyle:"italic"}}>
+              Bodyweight · progress photos, kept private
+            </div>
+          </div>
+          <div style={{flexShrink:0,width:34,height:34,borderRadius:"50%",background:T.bg3,border:`1px solid ${T.bg4}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{fontSize:14,color:T.text3}}>→</span>
           </div>
         </div>
       </Fade>

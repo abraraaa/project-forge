@@ -47,7 +47,8 @@ describe("photos route — privacy contract (code shape)", () => {
     expect(verbs.length).toBeGreaterThanOrEqual(2);
     // Each handler body must call gate() before doing work.
     expect((src.match(/await gate\(request\)/g) || []).length).toBe(verbs.length);
-    expect(src).toContain("verifyAuthToken");
+    expect(src).toContain("readTokenData");
+    expect(src).toContain("isTokenValid");
   });
 
   it("token travels in a header, never a URL", () => {
@@ -90,7 +91,7 @@ describe("P2 capture flow — morphing-sheet contract (code shape)", () => {
 
   it("passkey-less users get INLINE setup then continue (recruitment, not refusal)", () => {
     expect(src).toContain("registerPasskey(profileName)");
-    expect(src).toContain("authenticatePasskey(profileName)");
+    expect(src).toContain("getAuthTokenWithCeremony(profileName)");
     expect(src).toMatch(/has === false.*setStep\("secure"\)/s);
   });
 
@@ -121,5 +122,89 @@ describe("P2 preview safety (scanner finding, 2026-07-20)", () => {
   });
   it("non-image picks are rejected before preview or upload", () => {
     expect(src).toMatch(/f\.type\.startsWith\("image\/"\)/);
+  });
+});
+
+describe("P3/P5 Locker Room scrubber (code shape)", () => {
+  const src = readFileSync(resolve(root, "app/locker-room/page.jsx"), "utf8");
+  it("is a diag route gated by the passkey ceremony — no ungated photo fetch", () => {
+    expect(src).toContain("ensurePhotoAccess");
+    // Every photo fetch call threads a token argument.
+    expect(src).not.toMatch(/fetchPhotoIndex\(profile\s*\)/);
+    expect(src).toMatch(/fetchPhotoObjectUrl\(profile, tok/);
+    // Fail-modest: photos never render unless the toggle was used this visit.
+    expect(src).toContain("const photosVisible = shown && photos !== null");
+  });
+  it("crossfades under the finger and snaps with the settle haptic", () => {
+    expect(src).toMatch(/opacity: 1 - frac/);
+    expect(src).toMatch(/opacity: frac/);
+    expect(src).toContain("haptic.settle()");
+  });
+  it("revokes minted object URLs on unload", () => {
+    expect(src).toContain("revokeObjectURL");
+  });
+});
+
+describe("P4 — session tokens, delete verb, scrubber additions (code shape)", () => {
+  it("auth session is memory-only (no persistence of tokens)", () => {
+    const s = readFileSync(resolve(root, "lib/auth-session.js"), "utf8");
+    expect(s).toContain("new Map()");
+    expect(s).not.toMatch(/localStorage\.|sessionStorage\.|document\.cookie/); // API use, not the comment
+  });
+  it("DELETE verb exists, gated, index-row-first", () => {
+    const s = readFileSync(resolve(root, "app/api/photos/route.js"), "utf8");
+    expect(s).toContain("export async function DELETE");
+    const del = s.slice(s.indexOf("export async function DELETE"));
+    expect(del).toContain("await gate(request)");
+    expect(del.indexOf("dbDeletePhoto")).toBeLessThan(del.indexOf("del(exact"));
+  });
+  it("photo flows route through the cached ceremony, not raw authenticate", () => {
+    const bw = readFileSync(resolve(root, "components/BodyweightEditModal.jsx"), "utf8");
+    const scrub = readFileSync(resolve(root, "app/locker-room/page.jsx"), "utf8");
+    expect(bw).toContain("getAuthTokenWithCeremony");
+    expect(bw).not.toContain("authenticatePasskey(");
+    expect(scrub).toContain("ensurePhotoAccess");
+    const signin = readFileSync(resolve(root, "components/TakenNameModal.jsx"), "utf8");
+    expect(signin).toContain("cacheAuthToken(name, result.authToken)");
+  });
+  it("scrubber: pre-photo state is the bodyweight chart; delete is behind a confirm", () => {
+    const s = readFileSync(resolve(root, "app/locker-room/page.jsx"), "utf8");
+    expect(s).toMatch(/photos\.length === 0/);
+    expect(s).toContain("Hide photos");
+    expect(s).toContain("bwChart(photosVisible ? 90 : 150)");
+    expect(s).toContain("confirmDelete");
+    expect(s).toContain("deletePhoto(profile, token, cur.date)");
+  });
+});
+
+describe("P5 — the sliding 7-day photo cookie (code shape)", () => {
+  it("login-verify mints a 7-day photo-scope token and sets a hardened, path-scoped cookie", () => {
+    const s = readFileSync(resolve(root, "app/api/auth/login-verify/route.js"), "utf8");
+    expect(s).toContain('scope: "photos"');
+    expect(s).toContain("7 * 86400000");
+    expect(s).toMatch(/httpOnly: true, secure: true, sameSite: "strict", path: "\/api\/photos"/);
+  });
+  it("the photos gate SLIDES the window: rotates cookie-carried tokens on active use", () => {
+    const s = readFileSync(resolve(root, "app/api/photos/route.js"), "utf8");
+    expect(s).toContain("ROTATE_AFTER_MS");
+    expect(s).toMatch(/data\.scope === "photos" && token === cookieToken/);
+    expect(s).toContain("withCookie");
+    // Old records lapse naturally — the rotation path must not delete tokens.
+    const gateBlock = s.slice(s.indexOf("async function gate"), s.indexOf("export async function POST"));
+    expect(gateBlock).not.toContain("del(");
+  });
+  it("the photos gate accepts header OR cookie; sync wipe REJECTS photo-scope tokens", () => {
+    const photos = readFileSync(resolve(root, "app/api/photos/route.js"), "utf8");
+    expect(photos).toContain('request.cookies.get("forge_photos")');
+    const sync = readFileSync(resolve(root, "app/api/sync/route.js"), "utf8");
+    expect(sync).toMatch(/tokenData\.scope === "photos"/);
+  });
+});
+
+describe("Modal consistency (boss, 2026-07-21) — bottom-row Cancel, no corner X", () => {
+  it("BodyweightEditModal has no corner close and a bottom Cancel row", () => {
+    const s = readFileSync(resolve(root, "components/BodyweightEditModal.jsx"), "utf8");
+    expect(s).not.toContain('aria-label="Close"');
+    expect(s).toMatch(/Cancel<\/button>/);
   });
 });
