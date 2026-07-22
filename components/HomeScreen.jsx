@@ -69,7 +69,22 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 
   // Anchor "now" once at mount so render stays pure (no clock read mid-render)
   // and the day-of-week / viewed-date maths derive from a single consistent point.
-  const [nowMs]  = useState(() => Date.now());
+  // Midnight straddle (audit #55): the header used to read the LIVE clock at
+  // render while the strip used this anchor — cross midnight with the app
+  // open and they disagreed. Now everything derives from nowMs, and the
+  // anchor re-arms only when the CALENDAR DAY changes (foreground/focus/
+  // minute tick) — same-day events keep the anchor, so renders stay stable.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const reanchor = () => setNowMs((prev) => {
+      const now = Date.now();
+      return new Date(prev).toDateString() === new Date(now).toDateString() ? prev : now;
+    });
+    document.addEventListener("visibilitychange", reanchor);
+    window.addEventListener("focus", reanchor);
+    const id = setInterval(reanchor, 60_000);
+    return () => { document.removeEventListener("visibilitychange", reanchor); window.removeEventListener("focus", reanchor); clearInterval(id); };
+  }, []);
   const dow      = new Date(nowMs).getDay(); // 0=Sun
   const weekMap  = [6,0,1,2,3,4,5];    // JS day → WEEK index (Mon=0 … Sun=6)
   const todayIdx = weekMap[dow];
@@ -213,10 +228,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         <div style={{padding:"52px 24px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div>
             <div style={{fontFamily:T.serif,fontSize:13,fontWeight:300,color:T.text2,fontStyle:"italic"}}>
-              {new Date().toLocaleDateString("en-GB",{weekday:"long"})}
+              {new Date(nowMs).toLocaleDateString("en-GB",{weekday:"long"})}
             </div>
             <div style={{fontFamily:T.serif,fontSize:28,fontWeight:400,lineHeight:1.15,marginTop:2}}>
-              {new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}
+              {new Date(nowMs).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}
             </div>
           </div>
           <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>

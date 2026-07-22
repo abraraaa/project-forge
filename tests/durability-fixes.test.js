@@ -122,3 +122,25 @@ describe("db helpers (Neon step 2) — pure meta row mapping", () => {
     expect(assembleMeta(null)).toEqual({});
   });
 });
+
+describe("audit tail nits #54/#55/#35 (code shape)", () => {
+  it("#54: sync refresh is PRESENCE-gated — resets to 0/empty reflect", () => {
+    const s = readFileSync(resolve(__dirname, "../components/ForgeApp.jsx"), "utf8");
+    expect(s).toMatch(/typeof meta\.streak\.count === "number"/);
+    expect(s).toMatch(/Array\.isArray\(remoteHistory\)/);
+    expect(s).not.toMatch(/meta\.streak\?\.count\)/);
+    expect(s).not.toMatch(/remoteHistory\?\.length\)/);
+  });
+  it("#55: home header + strip share ONE re-anchoring clock", () => {
+    const s = readFileSync(resolve(__dirname, "../components/HomeScreen.jsx"), "utf8");
+    expect(s).toContain("new Date(nowMs).toLocaleDateString");
+    expect(s).not.toMatch(/\{new Date\(\)\.toLocaleDateString/);
+    expect(s).toMatch(/toDateString\(\) === new Date\(now\)\.toDateString\(\)/);
+  });
+  it("#35: deload math is calendar-day local; dead MAX constant gone", () => {
+    const s = readFileSync(resolve(__dirname, "../lib/progression.js"), "utf8");
+    expect(s).toContain("parseLocalDate(sessionDate || todayLocalIso())");
+    expect(s).not.toContain("DELOAD_AUTO_CLOSE_MAX_DAYS      = 10");
+    expect(s).not.toMatch(/new Date\(sessionDate/);
+  });
+});
