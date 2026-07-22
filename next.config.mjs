@@ -34,6 +34,23 @@ const nextConfig = {
   // AT FLIP TIME: delete this block (heatwayve.app goes primary) and add the
   // reverse 301 on theforged.fit — with the /.well-known/webauthn + auth-API
   // carve-outs per docs/audit ledger / migration map.
+  // Minimal SAFE security headers (audit #24). Deliberately NO script-src
+  // CSP: Next App Router inlines bootstrap scripts, and a nonce pipeline is
+  // its own project — a broken-CSP outage serves no one. These four are
+  // pure win, zero breakage surface: no framing (also kills clickjacking on
+  // the passkey ceremonies), no MIME sniffing, tight referrers, and no
+  // camera/mic/geo access from any embedded context.
+  async headers() {
+    return [{
+      source: "/:path*",
+      headers: [
+        { key: "Content-Security-Policy", value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'" },
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+      ],
+    }];
+  },
   async redirects() {
     return [
       {

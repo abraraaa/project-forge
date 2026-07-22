@@ -1,5 +1,5 @@
 import { put, list, del, get } from "@vercel/blob";
-import { mergeMeta } from "@/lib/sync-merge";
+import { mergeMeta, mergeHistories } from "@/lib/sync-merge";
 import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasRealPasskey } from "@/lib/auth-server";
 import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile } from "@/lib/db";
@@ -88,8 +88,14 @@ async function safeReadJson(request) {
     return { ok: false, reason: "Body too large", status: 413 };
   }
   try {
-    const body = await request.json();
-    return { ok: true, body };
+    // Read as TEXT and measure (audit #26): Content-Length is client-
+    // asserted and absent on chunked bodies, so the header check above is
+    // advisory only — this is the enforceable cap.
+    const text = await request.text();
+    if (text.length > MAX_BODY_BYTES) {
+      return { ok: false, reason: "Body too large", status: 413 };
+    }
+    return { ok: true, body: JSON.parse(text) };
   } catch (e) {
     return { ok: false, reason: "Invalid JSON", status: 400 };
   }
@@ -227,6 +233,20 @@ export async function GET(request) {
     // back to the latest legacy blob for whichever side is missing.
     const { blobs } = await list({ prefix: legacyPrefix(profile) });
 
+    // Read-failure guard (audit #13, same class as PUT's #7): a null read
+    // for a blob the LIST says exists is a transient failure, not absence.
+    // Returning 200+empty here was indistinguishable from a genuinely new
+    // profile — the client would then treat real data as gone. 503 lets
+    // the client retry instead.
+    const existsInList = (path) => blobs.some((b) => b.pathname === path);
+    if ((metaDirect === null && existsInList(metaPath(profile))) ||
+        (historyDirect === null && existsInList(historyPath(profile)))) {
+      return NextResponse.json(
+        { error: "Blob present but unreadable — retry" },
+        { status: 503 },
+      );
+    }
+
     // Profile has never existed at all — preserve the original 404 contract
     // so the client treats this as "blob unavailable" rather than "blob
     // exists but is empty". backgroundSync's branch on `if (!remote)` depends
@@ -344,11 +364,10 @@ export async function PUT(request) {
       }
       if (!Array.isArray(existing)) existing = [];
 
-      const byId = new Map();
-      [...existing, ...data.history].forEach(rec => {
-        if (rec && rec.id) byId.set(rec.id, rec);
-      });
-      const merged = Array.from(byId.values()).sort((a, b) => a.id.localeCompare(b.id));
+      // THE merge (audit #9): the same mergeHistories the client uses —
+      // the hand-rolled byId union here was a second implementation that
+      // could drift (and lacked mergeHistories' record-shape guards).
+      const merged = mergeHistories(existing, data.history);
 
       await put(
         historyPath(profile),
