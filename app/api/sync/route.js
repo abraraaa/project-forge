@@ -88,8 +88,14 @@ async function safeReadJson(request) {
     return { ok: false, reason: "Body too large", status: 413 };
   }
   try {
-    const body = await request.json();
-    return { ok: true, body };
+    // Read as TEXT and measure (audit #26): Content-Length is client-
+    // asserted and absent on chunked bodies, so the header check above is
+    // advisory only — this is the enforceable cap.
+    const text = await request.text();
+    if (text.length > MAX_BODY_BYTES) {
+      return { ok: false, reason: "Body too large", status: 413 };
+    }
+    return { ok: true, body: JSON.parse(text) };
   } catch (e) {
     return { ok: false, reason: "Invalid JSON", status: 400 };
   }

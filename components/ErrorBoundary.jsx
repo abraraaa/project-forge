@@ -23,14 +23,28 @@ export default class ErrorBoundary extends Component {
   };
 
   handleClearAndReload = () => {
-    // Clear localStorage in case it's corrupted data causing the crash
+    // Audit #11: this used to be localStorage.clear() — destroying UNPUSHED
+    // per-profile data (the only copy, if sync hadn't run) while the copy
+    // promised safety. Now: best-effort flush of pending pushes first, then
+    // clear ONLY device-level/cache keys — every forge:<profile>:* store
+    // survives. Corrupted-profile-data crashes can still be cleared via the
+    // profile wipe, which is passkey-gated and says what it deletes.
     if (typeof window !== "undefined") {
       const confirmed = window.confirm(
-        "This will clear your local data cache and reload. Your cloud data will be restored on next sync. Continue?"
+        "This resets app-level caches and reloads. Your training data on this device is kept. Continue?"
       );
       if (confirmed) {
-        localStorage.clear();
-        window.location.reload();
+        import("@/lib/storage")
+          .then((m) => m.flushPendingPushes?.())
+          .catch(() => {})
+          .finally(() => {
+            const DEVICE_PREFIXES = ["forge:onboarded", "forge:weekConfig", "forge:programmeBlock", "forge:pendingPushes", "forge:lastSyncAt", "forge:tonnageMilestoneSeen", "forge:iosInstallDismissed"];
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+              const k = localStorage.key(i);
+              if (k && DEVICE_PREFIXES.some((p) => k === p)) localStorage.removeItem(k);
+            }
+            window.location.reload();
+          });
       }
     }
   };
