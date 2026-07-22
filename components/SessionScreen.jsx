@@ -402,22 +402,21 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
        scroll; upward it now bleeds into the status zone so the field
        lighting is continuous to the screen edge, standalone and browser. */
     <div className="forge-fill" style={{maxWidth:430,margin:"0 auto",position:"relative",overflowX:"clip",display:"flex",flexDirection:"column",paddingBottom:"calc(24px + env(safe-area-inset-bottom,0px))",width:"100%"}}>
-      {/* Chrome-tint sampler (iOS 26 plate, 2026-07-24). Session content can
-          legitimately exceed the viewport (.forge-fill degrades to scroll),
-          which arms iOS 26's hardened top scroll-edge plate at rest; with
-          only <body> to sample, the plate reads GREY against the warm field
-          (four earlier element-level theories all missed this — it is
-          system chrome). Per the scrim doctrine below in globals.css, Safari
-          samples a FIXED edge element's OWN background-color for its chrome
-          tint — so this 1px strip hands the plate the session field's top
-          tone instead. Session-scoped deliberately: Home's plate already
-          blends and a global sampler could regress it (bug 301756 re-tints
-          BOTH bars). If this reads wrong on device, it is one div to
-          delete. */}
-      <div aria-hidden style={{position:"fixed",top:0,left:0,right:0,height:1,background:"#1D1C1A",pointerEvents:"none",zIndex:0}}/>
+      {/* Seamless frame (boss design, 2026-07-24): the header and footer
+          zones BLEND into the chrome-sample tone (#1D1A19 = body = what
+          every mode's chrome derives from), so Safari's split, the PWA's
+          status-bar extension, and iOS 26's scroll-edge plate all land on
+          a matching surface by construction. Collars are paint, not
+          layout — absolutely positioned, pointer-transparent, above the
+          glow, below content. The old fixed 1px sampler is gone (body
+          sampling now agrees with what it borders). */}
+      <div aria-hidden style={{position:"absolute",top:-160,left:"-10%",right:"-10%",height:240,background:"linear-gradient(to bottom, #1D1A19 55%, rgba(29,26,25,0))",pointerEvents:"none"}}/>
+      <div aria-hidden style={{position:"absolute",bottom:-40,left:"-10%",right:"-10%",height:120,background:"linear-gradient(to top, #1D1A19 30%, rgba(29,26,25,0))",pointerEvents:"none"}}/>
       <div style={{position:"absolute",top:-140,right:-80,width:340,height:380,background:`radial-gradient(circle,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
-      <div style={{height:1,background:T.bg3}}>
-        <div style={{height:"100%",width:`${progress}%`,background:T.coral,transition:`width 600ms ${T.ease}`}}/>
+      {/* Progress: inset + rounded (the old full-bleed 1px track read as a
+          hard line across every mode's frame — the boss's 'fine line'). */}
+      <div style={{margin:"10px 20px 0",height:3,borderRadius:2,background:`${T.bg3}55`,overflow:"hidden",position:"relative"}}>
+        <div style={{height:"100%",width:`${progress}%`,borderRadius:2,background:T.coral,transition:`width 600ms ${T.ease}`}}/>
       </div>
       <div style={{padding:"16px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <button onClick={onQuit} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:12,color:T.text3,fontFamily:T.sans}}>← Quit</button>
