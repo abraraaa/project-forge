@@ -21,14 +21,22 @@ html, body {
      overscroll base only — the visible page substrate (base + desktop
      ambient gradients + grain) paints on .forge-page below, which spans
      the full document rather than body's 100vh box. */
-  /* #1D1A19, not the #131110 design base, deliberately: this colour is
+  /* #231F1C, not the #131110 design base, deliberately: this colour is
      what Safari 26 SAMPLES for its chrome extension (bottom chin, status
      zone) and what overscroll rubber-band shows — and the page's visible
-     field is the substrate PLUS the 12% screen-blend grain lift, which
-     renders at #1D1A19 (measured in Chromium at page end). Sampling the
-     raw base left a visibly darker chin below the grain field at full
-     scroll. The painted substrate itself stays #131110 on .forge-page. */
-  background: #1D1A19;
+     field is the substrate PLUS the 12% screen-blend grain lift. Sampling
+     the raw base left a visibly darker chin below the grain field at full
+     scroll. The painted substrate itself stays #131110 on .forge-page.
+     RECALIBRATION INVARIANT (2026-07-23): this value must equal what the
+     grain-lifted field ACTUALLY renders at, re-measured from device
+     screenshots whenever the grain/vignette stack changes. It was first
+     measured at #1D1A19 (Chromium); the grain re-application + contrast
+     passes lifted the real field to ~#231F1C and the stale tone showed as
+     a hard chrome band over the field in browser Safari on every route
+     (reported on /session, actually global; standalone unaffected —
+     black-translucent skips sampling). Measured from the boss's iPhone
+     screenshots: band #1B1A18 vs field #22201C-#24211E. */
+  background: #231F1C;
   /* NO overflow on the root — deliberately. overflow-x: hidden here turned
      html into a managed scroll container, and iOS 26 Safari's chrome
      behaviours key off a NATURAL root scroller: with the root constrained,

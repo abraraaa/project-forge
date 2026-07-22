@@ -89,7 +89,7 @@ export const viewport = {
   // from html/body in globals.css thinking themeColor covers it; on Safari
   // 26 the body bg IS what tints the toolbar. (This exact trap already
   // caused a regression once.) See docs/frontend-audit.md F5.
-  themeColor: "#1D1A19",
+  themeColor: "#231F1C",
   // colorScheme via the viewport API rather than a manual <meta> in <head>
   // — Next dedupes/manages it and warns on hand-written viewport meta.
   // Controls UA form controls, scrollbars, and the default canvas colour.
