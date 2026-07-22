@@ -117,3 +117,25 @@ describe("stateless challenges (signed, no blob round-trip)", () => {
     expect(verifyChallenge(c, "Sarah", "auth")).toBe(false);
   });
 });
+
+describe("Heatwayve migration — two origins, one rpId (challenge 1)", () => {
+  const req = (host) => ({ headers: { get: (k) => (k === "host" ? host : null) } });
+  it("heatwayve.app is an allowed ORIGIN but rpId stays theforged.fit", () => {
+    expect(rpConfigFromRequest(req("heatwayve.app")))
+      .toEqual({ rpId: "theforged.fit", expectedOrigin: "https://heatwayve.app" });
+    expect(rpConfigFromRequest(req("www.heatwayve.app")).expectedOrigin).toBe("https://www.heatwayve.app");
+  });
+  it("allow-list is exact-match — lookalike hosts fail toward the legacy origin", () => {
+    expect(rpConfigFromRequest(req("evil-heatwayve.app")).expectedOrigin).toBe("https://theforged.fit");
+    expect(rpConfigFromRequest(req("heatwayve.app.evil.com")).expectedOrigin).toBe("https://theforged.fit");
+  });
+  it("the ROR well-known lists both domains and stays a static literal", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../app/.well-known/webauthn/route.js"), "utf8");
+    expect(src).toContain('"https://theforged.fit"');
+    expect(src).toContain('"https://heatwayve.app"');
+    expect(src).not.toMatch(/request|headers\.get/); // never reflected from input
+  });
+});

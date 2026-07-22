@@ -52,7 +52,7 @@ describe("photos route — privacy contract (code shape)", () => {
   });
 
   it("token travels in a header, never a URL", () => {
-    expect(src).toContain('request.headers.get("x-forge-auth")');
+    expect(src).toContain('request.headers.get("x-hw-auth")');
     expect(src).not.toMatch(/searchParams\.get\(["'](token|key|auth)/);
   });
 
@@ -69,7 +69,7 @@ describe("photos route — privacy contract (code shape)", () => {
 
   it("client sends the token as a header too", () => {
     const client = readFileSync(resolve(root, "lib/photos.js"), "utf8");
-    expect(client).toContain('"X-Forge-Auth"');
+    expect(client).toContain('"X-HW-Auth"');
     expect(client).not.toMatch(/[?&]token=/);
   });
 });
@@ -195,7 +195,7 @@ describe("P5 — the sliding 7-day photo cookie (code shape)", () => {
   });
   it("the photos gate accepts header OR cookie; sync wipe REJECTS photo-scope tokens", () => {
     const photos = readFileSync(resolve(root, "app/api/photos/route.js"), "utf8");
-    expect(photos).toContain('request.cookies.get("forge_photos")');
+    expect(photos).toContain('request.cookies.get("hw_photos")');
     const sync = readFileSync(resolve(root, "app/api/sync/route.js"), "utf8");
     expect(sync).toMatch(/tokenData\.scope === "photos"/);
   });

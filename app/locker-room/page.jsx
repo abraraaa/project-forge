@@ -144,7 +144,10 @@ export default function LockerRoom() {
   };
 
   // ── Shared bits ─────────────────────────────────────────────────────────
-  const page = { minHeight: "100dvh", background: T.bg0, color: T.text1, fontFamily: T.sans, padding: "calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))" };
+  // Shell-compliant (Phase 2 contract, .forge-page owns the viewport): no
+  // vh/dvh, no safe-area math, no local background — the substrate runs
+  // continuous under the status bar; this page only adds design spacing.
+  const page = { color: T.text1, fontFamily: T.sans, padding: "20px 20px 24px" };
   const serif = { fontFamily: T.serif, fontWeight: 300 };
   const coralBtn = { padding: "14px 20px", background: T.coral, border: "none", borderRadius: T.r.lg, ...serif, fontSize: 16, color: T.bg0, cursor: "pointer" };
   const quietBtn = { padding: "10px 14px", background: "none", border: "none", fontSize: 12, color: T.text3, cursor: "pointer" };

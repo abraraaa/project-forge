@@ -145,7 +145,7 @@ export async function POST(request) {
     }), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: true });
 
     const res = NextResponse.json({ ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600 });
-    res.cookies.set("forge_photos", photoToken, {
+    res.cookies.set("hw_photos", photoToken, {
       httpOnly: true, secure: true, sameSite: "strict", path: "/api/photos", maxAge: 7 * 86400,
     });
     return res;

@@ -225,7 +225,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
     {id:"other",       label:"Something else"},
   ];
   return (
-    <div style={{minHeight:"100vh",maxWidth:430,margin:"0 auto",padding:"72px 24px 0"}}>
+    <div style={{maxWidth:430,margin:"0 auto",padding:"72px 24px 0"}}>
       <Fade d={0}>
         <div style={{fontFamily:T.serif,fontSize:34,fontWeight:300,lineHeight:1.2,marginBottom:8}}>
           How are you<br/><span style={{fontStyle:"italic",color:T.coral}}>feeling today?</span>
@@ -793,7 +793,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
   useEffect(() => SyncStatus.subscribe(setSyncState), []);
 
   return (
-    <div style={{minHeight:"100vh",maxWidth:430,margin:"0 auto",padding:"72px 24px 0",position:"relative",overflow:"clip"}}>
+    <div style={{maxWidth:430,margin:"0 auto",padding:"72px 24px 0",position:"relative",overflow:"clip"}}>
       {/* Victory gradient — warm peach wash from top-centre down. A small
           non-patronising triumph beat at the moment the user has just put
           the work in. Two stacked layers: a tight glow above the headline +

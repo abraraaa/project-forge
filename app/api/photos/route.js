@@ -7,7 +7,7 @@ import { isJpegBytes, PHOTO_MAX_UPLOAD_BYTES } from "@/lib/photos";
 
 // Progress photos (P1) — the ONE gated data surface in Forge.
 // Every verb requires a live authToken (minted by login-verify after a real
-// passkey ceremony) in the X-Forge-Auth HEADER — never a query param, per
+// passkey ceremony) in the X-HW-Auth HEADER — never a query param, per
 // house law: keys don't ride URLs. Tokens are verified WITHOUT consuming
 // (the wipe path owns consumption). There is no open-read here and must
 // never be: physique photos are the revisit trigger the open-reads decision
@@ -52,7 +52,7 @@ const COOKIE_OPTS = { httpOnly: true, secure: true, sameSite: "strict", path: "/
 
 // Attach a rotated cookie (if the gate minted one) to any success response.
 const withCookie = (res, g) => {
-  if (g.refresh) res.cookies.set("forge_photos", g.refresh, COOKIE_OPTS);
+  if (g.refresh) res.cookies.set("hw_photos", g.refresh, COOKIE_OPTS);
   return res;
 };
 
@@ -69,8 +69,8 @@ async function gate(request) {
   // Header token (fresh ceremony) OR the sliding photo-scope cookie —
   // httpOnly + path-scoped to this route, set by login-verify. Cookie means
   // the phone the user unlocked stays unlocked; the wipe never accepts it.
-  const headerToken = request.headers.get("x-forge-auth") || null;
-  const cookieToken = request.cookies.get("forge_photos")?.value || null;
+  const headerToken = request.headers.get("x-hw-auth") || null;
+  const cookieToken = request.cookies.get("hw_photos")?.value || null;
   const token = headerToken || cookieToken;
   const data = await readTokenData(token);
   if (!isTokenValid(data, profile, Date.now())) {
