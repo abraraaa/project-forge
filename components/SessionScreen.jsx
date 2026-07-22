@@ -394,8 +394,15 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
        (split-screen, flip covers) degrade to scroll via the fill class's
        no-shrink basis. The bottom padding is home-indicator CLEARANCE for
        the pinned actions, not height maths. */
-    <div className="forge-fill" style={{maxWidth:430,margin:"0 auto",position:"relative",overflow:"clip",display:"flex",flexDirection:"column",paddingBottom:"calc(24px + env(safe-area-inset-bottom,0px))",width:"100%"}}>
-      <div style={{position:"absolute",top:-80,right:-80,width:340,height:320,background:`radial-gradient(circle,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
+    /* overflowX only (boss find, 2026-07-23): the old overflow:clip
+       amputated the radial glow at the container's top edge — unlit
+       substrate above, glow-lit field below, one hard line (misread twice
+       as chrome sampling before the boss pointed at the header). X stays
+       clipped so the glow's rightward overflow can't cause sideways
+       scroll; upward it now bleeds into the status zone so the field
+       lighting is continuous to the screen edge, standalone and browser. */
+    <div className="forge-fill" style={{maxWidth:430,margin:"0 auto",position:"relative",overflowX:"clip",display:"flex",flexDirection:"column",paddingBottom:"calc(24px + env(safe-area-inset-bottom,0px))",width:"100%"}}>
+      <div style={{position:"absolute",top:-140,right:-80,width:340,height:380,background:`radial-gradient(circle,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       <div style={{height:1,background:T.bg3}}>
         <div style={{height:"100%",width:`${progress}%`,background:T.coral,transition:`width 600ms ${T.ease}`}}/>
       </div>
