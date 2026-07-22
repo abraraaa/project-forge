@@ -24,10 +24,14 @@ html, body {
   /* #1D1A19, not the #131110 design base, deliberately: this colour is
      what Safari 26 SAMPLES for its chrome extension (bottom chin, status
      zone) and what overscroll rubber-band shows — and the page's visible
-     field is the substrate PLUS the 12% screen-blend grain lift, which
-     renders at #1D1A19 (measured in Chromium at page end). Sampling the
-     raw base left a visibly darker chin below the grain field at full
-     scroll. The painted substrate itself stays #131110 on .forge-page. */
+     field is the substrate PLUS the 12% screen-blend grain lift. Sampling
+     the raw base left a visibly darker chin below the grain field at full
+     scroll. The painted substrate itself stays #131110 on .forge-page.
+     (2026-07-23 note: a session-screen band was briefly misattributed to
+     this tone and the value churned to #231F1C then reverted — the band
+     was the session glow being clipped at its container, fixed in
+     SessionScreen. If this tone ever genuinely drifts from the rendered
+     field, re-measure from device screenshots before touching it.) */
   background: #1D1A19;
   /* NO overflow on the root — deliberately. overflow-x: hidden here turned
      html into a managed scroll container, and iOS 26 Safari's chrome

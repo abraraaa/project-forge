@@ -436,9 +436,14 @@ export default function ForgeApp(){
         setWWState(sanitised);
       }
       if (meta.reps) setWRState(meta.reps);
-      if (meta.streak?.count) setStreak(meta.streak.count);
+      // PRESENCE-gated, not truthiness-gated (audit #54): a remote streak
+      // reset to 0 and a legitimately-emptied history are real states that
+      // must reflect — the old `?.count` / `?.length` guards silently
+      // dropped every falsy value, so a reset never landed until remount.
+      // Absence (field not in the payload) still skips, as it should.
+      if (meta.streak && typeof meta.streak.count === "number") setStreak(meta.streak.count);
       if (meta.programmeBlock) setProgrammeBlock(meta.programmeBlock);
-      if (remoteHistory?.length) setHistory(remoteHistory);
+      if (Array.isArray(remoteHistory)) setHistory(remoteHistory);
       setUserWeek(W.get() || WEEK);
       setUserFocus(F.get(activeProfile));
       setBreaks(Bk.getAll(activeProfile));
@@ -447,7 +452,7 @@ export default function ForgeApp(){
       setBonusDone(proj.bonus);
       setDayDone(Days.manualTickDates(activeProfile));
       const bw = BW.getKg(activeProfile);
-      if (bw) setBodyweightState(bw);
+      if (bw != null) setBodyweightState(bw);
       const ts = TS.get(activeProfile);
       setActiveDeload(ts?.mesocycle?.activeDeload || null);
       setDeloadOffer(shouldOfferDeload(ts, H.get(activeProfile)));

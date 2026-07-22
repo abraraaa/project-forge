@@ -69,7 +69,22 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 
   // Anchor "now" once at mount so render stays pure (no clock read mid-render)
   // and the day-of-week / viewed-date maths derive from a single consistent point.
-  const [nowMs]  = useState(() => Date.now());
+  // Midnight straddle (audit #55): the header used to read the LIVE clock at
+  // render while the strip used this anchor — cross midnight with the app
+  // open and they disagreed. Now everything derives from nowMs, and the
+  // anchor re-arms only when the CALENDAR DAY changes (foreground/focus/
+  // minute tick) — same-day events keep the anchor, so renders stay stable.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const reanchor = () => setNowMs((prev) => {
+      const now = Date.now();
+      return new Date(prev).toDateString() === new Date(now).toDateString() ? prev : now;
+    });
+    document.addEventListener("visibilitychange", reanchor);
+    window.addEventListener("focus", reanchor);
+    const id = setInterval(reanchor, 60_000);
+    return () => { document.removeEventListener("visibilitychange", reanchor); window.removeEventListener("focus", reanchor); clearInterval(id); };
+  }, []);
   const dow      = new Date(nowMs).getDay(); // 0=Sun
   const weekMap  = [6,0,1,2,3,4,5];    // JS day → WEEK index (Mon=0 … Sun=6)
   const todayIdx = weekMap[dow];
@@ -213,10 +228,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         <div style={{padding:"52px 24px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div>
             <div style={{fontFamily:T.serif,fontSize:13,fontWeight:300,color:T.text2,fontStyle:"italic"}}>
-              {new Date().toLocaleDateString("en-GB",{weekday:"long"})}
+              {new Date(nowMs).toLocaleDateString("en-GB",{weekday:"long"})}
             </div>
             <div style={{fontFamily:T.serif,fontSize:28,fontWeight:400,lineHeight:1.15,marginTop:2}}>
-              {new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}
+              {new Date(nowMs).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}
             </div>
           </div>
           <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
@@ -823,18 +838,26 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             what it's doing to you). Chart is ungated; photos live behind the
             "Show photos" door on the page itself. COPY: draft, intimacy pass
             pending. */}
+        {/* Same anatomy as the Lab card above (boss device pass 2026-07-23:
+            the lighter variant read as a second-class citizen): identical
+            paddings, serif value line, 40px sage-ringed circle — sage, not
+            gold, because the Locker Room is the body surface, not the
+            barbell surface. */}
         <div {...grain} className={`${grain.className} forge-press forge-raised`} onClick={onLockerRoom}
-          style={{margin:"12px 24px 0",padding:"14px 20px",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          style={{margin:"12px 24px 0",padding:"18px 20px",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:3}}>
+            <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
               Locker room
+            </div>
+            <div style={{fontFamily:T.serif,fontSize:19,fontWeight:300,color:T.text1,lineHeight:1.3,marginBottom:3}}>
+              Your body&apos;s story
             </div>
             <div style={{fontSize:12,color:T.text3,lineHeight:1.5,fontFamily:T.serif,fontStyle:"italic"}}>
               Bodyweight · progress photos, kept private
             </div>
           </div>
-          <div style={{flexShrink:0,width:34,height:34,borderRadius:"50%",background:T.bg3,border:`1px solid ${T.bg4}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{fontSize:14,color:T.text3}}>→</span>
+          <div style={{flexShrink:0,width:40,height:40,borderRadius:"50%",background:`${T.sage}18`,border:`1px solid ${T.sage}55`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{fontSize:16,color:T.sage}}>→</span>
           </div>
         </div>
       </Fade>
