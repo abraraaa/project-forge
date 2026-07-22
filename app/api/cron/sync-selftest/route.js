@@ -44,6 +44,14 @@ export async function GET(request) {
   // Unique per run so concurrent/retried runs never collide with each other
   // or a real profile. Passes validateProfile (no path seps / control chars).
   const profile = `selftest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  // Cleanup namespace lock (audit #62). The `finally` below routes through
+  // the shared DELETE handler — deliberately, so the nightly run exercises
+  // the real delete path — but an unattended cron must never hold general
+  // delete authority. This pattern is the whole authority: enumerate the
+  // junk shape explicitly (wipe protocol rule 3) and refuse anything else,
+  // so no refactor of `profile` can ever aim the cleanup at a real person.
+  const SELFTEST_PROFILE_RE = /^selftest-\d{13}-[a-z0-9]{1,6}$/;
   const checks = [];
   const check = (name, ok) => checks.push({ name, ok: !!ok });
 
@@ -87,8 +95,17 @@ export async function GET(request) {
   } catch (e) {
     check(`threw: ${e?.message || e}`, false);
   } finally {
-    // Always release the throwaway profile — no passkey, so no authToken needed.
-    try { await syncDELETE(getReq({ profile })); } catch { /* best effort */ }
+    // Always release the throwaway profile — no passkey, so no authToken
+    // needed — but ONLY if it still matches the selftest junk pattern. A
+    // refusal here is a bug worth failing the run over, not a silent skip.
+    if (SELFTEST_PROFILE_RE.test(profile)) {
+      try {
+        const res = await syncDELETE(getReq({ profile }));
+        check("cleanup DELETE releases the throwaway profile", res.status === 200);
+      } catch { check("cleanup DELETE threw", false); }
+    } else {
+      check(`cleanup REFUSED: profile escaped the selftest namespace (${profile})`, false);
+    }
   }
 
   const failures = checks.filter((c) => !c.ok).map((c) => c.name);
