@@ -823,18 +823,26 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             what it's doing to you). Chart is ungated; photos live behind the
             "Show photos" door on the page itself. COPY: draft, intimacy pass
             pending. */}
+        {/* Same anatomy as the Lab card above (boss device pass 2026-07-23:
+            the lighter variant read as a second-class citizen): identical
+            paddings, serif value line, 40px sage-ringed circle — sage, not
+            gold, because the Locker Room is the body surface, not the
+            barbell surface. */}
         <div {...grain} className={`${grain.className} forge-press forge-raised`} onClick={onLockerRoom}
-          style={{margin:"12px 24px 0",padding:"14px 20px",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          style={{margin:"12px 24px 0",padding:"18px 20px",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:3}}>
+            <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
               Locker room
+            </div>
+            <div style={{fontFamily:T.serif,fontSize:19,fontWeight:300,color:T.text1,lineHeight:1.3,marginBottom:3}}>
+              Your body&apos;s story
             </div>
             <div style={{fontSize:12,color:T.text3,lineHeight:1.5,fontFamily:T.serif,fontStyle:"italic"}}>
               Bodyweight · progress photos, kept private
             </div>
           </div>
-          <div style={{flexShrink:0,width:34,height:34,borderRadius:"50%",background:T.bg3,border:`1px solid ${T.bg4}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{fontSize:14,color:T.text3}}>→</span>
+          <div style={{flexShrink:0,width:40,height:40,borderRadius:"50%",background:`${T.sage}18`,border:`1px solid ${T.sage}55`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{fontSize:16,color:T.sage}}>→</span>
           </div>
         </div>
       </Fade>
