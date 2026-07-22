@@ -208,3 +208,21 @@ describe("Modal consistency (boss, 2026-07-21) — bottom-row Cancel, no corner 
     expect(s).toMatch(/Cancel<\/button>/);
   });
 });
+
+describe("House pattern — no corner-close buttons anywhere (boss, 2026-07-21)", () => {
+  it("sheets close from the bottom row, never a corner ✕", () => {
+    const { readdirSync } = require("node:fs");
+    const offenders = [];
+    for (const dir of ["components", "app"]) {
+      const walk = (d) => {
+        for (const f of readdirSync(resolve(root, d), { withFileTypes: true })) {
+          const rel = `${d}/${f.name}`;
+          if (f.isDirectory()) walk(rel);
+          else if (/\.(jsx|js)$/.test(f.name) && readFileSync(resolve(root, rel), "utf8").includes('aria-label="Close"')) offenders.push(rel);
+        }
+      };
+      walk(dir);
+    }
+    expect(offenders, `corner-close buttons found (use a bottom-row Cancel): ${offenders.join(", ")}`).toEqual([]);
+  });
+});
