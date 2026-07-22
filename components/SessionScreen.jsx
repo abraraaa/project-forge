@@ -402,6 +402,19 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
        scroll; upward it now bleeds into the status zone so the field
        lighting is continuous to the screen edge, standalone and browser. */
     <div className="forge-fill" style={{maxWidth:430,margin:"0 auto",position:"relative",overflowX:"clip",display:"flex",flexDirection:"column",paddingBottom:"calc(24px + env(safe-area-inset-bottom,0px))",width:"100%"}}>
+      {/* Chrome-tint sampler (iOS 26 plate, 2026-07-24). Session content can
+          legitimately exceed the viewport (.forge-fill degrades to scroll),
+          which arms iOS 26's hardened top scroll-edge plate at rest; with
+          only <body> to sample, the plate reads GREY against the warm field
+          (four earlier element-level theories all missed this — it is
+          system chrome). Per the scrim doctrine below in globals.css, Safari
+          samples a FIXED edge element's OWN background-color for its chrome
+          tint — so this 1px strip hands the plate the session field's top
+          tone instead. Session-scoped deliberately: Home's plate already
+          blends and a global sampler could regress it (bug 301756 re-tints
+          BOTH bars). If this reads wrong on device, it is one div to
+          delete. */}
+      <div aria-hidden style={{position:"fixed",top:0,left:0,right:0,height:1,background:"#1D1C1A",pointerEvents:"none",zIndex:0}}/>
       <div style={{position:"absolute",top:-140,right:-80,width:340,height:380,background:`radial-gradient(circle,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       <div style={{height:1,background:T.bg3}}>
         <div style={{height:"100%",width:`${progress}%`,background:T.coral,transition:`width 600ms ${T.ease}`}}/>
