@@ -100,6 +100,23 @@ describe("delta pull — the two traps", () => {
     await backgroundSync("p");
     expect(DeltaSync.getCursor("p")).toBe("2026-07-25T01:00:00.000Z");
   });
+
+  it("hydration ACKNOWLEDGES the merged state — no phantom all-dirty baseline (boss find, 2026-07-26)", async () => {
+    DeltaSync.clearCursor("p");
+    stubFetch((url, opts) => {
+      if (opts.method === "PUT") return okJson({ ok: true });
+      return okJson({ meta: { streak: { count: 1, lastDate: "2026-07-01" } }, history: [], cursor: "2026-07-25T02:00:00.000Z" });
+    });
+    await backgroundSync("p");
+    const push = DeltaSync.getPushState("p");
+    expect(Object.keys(push.fieldHashes).length).toBeGreaterThan(0); // baseline acknowledged
+    const { dirty } = DeltaSync.diffMeta(
+      { weights: { Squat: 100 }, streak: { count: 1, lastDate: "2026-07-01" } },
+      push.fieldHashes,
+    );
+    // The freshly-merged fields must NOT read as dirty.
+    expect(dirty.weights).toBeUndefined();
+  });
 });
 
 describe("delta push — dirty diff over THE payload builder", () => {

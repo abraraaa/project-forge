@@ -20,7 +20,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   LS, P, H, W, PB, F, BW, TS, Days, PQ, SyncStatus,
-  backgroundSync, blobPull, blobPush, flushPendingPushes,
+  backgroundSync, blobPull, blobPush, flushPendingPushes, pushNow,
   getLocalProfile,
 } from "@/lib/storage";
 import { checkStoreHealth, collectStoreSnapshot } from "@/lib/store-health";
@@ -137,7 +137,7 @@ export default function DiagSync() {
       const remote = await blobPull(profile);
       setLastAction({
         type: "pull",
-        result: remote ? `OK — meta:${JSON.stringify(remote.meta || {}).length}b, history:${(remote.history || []).length} records` : "null (blob empty or unreachable)",
+        result: remote ? `OK — meta:${JSON.stringify(remote.meta || {}).length}b, history:${(remote.history || []).length} records` : "null (cloud empty or unreachable)",
         at: Date.now(),
       });
     } catch (e) {
@@ -163,6 +163,10 @@ export default function DiagSync() {
       });
       const bodyText = await res.text();
       if (res.ok) {
+        // The server now verifiably holds this exact snapshot — acknowledge
+        // it so the delta dirty-count resolves (boss find, 2026-07-26: the
+        // raw path bypassed blobPush's choke point and could never clear).
+        DeltaSync.commitPushState(profile, local);
         setLastAction({
           type: "push",
           result: `OK ${res.status} — meta:${JSON.stringify(local.meta || {}).length}b, history:${(local.history || []).length} records · server: ${bodyText.slice(0, 300)}`,
@@ -352,15 +356,22 @@ export default function DiagSync() {
         {(() => {
           const cursor = DeltaSync.getCursor(profile);
           const push = DeltaSync.getPushState(profile);
-          const dirty = snapshot
-            ? Object.keys(DeltaSync.diffMeta(getLocalProfile(profile).meta, push.fieldHashes).dirty).length
-            : 0;
+          const dirtyFields = snapshot
+            ? Object.keys(DeltaSync.diffMeta(getLocalProfile(profile).meta, push.fieldHashes).dirty)
+            : [];
           return (<>
             <Row label="mode" value={cursor ? "delta" : "fat (pre-hydration)"} />
             <Row label="cursor" value={cursor || "—"} dim />
             <Row label="push watermark (last record)" value={push.lastRecordId || "—"} dim />
             <Row label="acknowledged fields" value={Object.keys(push.fieldHashes || {}).length} />
-            <Row label="dirty fields (unpushed)" value={dirty} />
+            <Row label="dirty fields (unpushed)" value={dirtyFields.length ? `${dirtyFields.length} · ${dirtyFields.join(", ")}` : "0"} />
+            {dirtyFields.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <Button onClick={async () => { await pushNow(profile); setLastAction({ type: "delta-push", result: "pushNow ran — dirty set re-derives above", at: Date.now() }); }}>
+                  Sync now (delta — resolves dirty)
+                </Button>
+              </div>
+            )}
             {/* The support move for any sync weirdness: dropping the cursor
                 makes the next backgroundSync a FULL pull + re-hydration.
                 Non-destructive — local data untouched, cursor re-adopted. */}
