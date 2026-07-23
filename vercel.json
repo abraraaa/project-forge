@@ -4,19 +4,29 @@
     {
       "path": "/api/cron/sync-selftest",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/sync-snapshot",
+      "schedule": "30 4 * * *"
     }
   ],
   "headers": [
     {
       "source": "/icon-:size.png",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
       ]
     },
     {
       "source": "/manifest.json",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=3600" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
       ]
     }
   ]
