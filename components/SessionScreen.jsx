@@ -19,7 +19,7 @@ import ScrollDrum from "@/components/ScrollDrum";
 import { WEEK, SWAP_DB, EQ_COLOUR } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
-import { getLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS } from "@/lib/lift-translations";
+import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 
 // ─── Session overview sheet ──────────────────────────────────────────────────
@@ -657,14 +657,21 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
   const options=(SWAP_DB[activeEx?.name]||[]).filter(o=>!travel||["Bodyweight","Dumbbell","Band"].includes(o.eq));
 
   const applySwap=(option)=>{
-    // Inherit reps/weight from current slot — same movement pattern, same stimulus level.
-    // User can fine-tune with the drum editor after swapping.
+    // Inherit reps from the current slot — same movement pattern, same
+    // stimulus level. loadType is resolved HERE, at selection (audit #58):
+    // before this, the swap inherited the original slot's type via spread
+    // and volume math double/half-counted. The weight prefill only carries
+    // over when the load semantics match — a 35kg machine number is
+    // meaningless prefill for a bodyweight swap (re-seeds instead).
+    const loadType = swapLoadType(option);
+    const sameLoadMaths = loadType === getLoadType(activeEx);
     onSwap(swapKey, {
       name:   option.name,
       muscle: option.muscle,
       reps:   activeEx?.reps   ?? 10,
-      weight: activeEx?.weight ?? null,
+      weight: sameLoadMaths ? (activeEx?.weight ?? null) : null,
       vid:    option.vid ?? null,
+      loadType,
     });
     onClose();
   };

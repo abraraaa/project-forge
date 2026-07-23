@@ -9,6 +9,30 @@ specific next step that would unblock it.
 
 ---
 
+- **Exercise video sourcing (47 gaps)** · parked 2026-07-24 · 47 unique
+  exercises across the swap DB + conditioning pools have no demo video.
+  Sourcing brief + Gemini prompt generated and handed to the boss (sub-5min,
+  embeddable, moody-premium aesthetic, flagged fallback tier). Next step:
+  boss returns the results table → wire IDs into `lib/programme.js` (one
+  canonical vid per exercise name, every duplicate entry updated). Long-term
+  ambition on record: replace YouTube embeds with our own Heatwayve-shot
+  footage ("idealistic models covered in oil and sweat with moody lighting").
+
+- **"Buy me a protein shake" donation link** · parked 2026-07-24 · a
+  discreet donation affordance, tucked somewhere quiet (Profile screen
+  footer is the natural spot — never a nag, never a modal). Next step:
+  pick provider (BuyMeACoffee/Stripe Payment Link/Ko-fi), then it's a
+  one-card addition. Copy is on-voice already: "Buy me a protein shake."
+
+- **Bug reports at wide rollout** · parked 2026-07-24 · in-app bug report
+  affordance for the public launch. Boss's ideal review flow, recorded
+  verbatim so we build to it: reports land somewhere listable and readable
+  → dedupe/clean pass → joint "in scope?" decision → **fill or kill**.
+  Natural shape given our stack: a `bug_reports` table in Neon + a tiny
+  authenticated POST + a /diag-style review page (list, dedupe, tag
+  fill/kill) — no third-party tracker. Next step: design the intake copy
+  and the review page when rollout nears.
+
 ## Execution roadmap — the order we tackle work
 
 Crystallised 2026-07-10 after a full census; folded into this file 2026-07-11
