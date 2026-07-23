@@ -148,7 +148,7 @@ describe("#42 — lifecycle flushes live on every route (code shape)", () => {
   const src = readFileSync(resolve(__dirname, "../lib/storage.js"), "utf8");
   it("hidden/pagehide flush the ACTIVE profile even when auto-sync (home) is off", () => {
     expect(src).toMatch(/_lifecycleProfile = \(\) => _autoSyncProfile \|\| P\.getActive\(\)/);
-    expect(src).toMatch(/function _handlePageHide\(\) \{\s*flushDeferred\(_lifecycleProfile\(\)\)/);
+    expect(src).toMatch(/function _handlePageHide\(\) \{\s*flushDeferred\(_lifecycleProfile\(\), \{ keepalive: true \}\)/);
   });
   it("online-flush is unconditional; pull-refresh stays gated on the home mount", () => {
     const online = src.slice(src.indexOf("function _handleOnline"), src.indexOf("// Ask the browser"));
