@@ -1,9 +1,9 @@
 import { put, list, del, get } from "@vercel/blob";
 import { rateLimit } from "@/lib/rate-limit";
-import { mergeMeta, mergeHistories } from "@/lib/sync-merge";
+import { mergeMeta, mergeHistories, mergeMetaFields, fieldClosure } from "@/lib/sync-merge";
 import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasRealPasskey } from "@/lib/auth-server";
-import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile } from "@/lib/db";
+import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbReadProfileSince, dbReadMetaFields, dbCursorNow } from "@/lib/db";
 import { NextResponse } from "next/server";
 
 // Blob layout (case-insensitive — path uses lowercase, display name lives in meta):
@@ -186,6 +186,22 @@ export async function GET(request) {
       return NextResponse.json({ exists: blobs.length > 0 });
     }
 
+    // ── Delta pull (#2 family — docs/delta-sync.md) ─────────────────────
+    // GET ?since=<cursor> returns only rows whose updated_at is newer,
+    // plus a fresh cursor. DB-only by definition: a client holding a
+    // cursor hydrated from the DB era. Blob backfill never runs here.
+    const since = searchParams.get("since");
+    if (since !== null) {
+      if (!/^\d{4}-\d{2}-\d{2}T[0-9:.+Z-]+$/.test(since)) {
+        return NextResponse.json({ error: "Invalid cursor" }, { status: 400 });
+      }
+      if (!hasDb()) {
+        return NextResponse.json({ error: "Delta sync unavailable" }, { status: 503 });
+      }
+      const delta = await dbReadProfileSince(normalise(profile), since);
+      return NextResponse.json({ delta: true, ...delta });
+    }
+
     // DB-first (Neon migration step 2): if the profile has rows, serve them.
     // Blob remains the fallback + the lazy-migration source below. A DB
     // failure degrades to the blob path — never a 500 from this branch.
@@ -291,6 +307,37 @@ export async function PUT(request) {
 
   const v = validateProfile(profile);
   if (!v.ok) return NextResponse.json({ error: v.reason }, { status: 400 });
+
+  // ── Delta push (#2 family — docs/delta-sync.md) ────────────────────────
+  // Body: { profile, delta: { meta: { field: value… }, history: [records] } }.
+  // Meta fields merge via THE merge, scoped to the closure of what arrived
+  // (paired stamp fields travel together — see fieldClosure); records are
+  // immutable inserts. DB-only: a delta client hydrated from the DB era.
+  if (parsed.body.delta && !data) {
+    if (!hasDb()) {
+      return NextResponse.json({ error: "Delta sync unavailable" }, { status: 503 });
+    }
+    const d = parsed.body.delta;
+    const incoming = d?.meta && typeof d.meta === "object" && !Array.isArray(d.meta) ? d.meta : {};
+    const records = Array.isArray(d?.history) ? d.history.filter((r) => r && typeof r.id === "string" && r.id.length < 64) : [];
+    if (!Object.keys(incoming).length && !records.length) {
+      return NextResponse.json({ error: "Empty delta" }, { status: 400 });
+    }
+    try {
+      const norm = normalise(profile);
+      const cursor = await dbCursorNow();
+      const closure = fieldClosure(Object.keys(incoming));
+      const existing = await dbReadMetaFields(norm, closure);
+      const mergedFields = mergeMetaFields(existing, incoming);
+      await dbUpsertProfile(norm, { meta: mergedFields, history: records });
+      return NextResponse.json({ ok: true, delta: true, cursor, meta: { fields: Object.keys(mergedFields).length }, history: { inserted: records.length } });
+    } catch (e) {
+      // Refuse silently-dropped deltas: the client keeps its dirty set and
+      // retries — same posture as the fat path's 503s.
+      return NextResponse.json({ error: `Delta write failed: ${e.message}` }, { status: 503 });
+    }
+  }
+
   if (!data) return NextResponse.json({ error: "No data" }, { status: 400 });
 
   try {
