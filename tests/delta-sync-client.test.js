@@ -143,7 +143,8 @@ describe("delta push — dirty diff over THE payload builder", () => {
 describe("wiring (code shape)", () => {
   const src = readFileSync(resolve(root, "lib/storage.js"), "utf8");
   it("lifecycle flushes request keepalive (#12)", () => {
-    expect((src.match(/flushDeferred\(_lifecycleProfile\(\), \{ keepalive: true \}\)/g) || []).length).toBe(2);
+    expect((src.match(/flushOnLifecycle\(_lifecycleProfile\(\)\)/g) || []).length).toBe(2);
+    expect(src).toMatch(/flushOnLifecycle\(profile\) \{\s*if \(!profile \|\| !DeltaSync\.getCursor/);
   });
   it("full pushes acknowledge into the delta push-state (single choke point)", () => {
     const push = src.slice(src.indexOf("export async function blobPush("), src.indexOf("export async function blobPushDelta"));

@@ -340,6 +340,53 @@ export async function PUT(request) {
 
   if (!data) return NextResponse.json({ error: "No data" }, { status: 400 });
 
+  // ── Fat PUT, DB era (PR C — docs/delta-sync.md): DUAL-WRITE RETIRED ────
+  // The DB is the store; meta/history blobs are no longer written (the
+  // snapshot cron owns blob durability now; the claim blob remains the
+  // name marker). Merge base comes from the DB; a profile with no rows yet
+  // (unmigrated, dormant since the blob era) seeds its base from the old
+  // blobs — read-only, with the #7 unreadable-guard intact.
+  if (hasDb()) {
+    try {
+      const norm = normalise(profile);
+      const fromDb = await dbReadProfile(norm);
+      let baseMeta = fromDb?.meta || null;
+      let baseHistory = fromDb?.history || null;
+      if (!fromDb) {
+        const { blobs } = await list({ prefix: legacyPrefix(profile) });
+        const blobExists = (path) => blobs.some((b) => b.pathname === path);
+        const meta = await readJson(metaPath(profile));
+        if (meta === null && blobExists(metaPath(profile))) {
+          return NextResponse.json({ error: "Meta blob unreadable — refusing to overwrite; retry" }, { status: 503 });
+        }
+        let history = await readJson(historyPath(profile));
+        if (history === null && blobExists(historyPath(profile))) {
+          return NextResponse.json({ error: "History blob unreadable — refusing to overwrite; retry" }, { status: 503 });
+        }
+        if (!Array.isArray(history)) history = await readLatestLegacy(blobs, LEGACY_HISTORY_RE);
+        baseMeta = meta || {};
+        baseHistory = Array.isArray(history) ? history : [];
+      }
+      const mergedMeta = data.meta ? mergeMeta(baseMeta || {}, data.meta) : null;
+      const mergedHistory = Array.isArray(data.history)
+        ? mergeHistories(baseHistory || [], data.history)
+        : null;
+      await dbUpsertProfile(norm, {
+        meta: mergedMeta ? { ...mergedMeta, syncedAt: new Date().toISOString() } : {},
+        history: mergedHistory || [],
+      });
+      return NextResponse.json({
+        ok: true,
+        ...(mergedMeta ? { meta: true } : {}),
+        ...(mergedHistory ? { history: { count: mergedHistory.length } } : {}),
+      });
+    } catch (e) {
+      console.error("[forge:put:db]", profile, e?.message || e);
+      return NextResponse.json({ error: `Write failed: ${e.message}` }, { status: 503 });
+    }
+  }
+
+  // ── Legacy blob path — ONLY when no DB is configured (dev fallback) ────
   try {
     const results = {};
 
@@ -385,13 +432,6 @@ export async function PUT(request) {
         JSON.stringify(stamped),
         { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false },
       );
-      // Dual-write (Neon step 2): same MERGED object the blob got. DB
-      // failure never fails the request — blob is source-of-truth during
-      // the transition; the lazy backfill on GET reconverges.
-      if (hasDb()) {
-        try { await dbUpsertProfile(normalise(profile), { meta: stamped, history: [] }); }
-        catch (e) { console.error("[forge:sync PUT] db meta upsert failed:", e?.message || e); }
-      }
       results.meta = true;
     }
 
@@ -426,11 +466,6 @@ export async function PUT(request) {
         JSON.stringify(merged),
         { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false },
       );
-      // Dual-write (Neon step 2): immutable records, ON CONFLICT DO NOTHING.
-      if (hasDb()) {
-        try { await dbUpsertProfile(normalise(profile), { meta: {}, history: merged }); }
-        catch (e) { console.error("[forge:sync PUT] db history upsert failed:", e?.message || e); }
-      }
       results.history = { count: merged.length };
     }
 
@@ -599,6 +634,18 @@ export async function DELETE(request) {
         return NextResponse.json({ error: `Delete failed (db): ${e.message}` }, { status: 500 });
       }
     }
+    // Snapshot generations live OUTSIDE the profile prefix and must die
+    // with the profile (announced with PR C, wipe protocol): two EXACT
+    // enumerated paths, same user-initiated passkey-gated scope as
+    // everything above. Best-effort — a missing snapshot is not an error.
+    const enc = encodeURIComponent(normalise(profile));
+    try {
+      await del([
+        `forge/snapshots/daily/${enc}.json`,
+        `forge/snapshots/weekly/${enc}.json`,
+      ]);
+    } catch { /* nonexistent snapshots — nothing to remove */ }
+
     const { blobs } = await list({ prefix: legacyPrefix(profile) });
     if (!blobs.length) {
       return NextResponse.json({ ok: true, deleted: 0 });
