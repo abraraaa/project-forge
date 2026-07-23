@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 import { put, get, list, del } from "@vercel/blob";
 import crypto from "crypto";
 import { isTokenValid, readTokenData } from "@/lib/auth-server";
@@ -94,6 +95,8 @@ async function gate(request) {
 }
 
 export async function POST(request) {
+  const limited = rateLimit(request, "photos-upload", 20);
+  if (limited) return limited;
   try {
     const g = await gate(request);
     if (g.fail) return g.fail;
@@ -126,6 +129,8 @@ export async function POST(request) {
 }
 
 export async function GET(request) {
+  const limited = rateLimit(request, "photos-read", 90);
+  if (limited) return limited;
   try {
     const g = await gate(request);
     if (g.fail) return g.fail;
@@ -161,6 +166,8 @@ export async function GET(request) {
 // deterministic path + its index row. Enumerated target, no glob, nothing
 // else in the namespace is touchable from this handler.
 export async function DELETE(request) {
+  const limited = rateLimit(request, "photos-delete", 20);
+  if (limited) return limited;
   try {
     const g = await gate(request);
     if (g.fail) return g.fail;

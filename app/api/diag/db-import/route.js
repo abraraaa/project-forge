@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 import { list } from "@vercel/blob";
 import { readJsonDirect } from "@/lib/blob-utils";
 import { probeDb } from "@/lib/db";
@@ -12,7 +13,10 @@ import { probeDb } from "@/lib/db";
 // writes, no tables), (b) censuses the blob store per profile, (c) reports
 // proposed row counts. It deletes nothing, creates nothing, writes nothing.
 
-export async function GET() {
+export async function GET(request) {
+  // Whole-store census = the most expensive read in the app; throttle hard.
+  const limited = rateLimit(request, "diag-census", 5);
+  if (limited) return limited;
   // Auth: Bearer header, or ?key= for browser use (boss runs this from the
   // address bar, not a terminal). Acceptable for a READ-ONLY diag: the
   // operator-held secret grants no write path here, and HTTPS keeps the

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 import { put } from "@vercel/blob";
 import crypto from "crypto";
 import { readJsonByPrefix } from "@/lib/blob-utils";
@@ -14,6 +15,8 @@ const normalise = (name) => String(name || "").trim().toLowerCase();
 const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
 
 export async function POST(request) {
+  const limited = rateLimit(request, "auth-login", 20);
+  if (limited) return limited;
   try {
     const { profile } = await request.json();
     if (!profile) {

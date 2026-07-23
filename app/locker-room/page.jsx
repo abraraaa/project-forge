@@ -25,6 +25,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { T } from "@/lib/tokens";
 import { P, BW, getLocalProfile, pushNow } from "@/lib/storage";
 import { haptic } from "@/lib/a11y";
@@ -34,6 +35,7 @@ import { todayLocalIso } from "@/lib/dates";
 import ScrollDrum from "@/components/ScrollDrum";
 
 export default function LockerRoom() {
+  const router = useRouter();
   const [profile] = useState(() => (typeof window !== "undefined" ? P.getActive() : null));
   const [token, setToken] = useState(null);
   const [shown, setShown] = useState(false); // "Show photos" toggle — fail-modest each visit
@@ -226,15 +228,32 @@ export default function LockerRoom() {
   return (
     <main style={page}>
       {picker}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <h1 style={{ ...serif, fontSize: 26 }}>Locker room</h1>
+      {/* Header anatomy mirrors the Performance Lab (#73c/d): safe-area-aware
+          back-nav row with the photos toggle right-aligned, then eyebrow +
+          serif headline. Lab is gold; the Locker Room is sage — same bones,
+          its own light. */}
+      {/* No self-clearance: .forge-page owns the status bar (Phase 2 shell
+          contract — the ratchet rejects new safe-area-inset padding here,
+          unlike the Lab's grandfathered header). Design spacing only. */}
+      <div style={{ padding: "32px 0 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <button onClick={() => router.push("/")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12, color: T.text3, fontFamily: T.sans }}>
+          ← Home
+        </button>
         {photosVisible ? (
           <button onClick={() => setShown(false)} style={{ padding: "8px 14px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.md, fontSize: 12, color: T.text2, cursor: "pointer" }}>Hide photos</button>
         ) : (
           <button onClick={reveal} disabled={busy} style={{ padding: "8px 14px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.md, fontSize: 12, color: T.text2, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>{busy ? "One sec…" : "Show photos"}</button>
         )}
       </div>
-      <p style={{ fontSize: 12, color: T.text3, marginBottom: 16 }}>Your body's story. The chart is always here; photos stay behind the door until you ask.</p>
+      <div style={{ padding: "24px 0 0" }}>
+        <div style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 10 }}>
+          Locker room
+        </div>
+        <div className="home-headline" style={{ fontFamily: T.serif, fontSize: 42, fontWeight: 300, lineHeight: 1.1, transformOrigin: "left top" }}>
+          Your<br/><span style={{ color: T.sage, fontStyle: "italic" }}>story.</span>
+        </div>
+        <p style={{ fontSize: 14, color: T.text2, margin: "10px 0 16px", lineHeight: 1.5 }}>The chart is always here; photos stay behind the door until you ask.</p>
+      </div>
 
       {/* The always-on bodyweight chart */}
       {bwChart(photosVisible ? 90 : 150)}
@@ -272,7 +291,7 @@ export default function LockerRoom() {
         )}
 
         <div ref={trackRef} onPointerDown={onDrag} onPointerMove={onDrag}
-          style={{ position: "relative", width: "100%", aspectRatio: "3/4", maxHeight: "46dvh", borderRadius: T.r.xl, overflow: "hidden", background: T.bg2, touchAction: "none", marginBottom: 12 }}>
+          style={{ position: "relative", width: "100%", aspectRatio: "3/4", maxHeight: "46dvh", borderRadius: T.r.xl, overflow: "hidden", background: T.bg2, touchAction: "pan-y", marginBottom: 12 }}>
           {urls[photos[i0].date] && (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img src={urls[photos[i0].date]} alt={photos[i0].date} draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 1 - frac }} />
@@ -287,7 +306,7 @@ export default function LockerRoom() {
           </div>
         </div>
 
-        <div onPointerDown={onDrag} onPointerMove={onDrag} style={{ touchAction: "none" }}>
+        <div onPointerDown={onDrag} onPointerMove={onDrag} style={{ touchAction: "pan-y" }}>
           <svg viewBox={`0 0 ${curveW} ${curveH}`} style={{ width: "100%", height: curveH, display: "block" }}>
             <polyline points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={T.sage} strokeWidth="1.5" opacity="0.7" />
             {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill={Math.round(pos) === i ? T.coral : T.bg4} />)}
