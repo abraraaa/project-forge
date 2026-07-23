@@ -9,6 +9,16 @@ specific next step that would unblock it.
 
 ---
 
+- **README rework — flip-day item** · parked 2026-07-26 · the README is
+  Forge head to toe (title, "Unveil the best you." tagline, theforged.fit
+  links, forge-branded quickstart) — 11 brand mentions across 191 lines.
+  Rewriting it pre-flip would mismatch the LIVE brand; rewriting it at
+  the flip is one coherent pass. Scope when it fires: Heatwayve identity
+  + voice throughout, heatwayve.app links, and a fact-check sweep against
+  the delta-era architecture (the sync/storage description predates
+  Neon). Rides the flip package alongside the icon swap, rename sweep,
+  redirect reversal, migration copy, and SEO flip.
+
 - **Session CTA clearance above Safari's floating tab bar** · parked
   2026-07-25 · In browser mode the Log-set button sits close to iOS 26's
   floating pill. The native instruction is ALREADY in the markup — the
