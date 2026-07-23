@@ -170,6 +170,17 @@ choice.
 
 ## Phase 6 — Intimacy pass II · QUEUED 2026-07-14 (the savoured one)
 
+**THE VOICE BRIEF — boss, 2026-07-26, verbatim, the calibration line
+every draft gets held against:** "Sensation forward, not filthy. Enough
+to excite." Warmth that lands on the body, never on the nose. The
+working register that earned it (for reference at the sitting): physical
+metaphor doing real work, precision that reads as care, celebration
+without cheerleading, and restraint as the thing that makes the charged
+lines land. Copy in scope now includes the bodyweight-sheet COPY object,
+the Locker Room's full surface (headline, toggles, empty/first-point
+chart states, the metro confirm, the post-photo weight ask), and #75's
+style-pass twin — one sitting, voice and visuals together.
+
 Named honestly: Phase 3 got RESOLVED, not performed — its items closed
 as verdicts and codifications while the week's energy was audit-shaped.
 This is the slow pass the boss actually enjoys, done at its own tempo,
