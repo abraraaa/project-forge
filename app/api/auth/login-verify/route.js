@@ -4,7 +4,7 @@ import { put } from "@vercel/blob";
 import crypto from "crypto";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
-import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge } from "@/lib/auth-server";
+import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge, mintAuthToken } from "@/lib/auth-server";
 
 // Verify WebAuthn authentication and mint a short-lived auth token.
 // POST /api/auth/login-verify
@@ -114,18 +114,9 @@ export async function POST(request) {
       }
     }
 
-    // Mint the short-lived token (deterministic key, overwrite-in-place).
-    const authToken = crypto.randomBytes(32).toString("base64url");
-    await put(`forge/tokens/${authToken}`, JSON.stringify({
-      profile: normalise(profile),
-      expires: Date.now() + 3600000, // 1 hour
-      createdAt: new Date().toISOString(),
-    }), {
-      access: "private",
-      contentType: "application/json",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-    });
+    // Mint the short-lived ceremony token (Rec 11b: DB row; blob only as
+    // the no-DB dev fallback — see mintAuthToken).
+    const authToken = await mintAuthToken({ profile, ttlMs: 3600000 }); // 1 hour
 
     // Consume the challenge (blob mode only — stateless challenges are not
     // stored, and expire on their own).
@@ -139,13 +130,7 @@ export async function POST(request) {
     // Secure, SameSite=Strict, and PATH-SCOPED to /api/photos so it never
     // even accompanies any other request. scope:"photos" is rejected by the
     // wipe gate — destructive ops keep fresh short-lived ceremonies.
-    const photoToken = crypto.randomBytes(32).toString("base64url");
-    await put(`forge/tokens/${photoToken}`, JSON.stringify({
-      profile: normalise(profile),
-      expires: Date.now() + 7 * 86400000,
-      scope: "photos",
-      createdAt: new Date().toISOString(),
-    }), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: true });
+    const photoToken = await mintAuthToken({ profile, ttlMs: 7 * 86400000, scope: "photos" });
 
     const res = NextResponse.json({ ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600 });
     res.cookies.set("hw_photos", photoToken, {
