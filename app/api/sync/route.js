@@ -150,7 +150,7 @@ async function readJson(pathname) {
 async function readLatestLegacy(blobs, kindRe) {
   const matches = blobs.filter(b => kindRe.test(b.pathname));
   if (!matches.length) return null;
-  const latest = matches.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))[0];
+  const latest = matches.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())[0];
   return readJson(latest.pathname);
 }
 

@@ -112,7 +112,7 @@ export async function POST(request) {
     const bodyweightAt = bwRaw !== null && Number.isFinite(Number(bwRaw)) ? Number(bwRaw) : null;
 
     const path = photoPath(g.profile, g.date);
-    await put(path, buf, {
+    await put(path, Buffer.from(buf.buffer, buf.byteOffset, buf.byteLength), {
       access: "private",
       contentType: "image/jpeg",
       allowOverwrite: true,

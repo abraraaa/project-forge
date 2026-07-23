@@ -34,6 +34,7 @@
   },
   "include": [
     "lib/**/*.js",
+    "app/**/*.js",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],

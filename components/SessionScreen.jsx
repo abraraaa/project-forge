@@ -394,25 +394,22 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
        (split-screen, flip covers) degrade to scroll via the fill class's
        no-shrink basis. The bottom padding is home-indicator CLEARANCE for
        the pinned actions, not height maths. */
-    /* overflowX only (boss find, 2026-07-23): the old overflow:clip
-       amputated the radial glow at the container's top edge — unlit
-       substrate above, glow-lit field below, one hard line (misread twice
-       as chrome sampling before the boss pointed at the header). X stays
-       clipped so the glow's rightward overflow can't cause sideways
-       scroll; upward it now bleeds into the status zone so the field
-       lighting is continuous to the screen edge, standalone and browser. */
+    /* overflowX clip: the key light overhangs the right edge (right:-60,
+       house pattern, same as Home's rims) and must not cause sideways
+       scroll. Vertically nothing overflows any more — the glow lives
+       fully inside the frame (see the seamless-frame note below). */
     <div className="forge-fill" style={{maxWidth:430,margin:"0 auto",position:"relative",overflowX:"clip",display:"flex",flexDirection:"column",paddingBottom:"calc(24px + env(safe-area-inset-bottom,0px))",width:"100%"}}>
-      {/* Seamless frame (boss design, 2026-07-24): the header and footer
-          zones BLEND into the chrome-sample tone (#1D1A19 = body = what
-          every mode's chrome derives from), so Safari's split, the PWA's
-          status-bar extension, and iOS 26's scroll-edge plate all land on
-          a matching surface by construction. Collars are paint, not
-          layout — absolutely positioned, pointer-transparent, above the
-          glow, below content. The old fixed 1px sampler is gone (body
-          sampling now agrees with what it borders). */}
-      <div aria-hidden style={{position:"absolute",top:-160,left:"-10%",right:"-10%",height:240,background:"linear-gradient(to bottom, #1D1A19 55%, rgba(29,26,25,0))",pointerEvents:"none"}}/>
-      <div aria-hidden style={{position:"absolute",bottom:-40,left:"-10%",right:"-10%",height:120,background:"linear-gradient(to top, #1D1A19 30%, rgba(29,26,25,0))",pointerEvents:"none"}}/>
-      <div style={{position:"absolute",top:-140,right:-80,width:340,height:380,background:`radial-gradient(circle,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
+      {/* Seamless frame v2 (boss redirect, 2026-07-24): same rule Home's
+          rim glows learned — a glow box that crosses a container edge gets
+          cut mid-gradient and reads as a hard line against the chrome zone.
+          So the key light lives INSIDE the frame: transparent by 65% with
+          the default farthest-corner sizing, the gradient self-extinguishes
+          before the box's edge midpoints, and the page's top/bottom margins
+          are pure #1D1A19 by construction — which is exactly what Safari's
+          split, the PWA status-bar extension, and iOS 26's scroll-edge
+          plate all sample and paint. No collar overlays (v1's collars made
+          their own remnant edge up top and washed the footer CTA's glow). */}
+      <div style={{position:"absolute",top:16,right:-60,width:340,height:380,background:`radial-gradient(ellipse,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
       {/* Progress: inset + rounded (the old full-bleed 1px track read as a
           hard line across every mode's frame — the boss's 'fine line'). */}
       <div style={{margin:"10px 20px 0",height:3,borderRadius:2,background:`${T.bg3}55`,overflow:"hidden",position:"relative"}}>

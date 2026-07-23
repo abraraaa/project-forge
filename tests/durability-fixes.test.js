@@ -123,6 +123,80 @@ describe("db helpers (Neon step 2) — pure meta row mapping", () => {
   });
 });
 
+describe("#40 — every client API call has a deadline", () => {
+  it("lib client layers never call bare fetch — all go through fetchWithTimeout", () => {
+    for (const rel of ["../lib/storage.js", "../lib/photos.js", "../lib/webauthn.js"]) {
+      const src = readFileSync(resolve(__dirname, rel), "utf8");
+      expect(src.match(/await fetch\(/g), `${rel} has a bare fetch`).toBeNull();
+      expect(src).toContain("fetchWithTimeout");
+    }
+  });
+  it("the wrapper aborts a radio-limbo request instead of hanging forever", async () => {
+    const { fetchWithTimeout } = await import("../lib/net.js");
+    const orig = globalThis.fetch;
+    // A fetch that never settles unless the signal fires — iOS radio limbo.
+    globalThis.fetch = (url, { signal } = {}) => new Promise((resolvePromise, reject) => {
+      signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    });
+    try {
+      await expect(fetchWithTimeout("/api/x", {}, 30)).rejects.toThrow();
+    } finally { globalThis.fetch = orig; }
+  });
+});
+
+describe("#42 — lifecycle flushes live on every route (code shape)", () => {
+  const src = readFileSync(resolve(__dirname, "../lib/storage.js"), "utf8");
+  it("hidden/pagehide flush the ACTIVE profile even when auto-sync (home) is off", () => {
+    expect(src).toMatch(/_lifecycleProfile = \(\) => _autoSyncProfile \|\| P\.getActive\(\)/);
+    expect(src).toMatch(/function _handlePageHide\(\) \{\s*flushDeferred\(_lifecycleProfile\(\)\)/);
+  });
+  it("online-flush is unconditional; pull-refresh stays gated on the home mount", () => {
+    const online = src.slice(src.indexOf("function _handleOnline"), src.indexOf("// Ask the browser"));
+    expect(online.indexOf("flushPendingPushes()")).toBeLessThan(online.indexOf("if (_autoSyncProfile)"));
+    expect(online).toMatch(/if \(_autoSyncProfile\) \{\s*backgroundSync/);
+  });
+});
+
+describe("#62 — selftest cron cleanup is namespace-locked (code shape)", () => {
+  it("the finally-block delete fires only for profiles matching the selftest junk pattern", () => {
+    const s = readFileSync(resolve(__dirname, "../app/api/cron/sync-selftest/route.js"), "utf8");
+    expect(s).toMatch(/SELFTEST_PROFILE_RE\s*=\s*\/\^selftest-/);
+    const cleanup = s.slice(s.indexOf("} finally {"));
+    // The pattern test must gate the delete call — refusal, not routing.
+    expect(cleanup.indexOf("SELFTEST_PROFILE_RE.test(profile)")).toBeGreaterThan(-1);
+    expect(cleanup.indexOf("SELFTEST_PROFILE_RE.test(profile)")).toBeLessThan(cleanup.indexOf("syncDELETE"));
+  });
+  it("the junk pattern actually matches what the cron generates — and nothing person-shaped", () => {
+    const RE = /^selftest-\d{13}-[a-z0-9]{1,6}$/;
+    expect(RE.test(`selftest-${1753142400000}-k3x9qz`)).toBe(true);
+    expect(RE.test("selftest-1753142400000-a")).toBe(true); // rare short random tail
+    expect(RE.test("sarah")).toBe(false);
+    expect(RE.test("selftest-sarah")).toBe(false);
+    expect(RE.test("selftest-1753142400000-k3x9qz-extra")).toBe(false);
+  });
+});
+
+describe("#68 — ONE counted-set rule (behaviour + class lock)", () => {
+  it("isCountedSet: weight OR reps counts; empty scaffold and malformed rows don't", async () => {
+    const { isCountedSet } = await import("../lib/counted-set.js");
+    expect(isCountedSet({ weight: 100, reps: null })).toBe(true);
+    expect(isCountedSet({ weight: null, reps: 8 })).toBe(true);
+    expect(isCountedSet({ weight: 0, reps: null })).toBe(true);  // logged bodyweight-relative 0
+    expect(isCountedSet({ weight: null, reps: 0 })).toBe(false); // 0 reps is not evidence
+    expect(isCountedSet({ weight: null, reps: null })).toBe(false);
+    expect(isCountedSet({ weight: undefined, reps: null })).toBe(false);
+    expect(isCountedSet(null)).toBe(false);
+  });
+  it("no inline copies of the guard survive anywhere in lib/", () => {
+    const libFiles = readdirSync(resolve(__dirname, "../lib")).filter((f) => /\.(js|jsx)$/.test(f)).map((f) => join("../lib", f));
+    for (const rel of libFiles) {
+      if (rel.endsWith("counted-set.js")) continue;
+      const src = readFileSync(resolve(__dirname, rel), "utf8");
+      expect(src, `${rel} re-inlines the counted-set rule — use isCountedSet`).not.toMatch(/weight (!==|!=) null \|\|/);
+    }
+  });
+});
+
 describe("audit tail nits #54/#55/#35 (code shape)", () => {
   it("#54: sync refresh is PRESENCE-gated — resets to 0/empty reflect", () => {
     const s = readFileSync(resolve(__dirname, "../components/ForgeApp.jsx"), "utf8");
