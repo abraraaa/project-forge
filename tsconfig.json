@@ -35,6 +35,9 @@
   "include": [
     "lib/**/*.js",
     "app/**/*.js",
+    "app/**/*.jsx",
+    "components/**/*.jsx",
+    "types/**/*.d.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
@@ -42,7 +45,6 @@
     "node_modules",
     ".next",
     "out",
-    "components/**",
     "tests/**"
   ]
 }

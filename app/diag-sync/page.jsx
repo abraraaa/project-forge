@@ -36,7 +36,7 @@ function fmtTs(ts) {
   return new Date(ts).toLocaleString();
 }
 
-function Row({ label, value, dim }) {
+function Row({ label, value, dim = false }) {
   return (
     <div style={{
       display: "flex", justifyContent: "space-between", gap: 16,

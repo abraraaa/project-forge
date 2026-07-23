@@ -237,7 +237,7 @@ function EmptyState() {
 // Warm-black tints stay inside the Portra palette; no cool Material-grey
 // elevation. Same shape as the ForgeApp Card lift.
 const LAB_CARD_SHADOW = "inset 0 1px 0 rgba(237,235,231,0.04), 0 1px 2px rgba(10,9,8,0.28), 0 10px 28px -16px rgba(10,9,8,0.5)";
-function Card({ title, subtitle, action, children }) {
+function Card({ title, subtitle, action = null, children }) {
   return (
     <div className="lab-card forge-glass" style={{margin:"24px 24px 0", border:`1px solid ${T.bg3}`, borderRadius:T.r.lg, overflow:"hidden", boxShadow:LAB_CARD_SHADOW}}>
       <div style={{padding:"18px 20px 14px", borderBottom:`1px solid ${T.bg3}`, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12}}>
