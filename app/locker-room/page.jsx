@@ -32,7 +32,7 @@ import { haptic } from "@/lib/a11y";
 import { ensurePhotoAccess } from "@/lib/auth-session";
 import { preparePhoto, uploadPhoto, deletePhoto, fetchPhotoIndex, fetchPhotoObjectUrl } from "@/lib/photos";
 import { todayLocalIso, parseLocalDate } from "@/lib/dates";
-import ScrollDrum from "@/components/ScrollDrum";
+import BodyweightDrum from "@/components/BodyweightDrum";
 
 export default function LockerRoom() {
   const router = useRouter();
@@ -320,7 +320,7 @@ export default function LockerRoom() {
         {askBw && (
           <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: T.r.md, background: `${T.sage}12`, border: `1px solid ${T.sage}33` }}>
             {showDrum ? (<>
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><ScrollDrum value={bwDraft} onChange={setBwDraft} step={0.5} min={40} max={200} unit="kg" /></div>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><BodyweightDrum value={bwDraft} onChange={setBwDraft} /></div>
               <button onClick={saveBwAndTag} disabled={busy} style={{ ...coralBtn, width: "100%" }}>{busy ? "Saving…" : "Save weight"}</button>
             </>) : (<>
               <span style={{ fontSize: 13, color: T.text1 }}>Photo saved. Update your bodyweight too?</span>

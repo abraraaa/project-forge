@@ -28,7 +28,7 @@
 import { useRef, useState } from "react";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import { T } from "@/lib/tokens";
-import ScrollDrum from "@/components/ScrollDrum";
+import BodyweightDrum from "@/components/BodyweightDrum";
 import { hasPasskey, registerPasskey, isWebAuthnSupported } from "@/lib/webauthn";
 import { getAuthTokenWithCeremony } from "@/lib/auth-session";
 import { preparePhoto, uploadPhoto } from "@/lib/photos";
@@ -213,7 +213,7 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
 
         {step === "weight" && (<>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
-            <ScrollDrum value={kg} onChange={setKg} step={0.5} min={40} max={200} unit="kg" />
+            <BodyweightDrum value={kg} onChange={setKg} />
           </div>
           {/* House pattern (boss, 2026-07-21): clear Cancel/primary on the
               bottom row — no corner ✕. Escape still closes via useModalA11y. */}
