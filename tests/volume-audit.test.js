@@ -299,9 +299,17 @@ describe("computeWeeklyVolume / auditVolume — focus parameter", () => {
     expect(sculptAudit.perMuscle.Glutes.sets).toBeGreaterThan(baseAudit.perMuscle.Glutes.sets);
   });
 
-  it("Sculpt keeps the programme inside MEV..MRV (no new flags introduced)", () => {
+  it("Sculpt keeps the programme inside MEV..MRV (one documented exception)", () => {
     const sculptAudit = auditVolume(SESSIONS, { focus: "Sculpt", config: defaultConfig });
-    expect(sculptAudit.flags).toEqual([]);
+    // KNOWN + ACCEPTED (boss call 2026-07-24): Power Clean moved to 4×3 —
+    // the extra set nudges Sculpt-mode glutes marginally past MRV (16.6 vs
+    // 16), since Sculpt also +1s a glute-aligned slot. Deliberate trade for
+    // bar speed on the clean; anything OTHER than this marginal glute
+    // overage is a real regression and must fail here.
+    const unexpected = sculptAudit.flags.filter(
+      (f) => !(f.muscle === "Glutes" && f.status === "over_mrv" && f.sets <= f.target.mrv + 1),
+    );
+    expect(unexpected).toEqual([]);
   });
 
   it("Sculpt with empty config = no slots aligned = no bumps = Forged-equivalent", () => {

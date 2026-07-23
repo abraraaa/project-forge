@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rate-limit";
 import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasRealPasskey } from "@/lib/auth-server";
 
@@ -14,6 +15,8 @@ const normalise = (name) => String(name || "").trim().toLowerCase();
 const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
 
 export async function GET(request) {
+  const limited = rateLimit(request, "auth-check", 60);
+  if (limited) return limited;
   try {
     const { searchParams } = new URL(request.url);
     const profile = searchParams.get("profile");

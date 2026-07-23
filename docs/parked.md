@@ -9,6 +9,44 @@ specific next step that would unblock it.
 
 ---
 
+- **Session CTA clearance above Safari's floating tab bar** · parked
+  2026-07-25 · In browser mode the Log-set button sits close to iOS 26's
+  floating pill. The native instruction is ALREADY in the markup — the
+  session frame pads bottom with `env(safe-area-inset-bottom)` — but
+  non-`viewport-fit=cover` pages currently get 0 there while the pill
+  visually intrudes anyway (cousin of the research doc's §8 viewport
+  quirk). Deliberately NOT fixing via `viewport-fit=cover` (removed in
+  `c6c5668` per WebKit guidance — reopens the PWA status-bar wars) or
+  custom offsets (boss veto). Revisit trigger: each new Safari beta —
+  re-test whether the inset starts reporting for the floating-bar state;
+  if Safari starts crediting it, we're done with zero code.
+
+- **Exercise video sourcing (47 gaps)** · parked 2026-07-24 · 47 unique
+  exercises across the swap DB + conditioning pools have no demo video.
+  RESOLVED 2026-07-25: Gemini table returned + all 47 wired into
+  `lib/programme.js` (79 swap-DB rows + 17 conditioning pool entries, which
+  also grew a quiet ▶ Watch demo link on the bonus card). CAVEAT: IDs are
+  Gemini-asserted; YouTube is unreachable from the dev sandbox (proxy), so
+  they are unverified by us — dead IDs degrade to YouTube's unavailable
+  screen, boss spot-checking a handful on device is the cheap audit. Long-term
+  ambition on record: replace YouTube embeds with our own Heatwayve-shot
+  footage ("idealistic models covered in oil and sweat with moody lighting").
+
+- **"Buy me a protein shake" donation link** · parked 2026-07-24 · a
+  discreet donation affordance, tucked somewhere quiet (Profile screen
+  footer is the natural spot — never a nag, never a modal). Next step:
+  pick provider (BuyMeACoffee/Stripe Payment Link/Ko-fi), then it's a
+  one-card addition. Copy is on-voice already: "Buy me a protein shake."
+
+- **Bug reports at wide rollout** · parked 2026-07-24 · in-app bug report
+  affordance for the public launch. Boss's ideal review flow, recorded
+  verbatim so we build to it: reports land somewhere listable and readable
+  → dedupe/clean pass → joint "in scope?" decision → **fill or kill**.
+  Natural shape given our stack: a `bug_reports` table in Neon + a tiny
+  authenticated POST + a /diag-style review page (list, dedupe, tag
+  fill/kill) — no third-party tracker. Next step: design the intake copy
+  and the review page when rollout nears.
+
 ## Execution roadmap — the order we tackle work
 
 Crystallised 2026-07-10 after a full census; folded into this file 2026-07-11

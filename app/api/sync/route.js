@@ -1,4 +1,5 @@
 import { put, list, del, get } from "@vercel/blob";
+import { rateLimit } from "@/lib/rate-limit";
 import { mergeMeta, mergeHistories } from "@/lib/sync-merge";
 import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasRealPasskey } from "@/lib/auth-server";
@@ -161,6 +162,8 @@ async function readLatestLegacy(blobs, kindRe) {
 // Returns { exists: boolean } — lightweight availability check for signup.
 // Case-insensitive: "Sarah", "sarah", "SARAH" all resolve the same way.
 export async function GET(request) {
+  const limited = rateLimit(request, "sync-read", 120);
+  if (limited) return limited;
   const { searchParams } = new URL(request.url);
   const profile = searchParams.get("profile");
   const check   = searchParams.get("check") === "1";
@@ -276,6 +279,8 @@ export async function GET(request) {
 // Body: { profile: string, data: { meta?: object, history?: array } }
 // Profile is case-insensitive. Display name should be passed inside meta.displayName.
 export async function PUT(request) {
+  const limited = rateLimit(request, "sync-write", 120);
+  if (limited) return limited;
   // Parse the body via the size-guarded reader. Rejects oversize payloads
   // (>5MB) with 413 before any blob work, and malformed JSON with 400.
   const parsed = await safeReadJson(request);
@@ -404,6 +409,8 @@ export async function PUT(request) {
 // Body: { profile: string, displayName: string }
 // Returns 409 if the name is already taken.
 export async function POST(request) {
+  const limited = rateLimit(request, "sync-claim", 20);
+  if (limited) return limited;
   const parsed = await safeReadJson(request);
   if (!parsed.ok) {
     return NextResponse.json({ error: parsed.reason }, { status: parsed.status });
@@ -462,6 +469,8 @@ export async function POST(request) {
 // successful passkey authentication. Profiles without passkeys can still
 // be deleted freely (legacy behaviour for migration).
 export async function DELETE(request) {
+  const limited = rateLimit(request, "sync-delete", 10);
+  if (limited) return limited;
   try {
     const { searchParams } = new URL(request.url);
     const profile = searchParams.get("profile");
