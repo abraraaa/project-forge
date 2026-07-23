@@ -154,9 +154,12 @@ export default function LockerRoom() {
   const PICK_ID = "scrub-photo-input";
   const picker = <input id={PICK_ID} type="file" accept="image/*" onChange={onPick} style={{ display: "none" }} />;
 
-  // Bodyweight chart data — session-record snapshots (predates photos), plus
-  // any photo tags. Used as the WHOLE page pre-photos, and could underlay the
-  // scrubber curve at graduation.
+  // Bodyweight chart data, three sources in rising precedence: session-record
+  // snapshots (retro coverage — the timeline predates the journal), photo
+  // tags, then THE JOURNAL (boss, 2026-07-24) — every BW.set stamps a
+  // date-keyed entry, so logging weight populates this page immediately,
+  // no photos or sessions required. Journal wins overlaps: it IS the scale
+  // reading; the other two are derived echoes of it.
   const bwSeries = (() => {
     if (!profile) return [];
     const seen = new Map();
@@ -164,11 +167,29 @@ export default function LockerRoom() {
       if (rec?.date && rec.bodyweight != null) seen.set(rec.date, rec.bodyweight);
     }
     for (const p of photos || []) if (p.bodyweightAt != null) seen.set(p.date, p.bodyweightAt);
+    for (const [date, e] of Object.entries(BW.getLogRaw(profile))) {
+      if (e?.kg != null) seen.set(date, e.kg);
+    }
     return [...seen.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, kg]) => ({ date, kg }));
   })();
 
   const bwChart = (h = 120) => {
-    if (bwSeries.length < 2) return <p style={{ fontSize: 12, color: T.text4 }}>Weight history builds here as you train.</p>;
+    if (bwSeries.length === 0) return <p style={{ fontSize: 12, color: T.text4 }}>Log a bodyweight and your story starts here.</p>;
+    if (bwSeries.length === 1) {
+      // The very first log must visibly LAND (boss, 2026-07-24) — one point
+      // renders as a marked reading, not placeholder copy.
+      const only = bwSeries[0];
+      return (
+        <div style={{ height: h, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+            <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: T.sage, alignSelf: "center" }} />
+            <span style={{ ...serif, fontSize: 28 }}>{only.kg} kg</span>
+            <span style={{ fontSize: 11, color: T.text4, letterSpacing: "0.08em" }}>{only.date}</span>
+          </div>
+          <p style={{ fontSize: 12, color: T.text4, marginTop: 8 }}>First point on the curve — the next one draws the line.</p>
+        </div>
+      );
+    }
     const w = 340;
     const ks = bwSeries.map((d) => d.kg);
     const kMin = Math.min(...ks), kMax = Math.max(...ks);
