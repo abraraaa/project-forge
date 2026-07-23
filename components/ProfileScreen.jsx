@@ -734,6 +734,19 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
+      {/* The tip jar (boss, 2026-07-24; BMAC handle wired via FUNDING.yml
+          2026-07-26). DISCREET by decree: a whisper at the end of the page,
+          never a nag, never a modal, payment entirely off our surface.
+          Copy: boss's own phrase, verbatim — intimacy pass may season it. */}
+      {current && (
+        <Fade d={310}>
+          <a href="https://buymeacoffee.com/heatwayve" target="_blank" rel="noopener noreferrer"
+            style={{marginTop:24,display:"block",textAlign:"center",fontFamily:T.serif,fontSize:13,fontStyle:"italic",fontWeight:300,color:T.text4,textDecoration:"none"}}>
+            Buy me a protein shake&nbsp;↗
+          </a>
+        </Fade>
+      )}
+
       {/* Passkey auth required modal */}
       {needsPasskeyAuth && (
         <div onKeyDown={authKeyDown} onClick={()=>setNeedsPasskeyAuth(null)} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>

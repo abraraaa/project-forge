@@ -42,11 +42,11 @@ specific next step that would unblock it.
   ambition on record: replace YouTube embeds with our own Heatwayve-shot
   footage ("idealistic models covered in oil and sweat with moody lighting").
 
-- **"Buy me a protein shake" donation link** · parked 2026-07-24 · a
-  discreet donation affordance, tucked somewhere quiet (Profile screen
-  footer is the natural spot — never a nag, never a modal). Next step:
-  pick provider (BuyMeACoffee/Stripe Payment Link/Ko-fi), then it's a
-  one-card addition. Copy is on-voice already: "Buy me a protein shake."
+- **"Buy me a protein shake" donation link** · SHIPPED 2026-07-26 · the
+  boss wired the BMAC handle (`heatwayve`) via FUNDING.yml; the in-app
+  home landed the same day — a whisper-quiet italic line at the very end
+  of the Profile page, external open, never a nag. Copy is the boss's
+  phrase verbatim; the intimacy pass may season it.
 
 - **Bug reports at wide rollout** · parked 2026-07-24 · in-app bug report
   affordance for the public launch. Boss's ideal review flow, recorded
