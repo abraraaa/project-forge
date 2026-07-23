@@ -52,8 +52,19 @@ const PRECACHE_URLS = [
   "/apple-touch-icon.png",
 ];
 
+// Update UX (audit #39): NO unconditional skipWaiting. Activating a new
+// build under a live tab prunes the old build's hashed bundles (see
+// activate) — a page that then lazy-loads an old chunk 404s and strands.
+// Instead the new worker WAITS; the registrar tells it to take over only
+// at a safe moment (tab hidden, no live session draft), and rides the
+// controllerchange with an immediate reload so page and caches always
+// swap together. First-ever install never waits (no prior active worker),
+// so first-load control via clients.claim() is unchanged.
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
+
 self.addEventListener("install", (event) => {
-  self.skipWaiting();
 
   // ── Static routing (Safari 27+ / spec'd addRoutes) ────────────────────
   // Routes the browser applies WITHOUT waking this worker. Scope is
