@@ -19,6 +19,7 @@ import {
 } from "@/lib/webauthn";
 import { FOCUS_SUMMARIES } from "@/lib/programme";
 import { reasonLabel } from "@/lib/breaks";
+import BugReportSheet from "@/components/BugReportSheet";
 import { useInlineModalA11y } from "@/lib/a11y";
 import { PROFILE_SUFFIXES, LEGACY_PROFILE_KEY_PREFIXES } from "@/lib/store-health";
 import { Fade } from "@/components/ui";
@@ -67,6 +68,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const [profileHasPasskey, setProfileHasPasskey] = useState({});
   const [authToken, setAuthToken] = useState(null); // For authenticated destructive ops
   const [needsPasskeyAuth, setNeedsPasskeyAuth] = useState(null); // Profile name requiring auth
+  const [bugSheetOpen, setBugSheetOpen] = useState(false);
 
   // Check WebAuthn support on mount
   useEffect(() => {
@@ -733,6 +735,24 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           </a>
         </Fade>
       )}
+
+      {/* Bug report intake (fill-or-kill flow) — a quiet row in the admin-
+          adjacent tail of the page. Open to everyone; the review wing lives
+          at /diag-bugs. */}
+      {current && (
+        <Fade d={305}>
+          <button onClick={() => setBugSheetOpen(true)}
+            className="forge-glass" style={{marginTop:12,width:"100%",padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",textAlign:"left"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Report a bug</div>
+              <div style={{fontSize:11,color:T.text3,marginTop:2}}>Something off? Tell me where it hurts.</div>
+            </div>
+            <span style={{fontSize:14,color:T.text3}}>→</span>
+          </button>
+        </Fade>
+      )}
+
+      {bugSheetOpen && <BugReportSheet profileName={current} onClose={() => setBugSheetOpen(false)} />}
 
       {/* The tip jar (boss, 2026-07-24; BMAC handle wired via FUNDING.yml
           2026-07-26). DISCREET by decree: a whisper at the end of the page,

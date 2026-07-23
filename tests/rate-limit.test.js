@@ -58,7 +58,7 @@ describe("coverage class lock — every public API route is limited", () => {
         if (f.isDirectory()) { walk(rel); continue; }
         if (f.name !== "route.js" || rel.includes("cron")) continue;
         const src = readFileSync(resolve(root, rel), "utf8");
-        const verbs = (src.match(/export async function (GET|POST|PUT|DELETE)/g) || []).length;
+        const verbs = (src.match(/export async function (GET|POST|PUT|PATCH|DELETE)/g) || []).length;
         const guards = (src.match(/rateLimit\(request,/g) || []).length;
         if (verbs !== guards) offenders.push(`${rel}: ${verbs} verbs, ${guards} guards`);
       }
