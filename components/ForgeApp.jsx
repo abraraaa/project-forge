@@ -19,6 +19,7 @@ import {
   startingWeightForLift,
 } from "@/lib/storage";
 import { absencesFromHistory, weeklySlotsFromWeek } from "@/lib/absence";
+import { isHeatwayveOrigin } from "@/lib/origin";
 import { activeBreak } from "@/lib/breaks";
 import { todayLocalIso } from "@/lib/dates";
 import BreatherModal from "@/components/BreatherModal";
@@ -1149,7 +1150,7 @@ export default function ForgeApp(){
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}
-      {showIosInstall         && <IosInstallOverlay onDismiss={()=>{ LS.set("forge:iosInstallDismissed", true); setShowIosInstall(false); }}/>}
+      {showIosInstall         && <IosInstallOverlay migration={isHeatwayveOrigin()} onDismiss={()=>{ LS.set("forge:iosInstallDismissed", true); setShowIosInstall(false); }}/>}
       <BodyweightEditModal open={bwEditOpen} onClose={()=>setBwEditOpen(false)} currentKg={bodyweight} onSave={updateBodyweight} profileName={activeProfile}/>
       {weekEditorOpen && (
         <WeekEditorSheet
@@ -2045,7 +2046,13 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
 // Safari on iOS doesn't surface beforeinstallprompt, so we walk the user
 // through the native "Add to Home Screen" flow ourselves. Triggered after
 // first completed session, dismissable, remembered via localStorage.
-function IosInstallOverlay({ onDismiss }) {
+// `migration` (flip package, dormant until heatwayve.app is primary): the
+// re-add moment for returning users. MECHANICALLY the nudge is free — the
+// dismissed flag is per-origin localStorage, so it resets on the new domain
+// and this overlay re-fires once history hydrates. This prop only swaps the
+// VOICE: the move deserves acknowledgment, not a stranger's install pitch.
+// Copy: drafts, flagged for the intimacy pass.
+function IosInstallOverlay({ onDismiss, migration = false }) {
   const { containerRef, onKeyDown } = useModalA11y(onDismiss);
   const titleId = "ios-install-title";
   return (
@@ -2076,13 +2083,17 @@ function IosInstallOverlay({ onDismiss }) {
           style={{position:"absolute",top:14,right:14,background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,width:30,height:30,cursor:"pointer",color:T.text2,fontSize:13,padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
 
         <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8,paddingRight:40}}>
-          Live on your home screen
+          {migration ? "Same fire, new home" : "Live on your home screen"}
         </div>
         <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.2,marginBottom:10}}>
-          Install <span style={{fontStyle:"italic",color:T.coral}}>Forge</span>
+          {migration
+            ? <>Add <span style={{fontStyle:"italic",color:T.coral}}>Heatwayve</span> back</>
+            : <>Install <span style={{fontStyle:"italic",color:T.coral}}>Forge</span></>}
         </div>
         <p style={{fontSize:13,color:T.text2,marginBottom:20,lineHeight:1.6}}>
-          Fullscreen. One tap to open. Works offline between sessions.
+          {migration
+            ? "We moved — your story came with us. One re-add and the home screen is yours again."
+            : "Fullscreen. One tap to open. Works offline between sessions."}
         </p>
 
         {/* Three steps — Safari's share flow */}

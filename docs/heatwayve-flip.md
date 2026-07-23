@@ -30,8 +30,10 @@ Moving users to heatwayve.app means, on first visit:
   the baseline — shipped with #77). Synced state survives wholesale.
 - **Device-local stores reset** (accepted losses, enumerate honestly):
   live session draft, pendingSession stash, tonnage-milestone seen,
-  iOS-install-dismissed, onboarded flag (re-shows onboarding — check
-  whether to suppress for known profiles at flip time).
+  iOS-install-dismissed, onboarded flag. DECIDED 2026-07-27: onboarding
+  re-showing is FINE — it's one screen, and the sign-in path's migration
+  greeting carries the warmth for returning users; suppression machinery
+  would outweigh the moment it removes.
 - **The PWA must be re-added to the home screen** — a new origin is a
   new install. The re-add nudge (below) is the product answer.
 - **Photo cookie (`hw_photos`) doesn't travel** — first Locker Room
@@ -55,9 +57,14 @@ Moving users to heatwayve.app means, on first visit:
          links, fact-check against delta-era architecture).
    - [ ] SEO: `app/layout` metadata, OG image text, robots/sitemap URLs
          → heatwayve.app.
-   - [ ] Migration copy on the taken-name screen (returning user on the
-         new origin sees warmth, not confusion) + PWA re-add nudge
-         (dismissible card, standalone-aware).
+   - [x] Migration copy + PWA re-add nudge — PRE-BUILT, DORMANT
+         (2026-07-27, `lib/origin.js` gating): the install overlay
+         re-fires on the new origin by localStorage physics (per-origin
+         dismissed flag) and swaps to the migration voice ("Same fire,
+         new home / Add Heatwayve back"); the welcome-back beat greets
+         the move ("Forge grew into Heatwayve — your story came with
+         it"). Wakes automatically when heatwayve.app is primary; the
+         rename-sweep PR need only review the copy.
    - [ ] SW: no change needed (per-origin; new origin = clean install).
 3. **Vercel/DNS (boss's hands, ~10 min)**
    - [ ] Remove the app-layer 307 freeze block from `next.config.mjs`

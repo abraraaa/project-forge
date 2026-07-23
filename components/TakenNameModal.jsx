@@ -11,6 +11,7 @@
 
 import { useState, useEffect } from "react";
 import { useModalA11y } from "@/lib/a11y";
+import { isHeatwayveOrigin } from "@/lib/origin";
 import { T } from "@/lib/tokens";
 import { P } from "@/lib/storage";
 import { hasPasskey, authenticatePasskey } from "@/lib/webauthn";
@@ -82,7 +83,13 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
           <div style={{fontFamily:T.serif,fontSize:22,fontWeight:300,color:T.text1}}>
             Welcome back, {name}
           </div>
-          <p style={{fontSize:13,color:T.text3,marginTop:8}}>Fetching your stuff…</p>
+          <p style={{fontSize:13,color:T.text3,marginTop:8}}>
+            {/* Migration greeting (flip package, dormant until the new
+                origin) — copy draft, intimacy pass may season. */}
+            {isHeatwayveOrigin()
+              ? "Forge grew into Heatwayve — your story came with it. Fetching it now…"
+              : "Fetching your stuff…"}
+          </p>
         </div>
       </div>
     );
