@@ -24,6 +24,7 @@ import {
   getLocalProfile,
 } from "@/lib/storage";
 import { checkStoreHealth, collectStoreSnapshot } from "@/lib/store-health";
+import { DeltaSync } from "@/lib/sync-delta";
 import { windowPressure } from "@/lib/analytics";
 import { LIBRARY } from "@/lib/library";
 
@@ -345,6 +346,31 @@ export default function DiagSync() {
         <Row label="meta payload size"        value={`${snapshot.metaSize}b`} dim />
         <Row label="history payload size"     value={`${snapshot.historySize}b`} dim />
         <Row label="pending pushes (queue)"   value={snapshot.pendingPushes} />
+      </Section>
+
+      <Section title="Delta sync">
+        {(() => {
+          const cursor = DeltaSync.getCursor(profile);
+          const push = DeltaSync.getPushState(profile);
+          const dirty = snapshot
+            ? Object.keys(DeltaSync.diffMeta(getLocalProfile(profile).meta, push.fieldHashes).dirty).length
+            : 0;
+          return (<>
+            <Row label="mode" value={cursor ? "delta" : "fat (pre-hydration)"} />
+            <Row label="cursor" value={cursor || "—"} dim />
+            <Row label="push watermark (last record)" value={push.lastRecordId || "—"} dim />
+            <Row label="acknowledged fields" value={Object.keys(push.fieldHashes || {}).length} />
+            <Row label="dirty fields (unpushed)" value={dirty} />
+            {/* The support move for any sync weirdness: dropping the cursor
+                makes the next backgroundSync a FULL pull + re-hydration.
+                Non-destructive — local data untouched, cursor re-adopted. */}
+            {cursor && (
+              <div style={{ marginTop: 8 }}>
+                <Button onClick={() => { DeltaSync.clearCursor(profile); location.reload(); }}>Force full re-hydrate</Button>
+              </div>
+            )}
+          </>);
+        })()}
       </Section>
 
       <Section title="Actions">
