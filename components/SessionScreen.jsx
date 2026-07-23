@@ -140,7 +140,7 @@ function RecentHistorySheet({ exerciseName, recent, onCancel }) {
     const d = new Date(dateStr + "T12:00:00");
     if (isNaN(d.getTime())) return dateStr;
     const today = new Date(); today.setHours(0,0,0,0);
-    const diff = Math.floor((today - d) / 86400000);
+    const diff = Math.floor((today.getTime() - d.getTime()) / 86400000);
     if (diff <= 0) return "today";
     if (diff === 1) return "yesterday";
     if (diff < 7)   return `${diff} days ago`;

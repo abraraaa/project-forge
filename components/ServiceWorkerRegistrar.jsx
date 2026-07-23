@@ -7,15 +7,39 @@
 // workers + clear caches. Useful while iterating, and as a panic button if
 // a future SW deploy gets stuck on a user's device.
 //
-// Silent update: when a NEW service worker takes control of an existing tab
-// (i.e. the user already had a previous SW, and we just shipped a new build),
-// we schedule a `window.location.reload()` for the next moment the tab is
-// hidden. Users never see a reload flash — when they next look at the tab,
-// it's just on the new version. No popups, no banners.
+// Update UX (audit #39) — still silent, now SAFE. The old flow let the new
+// worker skipWaiting at install, which pruned the previous build's hashed
+// bundles under a live tab (lazy-loaded old chunk → 404 → stranded page).
+// Now the new worker WAITS, and we promote it only at a safe moment:
+//   - the tab is hidden (user isn't looking — no mid-interaction swap), AND
+//   - no live session draft exists (never swap builds mid-workout; the
+//     draft self-expires in 12h, so an abandoned one defers, not blocks).
+// Promotion posts SKIP_WAITING to the waiting worker; the resulting
+// controllerchange reloads immediately (we're hidden), so page, worker and
+// caches always move as one. Users still never see a popup or a flash —
+// when they next look at the tab, it's just on the new version.
+//
+// Discovery: iOS PWAs can live for days without a navigation, so we also
+// nudge reg.update() when the tab returns to visibility, throttled to
+// once an hour — otherwise a long-lived standalone app never learns a new
+// build exists.
 
 import { useEffect } from "react";
+import { P, D } from "@/lib/storage";
 
 const SW_PATH = "/sw.js";
+const UPDATE_CHECK_MS = 60 * 60 * 1000; // 1h between visibility-driven checks
+
+// A fresh (unexpired) draft = a workout in flight. D.load self-purges
+// past 12h, so this guard releases on its own worst-case.
+function liveSessionDraft() {
+  try {
+    const profile = P.getActive();
+    return !!(profile && D.load(profile));
+  } catch {
+    return false;
+  }
+}
 
 export default function ServiceWorkerRegistrar() {
   useEffect(() => {
@@ -44,6 +68,8 @@ export default function ServiceWorkerRegistrar() {
     // means a new build has activated and we should silently refresh.
     const hadControllerAtStart = navigator.serviceWorker.controller !== null;
     let reloadScheduled = false;
+    let registration = null;
+    let lastUpdateCheck = Date.now();
 
     const onControllerChange = () => {
       if (!hadControllerAtStart) return; // first install — not an upgrade
@@ -57,18 +83,55 @@ export default function ServiceWorkerRegistrar() {
       };
 
       if (document.visibilityState === "hidden") {
-        // Already backgrounded — reload now, user sees fresh on return.
+        // The normal path: we only promote while hidden, so the reload
+        // lands in the same hidden stint — fresh on return, never a flash.
         window.location.reload();
       } else {
-        // Visible — wait for the next backgrounding event, then reload silently.
+        // A sibling tab promoted the worker while we're visible — defer to
+        // the next backgrounding event, exactly the old behaviour.
         document.addEventListener("visibilitychange", reloadIfHidden);
       }
     };
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
 
+    // Promote a waiting worker ONLY at a safe moment. Called on every
+    // hidden transition and whenever a new worker reaches "installed".
+    const promoteIfSafe = () => {
+      const waiting = registration?.waiting;
+      if (!waiting) return;
+      if (document.visibilityState !== "hidden") return;
+      if (liveSessionDraft()) return; // never swap builds mid-workout
+      waiting.postMessage({ type: "SKIP_WAITING" });
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        promoteIfSafe();
+      } else if (Date.now() - lastUpdateCheck > UPDATE_CHECK_MS) {
+        // Long-lived standalone tabs never re-navigate; nudge discovery.
+        lastUpdateCheck = Date.now();
+        registration?.update().catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     navigator.serviceWorker
       .register(SW_PATH, { scope: "/" })
       .then((reg) => {
+        registration = reg;
+        // A worker may already be parked in waiting from a previous visit.
+        promoteIfSafe();
+        reg.addEventListener("updatefound", () => {
+          const incoming = reg.installing;
+          if (!incoming) return;
+          incoming.addEventListener("statechange", () => {
+            // "installed" with an existing controller = an update is now
+            // waiting. If we're already backgrounded, promote right away.
+            if (incoming.state === "installed" && navigator.serviceWorker.controller) {
+              promoteIfSafe();
+            }
+          });
+        });
         if (process.env.NODE_ENV !== "production") {
           console.log("[sw] registered, scope:", reg.scope);
         }
@@ -81,9 +144,9 @@ export default function ServiceWorkerRegistrar() {
 
     return () => {
       navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 
   return null;
 }
-

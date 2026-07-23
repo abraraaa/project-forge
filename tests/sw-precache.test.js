@@ -79,3 +79,37 @@ describe("wiring", () => {
     expect(sw).toContain("ignoreSearch: true");       // RSC + nav fallbacks
   });
 });
+
+describe("#39 — update UX: waiting worker, safe promotion (code shape)", () => {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const sw = readFileSync(resolve(root, "public/sw.js"), "utf8");
+  const reg = readFileSync(resolve(root, "components/ServiceWorkerRegistrar.jsx"), "utf8");
+
+  it("sw.js never skipWaitings unconditionally — only on the SKIP_WAITING message", () => {
+    const installBlock = sw.slice(sw.indexOf('addEventListener("install"'));
+    expect(installBlock).not.toContain("self.skipWaiting()");
+    const msgBlock = sw.slice(sw.indexOf('addEventListener("message"'), sw.indexOf('addEventListener("install"'));
+    expect(msgBlock).toContain('type === "SKIP_WAITING"');
+    expect(msgBlock).toContain("self.skipWaiting()");
+  });
+
+  it("the registrar promotes only when hidden AND no live session draft", () => {
+    const promote = reg.slice(reg.indexOf("const promoteIfSafe"), reg.indexOf("const onVisibility"));
+    expect(promote).toContain('visibilityState !== "hidden"');
+    expect(promote).toContain("liveSessionDraft()");
+    expect(promote).toContain('postMessage({ type: "SKIP_WAITING" })');
+    // The draft guard is the ONLY place a workout blocks the swap; it must
+    // consult the self-purging store, not a hand-rolled LS read.
+    expect(reg).toContain("D.load(profile)");
+  });
+
+  it("long-lived tabs re-check for updates on visibility, throttled", () => {
+    expect(reg).toContain("UPDATE_CHECK_MS");
+    expect(reg).toMatch(/registration\?\.update\(\)/);
+  });
+
+  it("first-install never reloads; sibling-tab promotion still defers to hidden", () => {
+    expect(reg).toContain("hadControllerAtStart");
+    expect(reg).toContain("reloadIfHidden");
+  });
+});

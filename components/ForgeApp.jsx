@@ -261,6 +261,7 @@ export default function ForgeApp(){
     const deduped = dedupeRotationConfig(programmeBlock.config, programmeBlock.history, { focus: userFocus });
     if (deduped === programmeBlock.config) return;
     const next = { ...programmeBlock, config: deduped };
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- read-time self-heal; the `deduped === config` guard above makes it converge in one pass, no cascade
     setProgrammeBlock(next);
     PB.save(next);
   }, [activeProfile, programmeBlock, userFocus]);
@@ -273,6 +274,7 @@ export default function ForgeApp(){
   // next one upwards is the next surprise.
   const [tonnageMilestoneSeen, setTonnageMilestoneSeen] = useState(0);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe LS seed: server HTML renders the 0 default; seeding in useState would mismatch on hydrate
     setTonnageMilestoneSeen(LS.get("forge:tonnageMilestoneSeen", 0));
   }, []);
   const totalKg = useMemo(() => totalTonnage(history), [history]);
@@ -371,6 +373,7 @@ export default function ForgeApp(){
     // One-shot handoff: if focus was changed on the /profile route, the
     // rotation summary was stashed for us (the modal lives on this shell).
     const pendingSummary = takePendingRotationSummary(activeProfile);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot LS handoff consumed on profile change; store-sync is what effects are for (see note below)
     if (pendingSummary) setRotationSummary(pendingSummary);
     // Hydrating React state from the localStorage cache on profile change —
     // synchronising with an external store, which is exactly what effects are
@@ -537,12 +540,12 @@ export default function ForgeApp(){
 
     // Not on iOS? Android handles the prompt natively via the manifest.
     const ua = window.navigator.userAgent;
-    const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+    const isIOS = /iPad|iPhone|iPod/.test(ua) && !(/** @type {any} */ (window)).MSStream;
     if (!isIOS) return;
 
     // Already installed (launched from home screen)?
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches
-      || window.navigator.standalone === true;
+      || (/** @type {any} */ (window.navigator)).standalone === true;
     if (isStandalone) return;
 
     // Gate on ≥1 completed session — don't nag new visitors
@@ -702,6 +705,18 @@ export default function ForgeApp(){
     setFocusPickerOpen(false);
   };
 
+  // After rotation summary acknowledged, hand off to the session route.
+  // Declared ABOVE the early returns, deliberately: the no-active-profile
+  // return below references this in its JSX — declared in its old spot
+  // (after the returns) it sat in the temporal dead zone for that path and
+  // threw ReferenceError the moment a rotation summary rendered while
+  // signed out (typecheck widening found it, #63). startSessionRoute is
+  // resolved at call time, so the body may reference later declarations.
+  const handleRotationContinue = () => {
+    setRotationSummary(null);
+    startSessionRoute();
+  };
+
   // Onboarding — first-time intro, shown before ProfileScreen
   if(screen==="onboarding"){
     return <OnboardingScreen onContinue={()=>{
@@ -836,12 +851,6 @@ export default function ForgeApp(){
   const startSessionRoute = () => {
     SessionIntent.stash(activeProfile, { sessionIdx: todaySessionIdx });
     router.push("/session");
-  };
-
-  // After rotation summary acknowledged, hand off to the session route
-  const handleRotationContinue = () => {
-    setRotationSummary(null);
-    startSessionRoute();
   };
 
   // Resume a draft from a previous, interrupted session.

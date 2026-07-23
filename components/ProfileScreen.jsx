@@ -34,7 +34,7 @@ import TakenNameModal from "@/components/TakenNameModal";
 const NAME_BLOCKED_RE = /[/\\\u0000-\u001F\u007F]/;
 const NAME_MAX_LEN = 64;
 
-export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,onOpenBreather,resting=false,restingReason=null,onEndBreather}){
+export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,onOpenBreather=null,resting=false,restingReason=null,onEndBreather=null}){
   const [name,setName]=useState("");
   const [confirmWipe,setConfirmWipe]=useState(null);
   const [showTakenHelp,setShowTakenHelp]=useState(false);
