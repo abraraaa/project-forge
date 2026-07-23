@@ -156,3 +156,31 @@ describe("bug reports — fill-or-kill (boss flow, built pre-flip)", () => {
     expect(review).toContain("getAuthTokenWithCeremony");
   });
 });
+
+describe("single-admin recognition (boss, 2026-07-26 — not a role system)", () => {
+  it("isAdminProfile: env names the boss; unset env = no admin exists", async () => {
+    const { isAdminProfile } = await import("../lib/auth-server.js");
+    expect(isAdminProfile("Abrar", "abrar")).toBe(true);   // case-insensitive
+    expect(isAdminProfile("  Abrar ", "abrar")).toBe(true); // normalised
+    expect(isAdminProfile("sarah", "abrar")).toBe(false);
+    expect(isAdminProfile("abrar", undefined)).toBe(false); // no env → nobody
+    expect(isAdminProfile(null, "abrar")).toBe(false);
+  });
+  it("login-verify carries the flag; bugs gate enforces it server-side", () => {
+    const login = readFileSync(resolve(root, "app/api/auth/login-verify/route.js"), "utf8");
+    expect(login).toContain("admin: isAdminProfile(profile)");
+    const bugs = readFileSync(resolve(root, "app/api/bugs/route.js"), "utf8");
+    expect(bugs).toContain("process.env.ADMIN_PROFILE && !isAdminProfile(data.profile)");
+    expect(bugs).toContain("status: 403");
+  });
+  it("the client flag is a memory-only UI hint riding the ceremony cache", () => {
+    const session = readFileSync(resolve(root, "lib/auth-session.js"), "utf8");
+    expect(session).toContain("isAdminSession");
+    expect(session).toMatch(/admin: !!auth\.admin/);
+    const profileScreen = readFileSync(resolve(root, "components/ProfileScreen.jsx"), "utf8");
+    // the admin wing (bug reports + diagnostics) is recognition-gated
+    expect(profileScreen).toMatch(/isAdminSession\(current\)[\s\S]{0,400}diag-bugs/);
+    expect(profileScreen).toMatch(/isAdminSession\(current\)[\s\S]{0,900}diag-sync/);
+    expect(profileScreen).not.toMatch(/\{current && \(\s*<Fade d=\{300\}>\s*<a href="\/diag-sync"/);
+  });
+});

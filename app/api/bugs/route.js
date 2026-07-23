@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { readTokenData, isTokenValid } from "@/lib/auth-server";
+import { readTokenData, isAdminProfile } from "@/lib/auth-server";
 import { hasDb, dbInsertBug, dbListBugs, dbUpdateBugStatus, BUG_STATUSES } from "@/lib/db";
 
 // Bug reports — the boss's fill-or-kill flow (parked 2026-07-24, built for
@@ -13,21 +13,27 @@ import { hasDb, dbInsertBug, dbListBugs, dbUpdateBugStatus, BUG_STATUSES } from 
 //   GET   → the report list. Ceremony-token gated: reports are THIRD-PARTY
 //         text, not the submitter's own profile data, so the open-reads
 //         doctrine (#20/#21) does NOT extend here.
-//   PATCH { id, status } — status-only triage transition. Same gate. Honest
-//         scope note: "admin" isn't a concept in Forge, so ANY valid
-//         passkey ceremony token authorises triage. Stakes are triage
-//         metadata only — there is NO delete verb for this table anywhere,
-//         so the worst abuse is a mislabeled status, which is re-labelable.
+//   PATCH { id, status } — status-only triage transition. Same gate.
+//         ADMIN RECOGNITION (boss, 2026-07-26): when ADMIN_PROFILE is set,
+//         the ceremony token must belong to THAT profile — the app now
+//         knows who the boss is. Unset (dev): any passkey holder, the
+//         documented pre-admin behaviour. Either way there is NO delete
+//         verb for this table anywhere.
 
 const MAX_MESSAGE_LEN = 2000;
 
 async function ceremonyGate(request) {
   const token = request.headers.get("x-hw-auth") || null;
   const data = await readTokenData(token);
-  // Any profile's live ceremony token; photo-scope cookies don't qualify
-  // (same posture as the wipe gate — triage is not a photo surface).
+  // Live ceremony token; photo-scope cookies don't qualify (same posture
+  // as the wipe gate — triage is not a photo surface).
   if (!data || data.scope === "photos" || typeof data.expires !== "number" || Date.now() > data.expires) {
     return NextResponse.json({ error: "Passkey authentication required", requiresAuth: true }, { status: 401 });
+  }
+  // Admin recognition: with ADMIN_PROFILE set, the token must be the
+  // boss's. Server-side ONLY — the client admin flag is a UI hint.
+  if (process.env.ADMIN_PROFILE && !isAdminProfile(data.profile)) {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
   return null;
 }

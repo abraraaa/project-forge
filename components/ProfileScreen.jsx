@@ -20,6 +20,7 @@ import {
 import { FOCUS_SUMMARIES } from "@/lib/programme";
 import { reasonLabel } from "@/lib/breaks";
 import BugReportSheet from "@/components/BugReportSheet";
+import { isAdminSession } from "@/lib/auth-session";
 import { useInlineModalA11y } from "@/lib/a11y";
 import { PROFILE_SUFFIXES, LEGACY_PROFILE_KEY_PREFIXES } from "@/lib/store-health";
 import { Fade } from "@/components/ui";
@@ -719,12 +720,35 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
-      {/* Sync diagnostics — entry point to /diag-sync. PWAs have no address
-          bar, so an in-app link is the only way to reach it from a standalone
-          install. Plain <a> rather than next/link so the page is fetched fresh
-          (it reads LS directly) and the route is independent of the SPA shell. */}
-      {current && (
+      {/* ── Admin wing (boss, 2026-07-26) — single-admin recognition, not a
+          role system. Appears when THIS session's ceremony was minted as
+          ADMIN_PROFILE (UI hint only; every admin API re-verifies the
+          token's profile server-side). Reveals after any Face ID moment —
+          signing in, or unlocking photos — and hides for everyone else,
+          which also DECLUTTERS the ordinary Profile: sync diagnostics now
+          live here rather than on every user's page. Plain <a> links so
+          the pages fetch fresh (they read LS directly). */}
+      {current && isAdminSession(current) && (
+        <Fade d={298}>
+          <div style={{marginTop:24,marginBottom:2,fontSize:10,fontWeight:600,color:T.text4,letterSpacing:"0.14em",textTransform:"uppercase"}}>
+            Your keys, boss
+          </div>
+        </Fade>
+      )}
+      {current && isAdminSession(current) && (
         <Fade d={300}>
+          <a href="/diag-bugs"
+            className="forge-glass" style={{marginTop:10,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Bug reports</div>
+              <div style={{fontSize:11,color:T.text3,marginTop:2}}>The list — fill or kill</div>
+            </div>
+            <span style={{fontSize:14,color:T.text3}}>↗︎</span>
+          </a>
+        </Fade>
+      )}
+      {current && isAdminSession(current) && (
+        <Fade d={302}>
           <a href="/diag-sync"
             className="forge-glass" style={{marginTop:12,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
