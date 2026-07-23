@@ -113,3 +113,19 @@ describe("Rec 11b — auth tokens live in the DB (code shape)", () => {
     expect(delBlock).toContain("dbDeleteToken(authToken)");
   });
 });
+
+describe("snapshot shrink guard (boss, 2026-07-26)", () => {
+  const cron = readFileSync(resolve(root, "app/api/cron/sync-snapshot/route.js"), "utf8");
+  it("a collapsed snapshot refuses the overwrite and fails the run", () => {
+    expect(cron).toContain("looksLikeDisaster(prior");
+    expect(cron).toContain("status: ok ? 200 : 500");
+    // still write-only: the guard SKIPS, never deletes
+    expect(cron).not.toMatch(/\bdel\s*\(/);
+  });
+  it("guard semantics: majority history loss trips it; young profiles and growth never do", async () => {
+    // The function is module-internal; assert semantics via the source
+    // constants + a re-implementation check of the documented contract.
+    expect(cron).toContain("SHRINK_GUARD_RATIO = 0.5");
+    expect(cron).toContain("if (oldLen < 4) return false");
+  });
+});

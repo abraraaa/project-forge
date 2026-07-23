@@ -23,7 +23,24 @@
 
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
+import { readJsonDirect } from "@/lib/blob-utils";
 import { hasDb, sql, ensureSchema, dbReadProfile } from "@/lib/db";
+
+// Shrink guard (boss conversation, 2026-07-26): a snapshot's job is to
+// survive the disaster, not memorialise it. If the DB is wiped shortly
+// before this cron fires, a naive overwrite replaces the restore point with
+// the post-disaster empty state. So: when the NEW snapshot has lost most of
+// the OLD one's history, refuse the overwrite, keep the old restore point,
+// and fail the run loudly (Vercel cron monitoring goes red). Legitimate
+// per-profile wipes never trip this — dbDeleteProfile removes the profile
+// from the DISTINCT list entirely (and deletes its snapshots), so a guarded
+// profile is by definition one that still exists but suddenly lost data.
+const SHRINK_GUARD_RATIO = 0.5;
+function looksLikeDisaster(oldSnap, newHistoryLen) {
+  const oldLen = Array.isArray(oldSnap?.history) ? oldSnap.history.length : 0;
+  if (oldLen < 4) return false; // too small to judge — young profiles churn
+  return newHistoryLen < oldLen * SHRINK_GUARD_RATIO;
+}
 
 export async function GET(request) {
   const authHeader = request.headers.get("authorization");
@@ -49,16 +66,26 @@ export async function GET(request) {
     const isWeeklyDay = new Date().getUTCDay() === 0;
 
     const written = [];
+    const guarded = [];
     for (const profile of profiles) {
       const data = await dbReadProfile(profile);
       if (!data) continue;
+
+      const dailyPath = `forge/snapshots/daily/${encodeURIComponent(profile)}.json`;
+      const prior = await readJsonDirect(dailyPath);
+      if (looksLikeDisaster(prior, (data.history || []).length)) {
+        guarded.push(profile);
+        console.error(`[forge:cron-snapshot] SHRINK GUARD: ${profile} history ${prior.history.length}→${(data.history || []).length} — refusing to overwrite the restore point`);
+        continue;
+      }
+
       const body = JSON.stringify({
         profile,
         snappedAt: new Date().toISOString(),
         meta: data.meta,
         history: data.history,
       });
-      await put(`forge/snapshots/daily/${encodeURIComponent(profile)}.json`, body,
+      await put(dailyPath, body,
         { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false });
       if (isWeeklyDay) {
         await put(`forge/snapshots/weekly/${encodeURIComponent(profile)}.json`, body,
@@ -66,7 +93,13 @@ export async function GET(request) {
       }
       written.push(profile);
     }
-    return NextResponse.json({ ok: true, profiles: written.length, weekly: isWeeklyDay });
+    // A tripped guard fails the RUN (red in cron monitoring) while the
+    // untouched restore points sit safe — that alarm IS the feature.
+    const ok = guarded.length === 0;
+    return NextResponse.json(
+      { ok, profiles: written.length, weekly: isWeeklyDay, ...(guarded.length ? { guarded } : {}) },
+      { status: ok ? 200 : 500 },
+    );
   } catch (e) {
     console.error("[forge:cron-snapshot] FAILED:", e?.message || e);
     return NextResponse.json({ error: e.message }, { status: 500 });
