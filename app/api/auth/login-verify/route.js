@@ -4,7 +4,7 @@ import { put } from "@vercel/blob";
 import crypto from "crypto";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
-import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge, mintAuthToken } from "@/lib/auth-server";
+import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge, mintAuthToken, isAdminProfile } from "@/lib/auth-server";
 
 // Verify WebAuthn authentication and mint a short-lived auth token.
 // POST /api/auth/login-verify
@@ -132,7 +132,12 @@ export async function POST(request) {
     // wipe gate — destructive ops keep fresh short-lived ceremonies.
     const photoToken = await mintAuthToken({ profile, ttlMs: 7 * 86400000, scope: "photos" });
 
-    const res = NextResponse.json({ ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600 });
+    const res = NextResponse.json({
+      ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600,
+      // Single-admin recognition: a UI hint only — every admin surface
+      // re-verifies the token's profile server-side.
+      admin: isAdminProfile(profile),
+    });
     res.cookies.set("hw_photos", photoToken, {
       httpOnly: true, secure: true, sameSite: "strict", path: "/api/photos", maxAge: 7 * 86400,
     });

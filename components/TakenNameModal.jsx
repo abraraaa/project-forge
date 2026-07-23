@@ -53,7 +53,7 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
       if (result?.verified) {
         // Seed the in-memory auth session so photo flows don't re-prompt
         // Face ID within the token's lifetime (one ceremony per visit).
-        if (result.authToken) cacheAuthToken(name, result.authToken);
+        if (result.authToken) cacheAuthToken(name, result.authToken, { admin: !!result.admin });
         setAuthSuccess(true);
         // Add profile locally and activate, then call onActivate to update React state
         P.add(name);

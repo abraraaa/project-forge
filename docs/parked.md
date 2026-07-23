@@ -42,20 +42,22 @@ specific next step that would unblock it.
   ambition on record: replace YouTube embeds with our own Heatwayve-shot
   footage ("idealistic models covered in oil and sweat with moody lighting").
 
-- **"Buy me a protein shake" donation link** · parked 2026-07-24 · a
-  discreet donation affordance, tucked somewhere quiet (Profile screen
-  footer is the natural spot — never a nag, never a modal). Next step:
-  pick provider (BuyMeACoffee/Stripe Payment Link/Ko-fi), then it's a
-  one-card addition. Copy is on-voice already: "Buy me a protein shake."
+- **"Buy me a protein shake" donation link** · SHIPPED 2026-07-26 · the
+  boss wired the BMAC handle (`heatwayve`) via FUNDING.yml; the in-app
+  home landed the same day — a whisper-quiet italic line at the very end
+  of the Profile page, external open, never a nag. Copy is the boss's
+  phrase verbatim; the intimacy pass may season it.
 
-- **Bug reports at wide rollout** · parked 2026-07-24 · in-app bug report
-  affordance for the public launch. Boss's ideal review flow, recorded
-  verbatim so we build to it: reports land somewhere listable and readable
-  → dedupe/clean pass → joint "in scope?" decision → **fill or kill**.
-  Natural shape given our stack: a `bug_reports` table in Neon + a tiny
-  authenticated POST + a /diag-style review page (list, dedupe, tag
-  fill/kill) — no third-party tracker. Next step: design the intake copy
-  and the review page when rollout nears.
+- **Bug reports at wide rollout** · SHIPPED 2026-07-26, deliberately
+  EARLY · built before the flip so flip breakage arrives through the app,
+  not the void. Exactly the recorded flow: `bug_reports` rows in Neon
+  (status-only triage — new → in_scope → filled|killed; NO delete verb
+  exists for the table anywhere), open rate-limited intake via a quiet
+  Profile row + one-sheet report ("Tell me where it hurts." — draft copy,
+  intimacy pass may season), and the /diag-bugs review wing (ceremony-
+  gated read + triage; reports are third-party text, the open-reads
+  doctrine doesn't extend to them). Dedupe stays a human pass at the
+  list, as specced.
 
 ## Execution roadmap — the order we tackle work
 

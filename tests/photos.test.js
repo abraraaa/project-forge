@@ -165,7 +165,7 @@ describe("P4 — session tokens, delete verb, scrubber additions (code shape)", 
     expect(bw).not.toContain("authenticatePasskey(");
     expect(scrub).toContain("ensurePhotoAccess");
     const signin = readFileSync(resolve(root, "components/TakenNameModal.jsx"), "utf8");
-    expect(signin).toContain("cacheAuthToken(name, result.authToken)");
+    expect(signin).toContain("cacheAuthToken(name, result.authToken, { admin: !!result.admin })");
   });
   it("scrubber: pre-photo state is the bodyweight chart; delete is behind a confirm", () => {
     const s = readFileSync(resolve(root, "app/locker-room/page.jsx"), "utf8");

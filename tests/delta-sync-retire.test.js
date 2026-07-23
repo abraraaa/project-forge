@@ -129,3 +129,58 @@ describe("snapshot shrink guard (boss, 2026-07-26)", () => {
     expect(cron).toContain("if (oldLen < 4) return false");
   });
 });
+
+describe("bug reports — fill-or-kill (boss flow, built pre-flip)", () => {
+  const route = readFileSync(resolve(root, "app/api/bugs/route.js"), "utf8");
+  it("triage is STATUS-ONLY: no delete verb for bug_reports anywhere", () => {
+    expect(route).not.toContain("export async function DELETE");
+    const db = readFileSync(resolve(root, "lib/db.js"), "utf8");
+    expect(db).not.toMatch(/DELETE FROM bug_reports/);
+  });
+  it("submit is open + hard-limited; read and triage are ceremony-gated", () => {
+    const post = route.slice(route.indexOf("export async function POST"), route.indexOf("export async function GET"));
+    expect(post).toContain('rateLimit(request, "bugs-submit", 5)');
+    expect(post).not.toContain("ceremonyGate");
+    for (const verb of ["GET", "PATCH"]) {
+      const block = route.slice(route.indexOf(`export async function ${verb}`));
+      expect(block.slice(0, 400), verb).toContain("ceremonyGate(request)");
+    }
+    // photo-scope cookies never qualify for triage (wipe-gate posture)
+    expect(route).toContain('data.scope === "photos"');
+  });
+  it("the sheet follows the modal doctrine and the review page runs the real ceremony", () => {
+    const sheet = readFileSync(resolve(root, "components/BugReportSheet.jsx"), "utf8");
+    expect(sheet).toMatch(/Cancel<\/button>|"Cancel"/);
+    expect(sheet).not.toContain('aria-label="Close"');
+    const review = readFileSync(resolve(root, "app/diag-bugs/page.jsx"), "utf8");
+    expect(review).toContain("getAuthTokenWithCeremony");
+  });
+});
+
+describe("single-admin recognition (boss, 2026-07-26 — not a role system)", () => {
+  it("isAdminProfile: env names the boss; unset env = no admin exists", async () => {
+    const { isAdminProfile } = await import("../lib/auth-server.js");
+    expect(isAdminProfile("Abrar", "abrar")).toBe(true);   // case-insensitive
+    expect(isAdminProfile("  Abrar ", "abrar")).toBe(true); // normalised
+    expect(isAdminProfile("sarah", "abrar")).toBe(false);
+    expect(isAdminProfile("abrar", undefined)).toBe(false); // no env → nobody
+    expect(isAdminProfile(null, "abrar")).toBe(false);
+  });
+  it("login-verify carries the flag; bugs gate enforces it server-side", () => {
+    const login = readFileSync(resolve(root, "app/api/auth/login-verify/route.js"), "utf8");
+    expect(login).toContain("admin: isAdminProfile(profile)");
+    const bugs = readFileSync(resolve(root, "app/api/bugs/route.js"), "utf8");
+    expect(bugs).toContain("process.env.ADMIN_PROFILE && !isAdminProfile(data.profile)");
+    expect(bugs).toContain("status: 403");
+  });
+  it("the client flag is a memory-only UI hint riding the ceremony cache", () => {
+    const session = readFileSync(resolve(root, "lib/auth-session.js"), "utf8");
+    expect(session).toContain("isAdminSession");
+    expect(session).toMatch(/admin: !!auth\.admin/);
+    const profileScreen = readFileSync(resolve(root, "components/ProfileScreen.jsx"), "utf8");
+    // the admin wing (bug reports + diagnostics) is recognition-gated
+    expect(profileScreen).toMatch(/isAdminSession\(current\)[\s\S]{0,400}diag-bugs/);
+    expect(profileScreen).toMatch(/isAdminSession\(current\)[\s\S]{0,900}diag-sync/);
+    expect(profileScreen).not.toMatch(/\{current && \(\s*<Fade d=\{300\}>\s*<a href="\/diag-sync"/);
+  });
+});
