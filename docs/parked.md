@@ -9,6 +9,16 @@ specific next step that would unblock it.
 
 ---
 
+- **README rework — flip-day item** · parked 2026-07-26 · the README is
+  Forge head to toe (title, "Unveil the best you." tagline, theforged.fit
+  links, forge-branded quickstart) — 11 brand mentions across 191 lines.
+  Rewriting it pre-flip would mismatch the LIVE brand; rewriting it at
+  the flip is one coherent pass. Scope when it fires: Heatwayve identity
+  + voice throughout, heatwayve.app links, and a fact-check sweep against
+  the delta-era architecture (the sync/storage description predates
+  Neon). Rides the flip package alongside the icon swap, rename sweep,
+  redirect reversal, migration copy, and SEO flip.
+
 - **Session CTA clearance above Safari's floating tab bar** · parked
   2026-07-25 · In browser mode the Log-set button sits close to iOS 26's
   floating pill. The native instruction is ALREADY in the markup — the
@@ -160,6 +170,17 @@ choice.
 
 ## Phase 6 — Intimacy pass II · QUEUED 2026-07-14 (the savoured one)
 
+**THE VOICE BRIEF — boss, 2026-07-26, verbatim, the calibration line
+every draft gets held against:** "Sensation forward, not filthy. Enough
+to excite." Warmth that lands on the body, never on the nose. The
+working register that earned it (for reference at the sitting): physical
+metaphor doing real work, precision that reads as care, celebration
+without cheerleading, and restraint as the thing that makes the charged
+lines land. Copy in scope now includes the bodyweight-sheet COPY object,
+the Locker Room's full surface (headline, toggles, empty/first-point
+chart states, the metro confirm, the post-photo weight ask), and #75's
+style-pass twin — one sitting, voice and visuals together.
+
 Named honestly: Phase 3 got RESOLVED, not performed — its items closed
 as verdicts and codifications while the week's energy was audit-shaped.
 This is the slow pass the boss actually enjoys, done at its own tempo,
@@ -219,6 +240,8 @@ through sync.
 person/device), and the fix is a storage migration (per-profile keys +
 legacy-key fold) with real blast area for zero felt benefit today. If
 multi-profile devices ever become real, this is the first thing to lift.
+(Checked against delta sync 2026-07-26: unchanged — per-field shipping
+doesn't alter WHICH device key feeds a profile's payload.)
 
 ### programmeBlock merges whole-object across devices
 
@@ -292,7 +315,15 @@ and blends into both, as the top edge always did.
   the +55px restoration drift is FIXED ("works beautifully") by leaving
   anchoring on app-wide with overflow-anchor: none on ScrollDrum only.
 
-### Rebrand — "Forge" is diluted in fitness · SCHEDULED winter 2026/27
+### Rebrand — "Forge" is diluted in fitness · IN FLIGHT (way ahead of the winter schedule)
+
+**RECONCILED 2026-07-26:** wildly overtaken by events. Heatwayve is the
+name; heatwayve.app + .fit/.space/.life are BOUGHT and wired (bonus TLDs
+301 → .app; .app temporarily 307-frozen → theforged.fit); the WebAuthn
+two-origins-one-rpId allow-list + /.well-known/webauthn ROR shipped; the
+photos surfaces are already Heatwayve-native (hw_photos cookie, X-HW-Auth
+header); the icon pack is staged. The flip fires after the delta-sync
+soak. Original entry kept below for the record.
 
 **Candidate on record (2026-07-14): "Heatwayve".** Domains checked:
 .fit at $2.99 (buy-as-option recommended — matches the .fit
@@ -1068,6 +1099,15 @@ rather than add a per-bug button.
 
 ## Shipped (rolling)
 
+- **Delta sync, end to end** — PRs #241/#242/#243 (2026-07-25/26). The
+  monolith is dead: `updated_at` deltas both directions over Neon rows,
+  dual-write retired, blob demoted to a write-only daily+weekly snapshot
+  cron with a shrink guard (the backup survives the disaster, never
+  memorialises it). Killed audit #2/#3/#8/#12/#14/#17 as one family.
+  Design + decisions: `docs/delta-sync.md`. Follow-ups landed in the
+  same wave: auth tokens → Neon (Rec 11b, closing the token-survives-
+  wipe gap, #78) and the ONE session-finalise engine (#16).
+
 Entries graduate here with the resolving commit. Keep most recent on top;
 trim entries older than the last block once they're no longer
 discussion-relevant.
@@ -1130,6 +1170,11 @@ discussion-relevant.
   Per-workout cost drops from ~30 advanced ops to 2; Sync now row on
   Profile screen exposes manual flush for power-user reassurance.
   Routing taxonomy in `docs/push-refactor.md`.
+  **SUPERSEDED 2026-07-26 (delta sync, audit #2/#3):** the class-2
+  deferral tier was deleted as obsolete — a delta push with nothing
+  dirty never touches the wire, so the cost the tier deferred no longer
+  exists. `docs/push-refactor.md` is historical; `docs/delta-sync.md`
+  is the live design.
 - **iOS Safari "chin" fix** — `9124425` + `5f6f073` (2026-06-23).
   `color-scheme: dark` on :root + restoring `background: #131110` on
   html, body. UA-painted chrome (toolbar surround, overscroll edges,

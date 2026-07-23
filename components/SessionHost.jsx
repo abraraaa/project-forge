@@ -38,19 +38,13 @@ import {
   applyRotationToSession, applySwapsToSession, applyFocusToSession,
   DEFAULT_FOCUS, WEEK,
 } from "@/lib/programme";
-import {
-  computeNextPrescription, computeDeloadPrescription, computeRecoveryPrescription,
-  updateLiftStateFromSession, updateMuscleAnchorFromSession,
-  reconcileLiftStateWithSession, shouldOfferDeload,
-  completeDeload, shouldAutoCompleteDeload, decrementRecoveryCounter,
-  deloadDayLabel,
-} from "@/lib/progression";
+import { deloadDayLabel } from "@/lib/progression";
+import { applySessionToEngine } from "@/lib/session-engine";
 import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR } from "@/lib/lift-translations";
 import { pickFlashLine } from "@/lib/set-flash";
 import { T } from "@/lib/tokens";
 import { haptic } from "@/lib/a11y";
 import { withNavTransition } from "@/lib/nav-transitions";
-import { computeVolumeAggregates } from "@/lib/analytics";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
 import {
@@ -472,119 +466,16 @@ export default function SessionHost() {
       }
       D.clear(profile);
 
-      // Progression engine + deload transitions (Phase 2 + 3).
+      // Progression engine + volume — THE engine (lib/session-engine, #16).
+      // One function shared with the retro-log path; UI mirrors stay here.
       if (sessionRecord) {
-        try {
-          const fullHistory = H.get(profile);
-          let trainingState = TS.get(profile);
-          const wwUpdates = {};
-
-          const wasInDeload = !!trainingState.mesocycle?.activeDeload;
-          let justCompletedDeload = false;
-          if (wasInDeload && shouldAutoCompleteDeload(trainingState, sessionRecord.date)) {
-            trainingState = completeDeload(trainingState);
-            TS.replaceState(profile, trainingState);
-            justCompletedDeload = true;
-            setActiveDeload(null);
-            setShowDeloadComplete(true);
-          }
-          const stillInDeload = !justCompletedDeload && wasInDeload;
-
-          for (const blk of sessionRecord.blocks || []) {
-            for (const ex of blk.exercises || []) {
-              const rawLiftState = trainingState.lifts?.[ex.name] || null;
-              const liftState    = reconcileLiftStateWithSession(rawLiftState, ex);
-              const liftProfile  = getLiftProfile(ex.name);
-              const anchorMuscle = liftProfile.primaryMuscle;
-              const muscleAnchor = anchorMuscle
-                ? trainingState.muscleAnchors?.[anchorMuscle] || null
-                : null;
-
-              let prescription;
-              const context = {
-                readiness: sessionRecord.readiness,
-                currentWeight: workingWeights[ex.name] ?? ex.sets?.[0]?.weight ?? null,
-              };
-
-              if (stillInDeload) {
-                prescription = computeDeloadPrescription(ex.name, liftState, context);
-              } else if (liftState?.inRecoveryUntil > 0) {
-                // Also true on the auto-close session (justCompletedDeload):
-                // completeDeload just set inRecoveryUntil=3, so the NEXT
-                // session gets the pre-deload-anchored re-entry instead of a
-                // standard prescription computed off deloaded weights. The
-                // counter decrement below stays skipped for it — that session
-                // happened inside the deload window, not in recovery.
-                prescription = computeRecoveryPrescription(ex.name, liftState, fullHistory, context);
-              } else {
-                prescription = computeNextPrescription({
-                  liftName: ex.name,
-                  history: fullHistory,
-                  liftState,
-                  muscleAnchor,
-                  context,
-                });
-              }
-
-              if (prescription.weight !== null && prescription.weight !== undefined) {
-                wwUpdates[ex.name] = prescription.weight;
-              }
-
-              if (stillInDeload && liftState) {
-                const lastHistEntry = {
-                  date: sessionRecord.date,
-                  weight: ex.sets?.[0]?.weight ?? null,
-                  effectiveLoad: ex.sets?.[0]?.effectiveLoad ?? null,
-                  reps: ex.sets?.[0]?.reps ?? null,
-                  rir: ex.sets?.[0]?.rir ?? null,
-                  est1rm: null,
-                  decision: "DELOAD",
-                  rationale: ["deload_session_logged"],
-                };
-                TS.updateLift(profile, ex.name, {
-                  ...liftState,
-                  history: [...(liftState.history || []), lastHistEntry].slice(-12),
-                });
-              } else {
-                const newLiftState = updateLiftStateFromSession(
-                  liftState,
-                  sessionRecord,
-                  ex,
-                  prescription,
-                );
-                const counterAdjusted = (liftState?.inRecoveryUntil > 0 && !justCompletedDeload)
-                  ? decrementRecoveryCounter(newLiftState)
-                  : newLiftState;
-                TS.updateLift(profile, ex.name, counterAdjusted);
-              }
-
-              if (anchorMuscle && liftProfile.progressesByLoad && !stillInDeload) {
-                const currentAnchor = TS.get(profile).muscleAnchors?.[anchorMuscle] || null;
-                const newAnchor = updateMuscleAnchorFromSession(currentAnchor, sessionRecord, ex);
-                if (newAnchor) TS.updateMuscleAnchor(profile, anchorMuscle, newAnchor);
-              }
-            }
-          }
-
-          if (Object.keys(wwUpdates).length) {
-            setWW(p => ({ ...p, ...wwUpdates }));
-          }
-          // shouldOfferDeload is home's card to show — evaluated on home
-          // remount from the same LS state; no mirror needed here.
-          void shouldOfferDeload;
-        } catch (e) {
-          console.error("[forge:progression]", e);
+        const engine = applySessionToEngine(profile, sessionRecord, { currentWeights: workingWeights });
+        if (Object.keys(engine.wwUpdates).length) {
+          setWW(p => ({ ...p, ...engine.wwUpdates }));
         }
-      }
-
-      // Phase 4 — silent volume tracking.
-      if (sessionRecord) {
-        try {
-          const fullHistory = H.get(profile);
-          const aggregates = computeVolumeAggregates(fullHistory);
-          TS.updateVolume(profile, aggregates);
-        } catch (e) {
-          console.error("[forge:volume-tracking]", e);
+        if (engine.justCompletedDeload) {
+          setActiveDeload(null);
+          setShowDeloadComplete(true);
         }
       }
 

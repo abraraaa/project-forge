@@ -182,8 +182,12 @@ describe.each(HOSTS)("$name mutation coverage — every persisted mutation pushe
 
   it("finds mutation sites (regression on the regex list going empty)", () => {
     // Sanity: if the regex list matches nothing, every other assertion
-    // passes trivially. Both hosts carry several finalise-path mutations.
-    expect(mutationSites.length).toBeGreaterThan(3);
+    // passes trivially. Floor lowered 4→3 when #16 moved the engine
+    // choreography (TS.updateLift/Anchor/Volume) into lib/session-engine —
+    // its writes are covered by the callers' end-of-finalise pushNow, and
+    // both call sites keep their own mutation sites here. Both hosts carry
+    // finalise-path mutations.
+    expect(mutationSites.length).toBeGreaterThanOrEqual(3);
   });
 
   it("every mutation site is in a function that routes through pushNow/pushDeferred", () => {

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { put, get, list, del } from "@vercel/blob";
-import crypto from "crypto";
-import { isTokenValid, readTokenData } from "@/lib/auth-server";
+import { isTokenValid, readTokenData, mintAuthToken } from "@/lib/auth-server";
 import { hasDb, dbUpsertPhoto, dbListPhotos, dbDeletePhoto } from "@/lib/db";
 import { isJpegBytes, PHOTO_MAX_UPLOAD_BYTES } from "@/lib/photos";
 
@@ -82,13 +81,7 @@ async function gate(request) {
   if (data.scope === "photos" && token === cookieToken) {
     const age = Date.now() - new Date(data.createdAt || 0).getTime();
     if (!Number.isFinite(age) || age > ROTATE_AFTER_MS) {
-      refresh = crypto.randomBytes(32).toString("base64url");
-      await put(`forge/tokens/${refresh}`, JSON.stringify({
-        profile: normalise(profile),
-        expires: Date.now() + PHOTO_TTL_MS,
-        scope: "photos",
-        createdAt: new Date().toISOString(),
-      }), { access: "private", contentType: "application/json", addRandomSuffix: false, allowOverwrite: true });
+      refresh = await mintAuthToken({ profile, ttlMs: PHOTO_TTL_MS, scope: "photos" });
     }
   }
   return { profile: normalise(profile), date, url, refresh };

@@ -1,4 +1,11 @@
-# Push refactor — design doc
+# Push refactor — design doc · HISTORICAL (superseded 2026-07-26)
+
+> **This document describes a retired architecture.** The class-1/class-2
+> routing taxonomy below was deleted with the delta-sync migration (audit
+> #2/#3, PRs #241–#243): a delta push with nothing dirty never touches the
+> wire, so deferral has nothing left to save. The live design is
+> `docs/delta-sync.md`. Kept for the record of WHY the tiers existed.
+
 
 ## Goal
 

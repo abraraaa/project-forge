@@ -36,6 +36,14 @@ import ScrollDrum from "@/components/ScrollDrum";
 
 export default function LockerRoom() {
   const router = useRouter();
+  // Hydration-safe (#76): SSR renders the empty shell; the first client
+  // render matches it (mounted=false), and localStorage-derived content
+  // appears after mount. Without the gate, the lazy P.getActive() read made
+  // the first client render diverge from the server HTML and React threw
+  // away the tree (silent in prod, flagged in dev).
+  const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- the canonical two-pass hydration gate; runs once
+  useEffect(() => setMounted(true), []);
   const [profile] = useState(() => (typeof window !== "undefined" ? P.getActive() : null));
   const [token, setToken] = useState(null);
   const [shown, setShown] = useState(false); // "Show photos" toggle — fail-modest each visit
@@ -207,6 +215,7 @@ export default function LockerRoom() {
     );
   };
 
+  if (!mounted) return <main style={page} />;
   if (!profile) return <main style={page}><p style={{ color: T.text3 }}>No active profile — sign in first, then come back to the Locker Room.</p></main>;
 
   // ── Chart-first layout: ungated bodyweight on top, photos behind the toggle ──

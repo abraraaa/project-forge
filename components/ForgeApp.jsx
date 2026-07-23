@@ -23,22 +23,8 @@ import { activeBreak } from "@/lib/breaks";
 import { todayLocalIso } from "@/lib/dates";
 import BreatherModal from "@/components/BreatherModal";
 import { T, MUSCLE_COLOURS } from "@/lib/tokens";
-import {
-  computeNextPrescription,
-  updateLiftStateFromSession,
-  updateMuscleAnchorFromSession,
-  reconcileLiftStateWithSession,
-  isLatestSessionForLift,
-  // Phase 3
-  shouldOfferDeload,
-  computeDeloadPrescription,
-  computeRecoveryPrescription,
-  startDeload,
-  completeDeload,
-  dismissDeloadOffer,
-  decrementRecoveryCounter,
-  shouldAutoCompleteDeload,
-} from "@/lib/progression";
+import { shouldOfferDeload, startDeload, dismissDeloadOffer } from "@/lib/progression";
+import { applySessionToEngine } from "@/lib/session-engine";
 import { getLiftProfile, sanitiseWorkingWeights, getLoadType, weightStepForLoadType } from "@/lib/lift-translations";
 import { solveRotation } from "@/lib/rotation-solver";
 import {
@@ -1037,120 +1023,17 @@ export default function ForgeApp(){
       // could promote a cardio tick into a phantom strength completion).
       setWeekDone(Days.projectCurrentWeek(activeProfile).complete);
 
-      // ─── Engine block — runs identically to live finalise hook ─────────
-      try {
-        const fullHistory = H.get(activeProfile);
-        let trainingState = TS.get(activeProfile);
-        const wwUpdates = {};
-
-        // Phase 3 — auto-completion check still applies if a deload is active
-        // and this retro session crosses the threshold. Edge case but correct.
-        const wasInDeload = !!trainingState.mesocycle?.activeDeload;
-        let justCompletedDeload = false;
-        if (wasInDeload && shouldAutoCompleteDeload(trainingState, sessionRecord.date)) {
-          trainingState = completeDeload(trainingState);
-          TS.replaceState(activeProfile, trainingState);
-          justCompletedDeload = true;
-          setActiveDeload(null);
+      // ─── Engine block — THE engine (lib/session-engine, #16), shared
+      // with the live finalise path. UI mirrors stay here.
+      {
+        const engine = applySessionToEngine(activeProfile, sessionRecord, { currentWeights: workingWeights });
+        if (Object.keys(engine.wwUpdates).length) {
+          setWW(p => ({ ...p, ...engine.wwUpdates }));
         }
-        const stillInDeload = !justCompletedDeload && wasInDeload;
-
-        for (const block of sessionRecord.blocks || []) {
-          for (const ex of block.exercises || []) {
-            // A retro record sorts into chronological position, so it can be
-            // OLDER than the newest session for this lift. In that case the
-            // record joins history but must not touch lift state — the state
-            // writers below assume their session is the latest evidence and
-            // would regress currentWeight to a week-old top set and bump
-            // stall/session counters out of order.
-            const isLatestForLift = isLatestSessionForLift(fullHistory, sessionRecord.id, ex.name);
-            // Reconcile before reading — see same comment on the live path.
-            const rawLiftState  = trainingState.lifts?.[ex.name] || null;
-            const liftState     = isLatestForLift
-              ? reconcileLiftStateWithSession(rawLiftState, ex)
-              : rawLiftState;
-            const profile       = getLiftProfile(ex.name);
-            const anchorMuscle  = profile.primaryMuscle;
-            const muscleAnchor  = anchorMuscle
-              ? trainingState.muscleAnchors?.[anchorMuscle] || null
-              : null;
-
-            let prescription;
-            const context = {
-              readiness: sessionRecord.readiness,
-              currentWeight: workingWeights[ex.name] ?? ex.sets?.[0]?.weight ?? null,
-            };
-
-            if (stillInDeload) {
-              prescription = computeDeloadPrescription(ex.name, liftState, context);
-            } else if (liftState?.inRecoveryUntil > 0) {
-              // Includes the auto-close session — same reasoning as the live
-              // finalise path in SessionHost: the re-entry anchors to the
-              // pre-deload snapshot, and the decrement below stays skipped.
-              prescription = computeRecoveryPrescription(ex.name, liftState, fullHistory, context);
-            } else {
-              prescription = computeNextPrescription({
-                liftName: ex.name,
-                history: fullHistory,
-                liftState,
-                muscleAnchor,
-                context,
-              });
-            }
-
-            if (prescription.weight !== null && prescription.weight !== undefined) {
-              wwUpdates[ex.name] = prescription.weight;
-            }
-
-            if (!isLatestForLift) {
-              // Older backfill: history has the record; lift state and
-              // anchors stay anchored to the newer live evidence.
-            } else if (stillInDeload && liftState) {
-              const lastHistEntry = {
-                date: sessionRecord.date,
-                weight: ex.sets?.[0]?.weight ?? null,
-                effectiveLoad: ex.sets?.[0]?.effectiveLoad ?? null,
-                reps: ex.sets?.[0]?.reps ?? null,
-                rir: ex.sets?.[0]?.rir ?? null,
-                est1rm: null,
-                decision: "DELOAD",
-                rationale: ["deload_session_logged"],
-              };
-              TS.updateLift(activeProfile, ex.name, {
-                ...liftState,
-                history: [...(liftState.history || []), lastHistEntry].slice(-12),
-              });
-            } else {
-              const newLiftState = updateLiftStateFromSession(liftState, sessionRecord, ex, prescription);
-              const counterAdjusted = (liftState?.inRecoveryUntil > 0 && !justCompletedDeload)
-                ? decrementRecoveryCounter(newLiftState)
-                : newLiftState;
-              TS.updateLift(activeProfile, ex.name, counterAdjusted);
-            }
-
-            if (isLatestForLift && anchorMuscle && profile.progressesByLoad && !stillInDeload) {
-              const currentAnchor = TS.get(activeProfile).muscleAnchors?.[anchorMuscle] || null;
-              const newAnchor     = updateMuscleAnchorFromSession(currentAnchor, sessionRecord, ex);
-              if (newAnchor) TS.updateMuscleAnchor(activeProfile, anchorMuscle, newAnchor);
-            }
-          }
-        }
-
-        if (Object.keys(wwUpdates).length) {
-          setWW(p => ({ ...p, ...wwUpdates }));
-        }
-
-        // Phase 3 — refresh offer state
-        const finalState   = TS.get(activeProfile);
-        const finalHistory = H.get(activeProfile);
-        setDeloadOffer(shouldOfferDeload(finalState, finalHistory));
+        // Phase 3 — refresh offer state from the post-engine snapshot.
+        const finalState = TS.get(activeProfile);
+        setDeloadOffer(shouldOfferDeload(finalState, H.get(activeProfile)));
         setActiveDeload(finalState?.mesocycle?.activeDeload || null);
-
-        // Phase 4 — recompute volume aggregates
-        const aggregates = computeVolumeAggregates(finalHistory);
-        TS.updateVolume(activeProfile, aggregates);
-      } catch (e) {
-        console.error("[forge:retro-engine]", e);
       }
 
       // Anonymous completion signal — same path as live session finalise.

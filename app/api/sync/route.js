@@ -3,7 +3,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { mergeMeta, mergeHistories, mergeMetaFields, fieldClosure } from "@/lib/sync-merge";
 import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasRealPasskey } from "@/lib/auth-server";
-import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbReadProfileSince, dbReadMetaFields, dbCursorNow } from "@/lib/db";
+import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbDeleteToken, dbReadProfileSince, dbReadMetaFields, dbCursorNow } from "@/lib/db";
 import { NextResponse } from "next/server";
 
 // Blob layout (case-insensitive — path uses lowercase, display name lives in meta):
@@ -614,8 +614,11 @@ export async function DELETE(request) {
         );
       }
 
-      // Clean up the used token
+      // Consume the used token (relocated with Rec 11b: DB row first, blob
+      // best-effort for transition-era tokens). Same announced behaviour —
+      // the wipe path has always deleted its ceremony token on success.
       try {
+        await dbDeleteToken(authToken);
         const { blobs: tokenBlobs } = await list({ prefix: tokenKey });
         if (tokenBlobs.length) {
           await del(tokenBlobs.map(b => b.url));
