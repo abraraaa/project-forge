@@ -90,7 +90,25 @@ describe("#59 — Strong keeps hamstrings AND the pull-up", () => {
     const exA = strongB.blocks.find((b) => b.id === "bss1").exA;
     expect(exA.name).toBe("Machine Hamstring Curl");
     expect(exA.reps).toBe("6-8");
-    expect(exA.weight).toBeGreaterThan(STRONG_SLOT_SUBSTITUTIONS["bss1-A"].weight); // load raised
+    expect(exA.weight).toBeGreaterThan(35); // pool default raised by the Strong bump
+  });
+
+  it("honours the leg-curl rotation when the pick is heavy-capable (boss, 2026-07-25)", () => {
+    const withNordic = applyFocusToSession(SESSIONS[1], "Strong", { "bss2-B": { name: "Nordic Curl" } });
+    const nordic = withNordic.blocks.find((b) => b.id === "bss1").exA;
+    expect(nordic.name).toBe("Nordic Curl");
+    expect(nordic.loadType).toBe("bodyweight"); // canonical pool metadata, not a duplicate literal
+    expect(nordic.reps).toBe("6-8");
+
+    const withSeated = applyFocusToSession(SESSIONS[1], "Strong", { "bss2-B": { name: "Seated Leg Curl" } });
+    expect(withSeated.blocks.find((b) => b.id === "bss1").exA.name).toBe("Seated Leg Curl");
+
+    // Light variants can't honestly carry a 6–8 prescription → fallback.
+    const withSlider = applyFocusToSession(SESSIONS[1], "Strong", { "bss2-B": { name: "Slider Leg Curl" } });
+    expect(withSlider.blocks.find((b) => b.id === "bss1").exA.name).toBe("Machine Hamstring Curl");
+    expect(STRONG_SLOT_SUBSTITUTIONS["bss1-A"].allowed).toEqual(
+      ["Machine Hamstring Curl", "Nordic Curl", "Seated Leg Curl"],
+    );
   });
 
   it("Forged and Sculpt are untouched by the substitution", () => {
