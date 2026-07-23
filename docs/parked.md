@@ -11,10 +11,12 @@ specific next step that would unblock it.
 
 - **Exercise video sourcing (47 gaps)** · parked 2026-07-24 · 47 unique
   exercises across the swap DB + conditioning pools have no demo video.
-  Sourcing brief + Gemini prompt generated and handed to the boss (sub-5min,
-  embeddable, moody-premium aesthetic, flagged fallback tier). Next step:
-  boss returns the results table → wire IDs into `lib/programme.js` (one
-  canonical vid per exercise name, every duplicate entry updated). Long-term
+  RESOLVED 2026-07-25: Gemini table returned + all 47 wired into
+  `lib/programme.js` (79 swap-DB rows + 17 conditioning pool entries, which
+  also grew a quiet ▶ Watch demo link on the bonus card). CAVEAT: IDs are
+  Gemini-asserted; YouTube is unreachable from the dev sandbox (proxy), so
+  they are unverified by us — dead IDs degrade to YouTube's unavailable
+  screen, boss spot-checking a handful on device is the cheap audit. Long-term
   ambition on record: replace YouTube embeds with our own Heatwayve-shot
   footage ("idealistic models covered in oil and sweat with moody lighting").
 

@@ -485,9 +485,18 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               <div style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:T.text1,lineHeight:1.2,marginBottom:4}}>
                 {dayBonus.name}
               </div>
-              <div style={{fontSize:13,color:T.text2,lineHeight:1.5,marginBottom:16}}>
+              <div style={{fontSize:13,color:T.text2,lineHeight:1.5,marginBottom:dayBonus.vid?8:16}}>
                 {dayBonus.detail}
               </div>
+              {/* External open, deliberately: the in-app video sheet is
+                  session-tree machinery; a 5-minute bonus earns a link, not
+                  an extraction (same ▶ voice as the session's Watch demo). */}
+              {dayBonus.vid && (
+                <a href={`https://www.youtube.com/watch?v=${dayBonus.vid}`} target="_blank" rel="noopener noreferrer"
+                  style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:T.text3,textDecoration:"none",marginBottom:16}}>
+                  <span aria-hidden style={{fontSize:10}}>▶</span> Watch demo
+                </a>
+              )}
               {bonusDone[todayIdx] ? (
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   <span style={{fontSize:16,color:accent.main}}>✓</span>
