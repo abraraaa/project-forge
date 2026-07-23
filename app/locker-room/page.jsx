@@ -310,11 +310,10 @@ export default function LockerRoom() {
       )}
 
       {photosVisible && photos.length > 0 && (<>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "18px 0 4" }}>
-          <span style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: T.text4 }}>Oldest · {photos[0].date}</span>
-          <span style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: T.text4 }}>Most recent · {photos[photos.length - 1].date}</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        {/* The old OLDEST/MOST-RECENT row died when the chart grew its own
+            date anchors (2026-07-26) — saying it twice was the opposite of
+            elegant. */}
+        <div style={{ display: "flex", justifyContent: "flex-end", margin: "14px 0 10px" }}>
           <label htmlFor={PICK_ID} role="button" style={{ padding: "8px 14px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.md, fontSize: 12, color: T.text2, cursor: "pointer" }}>+ Add photo</label>
         </div>
 
