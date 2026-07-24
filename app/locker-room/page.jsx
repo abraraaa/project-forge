@@ -31,8 +31,8 @@ import { P, BW, getLocalProfile, pushNow } from "@/lib/storage";
 import { haptic } from "@/lib/a11y";
 import { ensurePhotoAccess } from "@/lib/auth-session";
 import { preparePhoto, uploadPhoto, deletePhoto, fetchPhotoIndex, fetchPhotoObjectUrl } from "@/lib/photos";
-import { todayLocalIso } from "@/lib/dates";
-import ScrollDrum from "@/components/ScrollDrum";
+import { todayLocalIso, parseLocalDate } from "@/lib/dates";
+import BodyweightDrum from "@/components/BodyweightDrum";
 
 export default function LockerRoom() {
   const router = useRouter();
@@ -200,22 +200,56 @@ export default function LockerRoom() {
         </div>
       );
     }
-    const w = 340;
+    // Multi-point (boss, 2026-07-26: "this line means nothing without either
+    // a scale or specific numbering"): numbering chosen over axes — the
+    // house chart language stays gridless, and the numbers do the work.
+    // Anatomy mirrors the Lab's 1RM chart: current reading + delta above,
+    // values ON the points while they're few enough to read (≤6; endpoints
+    // only beyond that), dates anchoring the ends.
+    const w = 340, PAD_X = 14, PAD_TOP = 16, PAD_BOT = 6;
+    const n = bwSeries.length;
     const ks = bwSeries.map((d) => d.kg);
     const kMin = Math.min(...ks), kMax = Math.max(...ks);
-    const cpts = bwSeries.map((d, i) => {
-      const x = (i / (bwSeries.length - 1)) * w;
-      const y = kMax === kMin ? h / 2 : h - ((d.kg - kMin) / (kMax - kMin)) * (h - 16) - 8;
-      return `${x},${y}`;
-    });
+    const pts = bwSeries.map((d, i) => ({
+      ...d,
+      x: PAD_X + (i / (n - 1)) * (w - 2 * PAD_X),
+      y: kMax === kMin ? h / 2 : PAD_TOP + (1 - (d.kg - kMin) / (kMax - kMin)) * (h - PAD_TOP - PAD_BOT - 12),
+    }));
+    const first = bwSeries[0], last = bwSeries[n - 1];
+    const delta = Math.round((last.kg - first.kg) * 10) / 10;
+    const fmtD = (iso) => parseLocalDate(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    const labelled = n <= 6 ? pts : [pts[0], pts[n - 1]];
     return (
-      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: h, display: "block" }}>
-        <polyline points={cpts.join(" ")} fill="none" stroke={T.sage} strokeWidth="1.5" opacity="0.8" />
-      </svg>
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "2px 0 6px" }}>
+          <span style={{ ...serif, fontSize: 26 }}>{last.kg} kg</span>
+          {delta !== 0 && (
+            <span style={{ fontFamily: T.serif, fontSize: 12, fontStyle: "italic", color: delta < 0 ? T.sage : T.text3 }}>
+              {delta > 0 ? "+" : "−"}{Math.abs(delta)} kg since {fmtD(first.date)}
+            </span>
+          )}
+        </div>
+        <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: h, display: "block" }}>
+          <polyline points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={T.sage} strokeWidth="1.5" opacity="0.8" />
+          {pts.map((p, i) => (
+            <circle key={p.date} cx={p.x} cy={p.y} r={i === n - 1 ? 3 : 2.5} fill={i === n - 1 ? T.coral : T.sage} />
+          ))}
+          {labelled.map((p) => (
+            <text key={`t${p.date}`} x={p.x} y={p.y < PAD_TOP + 10 ? p.y + 16 : p.y - 8}
+              textAnchor={p.x < 30 ? "start" : p.x > w - 30 ? "end" : "middle"}
+              style={{ fontSize: 10, fontFamily: T.sans, fill: p.date === last.date ? T.text2 : T.text3 }}>
+              {p.kg}
+            </text>
+          ))}
+        </svg>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+          <span style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: T.text4 }}>{fmtD(first.date)}</span>
+          <span style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: T.text4 }}>{fmtD(last.date)}</span>
+        </div>
+      </div>
     );
   };
 
-  if (!mounted) return <main style={page} />;
   if (!profile) return <main style={page}><p style={{ color: T.text3 }}>No active profile — sign in first, then come back to the Locker Room.</p></main>;
 
   // ── Chart-first layout: ungated bodyweight on top, photos behind the toggle ──
@@ -276,18 +310,17 @@ export default function LockerRoom() {
       )}
 
       {photosVisible && photos.length > 0 && (<>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "18px 0 4" }}>
-          <span style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: T.text4 }}>Oldest · {photos[0].date}</span>
-          <span style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: T.text4 }}>Most recent · {photos[photos.length - 1].date}</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        {/* The old OLDEST/MOST-RECENT row died when the chart grew its own
+            date anchors (2026-07-26) — saying it twice was the opposite of
+            elegant. */}
+        <div style={{ display: "flex", justifyContent: "flex-end", margin: "14px 0 10px" }}>
           <label htmlFor={PICK_ID} role="button" style={{ padding: "8px 14px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.md, fontSize: 12, color: T.text2, cursor: "pointer" }}>+ Add photo</label>
         </div>
 
         {askBw && (
           <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: T.r.md, background: `${T.sage}12`, border: `1px solid ${T.sage}33` }}>
             {showDrum ? (<>
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><ScrollDrum value={bwDraft} onChange={setBwDraft} step={0.5} min={40} max={200} unit="kg" /></div>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><BodyweightDrum value={bwDraft} onChange={setBwDraft} /></div>
               <button onClick={saveBwAndTag} disabled={busy} style={{ ...coralBtn, width: "100%" }}>{busy ? "Saving…" : "Save weight"}</button>
             </>) : (<>
               <span style={{ fontSize: 13, color: T.text1 }}>Photo saved. Update your bodyweight too?</span>
