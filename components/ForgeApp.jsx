@@ -19,7 +19,7 @@ import {
   startingWeightForLift,
 } from "@/lib/storage";
 import { absencesFromHistory, weeklySlotsFromWeek } from "@/lib/absence";
-import { isHeatwayveOrigin } from "@/lib/origin";
+import { isHeatwayveOrigin, migrationWindowOpen, hasPreFlipStory } from "@/lib/origin";
 import { activeBreak } from "@/lib/breaks";
 import { todayLocalIso } from "@/lib/dates";
 import BreatherModal from "@/components/BreatherModal";
@@ -1150,7 +1150,7 @@ export default function ForgeApp(){
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}
-      {showIosInstall         && <IosInstallOverlay migration={isHeatwayveOrigin()} onDismiss={()=>{ LS.set("forge:iosInstallDismissed", true); setShowIosInstall(false); }}/>}
+      {showIosInstall         && <IosInstallOverlay migration={isHeatwayveOrigin() && migrationWindowOpen() && hasPreFlipStory(history)} onDismiss={()=>{ LS.set("forge:iosInstallDismissed", true); setShowIosInstall(false); }}/>}
       <BodyweightEditModal open={bwEditOpen} onClose={()=>setBwEditOpen(false)} currentKg={bodyweight} onSave={updateBodyweight} profileName={activeProfile}/>
       {weekEditorOpen && (
         <WeekEditorSheet
@@ -2047,11 +2047,13 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
 // through the native "Add to Home Screen" flow ourselves. Triggered after
 // first completed session, dismissable, remembered via localStorage.
 // `migration` (flip package, dormant until heatwayve.app is primary): the
-// re-add moment for returning users. MECHANICALLY the nudge is free — the
-// dismissed flag is per-origin localStorage, so it resets on the new domain
-// and this overlay re-fires once history hydrates. This prop only swaps the
-// VOICE: the move deserves acknowledgment, not a stranger's install pitch.
-// Copy: drafts, flagged for the intimacy pass.
+// re-add moment for MIGRATED users only — three gates (boss catches,
+// 2026-07-27): new origin AND inside the 60-day migration window AND a
+// pre-flip story in history. First-timers on Heatwayve get the ordinary
+// pitch (you can't add something BACK you never had), and the voice
+// retires itself when the window closes. Mechanically the nudge is free —
+// the per-origin dismissed flag resets on the new domain and the overlay
+// re-fires once history hydrates. Copy: drafts, intimacy pass may season.
 function IosInstallOverlay({ onDismiss, migration = false }) {
   const { containerRef, onKeyDown } = useModalA11y(onDismiss);
   const titleId = "ios-install-title";

@@ -57,6 +57,10 @@ Moving users to heatwayve.app means, on first visit:
          links, fact-check against delta-era architecture).
    - [ ] SEO: `app/layout` metadata, OG image text, robots/sitemap URLs
          → heatwayve.app.
+   - [ ] Set `FLIP_DATE` in `lib/origin.js` to flip day — arms the
+         migration voice (triple-gated: new origin + inside the 60-day
+         window + pre-flip story in history, so first-timers never see
+         "back" and the copy self-retires).
    - [x] Migration copy + PWA re-add nudge — PRE-BUILT, DORMANT
          (2026-07-27, `lib/origin.js` gating): the install overlay
          re-fires on the new origin by localStorage physics (per-origin
