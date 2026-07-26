@@ -61,10 +61,10 @@ Moving users to heatwayve.app means, on first visit:
          · Tagline "Unveil the best you." — KEPT everywhere. Settled on
            flip day (boss: "no need to linger"); the README carries the
            one alternative ("The heat is the point.") for posterity.
-         · Descriptor settled: "heat in the dark, applied with intent"
-           everywhere (README + og description aligned on flip day —
-           the near-black IS the heat in the dark; "heat and rhythm"
-           retired as the draft it was).
+         · Descriptor settled: "cast your frame, move with intent"
+           everywhere (boss, flip night — "heat in the dark" read too
+           thirsty once said out loud; "heat and rhythm" retired as
+           the draft it was). README + og description aligned.
          · rp.name in the OS passkey sheet → Heatwayve (display-only;
            rpId byte-identical).
          · Share-card FORGE wordmark + theforged.fit footer → Heatwayve/
