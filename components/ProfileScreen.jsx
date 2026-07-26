@@ -20,12 +20,12 @@ import {
 import { FOCUS_SUMMARIES } from "@/lib/programme";
 import { reasonLabel } from "@/lib/breaks";
 import BugReportSheet from "@/components/BugReportSheet";
+import BodyweightDrum from "@/components/BodyweightDrum";
 import { isAdminSession } from "@/lib/auth-session";
 import { useInlineModalA11y } from "@/lib/a11y";
 import { PROFILE_SUFFIXES, LEGACY_PROFILE_KEY_PREFIXES } from "@/lib/store-health";
 import { Fade } from "@/components/ui";
 import { SyncStatusCard, SyncNowRow } from "@/components/sync-cards";
-import ScrollDrum from "@/components/ScrollDrum";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
 import TakenNameModal from "@/components/TakenNameModal";
 
@@ -430,14 +430,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
         <Fade d={140}>
           <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minHeight: 280 }}>
-            <ScrollDrum
-              value={pendingBw}
-              onChange={setPendingBw}
-              min={40}
-              max={200}
-              step={0.5}
-              unit="kg"
-            />
+            <BodyweightDrum value={pendingBw} onChange={setPendingBw} />
           </div>
         </Fade>
 

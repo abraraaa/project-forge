@@ -11,6 +11,7 @@
 
 import { useState, useEffect } from "react";
 import { useModalA11y } from "@/lib/a11y";
+import { isHeatwayveOrigin, migrationWindowOpen } from "@/lib/origin";
 import { T } from "@/lib/tokens";
 import { P } from "@/lib/storage";
 import { hasPasskey, authenticatePasskey } from "@/lib/webauthn";
@@ -82,7 +83,19 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
           <div style={{fontFamily:T.serif,fontSize:22,fontWeight:300,color:T.text1}}>
             Welcome back, {name}
           </div>
-          <p style={{fontSize:13,color:T.text3,marginTop:8}}>Fetching your stuff…</p>
+          <p style={{fontSize:13,color:T.text3,marginTop:8}}>
+            {/* Migration greeting — new origin AND inside the 60-day
+                window, so it self-retires (boss catch, 2026-07-27: a
+                move nobody narrates forever). Known accepted edge: a
+                profile CREATED on Heatwayve signing in on a second
+                device inside the window sees one mildly odd line —
+                history isn't fetched yet at this beat, so the pre-flip
+                check can't run here. Copy draft, intimacy pass may
+                season. */}
+            {isHeatwayveOrigin() && migrationWindowOpen()
+              ? "Forge grew into Heatwayve — your story came with it. Fetching it now…"
+              : "Fetching your stuff…"}
+          </p>
         </div>
       </div>
     );

@@ -94,4 +94,41 @@ describe("Locker Room chart sources (code shape)", () => {
     expect(src).toMatch(/bwSeries\.length === 1/);
     expect(src).toMatch(/bwSeries\.length === 0/);
   });
+
+  it("the line carries its numbers (boss, 2026-07-26): reading + delta, values on the points, dates at the ends", () => {
+    // current reading + signed delta since the first point
+    expect(src).toContain("{last.kg} kg");
+    expect(src).toMatch(/kg since \{fmtD\(first\.date\)\}/);
+    // values ON the points while few enough to read; endpoints beyond that
+    expect(src).toMatch(/n <= 6 \? pts : \[pts\[0\], pts\[n - 1\]\]/);
+    // dates anchor the ends
+    expect(src).toContain("{fmtD(first.date)}");
+    expect(src).toContain("{fmtD(last.date)}");
+    // dates doctrine: parsed locally, never new Date(iso)
+    expect(src).toContain("parseLocalDate(iso)");
+  });
+});
+
+describe("the odometer (boss, 2026-07-26) — 0.1 kg entry without the 1,600-detent wheel", () => {
+  it("splitKg/joinKg round-trip exactly in digit-space (no floating tenths)", async () => {
+    const { splitKg, joinKg } = await import("../components/BodyweightDrum.jsx");
+    expect(splitKg(82.5)).toEqual({ whole: 82, digit: 5 });   // legacy half-kilo decomposes exactly
+    expect(splitKg(84.6)).toEqual({ whole: 84, digit: 6 });   // float 0.599… rounds true
+    expect(splitKg(75)).toEqual({ whole: 75, digit: 0 });
+    expect(joinKg(82, 5)).toBe(82.5);
+    expect(joinKg(84, 6)).toBe(84.6);
+    for (let w = 40; w <= 200; w += 7) for (let d = 0; d <= 9; d++) {
+      const v = joinKg(w, d);
+      expect(splitKg(v)).toEqual({ whole: w, digit: d });     // exhaustive-ish round-trip
+    }
+    expect(splitKg(30)).toEqual({ whole: 40, digit: 0 });     // clamps to floor
+    expect(splitKg("garbage")).toEqual({ whole: 40, digit: 0 });
+  });
+  it("all three bodyweight entry sites run the odometer; no half-kilo drums remain", () => {
+    for (const rel of ["components/BodyweightEditModal.jsx", "components/ProfileScreen.jsx", "app/locker-room/page.jsx"]) {
+      const s = readFileSync(resolve(root, rel), "utf8");
+      expect(s, rel).toContain("<BodyweightDrum");
+      expect(s, rel).not.toMatch(/ScrollDrum[^>]*step=\{0\.5\}/);
+    }
+  });
 });
