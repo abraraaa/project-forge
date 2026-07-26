@@ -118,8 +118,7 @@ Moving users to heatwayve.app means, on first visit:
    - [x] Home-screen icon is the glass Heatwayve mark — after the
          flip-night catch: /apple-touch-icon.png had survived the sweep
          as the Forge F (brand-neutral filename; fixed in #249).
-   - [ ] diag-sync: mode=delta, cursor present, dirty=0 — eyeball on
-         next natural visit.
+   - [x] diag-sync clean on the new origin (boss, flip night +1).
    - [ ] Log a set end-to-end; check it lands in Neon (session row) —
          boss's next real workout covers this (the record-path soak).
    - [x] First-timer pass: no migration greeting (correct — no pre-flip
