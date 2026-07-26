@@ -146,10 +146,22 @@ describe("P3/P5 Locker Room scrubber (code shape)", () => {
 });
 
 describe("P4 — session tokens, delete verb, scrubber additions (code shape)", () => {
-  it("auth session is memory-only (no persistence of tokens)", () => {
+  it("auth session: TOKENS are memory-only; the only persistence is the admin-visibility hint", () => {
     const s = readFileSync(resolve(root, "lib/auth-session.js"), "utf8");
     expect(s).toContain("new Map()");
-    expect(s).not.toMatch(/localStorage\.|sessionStorage\.|document\.cookie/); // API use, not the comment
+    // The lock's real contract (refined 2026-07-28 with the standalone
+    // admin-hint fix): no token/credential material ever persists. The
+    // adminHint is a boolean UI-visibility flag — it grants nothing and
+    // every admin API re-verifies server-side. So: every localStorage use
+    // in this file must be the adminHint key, and nothing else; no
+    // sessionStorage or cookies at all.
+    // One nesting level in the arg matcher: the key template contains
+    // `${norm(profile)}`, whose inner parens would truncate a naive [^)]*.
+    const lsUses = s.match(/localStorage\.[A-Za-z]+\((?:[^()]|\([^()]*\))*\)/g) || [];
+    expect(lsUses.length).toBeGreaterThan(0);
+    for (const use of lsUses) expect(use).toContain("adminHint");
+    expect(s).not.toMatch(/sessionStorage\.|document\.cookie/);
+    expect(s).not.toMatch(/localStorage\.setItem\([^)]*token/i); // a token can never ride this path
   });
   it("DELETE verb exists, gated, index-row-first", () => {
     const s = readFileSync(resolve(root, "app/api/photos/route.js"), "utf8");

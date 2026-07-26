@@ -27,7 +27,7 @@ export async function generateMetadata({ params }) {
   return {
     title: `${entry.name} — muscles worked & progression`,
     description: exerciseDescription(entry),
-    alternates: { canonical: `https://theforged.fit/library/${entry.slug}` },
+    alternates: { canonical: `https://heatwayve.app/library/${entry.slug}` },
   };
 }
 
@@ -91,8 +91,8 @@ export default async function ExercisePage({ params }) {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Exercise Library", item: "https://theforged.fit/library" },
-      { "@type": "ListItem", position: 2, name: entry.name, item: `https://theforged.fit/library/${entry.slug}` },
+      { "@type": "ListItem", position: 1, name: "Exercise Library", item: "https://heatwayve.app/library" },
+      { "@type": "ListItem", position: 2, name: entry.name, item: `https://heatwayve.app/library/${entry.slug}` },
     ],
   };
 
@@ -126,7 +126,7 @@ export default async function ExercisePage({ params }) {
           <MuscleBar key={s.muscle} muscle={s.muscle} weight={s.weight} />
         ))}
         <p style={{ fontSize: 12, color: T.text3, marginTop: 12, lineHeight: 1.6 }}>
-          These are the weights Forge&apos;s volume audit actually computes with — deliberately
+          These are the weights Heatwayve&apos;s volume audit actually computes with — deliberately
           conservative, so compounds don&apos;t masquerade as full coverage. A 0.5 means a set
           counts as half a set for that muscle: meaningful help, not a replacement for direct work.
         </p>
@@ -136,7 +136,7 @@ export default async function ExercisePage({ params }) {
 
       <section style={{ marginTop: 36 }}>
         <h2 style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 6px" }}>
-          How Forge progresses it
+          How Heatwayve progresses it
         </h2>
         <p style={{ fontSize: 14, color: T.text2, lineHeight: 1.6, margin: 0 }}>{entry.progression}</p>
       </section>
@@ -168,7 +168,7 @@ export default async function ExercisePage({ params }) {
       )}
 
       <p style={{ marginTop: 48, fontSize: 13, color: T.text3, fontFamily: T.serif, fontStyle: "italic", lineHeight: 1.6 }}>
-        Train with intention. <Link href="/" style={{ color: T.gold }}>Open Forge</Link> — it prescribes
+        Train with intention. <Link href="/" style={{ color: T.gold }}>Open Heatwayve</Link> — it prescribes
         the weight, watches the reps, and does this arithmetic for every set you log.
       </p>
     </div>

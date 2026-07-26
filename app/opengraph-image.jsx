@@ -6,7 +6,7 @@
 // the warm field + glow rather than literal texture.
 import { ImageResponse } from "next/og";
 
-export const alt = "Forge — Train with intention";
+export const alt = "Heatwayve — Train with intention";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -28,13 +28,13 @@ export default function OpenGraphImage() {
       >
         <div
           style={{
-            fontSize: 34,
-            letterSpacing: "0.28em",
+            fontSize: 26,
+            letterSpacing: "0.22em",
             color: "#E0956A",
             marginBottom: 28,
           }}
         >
-          FORGE
+          HEATWAYVE
         </div>
         <div
           style={{

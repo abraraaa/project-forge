@@ -58,7 +58,7 @@ export async function POST(request) {
     return NextResponse.json({
       challenge,
       rp: {
-        name: "Forge",
+        name: "Heatwayve",
         id: rpId,
       },
       user: {

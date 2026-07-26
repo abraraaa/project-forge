@@ -520,7 +520,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             ) : pip ? (
               <span>{pip.label === "available" && "Available · this will be your username"}
                     {pip.label === "on this device" && "Welcome back"}
-                    {pip.label === "taken" && "Already taken on Forge"}
+                    {pip.label === "taken" && "Already taken on Heatwayve"}
                     {pip.label === "invalid" && "That name won't travel: no slashes (/ or \\)"}
                     {pip.label === "checking" && "Checking…"}
                     {pip.label === "offline · try anyway" && "Couldn't check online. You can still proceed"}
@@ -559,7 +559,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             We don&apos;t want your <span style={{fontStyle:"italic",color:T.coral}}>starsign</span> either.
           </div>
           <p style={{fontSize:13,color:T.text3,lineHeight:1.6}}>
-            Forge keeps your data yours. A name is all we need — it syncs your streak and weights across your devices. Nothing more.
+            Heatwayve keeps your data yours. A name is all we need — it syncs your streak and weights across your devices. Nothing more.
           </p>
         </div>
       </Fade>}

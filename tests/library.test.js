@@ -92,9 +92,9 @@ describe("library catalogue", () => {
 describe("sitemap includes the library", () => {
   it("lists the index and one URL per exercise", () => {
     const urls = sitemap().map((r) => r.url);
-    expect(urls).toContain("https://theforged.fit/library");
+    expect(urls).toContain("https://heatwayve.app/library");
     for (const e of LIBRARY) {
-      expect(urls).toContain(`https://theforged.fit/library/${e.slug}`);
+      expect(urls).toContain(`https://heatwayve.app/library/${e.slug}`);
     }
   });
 });

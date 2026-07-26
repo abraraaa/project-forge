@@ -126,7 +126,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
                 <button
                   onClick={async ()=>{
                     const canvas = await renderShareCard({ lift: activeLift, series: trends[activeLift] || [] });
-                    await shareCanvas(canvas, `forge-${activeLift.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-1rm.png`);
+                    await shareCanvas(canvas, `heatwayve-${activeLift.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-1rm.png`);
                   }}
                   style={{background:"none", border:"none", padding:"6px 0", cursor:"pointer", fontSize:12, color:T.text3, fontFamily:T.sans, letterSpacing:"0.04em", flexShrink:0}}
                   aria-label={`Share ${activeLift} trend`}

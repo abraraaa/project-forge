@@ -1214,7 +1214,7 @@ function OnboardingScreen({ onContinue }) {
           fontSize: 11, fontWeight: 500, color: T.coral,
           letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 20,
         }}>
-          Forge
+          Heatwayve
         </div>
         <div style={{ fontFamily: T.serif, fontSize: 44, fontWeight: 300, lineHeight: 1.1, marginBottom: 16 }}>
           Train with<br/><span style={{ fontStyle: "italic", color: T.coral }}>intention.</span>
@@ -1223,7 +1223,7 @@ function OnboardingScreen({ onContinue }) {
 
       <Fade d={120}>
         <p style={{ fontSize: 15, color: T.text2, lineHeight: 1.65, marginBottom: 28 }}>
-          Forge notices. Bar speed, effort, the days you show up. Every session quietly shaped to the athlete you're becoming.
+          Heatwayve notices. Bar speed, effort, the days you show up. Every session quietly shaped to the athlete you're becoming.
         </p>
       </Fade>
 
@@ -1236,7 +1236,7 @@ function OnboardingScreen({ onContinue }) {
           <PromiseLine
             accent={T.coral}
             kicker="Intelligence"
-            body="Forge reads how the last session felt and loads the next to match. More when you've earned it, less when you need it."
+            body="Heatwayve reads how the last session felt and loads the next to match. More when you've earned it, less when you need it."
           />
           <PromiseLine
             accent={T.steel}
@@ -2090,7 +2090,7 @@ function IosInstallOverlay({ onDismiss, migration = false }) {
         <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.2,marginBottom:10}}>
           {migration
             ? <>Add <span style={{fontStyle:"italic",color:T.coral}}>Heatwayve</span> back</>
-            : <>Install <span style={{fontStyle:"italic",color:T.coral}}>Forge</span></>}
+            : <>Install <span style={{fontStyle:"italic",color:T.coral}}>Heatwayve</span></>}
         </div>
         <p style={{fontSize:13,color:T.text2,marginBottom:20,lineHeight:1.6}}>
           {migration

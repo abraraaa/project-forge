@@ -24,7 +24,9 @@ import { NextResponse } from "next/server";
 import { GET as syncGET, PUT as syncPUT, POST as syncPOST, DELETE as syncDELETE } from "@/app/api/sync/route";
 
 // Host is irrelevant — the handlers only parse the URL's search params.
-const BASE = "https://theforged.fit/api/sync";
+// Requests here are direct handler invocations, never HTTP, so the flip's
+// 301 cannot apply.
+const BASE = "https://heatwayve.app/api/sync";
 const getReq  = (params) => new Request(`${BASE}?${new URLSearchParams(params)}`);
 const jsonReq = (method, body) => new Request(BASE, {
   method, headers: { "content-type": "application/json" }, body: JSON.stringify(body),

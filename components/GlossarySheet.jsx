@@ -32,7 +32,7 @@ const TERMS = [
           <li><strong>MAV</strong> — Maximum Adaptive Volume. The productive window — most growth happens between MEV and MAV.</li>
           <li><strong>MRV</strong> — Maximum Recoverable Volume. The ceiling above which extra sets cost more recovery than they earn.</li>
         </ul>
-        <p style={{marginTop:8}}>Forge uses Israetel/Helms-derived landmarks, tuned per muscle and per delt head.</p>
+        <p style={{marginTop:8}}>Heatwayve uses Israetel/Helms-derived landmarks, tuned per muscle and per delt head.</p>
       </>
     ),
   },
@@ -42,7 +42,7 @@ const TERMS = [
     subtitle: "Estimated one-rep max",
     body: (
       <>
-        <p>The most weight you could move once with good form. Forge estimates it from your logged sets using the Epley formula (weight × (1 + reps / 30)), which is reliable in the 1–10 rep range and gets lossy above 12.</p>
+        <p>The most weight you could move once with good form. Heatwayve estimates it from your logged sets using the Epley formula (weight × (1 + reps / 30)), which is reliable in the 1–10 rep range and gets lossy above 12.</p>
         <p style={{marginTop:8}}>Used as the trend line for each main lift — strength gains show as a rising estimated 1RM over time.</p>
       </>
     ),
@@ -55,7 +55,7 @@ const TERMS = [
       <>
         <p><strong>RPE</strong> — Rate of Perceived Exertion (1–10 scale).</p>
         <p><strong>RIR</strong> — Reps in Reserve (how many more reps you could have done).</p>
-        <p style={{marginTop:8}}>Forge collapses both to a three-point scale so you don&apos;t have to do maths between sets:</p>
+        <p style={{marginTop:8}}>Heatwayve collapses both to a three-point scale so you don&apos;t have to do maths between sets:</p>
         <ul style={{margin:"8px 0 0",padding:"0 0 0 18px",lineHeight:1.6}}>
           <li><strong>Easy</strong> — ~3+ reps in reserve. Add weight next time.</li>
           <li><strong>Normal</strong> — ~2 reps in reserve. Working effort. Hold or progress.</li>
@@ -70,7 +70,7 @@ const TERMS = [
     subtitle: "A phase of training",
     body: (
       <>
-        <p>A stretch of weeks (typically 6–8) where your accessory exercises stay the same so you can build progression on them. At the end of a block, Forge offers to rotate accessories — fresh stimulus, mainlift progression continues uninterrupted.</p>
+        <p>A stretch of weeks (typically 6–8) where your accessory exercises stay the same so you can build progression on them. At the end of a block, Heatwayve offers to rotate accessories — fresh stimulus, mainlift progression continues uninterrupted.</p>
       </>
     ),
   },
@@ -90,7 +90,7 @@ const TERMS = [
     subtitle: "Two exercises back-to-back",
     body: (
       <>
-        <p>Two exercises (typically targeting different muscle groups) performed one after the other with minimal rest, then rested as a pair. Forge writes them as A ↔ B. Each round counts as one set of each. Saves time and adds a cardio nudge.</p>
+        <p>Two exercises (typically targeting different muscle groups) performed one after the other with minimal rest, then rested as a pair. Heatwayve writes them as A ↔ B. Each round counts as one set of each. Saves time and adds a cardio nudge.</p>
       </>
     ),
   },
@@ -127,7 +127,7 @@ export default function GlossarySheet({ anchorTerm = null, onCancel }) {
           Glossary
         </div>
         <div id={titleId} style={{fontFamily:T.serif,fontSize:24,fontWeight:300,lineHeight:1.2,marginBottom:14,color:T.text1}}>
-          The terms <span style={{fontStyle:"italic",color:T.gold}}>Forge uses</span>
+          The terms <span style={{fontStyle:"italic",color:T.gold}}>Heatwayve uses</span>
         </div>
 
         <div ref={scrollRef} style={{flex:1,overflowY:"auto",marginRight:-8,paddingRight:8}}>
