@@ -58,12 +58,13 @@ Moving users to heatwayve.app means, on first visit:
            the forge: internals; reads as a training quality, not a
            brand artifact). Explicit ruling so post-flip reports of it
            are answered, not investigated.
-         · Tagline "Unveil the best you." — KEPT everywhere, pending the
-           boss's copy review on this PR (it's his line; the staged
-           manifest dropped it, which is a signal, not a decision).
-         · "fire and pressure, applied with intent" → DRAFT "heat and
-           rhythm, applied with intent" (og description; forge imagery
-           under a heat brand) — boss review.
+         · Tagline "Unveil the best you." — KEPT everywhere. Settled on
+           flip day (boss: "no need to linger"); the README carries the
+           one alternative ("The heat is the point.") for posterity.
+         · Descriptor settled: "heat in the dark, applied with intent"
+           everywhere (README + og description aligned on flip day —
+           the near-black IS the heat in the dark; "heat and rhythm"
+           retired as the draft it was).
          · rp.name in the OS passkey sheet → Heatwayve (display-only;
            rpId byte-identical).
          · Share-card FORGE wordmark + theforged.fit footer → Heatwayve/
@@ -74,11 +75,11 @@ Moving users to heatwayve.app means, on first visit:
            handler invocations, the 301 can never apply.
          · LICENSING.md — names BOTH marks (Heatwayve current, Forge/
            theforged.fit retained legacy).
-   - [ ] README rework (parked entry: identity + voice, heatwayve.app
+   - [x] README rework (parked entry: identity + voice, heatwayve.app
          links, fact-check against delta-era architecture).
-   - [ ] SEO: `app/layout` metadata, OG image text, robots/sitemap URLs
+   - [x] SEO: `app/layout` metadata, OG image text, robots/sitemap URLs
          → heatwayve.app.
-   - [ ] Set `FLIP_DATE` in `lib/origin.js` to flip day — arms the
+   - [x] Set `FLIP_DATE` in `lib/origin.js` to flip day — arms the
          migration voice (triple-gated: new origin + inside the 60-day
          window + pre-flip story in history, so first-timers never see
          "back" and the copy self-retires).
@@ -118,6 +119,34 @@ Moving users to heatwayve.app means, on first visit:
    - [ ] Final deep audit fires (Task #8) — includes the test-suite
          pruning brief, diag sunset question, transition-era code
          removal (blob token fallback, legacy PUT path).
+
+## External-facing hardening (boss list, flip day — feeds the deep audit)
+
+Now that the app fronts the public under its real name, these join
+Task #8's queue in priority order:
+
+1. **CSP** — the biggest practical frontend hardening. Expand from
+   whatever Next ships by default to an explicit policy (script/style/
+   img/connect sources; the app is self-contained so the allow-list
+   should be short — self, blob storage host, YouTube embeds). Feasible
+   check first: inline styles/hydration may force `unsafe-inline` on
+   styles; measure before promising nonces.
+2. **Email auth records** — minimal SPF + DMARC on heatwayve.app even
+   though we send nothing: `v=spf1 -all` and a reject-policy DMARC stop
+   anyone spoofing @heatwayve.app while the domain is young. DNS-only,
+   boss's registrar hands.
+3. **CORS on credentialed paths** — verify no API route reflects
+   arbitrary Origins while carrying credentials. Inventory: `/api/auth/*`
+   (ceremony tokens), `/api/photos` (hw_photos cookie — the one true
+   credentialed path), `/api/sync` (token in body). Same-origin-only is
+   the expected finding; prove it.
+4. **Repo hygiene** — public repo stays clean; secrets live only in
+   Vercel env vars (already the pattern: CRON_SECRET, ADMIN_PROFILE,
+   BLOB_READ_WRITE_TOKEN, DATABASE_URL). Deep audit re-greps history
+   for anything that ever slipped.
+5. **Cookie security review** — hw_photos is httpOnly + path-scoped;
+   audit confirms Secure + SameSite attributes and that no other cookie
+   exists or gets added without the same treatment.
 
 ## Rollback
 
