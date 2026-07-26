@@ -2,7 +2,7 @@ import { put, list, del, get } from "@vercel/blob";
 import { rateLimit } from "@/lib/rate-limit";
 import { mergeMeta, mergeHistories, mergeMetaFields, fieldClosure } from "@/lib/sync-merge";
 import { readJsonByPrefix } from "@/lib/blob-utils";
-import { hasRealPasskey } from "@/lib/auth-server";
+import { hasRealPasskey, readTokenData, isTokenValid } from "@/lib/auth-server";
 import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbDeleteToken, dbReadProfileSince, dbReadMetaFields, dbCursorNow } from "@/lib/db";
 import { NextResponse } from "next/server";
 
@@ -561,70 +561,75 @@ export async function DELETE(request) {
     const v = validateProfile(profile);
     if (!v.ok) return NextResponse.json({ error: v.reason }, { status: 400 });
 
-    // Gate deletion on a VERIFIABLE passkey. Read the credentials doc (blobs
-    // carry a random suffix, so match the extensionless prefix — the old
-    // `credentials.json` prefix never matched `credentials-XXX.json`, which
-    // silently left this gate open) and require auth only when a real,
-    // key-bearing credential exists. Keyless legacy credentials don't lock a
-    // user out; they can re-register to re-protect. See lib/auth-server.js.
-    const credData = await readJsonByPrefix(
-      `forge/profiles/${encodeURIComponent(normalise(profile))}/credentials`,
-    );
-    const hasPasskeys = hasRealPasskey(credData);
-
-    // If a real passkey exists, require a valid auth token.
-    if (hasPasskeys) {
-      if (!authToken) {
-        return NextResponse.json(
-          { error: "Passkey authentication required", requiresAuth: true },
-          { status: 401 }
-        );
-      }
-
-      // Verify auth token
-      const tokenKey = `forge/tokens/${authToken}`;
-      const tokenData = await readJson(tokenKey);
-
-      if (!tokenData) {
-        return NextResponse.json(
-          { error: "Invalid or expired auth token", requiresAuth: true },
-          { status: 401 }
-        );
-      }
-
-      if (Date.now() > tokenData.expires) {
-        return NextResponse.json(
-          { error: "Auth token expired", requiresAuth: true },
-          { status: 401 }
-        );
-      }
-
-      // Photo-scope tokens (the 30-day cookie, 2026-07-21) NEVER satisfy the
-      // wipe gate — destructive ops keep fresh-ceremony, short-lived tokens.
-      if (tokenData.scope === "photos") {
-        return NextResponse.json(
-          { error: "Fresh passkey authentication required", requiresAuth: true },
-          { status: 401 },
-        );
-      }
-      if (tokenData.profile !== normalise(profile)) {
-        return NextResponse.json(
-          { error: "Auth token does not match profile" },
-          { status: 403 }
-        );
-      }
-
-      // Consume the used token (relocated with Rec 11b: DB row first, blob
-      // best-effort for transition-era tokens). Same announced behaviour —
-      // the wipe path has always deleted its ceremony token on success.
-      try {
-        await dbDeleteToken(authToken);
-        const { blobs: tokenBlobs } = await list({ prefix: tokenKey });
-        if (tokenBlobs.length) {
-          await del(tokenBlobs.map(b => b.url));
-        }
-      } catch {}
+    // ── The wipe gate. FAILS CLOSED, always. ────────────────────────────
+    // Rewritten 2026-07-26 after the deep audit found two ways past it:
+    //
+    //  1. TRAVERSAL (critical): the token used to be read with a route-local
+    //     blob helper, from the tokens prefix joined to the RAW, unencoded
+    //     authToken. The SDK interpolates a pathname into a URL string and
+    //     fetch() collapses "../" before the request leaves the process, so
+    //     `authToken=../snapshots/daily/<name>.json` pointed the "token"
+    //     read at that profile's own snapshot. The snapshot JSON then
+    //     satisfied every check: it is truthy; `Date.now() > undefined` is
+    //     false (NaN comparison, not a rejection); it has no `scope`; and
+    //     its `profile` field matches. An anonymous caller could wipe anyone.
+    //     readTokenData() encodes the token, and isTokenValid() requires
+    //     `typeof expires === "number"` — either one alone kills that trick.
+    //
+    //  2. NO-PASSKEY PASS-THROUGH: the gate only ran `if (hasPasskeys)`, so
+    //     any profile without a verifiable credential was deletable by
+    //     anyone who could name it (/api/auth/check tells you which). The
+    //     "don't lock legacy users out" intent was right for reads and
+    //     wrong for the one irreversible verb. Deletion now requires proof
+    //     of control, full stop — a profile with no passkey must register
+    //     one first (requiresPasskeySetup), which is a recoverable prompt;
+    //     an unrecoverable wipe is not.
+    //
+    // Reads the SAME token store the mint writes (readTokenData is DB-first
+    // with the transition-era blob fallback) — the old blob-only read also
+    // meant no DB-minted token could ever satisfy this gate, so the
+    // legitimate passkey-protected wipe was broken in production.
+    if (!authToken) {
+      const credData = await readJsonByPrefix(
+        `forge/profiles/${encodeURIComponent(normalise(profile))}/credentials`,
+      );
+      return NextResponse.json(
+        hasRealPasskey(credData)
+          ? { error: "Passkey authentication required", requiresAuth: true }
+          : { error: "Set up a passkey before deleting this profile", requiresPasskeySetup: true },
+        { status: 401 },
+      );
     }
+
+    const tokenData = await readTokenData(authToken);
+    if (!isTokenValid(tokenData, profile, Date.now())) {
+      return NextResponse.json(
+        { error: "Invalid or expired auth token", requiresAuth: true },
+        { status: 401 },
+      );
+    }
+    // Photo-scope tokens (the sliding cookie, 2026-07-21) NEVER satisfy the
+    // wipe gate — destructive ops keep fresh-ceremony, short-lived tokens.
+    if (tokenData.scope === "photos") {
+      return NextResponse.json(
+        { error: "Fresh passkey authentication required", requiresAuth: true },
+        { status: 401 },
+      );
+    }
+
+    // Consume the used token (relocated with Rec 11b: DB row first, blob
+    // best-effort for transition-era tokens). Same announced behaviour —
+    // the wipe path has always deleted its ceremony token on success.
+    // Encoded to match the mint path, so the delete aims where the write landed.
+    try {
+      await dbDeleteToken(authToken);
+      const { blobs: tokenBlobs } = await list({
+        prefix: `forge/tokens/${encodeURIComponent(authToken)}`,
+      });
+      if (tokenBlobs.length) {
+        await del(tokenBlobs.map(b => b.url));
+      }
+    } catch {}
 
     // Proceed with deletion. DB rows go too (announced 2026-07-19, wipe
     // protocol): same user-initiated, passkey-gated scope as the blob
