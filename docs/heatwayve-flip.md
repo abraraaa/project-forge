@@ -119,6 +119,18 @@ Moving users to heatwayve.app means, on first visit:
    - [ ] Final deep audit fires (Task #8) — includes the test-suite
          pruning brief, diag sunset question, transition-era code
          removal (blob token fallback, legacy PUT path).
+   - [ ] Audit parameter (boss, flip night): **onboarding across device
+         types** — walk the install/first-run path per platform (iOS
+         Safari add-to-home, Android Chrome install prompt, desktop),
+         checking icon correctness at every surface that names its own
+         file (the apple-touch-icon miss is the class: brand-neutral
+         filenames dodge rename sweeps), install overlay voice, splash/
+         status-bar chrome, and the first-sync hydration beat.
+   - [ ] Audit parameter (boss, flip night): **SEO** — post-flip search
+         posture: 301 equity actually transferring (Search Console on
+         both domains), canonical/OG/sitemap all heatwayve.app, old-
+         domain indexed pages draining, structured data valid, and the
+         bonus TLDs not fragmenting the signal.
 
 ## External-facing hardening (boss list, flip day — feeds the deep audit)
 
