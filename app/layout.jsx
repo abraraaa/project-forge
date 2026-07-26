@@ -45,7 +45,7 @@ export const metadata = {
   openGraph: {
     title: "Heatwayve — Train with intention",
     description:
-      "Unveil the best you. Performance Lab, focus-aware rotation, progression that stays honest — heat in the dark, applied with intent.",
+      "Unveil the best you. Performance Lab, focus-aware rotation, progression that stays honest — cast your frame, move with intent.",
     siteName: "Heatwayve",
     locale: "en_GB",
     type: "website",
