@@ -4,7 +4,7 @@
 // are excluded here and disallowed in robots.js.
 import { LIBRARY } from "@/lib/library";
 
-const BASE = "https://theforged.fit";
+const BASE = "https://heatwayve.app";
 
 export default function sitemap() {
   return [

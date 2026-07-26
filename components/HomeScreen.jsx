@@ -619,7 +619,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               Milestone · {formatTonnage(tonnageMilestone)}
             </div>
             <div style={{fontFamily:T.serif,fontSize:18,fontWeight:300,color:T.text1,lineHeight:1.4}}>
-              You&apos;ve moved <span style={{color:T.gold,fontStyle:"italic"}}>{formatTonnage(tonnageTotalKg)}</span> since you started with Forge.
+              You&apos;ve moved <span style={{color:T.gold,fontStyle:"italic"}}>{formatTonnage(tonnageTotalKg)}</span> since you started with Heatwayve.
             </div>
           </button>
         </Fade>

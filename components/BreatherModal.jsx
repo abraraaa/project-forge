@@ -37,7 +37,7 @@ export default function BreatherModal({ onConfirm, onCancel }) {
           Need a <span style={{ fontStyle: "italic", color: T.coral }}>breather?</span>
         </div>
         <p style={{ fontSize: 14, color: T.text2, lineHeight: 1.6, marginBottom: 22 }}>
-          Rest is a training variable, not a lapse. Tell Forge you&apos;re stepping back and your
+          Rest is a training variable, not a lapse. Tell Heatwayve you&apos;re stepping back and your
           rhythm holds where it is. It picks up the moment you train again.
         </p>
 

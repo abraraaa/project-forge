@@ -173,10 +173,12 @@ describe("single-admin recognition (boss, 2026-07-26 — not a role system)", ()
     expect(bugs).toContain("process.env.ADMIN_PROFILE && !isAdminProfile(data.profile)");
     expect(bugs).toContain("status: 403");
   });
-  it("the client flag is a memory-only UI hint riding the ceremony cache", () => {
+  it("the client flag is a UI hint riding the ceremony cache, with a device-local persisted hint (standalone fix, 2026-07-28)", () => {
     const session = readFileSync(resolve(root, "lib/auth-session.js"), "utf8");
     expect(session).toContain("isAdminSession");
     expect(session).toMatch(/admin: !!auth\.admin/);
+    expect(session).toContain("adminHint");   // persists visibility across tab death
+    expect(session).toContain("re-verifies the token's profile server-side");
     const profileScreen = readFileSync(resolve(root, "components/ProfileScreen.jsx"), "utf8");
     // the admin wing (bug reports + diagnostics) is recognition-gated
     expect(profileScreen).toMatch(/isAdminSession\(current\)[\s\S]{0,400}diag-bugs/);

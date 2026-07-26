@@ -54,9 +54,10 @@ expression of them — the part that took the work.
 
 ## Branding
 
-The **Forge** name, wordmark, visual identity, and the **theforged.fit**
-domain are *not* licensed under any grant in this repository. All branding
-rights reserved.
+The **Heatwayve** name, wordmark, visual identity, and the
+**heatwayve.app** domain — together with the retained legacy marks
+**Forge** and **theforged.fit** — are *not* licensed under any grant in
+this repository. All branding rights reserved.
 
 ## Contributions
 
@@ -90,8 +91,8 @@ public. The citations are in the modules themselves.
 noncommercial purposes.
 
 **Can I self-host a modified Forge? Fork it and build on it?** No — no
-modified versions, no derivative works. If you want Forge, it lives at
-[theforged.fit](https://theforged.fit).
+modified versions, no derivative works. If you want Heatwayve, it lives at
+[heatwayve.app](https://heatwayve.app) — formerly Forge at theforged.fit.
 
 **Can I copy the programme design, anatomy weights, or tempo data into a
 different app?** No. The curated datasets and programme content are part

@@ -6,9 +6,9 @@ export default function robots() {
         userAgent: "*",
         allow: "/",
         // Diagnostic surfaces and the sync API are operational, not content.
-        disallow: ["/diag-sync", "/diag-vt", "/api/", "/session"],
+        disallow: ["/diag-sync", "/diag-vt", "/diag-bugs", "/api/", "/session"],
       },
     ],
-    sitemap: "https://theforged.fit/sitemap.xml",
+    sitemap: "https://heatwayve.app/sitemap.xml",
   };
 }

@@ -47,8 +47,8 @@ try {
 // PWA that references them before the new manifest takes effect.
 const PRECACHE_URLS = [
   "/manifest.json",
-  "/forge-glass-192.png",
-  "/forge-glass-512.png",
+  "/heatwayve/heatwayve-glass-192.png",
+  "/heatwayve/heatwayve-glass-512.png",
   "/apple-touch-icon.png",
 ];
 
@@ -97,8 +97,8 @@ self.addEventListener("install", (event) => {
       event.addRoutes([
         { condition: { urlPattern: { pathname: "/api/*" } }, source: "network" },
         { condition: { urlPattern: { pathname: "/manifest.json" } }, source: "cache" },
-        { condition: { urlPattern: { pathname: "/forge-glass-192.png" } }, source: "cache" },
-        { condition: { urlPattern: { pathname: "/forge-glass-512.png" } }, source: "cache" },
+        { condition: { urlPattern: { pathname: "/heatwayve/heatwayve-glass-192.png" } }, source: "cache" },
+        { condition: { urlPattern: { pathname: "/heatwayve/heatwayve-glass-512.png" } }, source: "cache" },
         { condition: { urlPattern: { pathname: "/apple-touch-icon.png" } }, source: "cache" },
         ...manifestAssetRoutes,
       ]).catch((err) => console.warn("[sw] addRoutes rejected:", err));
