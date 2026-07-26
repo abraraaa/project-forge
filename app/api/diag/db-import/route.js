@@ -17,16 +17,31 @@ export async function GET(request) {
   // Whole-store census = the most expensive read in the app; throttle hard.
   const limited = rateLimit(request, "diag-census", 5);
   if (limited) return limited;
-  // Auth: Bearer header, or ?key= for browser use (boss runs this from the
-  // address bar, not a terminal). Acceptable for a READ-ONLY diag: the
-  // operator-held secret grants no write path here, and HTTPS keeps the
-  // query string off the wire in the clear.
-  // Deliberately UNGATED (boss decision 2026-07-19): reads in Forge are open
-  // by design (see audit #20/#21 — no sensitive data; passkeys gate
-  // destructive ops only), and this report reveals nothing GET /api/sync
-  // doesn't already serve. A secret here would be stricter than the data
-  // itself, and keys don't get thrown around in URLs. Read-only by
-  // construction — no DDL, no writes, no deletes exist in this handler.
+  // GATED 2026-07-26 (deep audit). The previous "deliberately ungated"
+  // decision (2026-07-19) rested on audit #20/#21 — "no sensitive data" —
+  // and that ruling carried its own expiry: *revisit if the data model
+  // gains something private*. It has. Progress photos landed 2026-07-21
+  // and the bodyweight journal rides sync meta.
+  //
+  // The decisive point is not what one profile's report reveals, though —
+  // it is that this is the only route in the app that enumerates the WHOLE
+  // namespace. Profile name IS the identity here, so a census hands over
+  // every user's key at once; that is categorically different from serving
+  // one already-known name, which is what the open-reads doctrine actually
+  // licenses. Read-only by construction (no DDL, no writes, no deletes),
+  // so the risk was always disclosure — but disclosure of the target list
+  // is the precondition for every other attack on an open-read system.
+  //
+  // Fails closed when CRON_SECRET is unset, matching the cron routes: an
+  // unconfigured deployment refuses rather than opens.
+  const authHeader = request.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
+  }
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const db = await probeDb();
 
