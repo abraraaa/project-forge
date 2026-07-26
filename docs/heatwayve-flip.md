@@ -51,8 +51,29 @@ Moving users to heatwayve.app means, on first visit:
    - [ ] Manifest: swap to staged `public/heatwayve/manifest-staged.webmanifest`
          content (name Heatwayve, icons → `/heatwayve/heatwayve-glass-*.png`;
          legacy `/icon-*.png` paths stay in place for installed PWAs).
-   - [ ] User-visible "Forge" strings → Heatwayve (components + metadata;
-         NOT the `forge:`/`forge/` internals, NOT lib comments).
+   - [~] User-visible "Forge" strings → Heatwayve — SWEPT 2026-07-28 from
+         a 248-item Opus survey (58 renames, 23 edge-cases ruled).
+         EDGE-CASE RULINGS OF RECORD:
+         · "Forged" focus name — KEPT (persisted value; same doctrine as
+           the forge: internals; reads as a training quality, not a
+           brand artifact). Explicit ruling so post-flip reports of it
+           are answered, not investigated.
+         · Tagline "Unveil the best you." — KEPT everywhere, pending the
+           boss's copy review on this PR (it's his line; the staged
+           manifest dropped it, which is a signal, not a decision).
+         · "fire and pressure, applied with intent" → DRAFT "heat and
+           rhythm, applied with intent" (og description; forge imagery
+           under a heat brand) — boss review.
+         · rp.name in the OS passkey sheet → Heatwayve (display-only;
+           rpId byte-identical).
+         · Share-card FORGE wordmark + theforged.fit footer → Heatwayve/
+           heatwayve.app; OG image wordmark resized for nine glyphs.
+         · package.json "project-forge" — KEPT (repo self-ID, never
+           rendered).
+         · Selftest cron BASE — cosmetic swap; requests are direct
+           handler invocations, the 301 can never apply.
+         · LICENSING.md — names BOTH marks (Heatwayve current, Forge/
+           theforged.fit retained legacy).
    - [ ] README rework (parked entry: identity + voice, heatwayve.app
          links, fact-check against delta-era architecture).
    - [ ] SEO: `app/layout` metadata, OG image text, robots/sitemap URLs

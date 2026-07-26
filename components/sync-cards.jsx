@@ -22,7 +22,15 @@ export function SyncStatusCard({ profile }) {
   // pure — no Date.now() read mid-render.
   const [now, setNow] = useState(() => Date.now());
 
-  useEffect(() => SyncStatus.subscribe(s => { setStatus(s); setNow(Date.now()); }), []);
+  useEffect(() => {
+    const unsub = SyncStatus.subscribe(s => { setStatus(s); setNow(Date.now()); });
+    // Boss find (2026-07-28): without a tick, "just now" FROZE at the last
+    // sync event while SyncNowRow's per-second counter marched on — two
+    // clocks disagreeing on one screen. 30s granularity is enough here
+    // (this label's units are minutes).
+    const tick = setInterval(() => setNow(Date.now()), 30_000);
+    return () => { unsub(); clearInterval(tick); };
+  }, []);
 
   const handleRetry = async () => {
     if (retrying) return;
