@@ -187,6 +187,15 @@ Added from the flip-night copy review (boss, 2026-07-26): the Locker
 Room chart lines (journal captions + reading/delta header) and the OG/
 metadata long lines (the "volume audits against MEV/MAV/MRV" sentence
 and the twitter description — functional, never had the voice pass).
+
+Added from the Sarah first-timer pass (boss, 2026-07-26): the first-run
+rest-day warm line. A brand-new user whose first-ever screen is "rest
+day" gets an anticlimactic opening beat — one forward-pointing line
+fixes it. SPEC RULED (boss): the logic is **next scheduled strength
+session**, computed from the user's week config — never a hardcoded
+weekday, and "strength" specifically so a suggested cardio/HIIT day
+doesn't make the line lie. Copy drafted at the sitting; logic is
+settled now.
 Ruled at the same review, NOT in scope here: descriptor is "cast your
 frame, move with intent" (settled, aligned everywhere); migration voice,
 "Tell me where it hurts.", and "Your keys, boss" confirmed as-shipped.
@@ -225,6 +234,29 @@ entry below.
 ---
 
 ## Active parking list
+
+### Preferred name ("What should we call you?") — QUEUED 2026-07-26, ready-anytime
+
+The login name is a permanent claim key (sync, blobs, passkeys find you
+by it — it can never change). Being ADDRESSED by it is a separate
+concern currently conflated with it: greetings, welcome-back beats, and
+share-card vocatives all use the handle raw. Works for most; fails
+funny-to-mortifying at the edges (boss: someone who regrets their
+handle shouldn't hear it read back warmly at every open).
+
+The build, when triggered: optional preferred-name field in the profile
+screen; greeting sites use it with fallback to the handle when unset
+(fallback is already correct for both archetypes — full-name people get
+their full name, joke-handle people chose their greeting). Handle stays
+visible where identity matters (profile header, sync diagnostics). Sync
+mechanics are the well-trodden pattern: one meta field + stamp pair in
+the delta closure, one settings row, a swap at each greeting site. No
+migrations, nothing structural.
+
+DELIBERATELY HELD, not built: this is a rapid-response card. First user
+who regrets their profile name gets it shipped same-day — a cheap,
+visible "heard you, fixed it" (boss's call, flip night). Nothing else
+blocks on it; anyone may trigger it at any time.
 
 ### Shell-owns-the-viewport rearchitecture — SHIPPED 2026-07-12 (PR #208)
 

@@ -92,30 +92,45 @@ Moving users to heatwayve.app means, on first visit:
          it"). Wakes automatically when heatwayve.app is primary; the
          rename-sweep PR need only review the copy.
    - [ ] SW: no change needed (per-origin; new origin = clean install).
-3. **Vercel/DNS (boss's hands, ~10 min)**
-   - [ ] Remove the app-layer 307 freeze block from `next.config.mjs`
-         (rides the rename PR, deploys with it).
-   - [ ] In Vercel: make heatwayve.app the primary domain.
-   - [ ] Add app-layer PERMANENT 301 theforged.fit → heatwayve.app with
-         carve-outs that must keep serving on the OLD origin:
+3. **Vercel/DNS (boss's hands, ~10 min)** — DONE flip night 2026-07-26
+   - [x] Remove the app-layer 307 freeze block from `next.config.mjs`
+         (rode the rename PR #248, deployed with it).
+   - [x] In Vercel: heatwayve.app made the primary domain ("firing as
+         expected" — boss).
+   - [x] App-layer PERMANENT 301 theforged.fit → heatwayve.app live,
+         with carve-outs serving on the OLD origin:
          `/.well-known/webauthn` (ROR must stay fetchable at the rpId
          origin) and `/api/auth/*` (ceremonies negotiated against the
          rpId origin). `/api/sync` + `/api/photos` follow the redirect
          fine (clients re-request).
-   - [ ] Bonus TLDs: confirm .fit/.space/.life still 301 → .app.
-4. **Verify (the Sarah walkthrough, on device)**
-   - [ ] theforged.fit URL → lands on heatwayve.app, profile hydrates
-         from cloud (streak/history intact).
-   - [ ] Existing passkey signs in ON heatwayve.app (ROR path).
+   - [x] Bonus TLDs confirmed still 301 → .app.
+4. **Verify (the Sarah walkthrough, on device)** — flip night, boss's
+   two passes: veteran (own profile, fresh PWA reinstall) + first-timer
+   (throwaway name). "Sarah" is the security audit's placeholder user —
+   the archetypal ordinary user; the persona, not a person.
+   - [x] Fresh install from heatwayve.app: profile hydrates from cloud,
+         "synced smoothly, no missing data" (boss, veteran pass).
+   - [x] Passkey signs in ON heatwayve.app.
    - [ ] Locker Room reveal: one ceremony, cookie set, second visit
-         zero-prompt.
-   - [ ] Re-add to home screen; icon is the glass Heatwayve mark;
-         standalone chrome blends (the #72 collar work is origin-blind
-         but eyeball it).
-   - [ ] diag-sync: mode=delta, cursor present, dirty=0 after first sync.
-   - [ ] Log a set end-to-end; check it lands in Neon (session row).
+         zero-prompt — DEFERRED to the boss's planned Locker Room
+         shakedown (surface barely used pre-flip; will be tested with
+         real photo volume).
+   - [x] Home-screen icon is the glass Heatwayve mark — after the
+         flip-night catch: /apple-touch-icon.png had survived the sweep
+         as the Forge F (brand-neutral filename; fixed in #249).
+   - [x] diag-sync clean on the new origin (boss, flip night +1).
+   - [ ] Log a set end-to-end; check it lands in Neon (session row) —
+         boss's next real workout covers this (the record-path soak).
+   - [x] First-timer pass: no migration greeting (correct — no pre-flip
+         story), onboarding → straight into rest day. Ruled fine; no
+         tutorial ("designed to be easy to intuit" — boss). One copy
+         beat noted for intimacy pass II: the first-run rest-day warm
+         line (see parked.md Phase 6).
 5. **Aftermath**
    - [ ] Watch Vercel logs for 404s/auth failures for a day.
+   - [x] SEO: heatwayve.app in Search Console since purchase; Change of
+         Address filed from the theforged.fit property (flip night) —
+         the transfer is now observable, not assumed.
    - [ ] Final deep audit fires (Task #8) — includes the test-suite
          pruning brief, diag sunset question, transition-era code
          removal (blob token fallback, legacy PUT path).
