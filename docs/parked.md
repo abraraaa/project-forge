@@ -183,6 +183,14 @@ the Locker Room's full surface (headline, toggles, empty/first-point
 chart states, the metro confirm, the post-photo weight ask), and #75's
 style-pass twin — one sitting, voice and visuals together.
 
+Added from the flip-night copy review (boss, 2026-07-26): the Locker
+Room chart lines (journal captions + reading/delta header) and the OG/
+metadata long lines (the "volume audits against MEV/MAV/MRV" sentence
+and the twitter description — functional, never had the voice pass).
+Ruled at the same review, NOT in scope here: descriptor is "cast your
+frame, move with intent" (settled, aligned everywhere); migration voice,
+"Tell me where it hurts.", and "Your keys, boss" confirmed as-shipped.
+
 Named honestly: Phase 3 got RESOLVED, not performed — its items closed
 as verdicts and codifications while the week's energy was audit-shaped.
 This is the slow pass the boss actually enjoys, done at its own tempo,
