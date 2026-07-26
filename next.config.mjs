@@ -23,17 +23,17 @@ const nextConfig = {
   experimental: {
     viewTransition: true,
   },
-  // ── Heatwayve migration freeze (2026-07-22) ─────────────────────────────
-  // heatwayve.app is attached to this project as the 301 TARGET of the bonus
-  // TLDs (.fit/.space/.life), so Vercel's dashboard can't also redirect it.
-  // The freeze therefore lives HERE: any request arriving on a heatwayve
-  // host gets a 307 (temporary — never 301, which caches would hold against
-  // next week's flip) to theforged.fit, preserving the path. This stops
-  // anyone accruing per-origin state (localStorage/passkeys/cookies) on the
-  // new domain before the migration map is fully executed.
-  // AT FLIP TIME: delete this block (heatwayve.app goes primary) and add the
-  // reverse 301 on theforged.fit — with the /.well-known/webauthn + auth-API
-  // carve-outs per docs/audit ledger / migration map.
+  // ── THE FLIP (docs/heatwayve-flip.md, step 3) ────────────────────────────
+  // The 2026-07-22 freeze (heatwayve→theforged 307) is DELETED; the reverse
+  // PERMANENT 301 below sends theforged.fit → heatwayve.app, with two
+  // carve-outs that must keep serving on the OLD origin:
+  //   /.well-known/webauthn — the ROR document must stay fetchable at the
+  //     rpId origin, or cross-origin passkey ceremonies break;
+  //   /api/auth/*           — ceremonies are negotiated against the rpId
+  //     origin. Everything else follows the redirect (clients re-request).
+  // Bonus TLDs (.fit/.space/.life → .app) stay at the Vercel dashboard.
+  // THIS PR MERGES ON FLIP DAY ONLY — the 301 is cached aggressively by
+  // design; merging early strands users before DNS is ready.
   // Minimal SAFE security headers (audit #24). Deliberately NO script-src
   // CSP: Next App Router inlines bootstrap scripts, and a nonce pipeline is
   // its own project — a broken-CSP outage serves no one. These four are
@@ -52,18 +52,21 @@ const nextConfig = {
     }];
   },
   async redirects() {
+    // Carve-out via negative lookahead in the path matcher: auth ceremony
+    // routes + the ROR document never leave the rpId origin.
+    const CARVE_OUT = "/:path((?!api/auth/|\\.well-known/webauthn).*)";
     return [
       {
-        source: "/:path*",
-        has: [{ type: "host", value: "heatwayve.app" }],
-        destination: "https://theforged.fit/:path*",
-        permanent: false, // 307
+        source: CARVE_OUT,
+        has: [{ type: "host", value: "theforged.fit" }],
+        destination: "https://heatwayve.app/:path",
+        permanent: true, // 301 — the move is forever
       },
       {
-        source: "/:path*",
-        has: [{ type: "host", value: "www.heatwayve.app" }],
-        destination: "https://theforged.fit/:path*",
-        permanent: false,
+        source: CARVE_OUT,
+        has: [{ type: "host", value: "www.theforged.fit" }],
+        destination: "https://heatwayve.app/:path",
+        permanent: true,
       },
     ];
   },

@@ -1,6 +1,6 @@
 {
-  "name": "Forge",
-  "short_name": "Forge",
+  "name": "Heatwayve",
+  "short_name": "Heatwayve",
   "description": "Unveil the best you. Train with intention.",
   "start_url": "/",
   "display": "standalone",
@@ -14,31 +14,31 @@
   ],
   "icons": [
     {
-      "src": "/forge-glass-192.png",
+      "src": "/heatwayve/heatwayve-glass-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/forge-glass-512.png",
+      "src": "/heatwayve/heatwayve-glass-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/forge-glass-1024.png",
+      "src": "/heatwayve/heatwayve-glass-1024.png",
       "sizes": "1024x1024",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/forge-flat-192.png",
+      "src": "/heatwayve/heatwayve-flat-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/forge-flat-512.png",
+      "src": "/heatwayve/heatwayve-flat-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -52,7 +52,7 @@
       "url": "/performance",
       "icons": [
         {
-          "src": "/forge-flat-192.png",
+          "src": "/heatwayve/heatwayve-flat-192.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -65,7 +65,7 @@
       "url": "/profile",
       "icons": [
         {
-          "src": "/forge-flat-192.png",
+          "src": "/heatwayve/heatwayve-flat-192.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -78,14 +78,14 @@
       "sizes": "1206x2622",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Today's training at a glance \u2014 week rhythm, session overview, and the Performance Lab"
+      "label": "Today's training at a glance — week rhythm, session overview, and the Performance Lab"
     },
     {
       "src": "/screenshots/profile.png",
       "sizes": "1206x2622",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Profiles travel across devices \u2014 bodyweight, training focus, and sync in one place"
+      "label": "Profiles travel across devices — bodyweight, training focus, and sync in one place"
     }
   ]
 }
