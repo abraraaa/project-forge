@@ -6,6 +6,14 @@ import { hasRealPasskey, readTokenData, isTokenValid, mintAuthToken } from "@/li
 import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbDeleteToken, dbReadProfileSince, dbReadMetaFields, dbCursorNow } from "@/lib/db";
 import { NextResponse } from "next/server";
 
+// Generic client error + full server-side log. Raw exception text (Neon/blob
+// driver detail, query fragments, schema names) must not reach the client —
+// audit 2026-07-26, P3 info-disclosure. Detail stays in the server log.
+function serverError(e, { status = 500, label = "sync" } = {}) {
+  console.error(`[forge:${label}]`, e?.stack || e?.message || e);
+  return NextResponse.json({ error: "Something went wrong. Try again." }, { status });
+}
+
 // Blob layout (case-insensitive — path uses lowercase, display name lives in meta):
 //   forge/profiles/{lowerName}/meta.json    — weights, reps, streak, programmeBlock, displayName
 //   forge/profiles/{lowerName}/history.json — full session history (append-only)
@@ -428,7 +436,7 @@ export async function GET(request) {
       history: Array.isArray(history) ? history : [],
     }), gate);
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e);
   }
 }
 
@@ -482,7 +490,7 @@ export async function PUT(request) {
     } catch (e) {
       // Refuse silently-dropped deltas: the client keeps its dirty set and
       // retries — same posture as the fat path's 503s.
-      return NextResponse.json({ error: `Delta write failed: ${e.message}` }, { status: 503 });
+      return serverError(e, { status: 503, label: "sync-delta" });
     }
   }
 
@@ -530,7 +538,7 @@ export async function PUT(request) {
       }), gate);
     } catch (e) {
       console.error("[forge:put:db]", profile, e?.message || e);
-      return NextResponse.json({ error: `Write failed: ${e.message}` }, { status: 503 });
+      return serverError(e, { status: 503, label: "sync-write" });
     }
   }
 
@@ -629,7 +637,7 @@ export async function PUT(request) {
     // Tagged log so the runtime error surface tells us which call exploded
     // next time something goes wrong. Aggregate logs truncate without this.
     console.error("[forge:put:outer]", profile, e?.message || e, e?.stack);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e);
   }
 }
 
@@ -687,7 +695,7 @@ export async function POST(request) {
 
     return NextResponse.json({ ok: true, claimed: true });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e);
   }
 }
 
@@ -704,13 +712,12 @@ export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
     const profile = searchParams.get("profile");
-    // Header first (deep audit 2026-07-26): the app's own law is "keys don't
-    // ride URLs" — /api/photos obeys it, the wipe did not, so the one
-    // credential authorising irreversible deletion was landing in access
-    // logs and Referer headers. The query fallback stays ONLY so a client
-    // mid-deploy isn't stranded; it is the deprecated path, not the design.
-    const authToken = request.headers.get("x-hw-auth")
-      || searchParams.get("authToken");
+    // Header ONLY (finalised 2026-07-27). The app's law is "keys don't ride
+    // URLs"; the query fallback existed briefly so a mid-deploy client wasn't
+    // stranded, and every client has long since reloaded onto the header path
+    // (lib/storage.js blobDelete). Retired so a wipe token can never land in
+    // an access log or Referer again.
+    const authToken = request.headers.get("x-hw-auth");
 
     const v = validateProfile(profile);
     if (!v.ok) return NextResponse.json({ error: v.reason }, { status: 400 });
@@ -800,7 +807,7 @@ export async function DELETE(request) {
       catch (e) {
         // Refuse a half-wipe: if DB rows survive while blobs die, the next
         // GET would serve the "deleted" profile straight back from the DB.
-        return NextResponse.json({ error: `Delete failed (db): ${e.message}` }, { status: 500 });
+        return serverError(e, { label: "sync-delete-db" });
       }
     }
     // Snapshot generations live OUTSIDE the profile prefix and must die
@@ -823,11 +830,11 @@ export async function DELETE(request) {
     try {
       await del(blobs.map(b => b.url));
     } catch (e) {
-      return NextResponse.json({ error: `Delete failed: ${e.message}` }, { status: 500 });
+      return serverError(e, { label: "sync-delete" });
     }
 
     return NextResponse.json({ ok: true, deleted: blobs.length });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e);
   }
 }

@@ -125,10 +125,14 @@ describe("admin wing fails closed in production", () => {
 });
 
 describe("credentials never ride URLs", () => {
-  it("the wipe token is read from the header first", () => {
+  it("the wipe token is read from the header — and the query fallback is GONE", () => {
+    // Finalised 2026-07-27: the transitional `|| searchParams.get("authToken")`
+    // is retired, so a wipe credential can never land in an access log or
+    // Referer. The lock asserts BOTH halves: header present, query absent.
     const route = read("app/api/sync/route.js");
     const del = route.slice(route.indexOf("export async function DELETE"));
     expect(del).toContain('request.headers.get("x-hw-auth")');
+    expect(del).not.toContain('searchParams.get("authToken")');
   });
 
   it("the client sends it as a header, not a query param", () => {
@@ -172,6 +176,50 @@ describe("sliding cookies cannot renew themselves forever", () => {
 
   it("mintAuthToken preserves an inherited authAt rather than re-stamping", () => {
     expect(read("lib/auth-server.js")).toContain("authAt: authAt || new Date().toISOString()");
+  });
+});
+
+describe("raw exception text never reaches the client", () => {
+  // Neon/blob driver messages carry query fragments and schema names. The
+  // routes now funnel every 5xx through a serverError() helper that logs the
+  // detail server-side and returns a fixed generic string. Assert the LEAK
+  // SHAPE is gone (`error: e.message` in a response) — not the substring
+  // `e.message`, which still legitimately appears in server-side console.error.
+  for (const f of ["app/api/sync/route.js", "app/api/photos/route.js"]) {
+    it(`${f} funnels errors through serverError, not raw e.message`, () => {
+      const s = read(f);
+      expect(s).toContain("function serverError(");
+      expect(s, "raw message must not be returned to the client")
+        .not.toMatch(/error:\s*`?[^`\n]*\$\{?e\.message/);
+      expect(s).not.toContain("error: e.message");
+    });
+  }
+});
+
+describe("unauthenticated bug intake is bounded before parse", () => {
+  const bugs = read("app/api/bugs/route.js");
+  it("caps the raw body and measures it as text, not post-parse", () => {
+    // Open, unauthenticated intake. Reading text() and length-checking BEFORE
+    // JSON.parse means a huge or chunked body is rejected 413 without ever
+    // being buffered into an object.
+    expect(bugs).toContain("await request.text()");
+    expect(bugs).toMatch(/text\.length > \d/);
+    expect(bugs).toContain("status: 413");
+    expect(bugs.indexOf("request.text()")).toBeLessThan(bugs.indexOf("JSON.parse"));
+  });
+});
+
+describe("the snapshot shrink-guard fails CLOSED on an unreadable prior", () => {
+  const cron = read("app/api/cron/sync-snapshot/route.js");
+  it("a prior that exists but won't read refuses the overwrite", () => {
+    // readJsonDirect returns null for BOTH "no prior" and "read threw". A
+    // transient read error must not disable the guard and clobber the restore
+    // point — so when prior===null we LIST and, if the blob is really there,
+    // guard rather than overwrite.
+    expect(cron).toContain("import { put, list }");
+    const guard = cron.slice(cron.indexOf("if (prior === null)"));
+    expect(guard.slice(0, 400)).toContain("list({ prefix: dailyPath })");
+    expect(guard.slice(0, 400)).toMatch(/guarded\.push\(profile\)[\s\S]{0,200}continue/);
   });
 });
 

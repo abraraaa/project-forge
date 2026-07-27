@@ -59,7 +59,12 @@ export async function POST(request) {
   if (limited) return limited;
   try {
     if (!hasDb()) return NextResponse.json({ error: "Reports unavailable" }, { status: 503 });
-    const body = await request.json().catch(() => null);
+    // Body cap before parse (audit 2026-07-26, P3): this is unauthenticated
+    // open intake, and only `message` (≤2000) is length-checked AFTER parse.
+    // Read as text and measure so a chunked body can't skip the guard.
+    const text = await request.text();
+    if (text.length > 16 * 1024) return NextResponse.json({ error: "Body too large" }, { status: 413 });
+    let body = null; try { body = JSON.parse(text); } catch { body = null; }
     const message = typeof body?.message === "string" ? body.message.trim() : "";
     if (!message || message.length > MAX_MESSAGE_LEN) {
       return NextResponse.json({ error: "Message required (max 2000 chars)" }, { status: 400 });
