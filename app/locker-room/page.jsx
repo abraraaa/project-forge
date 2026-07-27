@@ -24,7 +24,7 @@
 //     token-gated at the API. Regret must be reversible.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { T } from "@/lib/tokens";
 import { P, BW, getLocalProfile, pushNow } from "@/lib/storage";
@@ -59,14 +59,48 @@ export default function LockerRoom() {
   const trackRef = useRef(null);
   const lastSnapRef = useRef(0);
   const urlsRef = useRef({});
+  const inflightRef = useRef(new Set());
 
   useEffect(() => () => { Object.values(urlsRef.current).forEach((u) => URL.revokeObjectURL(u)); }, []);
 
-  const mintUrl = (tok, date) => {
-    fetchPhotoObjectUrl(profile, tok, date).then((u) => {
-      if (u) { urlsRef.current[date] = u; setUrls((prev) => ({ ...prev, [date]: u })); }
-    });
-  };
+  // Mint ONE photo's object URL, deduped: skip if already loaded or in flight.
+  // (Was called in a loop over every photo on reveal — the N+1 full-res fetch
+  // our own audit + an external review both flagged. Now driven by the window
+  // below, so only a bounded neighbourhood is ever fetched.)
+  const mintUrl = useCallback((tok, date) => {
+    if (urlsRef.current[date] || inflightRef.current.has(date)) return;
+    inflightRef.current.add(date);
+    fetchPhotoObjectUrl(profile, tok, date)
+      .then((u) => {
+        inflightRef.current.delete(date);
+        if (u) { urlsRef.current[date] = u; setUrls((prev) => ({ ...prev, [date]: u })); }
+      })
+      .catch(() => inflightRef.current.delete(date));
+  }, [profile]);
+
+  // Bounded prefetch window + LRU eviction. PREFETCH each side keeps the drag
+  // smooth (neighbours are already loading before you reach them); anything
+  // past EVICT is revoked so a long timeline never holds every full-res frame
+  // (or trips the 90/min photo-read limit). Sized so a collection that fits in
+  // the window loads fully — i.e. today's small collections behave EXACTLY as
+  // before; the bounding only engages once there are more photos than the
+  // window. PREFETCH/EVICT are the tunable knobs if the drag feel wants it.
+  const PREFETCH = 6;   // collections <= 13 photos load in full (no change)
+  const EVICT = 9;      // beyond ±9 frames, revoke to stay bounded
+  const syncWindow = useCallback((center, tok, list) => {
+    if (!tok || !list?.length) return;
+    const lo = Math.max(0, center - PREFETCH);
+    const hi = Math.min(list.length - 1, center + PREFETCH);
+    for (let i = lo; i <= hi; i++) mintUrl(tok, list[i].date);
+    for (const d of Object.keys(urlsRef.current)) {
+      const i = list.findIndex((p) => p.date === d);
+      if (i < 0 || i < center - EVICT || i > center + EVICT) {
+        URL.revokeObjectURL(urlsRef.current[d]);
+        delete urlsRef.current[d];
+        setUrls((prev) => { const n = { ...prev }; delete n[d]; return n; });
+      }
+    }
+  }, [mintUrl]);
 
   const reveal = async () => {
     setBusy(true); setErr(null);
@@ -77,7 +111,8 @@ export default function LockerRoom() {
       setToken(t);
       setPhotos(idx.photos);
       setPos(Math.max(0, idx.photos.length - 1));
-      for (const p of idx.photos) mintUrl(t, p.date);
+      // Window loading is driven by the effect below (keyed on the centre
+      // frame) — no eager all-photos fetch here.
       setShown(true);
     } finally { setBusy(false); }
   };
@@ -138,6 +173,14 @@ export default function LockerRoom() {
       haptic.commit();
     } finally { setConfirmDelete(false); setBusy(false); }
   };
+
+  // Sync the prefetch window whenever the visible frame changes. Keyed on the
+  // ROUNDED centre so a drag re-syncs once per frame crossed, not per pixel.
+  const centerFrame = photos?.length ? Math.max(0, Math.min(photos.length - 1, Math.round(pos))) : 0;
+  useEffect(() => {
+    if (!shown || !token || !photos?.length) return;
+    syncWindow(centerFrame, token, photos);
+  }, [shown, token, photos, centerFrame, syncWindow]);
 
   const posFromClientX = (clientX) => {
     const el = trackRef.current;
