@@ -77,6 +77,37 @@ describe("token scope fails closed by default", () => {
   });
 });
 
+describe("one token store per deployment — the DB is authoritative", () => {
+  const auth = read("lib/auth-server.js");
+
+  it("the blob fallback is reachable ONLY when there is no DB", () => {
+    // The fallback used to be unconditional, which made the DB
+    // non-authoritative: dbDeleteProfile drops a profile's auth_tokens rows
+    // but the wipe never sweeps forge/tokens/, so a surviving blob token
+    // still authenticated — and because the profile key is a low-entropy
+    // NAME, once a wiped name was re-claimed that stale token read the NEW
+    // profile's photos, which the photos route would then rotate into a
+    // fresh DB token. A dead credential resurrected as a live one.
+    const fn = auth.slice(auth.indexOf("export async function readTokenData"));
+    const body = fn.slice(0, fn.indexOf("\n}"));
+    const dbAt   = body.indexOf("if (hasDb())");
+    const blobAt = body.indexOf("readJsonDirect(");
+    expect(dbAt).toBeGreaterThan(-1);
+    expect(blobAt).toBeGreaterThan(dbAt);          // fallback is AFTER the guard
+    // ...and the DB branch must RETURN, never fall through to the blob.
+    expect(body).toMatch(/if \(hasDb\(\)\)\s*\{\s*return[\s\S]{0,80}dbReadToken/);
+  });
+
+  it("mint and read agree on which store a deployment uses", () => {
+    // Asymmetry is the bug shape: writing a token somewhere the reader will
+    // not look (or vice versa) is exactly how the wipe gate ended up
+    // rejecting real tokens while accepting a forged one.
+    const mint = auth.slice(auth.indexOf("export async function mintAuthToken"));
+    expect(mint).toMatch(/if \(hasDb\(\)\)[\s\S]{0,200}dbInsertToken/);
+    expect(mint).toMatch(/else[\s\S]{0,120}put\(`forge\/tokens\//);
+  });
+});
+
 describe("admin wing fails closed in production", () => {
   const bugs = read("app/api/bugs/route.js");
 
