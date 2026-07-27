@@ -18,9 +18,7 @@ describe("CSP — a real allow-list, not a framing-only gesture", () => {
   const cfg = read("next.config.mjs");
 
   it("constrains scripts at all (the whole point of the tightening)", () => {
-    // Before: `frame-ancestors 'none'; object-src 'none'; base-uri 'self'`
-    // with no default-src and no script-src, so scripts were unconstrained
-    // and the policy offered zero XSS containment.
+    // The policy must constrain script execution, not only framing.
     expect(cfg).toContain("default-src 'self'");
     expect(cfg).toContain("script-src 'self' 'unsafe-inline'");
   });
@@ -81,13 +79,9 @@ describe("one token store per deployment — the DB is authoritative", () => {
   const auth = read("lib/auth-server.js");
 
   it("the blob fallback is reachable ONLY when there is no DB", () => {
-    // The fallback used to be unconditional, which made the DB
-    // non-authoritative: dbDeleteProfile drops a profile's auth_tokens rows
-    // but the wipe never sweeps forge/tokens/, so a surviving blob token
-    // still authenticated — and because the profile key is a low-entropy
-    // NAME, once a wiped name was re-claimed that stale token read the NEW
-    // profile's photos, which the photos route would then rotate into a
-    // fresh DB token. A dead credential resurrected as a live one.
+    // One authoritative store. A credential must not outlive the deletion
+    // of the thing it authorises, so the fallback exists only where there is
+    // no database to be authoritative in the first place.
     const fn = auth.slice(auth.indexOf("export async function readTokenData"));
     const body = fn.slice(0, fn.indexOf("\n}"));
     const dbAt   = body.indexOf("if (hasDb())");
@@ -99,9 +93,8 @@ describe("one token store per deployment — the DB is authoritative", () => {
   });
 
   it("mint and read agree on which store a deployment uses", () => {
-    // Asymmetry is the bug shape: writing a token somewhere the reader will
-    // not look (or vice versa) is exactly how the wipe gate ended up
-    // rejecting real tokens while accepting a forged one.
+    // Mint and read must agree on the store. Asymmetry here means valid
+    // credentials are rejected while the gate's guarantees quietly weaken.
     const mint = auth.slice(auth.indexOf("export async function mintAuthToken"));
     expect(mint).toMatch(/if \(hasDb\(\)\)[\s\S]{0,200}dbInsertToken/);
     expect(mint).toMatch(/else[\s\S]{0,120}put\(`forge\/tokens\//);
@@ -112,9 +105,8 @@ describe("admin wing fails closed in production", () => {
   const bugs = read("app/api/bugs/route.js");
 
   it("an unset ADMIN_PROFILE does not open the wing in production", () => {
-    // The old shape (`env && !isAdmin`) meant an absent/mistyped var silently
-    // admitted ANY passkey holder — behaviour changing as a side effect of an
-    // env-var state, which is the 2026-07-09 failure shape exactly.
+    // Behaviour must not change as a side effect of an env-var being unset —
+    // the 2026-07-09 failure shape. Unset means refuse, not open.
     expect(bugs).toMatch(/if \(!process\.env\.ADMIN_PROFILE\)/);
     expect(bugs).toMatch(/NODE_ENV === "production"[\s\S]{0,140}status: 403/);
   });
@@ -126,9 +118,8 @@ describe("admin wing fails closed in production", () => {
 
 describe("credentials never ride URLs", () => {
   it("the wipe token is read from the header — and the query fallback is GONE", () => {
-    // Finalised 2026-07-27: the transitional `|| searchParams.get("authToken")`
-    // is retired, so a wipe credential can never land in an access log or
-    // Referer. The lock asserts BOTH halves: header present, query absent.
+    // Credentials travel in headers only, so they cannot land in access logs
+    // or Referer. Asserts both halves: header present, query absent.
     const route = read("app/api/sync/route.js");
     const del = route.slice(route.indexOf("export async function DELETE"));
     expect(del).toContain('request.headers.get("x-hw-auth")');
@@ -147,9 +138,8 @@ describe("profile names cannot be path fragments or homoglyph collisions", () =>
   const route = read("app/api/sync/route.js");
 
   it("NFKC-normalises before lowercasing", () => {
-    // Without it, U+212A (Kelvin) lowercases to "k" and collapses onto
-    // another profile's path, while NFC/NFD variants of the same visible
-    // name resolve to DIFFERENT profiles.
+    // One visible name must resolve to exactly one profile, and two
+    // different profiles must never collapse onto one path.
     expect(route).toContain('.normalize("NFKC")');
   });
 

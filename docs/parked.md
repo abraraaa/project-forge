@@ -34,10 +34,9 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
   the template block; touches training output, so engine-level test required.
 - **Cursor advance under local-storage quota pressure** (`lib/storage.js`) —
   only advance once local writes are confirmed. Small proposal first.
-- **Locker Room rapid-scrub fetch burst** — the window is bounded and
-  centre-first, but in-flight fetches are uncapped. Only reachable at photo
-  counts no profile is near. Plan when it earns attention: a small concurrency
-  cap, or abort-on-evict. Don't build speculatively.
+- **Locker Room photo loading — further tuning available.** The bounded
+  centre-first window covers today's usage. Options if it ever earns attention
+  are in the internal notes. Don't build speculatively.
 - **Two test files pin literal source** (`flip-dormant`, `photos`) — loosen to
   regex on the invariant next time they're touched.
 - **ESLint 9→10** — bump in isolation, run lint.
