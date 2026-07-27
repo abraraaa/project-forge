@@ -55,6 +55,11 @@ export function SyncStatusCard({ profile }) {
     pulling: "Syncing…",
     pushing: "Saving…",
     error: "Offline",
+    // J1 (2026-07-26): not a failure. Nothing is lost and nothing is broken —
+    // this device just hasn't proved the profile is its own yet, so the work
+    // stays here rather than travelling. Named for what's true, not for what
+    // went wrong.
+    needsAuth: "On this device only",
   };
 
   const stateColour = {
@@ -62,6 +67,9 @@ export function SyncStatusCard({ profile }) {
     pulling: T.steel,
     pushing: T.steel,
     error: T.coral,
+    // Steel, not coral: nothing has gone wrong. Coral would teach the user to
+    // read a normal resting state as an alarm.
+    needsAuth: T.steel,
   };
 
   // Deliberately CLEAR — a status readout, not an interactive card (per the
@@ -95,6 +103,11 @@ export function SyncStatusCard({ profile }) {
           {status.error && (
             <div style={{ fontSize: 11, color: T.text3, marginTop: 2 }}>
               Will retry when online
+            </div>
+          )}
+          {status.state === "needsAuth" && (
+            <div style={{ fontSize: 11, color: T.text3, marginTop: 2 }}>
+              Add a passkey to carry it across devices
             </div>
           )}
         </div>

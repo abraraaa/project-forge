@@ -2,7 +2,7 @@ import { put, list, del, get } from "@vercel/blob";
 import { rateLimit } from "@/lib/rate-limit";
 import { mergeMeta, mergeHistories, mergeMetaFields, fieldClosure } from "@/lib/sync-merge";
 import { readJsonByPrefix } from "@/lib/blob-utils";
-import { hasRealPasskey, readTokenData, isTokenValid } from "@/lib/auth-server";
+import { hasRealPasskey, readTokenData, isTokenValid, mintAuthToken } from "@/lib/auth-server";
 import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbDeleteToken, dbReadProfileSince, dbReadMetaFields, dbCursorNow } from "@/lib/db";
 import { NextResponse } from "next/server";
 
@@ -102,6 +102,115 @@ async function safeReadJson(request) {
   }
 }
 
+// ─── The sync gate (J1, boss decision 2026-07-26) ───────────────────────────
+// Until now GET/PUT/POST here asserted nothing about WHO was calling: the
+// profile name was the only key, so anyone who could guess a handle could
+// read a stranger's training history and bodyweight, and merge-write into it.
+// The auth machinery built through July (SimpleWebAuthn, auth_tokens, the
+// photo cookie) was wired into /api/photos and /api/bugs and never into the
+// route that carries the most data.
+//
+// The contract now matches /api/photos exactly — the token's STORED profile
+// is compared against the REQUESTED profile, and every path below is derived
+// from the gate's normalised value, so there is no seam between what was
+// authorised and what gets used.
+//
+// WHY A COOKIE, not the in-memory ceremony token: sync is ambient (visibility
+// change, reconnect, every mutation). A memory-only token dies with the tab,
+// so binding sync to it would demand Face ID before a fresh tab could sync.
+// The sliding httpOnly cookie means a ceremony only after a week of NOT
+// using the app on this device — never once per tab. It
+// is never readable by JS, so lib/auth-session.js's "nothing plaintext gets
+// thrown around" law holds — that law governs JS-readable persistence.
+//
+// WHAT STAYS OPEN, deliberately:
+//   · POST (name claim) — the bootstrap. You cannot hold a token for a
+//     profile that does not exist yet. Claiming grants nothing: a claimed
+//     profile with no passkey syncs nothing in or out.
+//   · GET ?check=1 — name availability, needed BEFORE a claim exists.
+// Both are pre-identity by construction, and neither returns user data.
+//
+// A profile with no passkey keeps working FOREVER, locally: the app is
+// local-first (lib/storage.js — "loads INSTANTLY from localStorage, works
+// offline"). It simply does not sync. That is the product story, not a
+// punishment: your training lives on your device; a passkey is what carries
+// it between devices.
+// SLIDING 7 days, matching hw_photos exactly (boss, 2026-07-26). The window
+// length is not a UX dial: because ANY active day rotates it, a trusted
+// high-touch device never re-auths no matter what this number is. A longer
+// window therefore buys the honest user nothing and hands a LOST phone extra
+// days. 7 is the tighter choice at identical convenience — the same reasoning
+// that set the photo cookie, applied consistently rather than re-litigated.
+const SYNC_TTL_MS = 7 * 86400000;
+const SYNC_ROTATE_AFTER_MS = 86400000;   // any active day slides it
+// ...but the chain is not infinite: rotation stops at 90 days from the
+// ORIGINAL ceremony, so a credential used daily forever still comes back to a
+// passkey once a quarter. Without a ceiling, one captured cookie renews itself
+// for life (deep audit finding against the photo cookie — not repeated here).
+const SYNC_ABSOLUTE_CAP_MS = 90 * 86400000;
+export const SYNC_COOKIE = "hw_sync";
+const SYNC_COOKIE_OPTS = {
+  httpOnly: true, secure: true, sameSite: "strict",
+  path: "/api/sync", maxAge: 7 * 86400,
+};
+
+/** Attach a rotated sync cookie (if the gate minted one) to a success response. */
+const withSyncCookie = (res, g) => {
+  if (g?.refresh) res.cookies.set(SYNC_COOKIE, g.refresh, SYNC_COOKIE_OPTS);
+  return res;
+};
+
+/**
+ * Resolve and verify the caller for a profile-scoped sync request.
+ * Returns { profile } on success (plus `refresh` when the cookie slid), or
+ * { fail: NextResponse } — never a bare boolean, so a caller cannot mistake
+ * a falsy result for permission.
+ */
+async function syncGate(request, profile) {
+  // Header token (fresh ceremony) OR the sliding sync cookie. Optional
+  // chaining throughout: the nightly self-test invokes these handlers
+  // DIRECTLY with a plain Request, which has no cookie jar.
+  const headerToken = request.headers?.get?.("x-hw-auth") || null;
+  const cookieToken = request.cookies?.get?.(SYNC_COOKIE)?.value || null;
+  const token = headerToken || cookieToken;
+  const data = await readTokenData(token);
+  if (!isTokenValid(data, profile, Date.now())) {
+    return {
+      fail: NextResponse.json(
+        { error: "Sign in to sync this profile", requiresAuth: true },
+        { status: 401 },
+      ),
+    };
+  }
+  // Photo-scope tokens are for photos. Accepting one here would let the
+  // narrow, long-lived credential read the whole training record.
+  if (data.scope && data.scope !== "sync") {
+    return {
+      fail: NextResponse.json(
+        { error: "Sign in to sync this profile", requiresAuth: true },
+        { status: 401 },
+      ),
+    };
+  }
+  // Sliding rotation — cookie-carried sync tokens only, and never past the
+  // absolute ceiling measured from the ORIGINAL ceremony (authAt survives
+  // rotation; createdAt does not). Past the cap the cookie simply stops
+  // sliding and lapses on its own, so the next visit runs one ceremony.
+  let refresh = null;
+  if (data.scope === "sync" && token === cookieToken) {
+    const age = Date.now() - new Date(data.createdAt || 0).getTime();
+    const authAge = Date.now() - new Date(data.authAt || data.createdAt || 0).getTime();
+    const withinCap = Number.isFinite(authAge) && authAge < SYNC_ABSOLUTE_CAP_MS;
+    if ((!Number.isFinite(age) || age > SYNC_ROTATE_AFTER_MS) && withinCap) {
+      refresh = await mintAuthToken({
+        profile, ttlMs: SYNC_TTL_MS, scope: "sync",
+        authAt: data.authAt || data.createdAt || null,
+      });
+    }
+  }
+  return { profile: normalise(profile), refresh };
+}
+
 // Read a private blob's JSON body via the SDK's authenticated get().
 // Returns null on not-found / parse error / any other failure.
 //
@@ -186,6 +295,13 @@ export async function GET(request) {
       return NextResponse.json({ exists: blobs.length > 0 });
     }
 
+    // Everything past here returns the PROFILE'S OWN DATA — gated.
+    // (check=1 above is deliberately open: it predates any identity and
+    // reveals only whether a name is taken, which a claim attempt would
+    // reveal anyway.)
+    const gate = await syncGate(request, profile);
+    if (gate.fail) return gate.fail;
+
     // ── Delta pull (#2 family — docs/delta-sync.md) ─────────────────────
     // GET ?since=<cursor> returns only rows whose updated_at is newer,
     // plus a fresh cursor. DB-only by definition: a client holding a
@@ -199,7 +315,7 @@ export async function GET(request) {
         return NextResponse.json({ error: "Delta sync unavailable" }, { status: 503 });
       }
       const delta = await dbReadProfileSince(normalise(profile), since);
-      return NextResponse.json({ delta: true, ...delta });
+      return withSyncCookie(NextResponse.json({ delta: true, ...delta }), gate);
     }
 
     // DB-first (Neon migration step 2): if the profile has rows, serve them.
@@ -208,7 +324,7 @@ export async function GET(request) {
     if (hasDb()) {
       try {
         const fromDb = await dbReadProfile(normalise(profile));
-        if (fromDb) return NextResponse.json(fromDb);
+        if (fromDb) return withSyncCookie(NextResponse.json(fromDb), gate);
       } catch (e) {
         console.error("[forge:sync GET] db read failed, falling back to blob:", e?.message || e);
       }
@@ -240,10 +356,10 @@ export async function GET(request) {
           console.error("[forge:sync GET] lazy backfill failed:", e?.message || e);
         }
       }
-      return NextResponse.json({
+      return withSyncCookie(NextResponse.json({
         meta: metaDirect,
         history: Array.isArray(historyDirect) ? historyDirect : [],
-      });
+      }), gate);
     }
 
     // Slow path: one or both deterministic reads came back empty. Either
@@ -282,10 +398,10 @@ export async function GET(request) {
     const meta    = metaDirect    ?? metaLegacy;
     const history = historyDirect ?? historyLegacy;
 
-    return NextResponse.json({
+    return withSyncCookie(NextResponse.json({
       meta,
       history: Array.isArray(history) ? history : [],
-    });
+    }), gate);
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
@@ -307,6 +423,13 @@ export async function PUT(request) {
 
   const v = validateProfile(profile);
   if (!v.ok) return NextResponse.json({ error: v.reason }, { status: 400 });
+
+  // Writes are the actively harmful half of J1: an open PUT let anyone
+  // overwrite a stranger's bodyweight and streak, and mergeHistories unions
+  // rather than replaces, so fabricated sessions could be INJECTED
+  // permanently. Gated before a single byte is merged.
+  const gate = await syncGate(request, profile);
+  if (gate.fail) return gate.fail;
 
   // ── Delta push (#2 family — docs/delta-sync.md) ────────────────────────
   // Body: { profile, delta: { meta: { field: value… }, history: [records] } }.
@@ -330,7 +453,7 @@ export async function PUT(request) {
       const existing = await dbReadMetaFields(norm, closure);
       const mergedFields = mergeMetaFields(existing, incoming);
       await dbUpsertProfile(norm, { meta: mergedFields, history: records });
-      return NextResponse.json({ ok: true, delta: true, cursor, meta: { fields: Object.keys(mergedFields).length }, history: { inserted: records.length } });
+      return withSyncCookie(NextResponse.json({ ok: true, delta: true, cursor, meta: { fields: Object.keys(mergedFields).length }, history: { inserted: records.length } }), gate);
     } catch (e) {
       // Refuse silently-dropped deltas: the client keeps its dirty set and
       // retries — same posture as the fat path's 503s.
@@ -375,11 +498,11 @@ export async function PUT(request) {
         meta: mergedMeta ? { ...mergedMeta, syncedAt: new Date().toISOString() } : {},
         history: mergedHistory || [],
       });
-      return NextResponse.json({
+      return withSyncCookie(NextResponse.json({
         ok: true,
         ...(mergedMeta ? { meta: true } : {}),
         ...(mergedHistory ? { history: { count: mergedHistory.length } } : {}),
-      });
+      }), gate);
     } catch (e) {
       console.error("[forge:put:db]", profile, e?.message || e);
       return NextResponse.json({ error: `Write failed: ${e.message}` }, { status: 503 });
@@ -476,7 +599,7 @@ export async function PUT(request) {
     // deterministic paths mean nothing reads them. PUT stays small and
     // predictable.
 
-    return NextResponse.json({ ok: true, ...results });
+    return withSyncCookie(NextResponse.json({ ok: true, ...results }), gate);
   } catch (e) {
     // Tagged log so the runtime error surface tells us which call exploded
     // next time something goes wrong. Aggregate logs truncate without this.
@@ -608,9 +731,16 @@ export async function DELETE(request) {
         { status: 401 },
       );
     }
-    // Photo-scope tokens (the sliding cookie, 2026-07-21) NEVER satisfy the
-    // wipe gate — destructive ops keep fresh-ceremony, short-lived tokens.
-    if (tokenData.scope === "photos") {
+    // NO scoped token EVER satisfies the wipe gate — destructive ops keep
+    // fresh-ceremony, short-lived, full-scope tokens.
+    //
+    // This is now load-bearing in a way it wasn't: the sync cookie added with
+    // J1 is path-scoped to /api/sync, and DELETE lives on that path, so the
+    // browser WILL attach it to a wipe request. Checking for one named scope
+    // ("photos") would have let a 30-day sliding cookie authorise permanent
+    // destruction. Rejecting ANY scope is the fail-closed shape: a new scope
+    // added later is refused by default rather than silently admitted.
+    if (tokenData.scope) {
       return NextResponse.json(
         { error: "Fresh passkey authentication required", requiresAuth: true },
         { status: 401 },

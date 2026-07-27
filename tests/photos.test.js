@@ -209,7 +209,11 @@ describe("P5 — the sliding 7-day photo cookie (code shape)", () => {
     const photos = readFileSync(resolve(root, "app/api/photos/route.js"), "utf8");
     expect(photos).toContain('request.cookies.get("hw_photos")');
     const sync = readFileSync(resolve(root, "app/api/sync/route.js"), "utf8");
-    expect(sync).toMatch(/tokenData\.scope === "photos"/);
+    // Strengthened with J1 (2026-07-26): the wipe gate now rejects ANY scoped
+    // token, not just the photo scope. The sync cookie is path-scoped to
+    // /api/sync and DELETE lives there, so the browser attaches it to wipe
+    // requests — a named-scope check would have admitted it.
+    expect(sync).toMatch(/if \(tokenData\.scope\)/);
   });
 });
 

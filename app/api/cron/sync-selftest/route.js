@@ -22,14 +22,23 @@
 
 import { NextResponse } from "next/server";
 import { GET as syncGET, PUT as syncPUT, POST as syncPOST, DELETE as syncDELETE } from "@/app/api/sync/route";
+import { mintAuthToken } from "@/lib/auth-server";
 
 // Host is irrelevant — the handlers only parse the URL's search params.
 // Requests here are direct handler invocations, never HTTP, so the flip's
 // 301 cannot apply.
 const BASE = "https://heatwayve.app/api/sync";
-const getReq  = (params) => new Request(`${BASE}?${new URLSearchParams(params)}`);
+// J1 (2026-07-26): sync reads/writes are now profile-bound. These are DIRECT
+// handler invocations with a plain Request — no cookie jar — so the self-test
+// carries its token in the x-hw-auth header, exactly as a fresh-ceremony
+// client would. It mints one server-side for its own throwaway profile: the
+// selftest has no authenticator, but it is inside the trust boundary and the
+// token it mints is scoped to a name it just invented and deletes minutes later.
+let SELFTEST_TOKEN = null;
+const authHeaders = () => (SELFTEST_TOKEN ? { "x-hw-auth": SELFTEST_TOKEN } : {});
+const getReq  = (params) => new Request(`${BASE}?${new URLSearchParams(params)}`, { headers: authHeaders() });
 const jsonReq = (method, body) => new Request(BASE, {
-  method, headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  method, headers: { "content-type": "application/json", ...authHeaders() }, body: JSON.stringify(body),
 });
 
 export async function GET(request) {
@@ -58,6 +67,12 @@ export async function GET(request) {
   const check = (name, ok) => checks.push({ name, ok: !!ok });
 
   try {
+    // Gate first: an ungated read must 401, proving J1's gate is live in the
+    // deployed build. THEN mint and proceed — if this check ever passes with
+    // data instead, the gate has regressed and the run fails loudly.
+    check("ungated GET is refused (J1 gate live)", (await syncGET(new Request(`${BASE}?profile=${encodeURIComponent(profile)}`))).status === 401);
+    SELFTEST_TOKEN = await mintAuthToken({ profile, ttlMs: 600000, scope: "sync" });
+
     check("unwritten profile GET 404s", (await syncGET(getReq({ profile }))).status === 404);
 
     const before = await (await syncGET(getReq({ profile, check: "1" }))).json();
