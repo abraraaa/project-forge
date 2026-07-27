@@ -155,16 +155,28 @@ export default function GlossarySheet({ anchorTerm = null, onCancel }) {
 // term id to anchor the sheet on open.
 export function GlossaryTrigger({ anchorTerm = null, onOpen, label = "Open glossary" }) {
   return (
+    // 18px RING, 32px TARGET. The ring is what the eye sees and must not
+    // change; the button around it is a transparent 32x32 hit area so the
+    // control clears the WCAG 2.5.8 minimum (24x24). Negative margins absorb
+    // the extra box in both axes, so inline text rhythm and the 6px gap from
+    // the preceding word are exactly as before — this is a touch fix, not a
+    // visual one.
     <button onClick={(e) => { e.stopPropagation(); onOpen(anchorTerm); }} aria-label={label}
       style={{
         display:"inline-flex",alignItems:"center",justifyContent:"center",
-        width:18,height:18,marginLeft:6,padding:0,
-        background:"none",border:`1px solid ${T.text4}66`,borderRadius:"50%",
+        width:32,height:32,margin:"-7px -7px -7px -1px",padding:0,
+        boxSizing:"border-box",
+        background:"none",border:"none",
         cursor:"pointer",
-        fontFamily:T.serif,fontSize:11,fontStyle:"italic",fontWeight:400,color:T.text3,
         lineHeight:1,verticalAlign:"middle",
       }}>
-      i
+      <span aria-hidden="true" style={{
+        display:"inline-flex",alignItems:"center",justifyContent:"center",
+        width:18,height:18,boxSizing:"border-box",
+        border:`1px solid ${T.text4}66`,borderRadius:"50%",
+        fontFamily:T.serif,fontSize:11,fontStyle:"italic",fontWeight:400,color:T.text3,
+        lineHeight:1,
+      }}>i</span>
     </button>
   );
 }

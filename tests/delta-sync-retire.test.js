@@ -170,7 +170,15 @@ describe("single-admin recognition (boss, 2026-07-26 — not a role system)", ()
     const login = readFileSync(resolve(root, "app/api/auth/login-verify/route.js"), "utf8");
     expect(login).toContain("admin: isAdminProfile(profile)");
     const bugs = readFileSync(resolve(root, "app/api/bugs/route.js"), "utf8");
-    expect(bugs).toContain("process.env.ADMIN_PROFILE && !isAdminProfile(data.profile)");
+    // Strengthened 2026-07-26 (deep audit): the gate used to be
+    // `if (process.env.ADMIN_PROFILE && !isAdminProfile(...))`, which
+    // silently opened the wing to ANY passkey holder when the env var was
+    // absent, empty or mistyped — behaviour changing as a side effect of an
+    // env-var state, the 2026-07-09 failure shape. It must now FAIL CLOSED
+    // in production and still re-derive admin from the TOKEN's profile.
+    expect(bugs).toContain("isAdminProfile(data.profile)");
+    expect(bugs).toMatch(/if \(!process\.env\.ADMIN_PROFILE\)/);
+    expect(bugs).toMatch(/NODE_ENV === "production"[\s\S]{0,120}status: 403/);
     expect(bugs).toContain("status: 403");
   });
   it("the client flag is a UI hint riding the ceremony cache, with a device-local persisted hint (standalone fix, 2026-07-28)", () => {

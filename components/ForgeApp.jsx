@@ -2081,10 +2081,11 @@ function IosInstallOverlay({ onDismiss, migration = false }) {
           position:"relative",
           boxSizing:"border-box",
         }}>
-        <button onClick={onDismiss} aria-label="Dismiss"
-          style={{position:"absolute",top:14,right:14,background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.sm,width:30,height:30,cursor:"pointer",color:T.text2,fontSize:13,padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
-
-        <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8,paddingRight:40}}>
+        {/* No corner ✕ — house modal doctrine (bottom-row dismiss only). The
+            "Maybe later" button below already covers it, and every other
+            role="dialog" in the app follows the same rule. The eyebrow's
+            paddingRight went with it: it existed only to clear this button. */}
+        <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
           {migration ? "Same fire, new home" : "Live on your home screen"}
         </div>
         <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.2,marginBottom:10}}>

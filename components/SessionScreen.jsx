@@ -688,7 +688,7 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10,margin:"14px 0",padding:"10px 14px",background:T.bg3,borderRadius:T.r.md,cursor:"pointer"}} onClick={()=>setTravel(p=>!p)}>
           <div style={{width:32,height:18,borderRadius:9,background:travel?T.coral:T.bg4,position:"relative",transition:`background 200ms ${T.ease}`,flexShrink:0}}>
-            <div style={{position:"absolute",top:2,left:travel?14:2,width:14,height:14,borderRadius:"50%",background:"#fff",transition:`left 200ms ${T.ease}`}}/>
+            <div style={{position:"absolute",top:2,left:travel?14:2,width:14,height:14,borderRadius:"50%",background:T.text1,transition:`left 200ms ${T.ease}`}}/>
           </div>
           <div>
             <div style={{fontSize:13,color:T.text1,fontWeight:500}}>Travel mode</div>

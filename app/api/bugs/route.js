@@ -30,9 +30,25 @@ async function ceremonyGate(request) {
   if (!data || data.scope === "photos" || typeof data.expires !== "number" || Date.now() > data.expires) {
     return NextResponse.json({ error: "Passkey authentication required", requiresAuth: true }, { status: 401 });
   }
-  // Admin recognition: with ADMIN_PROFILE set, the token must be the
-  // boss's. Server-side ONLY — the client admin flag is a UI hint.
-  if (process.env.ADMIN_PROFILE && !isAdminProfile(data.profile)) {
+  // Admin recognition: the token must be the boss's. Server-side ONLY —
+  // the client admin flag is a UI hint.
+  //
+  // FAILS CLOSED when ADMIN_PROFILE is unset (deep audit 2026-07-26). The
+  // check used to be `if (process.env.ADMIN_PROFILE && ...)`, so an absent,
+  // empty or mistyped env var silently opened this wing to ANY passkey
+  // holder — every bug report, with submitter names and free text, plus
+  // triage mutation. That is the same failure shape as the 2026-07-09
+  // incident: behaviour changing as a side effect of an env-var state. The
+  // cron routes already get this right by 500ing on a missing secret.
+  //
+  // Dev convenience is preserved deliberately and narrowly: outside
+  // production an unset var still opens the wing, so a local checkout with
+  // no env file remains usable.
+  if (!process.env.ADMIN_PROFILE) {
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json({ error: "Admin only" }, { status: 403 });
+    }
+  } else if (!isAdminProfile(data.profile)) {
     return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
   return null;

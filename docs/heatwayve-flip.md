@@ -48,9 +48,14 @@ Moving users to heatwayve.app means, on first visit:
    - [ ] Snapshot cron has ≥1 green run (restore point exists).
    - [ ] Verify `/.well-known/webauthn` serves both origins from prod.
 2. **Repo PR — the rename sweep** (one PR, boss reviews copy)
-   - [ ] Manifest: swap to staged `public/heatwayve/manifest-staged.webmanifest`
-         content (name Heatwayve, icons → `/heatwayve/heatwayve-glass-*.png`;
+   - [x] Manifest: done by MERGE-not-swap into `public/manifest.json`
+         (name Heatwayve, icons → `/heatwayve/heatwayve-glass-*.png`;
          legacy `/icon-*.png` paths stay in place for installed PWAs).
+         The staged draft `public/heatwayve/manifest-staged.webmanifest`
+         was DELETED 2026-07-26: it carried the raw `#131110` we
+         deliberately rejected in favour of the grain-lifted `#1D1A19`,
+         so "finishing" the swap would have regressed the theme colour.
+         Do not recreate it.
    - [~] User-visible "Forge" strings → Heatwayve — SWEPT 2026-07-28 from
          a 248-item Opus survey (58 renames, 23 edge-cases ruled).
          EDGE-CASE RULINGS OF RECORD:
