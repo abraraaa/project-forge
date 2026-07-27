@@ -178,17 +178,37 @@ describe("sliding cookies cannot renew themselves forever", () => {
 describe("hygiene", () => {
   const pkg = JSON.parse(read("package.json"));
 
-  it("pins the Node major the CI and types agree on", () => {
-    expect(pkg.engines?.node).toBe("22.x");
-    // @types/node tracks Node's major by convention; it was pinned at 25.x
-    // against a Node 22 runtime, so tsc was checking against APIs that do
-    // not exist in production.
-    expect(pkg.devDependencies["@types/node"]).toMatch(/^\^22\./);
+  it("pins the Node major the CI, Vercel, and types all agree on", () => {
+    // Moved 22 -> 24 (2026-07-27): Node 22 went to maintenance while 24 is
+    // active LTS. engines.node is the SINGLE source of truth — Vercel reads
+    // it and locks the production runtime to match (the dashboard shows it as
+    // a non-editable override), so this one field moves prod, CI, and the
+    // type-check target together. @types/node tracks the runtime major by
+    // convention; a mismatch means tsc checks against APIs prod does not have
+    // (the exact drift the 25-against-22 pin caused before).
+    expect(pkg.engines?.node).toBe("24.x");
+    expect(pkg.devDependencies["@types/node"]).toMatch(/^\^24\./);
   });
 
   it("carries no dependency the source never imports", () => {
-    for (const dead of ["babel-plugin-react-compiler", "playwright-core"]) {
-      expect(pkg.devDependencies, dead).not.toHaveProperty(dead);
+    // playwright-core: genuinely unused (no import anywhere), removed in the
+    // hygiene sweep and staying gone.
+    expect(pkg.devDependencies, "playwright-core").not.toHaveProperty("playwright-core");
+  });
+
+  it("KEEPS babel-plugin-react-compiler while reactCompiler is enabled", () => {
+    // Hard-won: the hygiene sweep removed this on the audit's (wrong) word
+    // that Next 16 vendors the compiler itself. It does NOT — `reactCompiler:
+    // true` in next.config.mjs needs the babel plugin resolvable, and the
+    // production `next build` fails without it ("Failed to resolve package
+    // babel-plugin-react-compiler"). Local builds hid it because a stale
+    // node_modules still had the package; only a clean CI install surfaced
+    // it. This lock ties the two together so the plugin can never be
+    // "tidied away" again while the config still asks for it.
+    const cfg = read("next.config.mjs");
+    if (/reactCompiler:\s*true/.test(cfg)) {
+      expect(pkg.devDependencies, "reactCompiler:true requires the babel plugin")
+        .toHaveProperty("babel-plugin-react-compiler");
     }
   });
 

@@ -425,6 +425,33 @@ and blends into both, as the top edge always did.
 
 ### Safari 27 opportunistic follow-ups (user base is on the beta)
 
+**STP 248 device re-tests (2026-07-27, from the release notes — browser-side
+fixes, NO code change on our end; the boss is on iOS 27 so these are eyeball
+checks against what's already deployed):**
+- **The ScrollDrum** (bodyweight / weight-reps pickers) — 248 has THREE
+  scroll-snap fixes, one of which makes re-snap prefer the focused/target
+  snap area. Our drum runs `scroll-snap-type: y mandatory` PLUS a JS
+  onScroll settle that programmatically sets scrollTop. Watch for the two
+  fighting: if the flick now feels like it double-settles or overrides the
+  native snap, that's the seam and the fix is to lean more on native snap
+  and less on the JS settle. If it feels like butter, do nothing.
+  `overflow-anchor: none` STAYS regardless — it guards the settle maths
+  against Safari's scroll anchoring, unrelated to the 248 snap fixes.
+- **The /library cross-document view transition** — 248 fixes
+  CSSViewTransitionRule serialization, a "snap to final state" bug, and a
+  render-blocked pagereveal misfire. All reliability improvements to our
+  exact path; confirm the library nav still transitions cleanly.
+- **The CSP** — 248 patched five CSP-engine bugs (one where "some websites
+  failed to display"). We shipped a real CSP in the hardening batch;
+  confirm it renders clean on Safari 27 (no console CSP errors, nothing
+  blocked). Doubly relevant if we ever take the deferred nonce-CSP
+  hardening — 248's nonce-source parsing fixes touch that directly.
+- RULED OUT by grep so nobody re-checks: the `filter: drop-shadow()`
+  repaint fix (we use box-shadow), IndexedDB (we don't use it), and the
+  Digital Credentials fixes (that's the wallet API, not our WebAuthn
+  passkeys).
+
+
 - **v2 research-doc verdicts (2026-07-13, cross-model-reviewed edition):**
   the static-routing three-tier correction CONFIRMS our shipped
   architecture — public/sw.js already routes /api/* → network (tier 2),
