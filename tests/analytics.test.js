@@ -254,11 +254,19 @@ describe("normaliseMuscle — DISPLAY_BUCKET vocabulary", () => {
     [undefined,                          null],
   ];
 
-  for (const [input, expected] of cases) {
-    it(`"${input}" → ${JSON.stringify(expected)}`, () => {
-      expect(normaliseMuscle(input)).toBe(expected);
-    });
-  }
+  // One test, all 32 rules. Every case is a real, hand-verified
+  // disambiguation ("Lateral delt" must not fall into Back; "Triceps & chest"
+  // resolves triceps-first), so NOTHING is dropped — the table above is the
+  // coverage and it is untouched. Collapsing the 32 generated `it` blocks
+  // into one loop cuts visible test COUNT without losing an assertion, which
+  // is the only honest kind of pruning. Reporting every failure at once also
+  // beats fixing them one re-run at a time.
+  it("buckets every known raw muscle string correctly", () => {
+    const wrong = cases
+      .filter(([input, expected]) => normaliseMuscle(input) !== expected)
+      .map(([input, expected]) => `${JSON.stringify(input)} → got ${JSON.stringify(normaliseMuscle(input))}, want ${JSON.stringify(expected)}`);
+    expect(wrong, `\n${wrong.join("\n")}`).toEqual([]);
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────────────
