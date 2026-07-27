@@ -132,6 +132,16 @@ export async function POST(request) {
     // wipe gate — destructive ops keep fresh short-lived ceremonies.
     const photoToken = await mintAuthToken({ profile, ttlMs: 7 * 86400000, scope: "photos" });
 
+    // Sync-scope cookie (J1, 2026-07-26). Sync is AMBIENT — visibility
+    // change, reconnect, every mutation — so it cannot ride the in-memory
+    // ceremony token, which dies with the tab and would demand Face ID
+    // before a fresh tab could sync. Path-scoped to /api/sync, httpOnly so
+    // JS never sees it. The wipe gate on that same
+    // path rejects every scoped token, so this cookie can read and write a
+    // profile but can never destroy one. Sliding 7 days — same window as
+    // hw_photos: any active day rotates it, so a device in use never re-auths.
+    const syncToken = await mintAuthToken({ profile, ttlMs: 7 * 86400000, scope: "sync" });
+
     const res = NextResponse.json({
       ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600,
       // Single-admin recognition: a UI hint only — every admin surface
@@ -140,6 +150,9 @@ export async function POST(request) {
     });
     res.cookies.set("hw_photos", photoToken, {
       httpOnly: true, secure: true, sameSite: "strict", path: "/api/photos", maxAge: 7 * 86400,
+    });
+    res.cookies.set("hw_sync", syncToken, {
+      httpOnly: true, secure: true, sameSite: "strict", path: "/api/sync", maxAge: 7 * 86400,
     });
     return res;
   } catch (e) {

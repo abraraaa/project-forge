@@ -3,7 +3,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import crypto from "crypto";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
-import { rpConfigFromRequest, verifyAuthToken, hasRealPasskey, hasChallengeSecret, verifyChallenge } from "@/lib/auth-server";
+import { rpConfigFromRequest, verifyAuthToken, hasRealPasskey, hasChallengeSecret, verifyChallenge, mintAuthToken } from "@/lib/auth-server";
 
 // Verify WebAuthn registration and store the credential's PUBLIC KEY.
 // POST /api/auth/register-verify
@@ -119,7 +119,16 @@ export async function POST(request) {
     // Consume the challenge (blob mode only — stateless challenges aren't stored).
     if (!stateless) await deleteByPrefix(challengeKey);
 
-    return NextResponse.json({ ok: true, credentialId: vc.id });
+    // A freshly-registered passkey enables sync IMMEDIATELY (J1, 2026-07-26).
+    // Without this the flow would be "register a passkey → now sign in with
+    // it" — two ceremonies back to back for one intent. The user just proved
+    // control of this profile with an authenticator; that IS the ceremony.
+    const syncToken = await mintAuthToken({ profile, ttlMs: 7 * 86400000, scope: "sync" });
+    const res = NextResponse.json({ ok: true, credentialId: vc.id });
+    res.cookies.set("hw_sync", syncToken, {
+      httpOnly: true, secure: true, sameSite: "strict", path: "/api/sync", maxAge: 7 * 86400,
+    });
+    return res;
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

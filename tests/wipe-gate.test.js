@@ -90,8 +90,8 @@ describe("wipe gate — fails closed, always", () => {
     expect(deleteSrc).toContain("requiresPasskeySetup");
   });
 
-  it("photo-scope tokens never satisfy the wipe gate", () => {
-    expect(deleteSrc).toMatch(/tokenData\.scope === "photos"/);
+  it("NO scoped token ever satisfies the wipe gate (strengthened by J1)", () => {
+    expect(deleteSrc).toMatch(/if \(tokenData\.scope\)/);
     const now = Date.now();
     // isTokenValid is scope-blind by design, so the route must check scope
     // itself — assert the shape rather than assuming the helper covers it.
