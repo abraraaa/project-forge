@@ -254,8 +254,34 @@ input, button, textarea, select { font: inherit; }
    - Perf: small, static surfaces only per WebKit guidance — do NOT apply to
      large scrolling containers or animated elements. */
 .forge-glass {
+  position: relative; /* containing block for the specular edge below */
   background: rgba(35, 32, 27, 0.72); /* T.bg2 at 72% over the substrate */
   backdrop-filter: blur(14px) saturate(120%);
+}
+/* The specular edge (intimacy pass II, 2026-07-27 — DEVICE-VERIFY CANDIDATE).
+   What separates Liquid Glass (iOS 26) from Windows Aero (2007) is NOT more
+   blur — it's WHERE the light sits. Aero painted a gloss gradient across the
+   whole panel; Liquid Glass lets the RIM catch light: a bright top edge that
+   falls to a darker bottom, so the surface reads as a lens with thickness
+   rather than a flat translucent sheet. Our material (28% transparency,
+   14px blur, 120% saturate) was already in the modern range; the flat
+   `1px solid` borders the cards draw inline were the only thing missing.
+   This adds the lit lip as a SEPARATE layer so it never fights those inline
+   borders or the inline box-shadows some cards set. Two inset hairlines: a
+   warm-white top rim (T.text1 @ ~9%) and a faint bottom shade — the whole
+   effect is one-line reversible (delete this block + the position above).
+   Kept deliberately subtle: it should register as quality, not announce
+   itself. Judge on a real OLED — this is the class of thing that looks
+   right in code and wrong to the eye, or the reverse. */
+.forge-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 1px 0 0 rgba(237, 235, 231, 0.09),   /* top rim catches light */
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.18);         /* bottom falls to shade */
 }
 /* Engines without backdrop-filter: clean opaque card, not an invisible one. */
 @supports not (backdrop-filter: blur(1px)) {
