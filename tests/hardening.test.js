@@ -178,12 +178,16 @@ describe("sliding cookies cannot renew themselves forever", () => {
 describe("hygiene", () => {
   const pkg = JSON.parse(read("package.json"));
 
-  it("pins the Node major the CI and types agree on", () => {
-    expect(pkg.engines?.node).toBe("22.x");
-    // @types/node tracks Node's major by convention; it was pinned at 25.x
-    // against a Node 22 runtime, so tsc was checking against APIs that do
-    // not exist in production.
-    expect(pkg.devDependencies["@types/node"]).toMatch(/^\^22\./);
+  it("pins the Node major the CI, Vercel, and types all agree on", () => {
+    // Moved 22 -> 24 (2026-07-27): Node 22 went to maintenance while 24 is
+    // active LTS. engines.node is the SINGLE source of truth — Vercel reads
+    // it and locks the production runtime to match (the dashboard shows it as
+    // a non-editable override), so this one field moves prod, CI, and the
+    // type-check target together. @types/node tracks the runtime major by
+    // convention; a mismatch means tsc checks against APIs prod does not have
+    // (the exact drift the 25-against-22 pin caused before).
+    expect(pkg.engines?.node).toBe("24.x");
+    expect(pkg.devDependencies["@types/node"]).toMatch(/^\^24\./);
   });
 
   it("carries no dependency the source never imports", () => {
