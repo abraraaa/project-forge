@@ -191,8 +191,24 @@ describe("hygiene", () => {
   });
 
   it("carries no dependency the source never imports", () => {
-    for (const dead of ["babel-plugin-react-compiler", "playwright-core"]) {
-      expect(pkg.devDependencies, dead).not.toHaveProperty(dead);
+    // playwright-core: genuinely unused (no import anywhere), removed in the
+    // hygiene sweep and staying gone.
+    expect(pkg.devDependencies, "playwright-core").not.toHaveProperty("playwright-core");
+  });
+
+  it("KEEPS babel-plugin-react-compiler while reactCompiler is enabled", () => {
+    // Hard-won: the hygiene sweep removed this on the audit's (wrong) word
+    // that Next 16 vendors the compiler itself. It does NOT — `reactCompiler:
+    // true` in next.config.mjs needs the babel plugin resolvable, and the
+    // production `next build` fails without it ("Failed to resolve package
+    // babel-plugin-react-compiler"). Local builds hid it because a stale
+    // node_modules still had the package; only a clean CI install surfaced
+    // it. This lock ties the two together so the plugin can never be
+    // "tidied away" again while the config still asks for it.
+    const cfg = read("next.config.mjs");
+    if (/reactCompiler:\s*true/.test(cfg)) {
+      expect(pkg.devDependencies, "reactCompiler:true requires the babel plugin")
+        .toHaveProperty("babel-plugin-react-compiler");
     }
   });
 
