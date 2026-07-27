@@ -101,7 +101,13 @@ describe('"Clear cache" is the audit #11 data-safety contract', () => {
 
     // The handler dynamically imports lib/storage for a best-effort flush,
     // then clears + reloads in a .finally — let the microtasks drain.
-    await vi.waitFor(() => expect(reload).toHaveBeenCalled());
+    //
+    // Generous timeout ON PURPOSE: this waits on a real dynamic import(),
+    // whose resolution time depends on how loaded the worker pool is.
+    // waitFor's 1s default made this intermittently fail in the full run
+    // while passing in isolation (observed 1136ms) — and a flaky test is
+    // worse than no test, because it teaches people to re-run and shrug.
+    await vi.waitFor(() => expect(reload).toHaveBeenCalled(), { timeout: 5000 });
 
     // Device-level caches: gone.
     expect(window.localStorage.getItem("forge:onboarded")).toBeNull();
