@@ -772,20 +772,47 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
 }
 
 // ─── Done ──────────────────────────────────────────────────────────────────────
+// Intimacy pass II (2026-07-27). The done screen is a reward for the person
+// who lingers after "complete" — so the copy pays the stare, not just the
+// glance. Beige removed ("Solid work" / "Job done" / "That's a session"); the
+// survivors are factual-proud, and the ache lines land as a souvenir.
 const DONE_HEADLINES = [
-  ["Solid", "work."],
   ["Heavy,", "handled."],
   ["The bar", "moved."],
-  ["That's", "a session."],
-  ["Job", "done."],
   ["Nothing", "wasted."],
+  ["That", "counted."],
+  ["Mmm.", "Felt that."],
+  ["Gonna feel", "that tomorrow."],
 ];
+// Each type is a POOL now, picked at random per done-screen so the same "next"
+// reads fresh across a block. Voice test (boss, 2026-07-27): clear, precise,
+// dominating, flirty, innuendo-laden, witty or sharp — or it's in the wrong
+// place. Deliberately ONE charged line paired with ONE clean/specific one per
+// pool: the numbers-and-facts line is the straight man that makes the filthy
+// one land. If every line winks, the wink stops working.
 const NEXT_DAY_MSG = {
-  zone2:  "Zone 2 tomorrow. 60 min, conversational pace.",
-  cardio: "Moderate cardio tomorrow. 35 min at ~75%.",
-  hiit:   "HIIT tomorrow. 8–10 rounds, all out.",
-  rest:   "Rest day tomorrow. That's where you grow.",
-  strength:"Strength session next. Load up.",
+  strength: [
+    "Strength session next. Come strong.",
+    "Strength next. The good kind of heavy.",
+    "Strength next. Ready for the squeeze.",
+    "Strength next. Grip it and mean it.",
+  ],
+  zone2: [
+    "Zone 2 tomorrow. 60 min, conversational pace.",
+    "Zone 2 tomorrow. This is how you learn to last.",
+  ],
+  cardio: [
+    "Moderate cardio tomorrow. 35 min at ~75%.",
+    "Cardio tomorrow. Half an hour. Get sweaty.",
+  ],
+  hiit: [
+    "HIIT tomorrow. 8–10 rounds, all out.",
+    "HIIT tomorrow. Short, brutal, obscenely satisfying. Over before you hate it.",
+  ],
+  rest: [
+    "Rest day tomorrow. Feed it, sleep on it, come back hungry.",
+    "Rest day tomorrow. Do gloriously little.",
+  ],
 };
 
 export function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},userWeek=WEEK,onHome,deloadCompleted=false,returnGapDays=null}){
@@ -809,7 +836,12 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
   const todayIdx= weekMap[dow];
   const nextIdx = (todayIdx+1) % 7;
   const nextType= userWeek[nextIdx]?.type ?? "rest";
-  const nextMsg = NEXT_DAY_MSG[nextType] ?? "";
+  // Stable random pick from the pool, once per mount (same mechanism as the
+  // headline above) — so it doesn't reshuffle on every re-render mid-screen.
+  const [nextMsg] = useState(() => {
+    const pool = NEXT_DAY_MSG[nextType] ?? [""];
+    return pool[Math.floor(Math.random() * pool.length)];
+  });
 
   // Sync status for confirmation line
   const [syncState, setSyncState] = useState(SyncStatus.get());

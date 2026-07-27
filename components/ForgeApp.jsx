@@ -1223,7 +1223,7 @@ function OnboardingScreen({ onContinue }) {
 
       <Fade d={120}>
         <p style={{ fontSize: 15, color: T.text2, lineHeight: 1.65, marginBottom: 28 }}>
-          Heatwayve notices. Bar speed, effort, the days you show up. Every session quietly shaped to the athlete you're becoming.
+          Heatwayve notices. Bar speed, effort, the days you show up. Your next session already knows what your body can take.
         </p>
       </Fade>
 

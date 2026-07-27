@@ -829,7 +829,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             </div>
             <div style={{fontFamily:T.serif,fontSize:19,fontWeight:300,color:T.text1,lineHeight:1.3,marginBottom:3}}>
               {historyCount === 0
-                ? "Your progress, visualised"
+                ? "What the work's building"
                 : `${historyCount} session${historyCount===1?"":"s"} logged`}
             </div>
             <div style={{fontSize:12,color:T.text3,lineHeight:1.5,fontFamily:T.serif,fontStyle:"italic"}}>
@@ -859,10 +859,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               Locker room
             </div>
             <div style={{fontFamily:T.serif,fontSize:19,fontWeight:300,color:T.text1,lineHeight:1.3,marginBottom:3}}>
-              Your body&apos;s story
+              What it&apos;s doing to you
             </div>
             <div style={{fontSize:12,color:T.text3,lineHeight:1.5,fontFamily:T.serif,fontStyle:"italic"}}>
-              Bodyweight · progress photos, kept private
+              Bodyweight and photos, yours alone
             </div>
           </div>
           <div style={{flexShrink:0,width:40,height:40,borderRadius:"50%",background:`${T.sage}18`,border:`1px solid ${T.sage}55`,display:"flex",alignItems:"center",justifyContent:"center"}}>

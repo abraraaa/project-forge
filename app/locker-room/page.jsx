@@ -73,7 +73,7 @@ export default function LockerRoom() {
     try {
       // Cookie-first: most visits need no prompt at all.
       const { token: t, result: idx } = await ensurePhotoAccess(profile, (tok) => fetchPhotoIndex(profile, tok));
-      if (!idx?.ok) { setErr(idx?.requiresAuth ? "Unlock cancelled." : "Couldn't load your photos."); return; }
+      if (!idx?.ok) { setErr(idx?.requiresAuth ? "No bother — the chart's still here." : "Couldn't load your photos."); return; }
       setToken(t);
       setPhotos(idx.photos);
       setPos(Math.max(0, idx.photos.length - 1));
@@ -184,7 +184,7 @@ export default function LockerRoom() {
   })();
 
   const bwChart = (h = 120) => {
-    if (bwSeries.length === 0) return <p style={{ fontSize: 12, color: T.text4 }}>Log a bodyweight and your story starts here.</p>;
+    if (bwSeries.length === 0) return <p style={{ fontSize: 12, color: T.text4 }}>Log a weight. The line needs two points; the truth needs a few more.</p>;
     if (bwSeries.length === 1) {
       // The very first log must visibly LAND (boss, 2026-07-24) — one point
       // renders as a marked reading, not placeholder copy.
@@ -290,10 +290,10 @@ export default function LockerRoom() {
       </div>
       <div style={{ padding: "24px 0 0" }}>
         <div style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 10 }}>
-          Locker room
+          Locker Room
         </div>
         <div className="home-headline" style={{ fontFamily: T.serif, fontSize: 42, fontWeight: 300, lineHeight: 1.1, transformOrigin: "left top" }}>
-          Your<br/><span style={{ color: T.sage, fontStyle: "italic" }}>story.</span>
+          Where<br/><span style={{ color: T.sage, fontStyle: "italic" }}>it shows.</span>
         </div>
         <p style={{ fontSize: 14, color: T.text2, margin: "10px 0 16px", lineHeight: 1.5 }}>The chart is always here; photos stay behind the door until you ask.</p>
       </div>
@@ -304,7 +304,7 @@ export default function LockerRoom() {
 
       {photosVisible && photos.length === 0 && (
         <div style={{ marginTop: 18 }}>
-          <p style={{ fontSize: 13, color: T.text3, marginBottom: 12 }}>No photos yet — the timeline starts with one.</p>
+          <p style={{ fontSize: 13, color: T.text3, marginBottom: 12 }}>No photos yet. The first one's the hardest.</p>
           <label htmlFor={PICK_ID} role="button" style={{ ...coralBtn, display: "inline-block" }}>Add your first photo</label>
         </div>
       )}
@@ -323,7 +323,7 @@ export default function LockerRoom() {
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><BodyweightDrum value={bwDraft} onChange={setBwDraft} /></div>
               <button onClick={saveBwAndTag} disabled={busy} style={{ ...coralBtn, width: "100%" }}>{busy ? "Saving…" : "Save weight"}</button>
             </>) : (<>
-              <span style={{ fontSize: 13, color: T.text1 }}>Photo saved. Update your bodyweight too?</span>
+              <span style={{ fontSize: 13, color: T.text1 }}>Photo saved. What did the scale say?</span>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button onClick={() => setShowDrum(true)} style={{ ...coralBtn, padding: "10px 16px", fontSize: 14 }}>Update it</button>
                 <button onClick={() => setAskBw(null)} style={quietBtn}>Keep {photos.find((p) => p.date === askBw)?.bodyweightAt ?? "latest"} kg</button>

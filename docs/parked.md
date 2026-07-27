@@ -170,7 +170,69 @@ choice.
   away-muted like the volume card. Also fixed in passing: the old grid
   built its week columns from toISOString(), the UTC-shift class.
 
-## Phase 6 — Intimacy pass II · QUEUED 2026-07-14 (the savoured one)
+## Phase 6 — Intimacy pass II · WALK ONE DONE 2026-07-27
+
+**THE VOICE TEST — boss, 2026-07-27, verbatim, the new bar every line is
+held against:** *"If it's not clear, precise, dominating, flirty, innuendo-
+laden, witty or sharp, it's likely in the wrong place."* Corollary from the
+same sitting: **mild is almost an insult** in Heatwayve. And restraint is
+structural, not incidental — one charged line paired with one clean/specific
+one, because the numbers-and-facts line is the straight man that makes the
+filthy one land. If every line winks, the wink stops working.
+
+**Walk one shipped (surface-by-surface sitting, copy only):**
+- Front door hero: retired "the athlete you're becoming" (the LinkedIn of
+  body copy) → "your next session already knows what your body can take."
+- Bodyweight sheet: "Let's make this secure first" (chatbot voice) → "Lock
+  this down"; the photo offer dropped the mirror/dial/future-self clichés
+  for "the number tells you the weight — a photo tells you where it went";
+  and the done line pointed at the LAB (a bug — photos live in the Locker
+  Room) → "Watch it come together in the Locker Room."
+- Locker Room: headline "Your story." → "Where it shows."; empty chart,
+  no-photos, post-photo ask, and the declined-unlock line all rewritten;
+  "story" retired from the surface.
+- Session done screen: DONE_HEADLINES lost the beige ("Solid work" / "Job
+  done" / "That's a session"), gained "That counted." / "Mmm. Felt that." /
+  "Gonna feel that tomorrow." NEXT_DAY_MSG became per-type POOLS picked at
+  random per screen (strength four-deep incl. "Ready for the squeeze" and
+  "Grip it and mean it"; the cardio/HIIT/rest each pair a charged line with
+  the informative one). Rest-day home descriptor: "Recover. You've earned
+  it." → "Recover. This is the other half of the work." (dominating: rest
+  reframed as work, not consolation).
+- Home: Lab card empty state "Your progress, visualised" (peak dashboard-
+  speak) → "What the work's building"; Locker Room card "Your body's story"
+  → "What it's doing to you" (the tease-then-reward pairing with the room's
+  own "Where it shows."); subtitle reframed to possession not exclusion
+  ("Bodyweight and photos, yours alone" — a "nobody else sees them" would
+  conjure the third party it denies).
+
+**DELIBERATELY KEPT — "story" earns it in exactly one place:** the flip
+migration lines ("your story came with it/us"). There it means the user's
+history LITERALLY travelled across the domain change — concrete, tender, a
+rare dormant surface. Everywhere else it was a vague-uplift crutch and is
+gone. If the boss wants those killed too it's a one-line swap.
+
+**BEHAVIOURAL follow-ups surfaced during the walk, DEFERRED (need device
+passes, not just words):**
+- **"Log weight" affordance in the Locker Room top row**, beside "Show
+  photos". The drum + save path already exist on the page but are reachable
+  only via the photo-tag flow, so a weight-only user has to leave the
+  tracker to log the thing it tracks. Reuse, don't rebuild.
+- **Photo-offer escalation counted in VISITS, not days** (contact is days-
+  to-weeks apart): first weigh-in = breadcrumb, next = invitation now that
+  the chart has a line to point at. A decline costs one visit, not a
+  fortnight. Rule: offer only what isn't already visible (so the Locker
+  Room, which shows "Add photo", never nags).
+- **cameraBody "…does wonders for the timeline"** spotted-but-untouched
+  ("timeline" is product-speak, "does wonders" is mild) — next copy pass.
+
+**Remaining surfaces for later walks:** breather, focus picker, week editor,
+onboarding beats, Lab interior, the admin wing, plus #75's style-pass twin
+(glow discipline, card stacks, eyebrow density — voice and visuals together).
+
+Original brief + working register below.
+
+## Phase 6 — Intimacy pass II · QUEUED 2026-07-14 (the savoured one, now in progress)
 
 **THE VOICE BRIEF — boss, 2026-07-26, verbatim, the calibration line
 every draft gets held against:** "Sensation forward, not filthy. Enough
