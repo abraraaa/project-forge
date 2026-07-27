@@ -284,11 +284,23 @@ async function readLatestLegacy(blobs, kindRe) {
 // Returns { exists: boolean } — lightweight availability check for signup.
 // Case-insensitive: "Sarah", "sarah", "SARAH" all resolve the same way.
 export async function GET(request) {
-  const limited = rateLimit(request, "sync-read", 120);
-  if (limited) return limited;
   const { searchParams } = new URL(request.url);
   const profile = searchParams.get("profile");
   const check   = searchParams.get("check") === "1";
+
+  // Two buckets, because these are two different requests wearing one verb.
+  // An authenticated hydration GET legitimately fires often (visibility
+  // change, reconnect) → 120/min. `check=1` is an UNAUTHENTICATED existence
+  // oracle used only while a human types a name at signup — a person needs a
+  // handful, an enumerator wants thousands. J1 made this oracle nearly
+  // worthless (knowing a name exists now grants no read/write/wipe), and the
+  // claim's 409 leaks existence unavoidably, so the goal is not to close it
+  // (you cannot) but to make BULK probing expensive. Its own tight bucket
+  // does exactly that — invisible to the one person signing up, a 12x
+  // throttle on anyone mapping the namespace. See docs/audit-2026-07-*.
+  const [bucket, budget] = check ? ["sync-check", 10] : ["sync-read", 120];
+  const limited = rateLimit(request, bucket, budget);
+  if (limited) return limited;
 
   // Profile validation — reject malformed names with 400 before doing any
   // blob work. Returns null body for compatibility with existing client code
