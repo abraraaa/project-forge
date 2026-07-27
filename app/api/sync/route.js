@@ -305,7 +305,7 @@ export async function GET(request) {
   // claim's 409 leaks existence unavoidably, so the goal is not to close it
   // (you cannot) but to make BULK probing expensive. Its own tight bucket
   // does exactly that — invisible to the one person signing up, a 12x
-  // throttle on anyone mapping the namespace. See docs/audit-2026-07-*.
+  // throttle on anyone mapping the namespace.
   const [bucket, budget] = check ? ["sync-check", 10] : ["sync-read", 120];
   const limited = rateLimit(request, bucket, budget);
   if (limited) return limited;

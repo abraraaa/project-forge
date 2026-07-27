@@ -54,7 +54,7 @@ describe("the existence oracle is on its own tight bucket", () => {
     // The signup availability probe is unauthenticated and pure-oracle; J1
     // made it near-worthless (existence grants no read/write/wipe) but the
     // point of a tight bucket is to make BULK enumeration expensive without
-    // touching the one-name-at-a-time signup UX. See docs/audit-2026-07-*.
+    // touching the one-name-at-a-time signup UX.
     const s = readFileSync(resolve(root, "app/api/sync/route.js"), "utf8");
     expect(s).toContain('["sync-check", 10]');
     expect(s).toContain('["sync-read", 120]');

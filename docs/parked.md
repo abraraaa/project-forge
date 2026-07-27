@@ -9,176 +9,75 @@ specific next step that would unblock it.
 
 ---
 
-## AUDIT RECONCILIATION — the true open ledger · 2026-07-27
+## Open work — reconciled 2026-07-27
 
-The July-26 deep audit (`docs/audit-2026-07-holistic.md` + `-security.md`)
-produced a P0, a J1 architecture decision, and a long P2/P3 tail. Most of it
-shipped across this session's PRs; this is the honest accounting of what
-landed, what's still open, and what's parked-by-decision. **This section is
-the live to-do — reconcile it, don't let it drift.** When an open item ships,
-move it to SHIPPED with its PR number.
+The July internal review closed out across this session's PRs. What remains is
+listed below in plain terms. **Detail, rationale, and anything security-shaped
+lives in Drive ("Heatwayve — Internal Notes"), not here** — see
+`docs/internal-notes.md` for why.
 
-### SHIPPED this audit cycle (verified, merged unless noted)
+### Landed this cycle
 
-- **P0 · Retro-logged sessions lost on delta devices** — PR #254 (now()-id +
-  separate loggedFor date; engine-level regression test; interim full-push valve).
-- **CRITICAL · Anonymous wipe via traversal + no-passkey pass-through + census
-  gate** — PR #251 (hand-verified). Locks in `tests/wipe-gate.test.js`.
-- **J1 · `/api/sync` unauthenticated** — PR #253 (syncGate / `hw_sync` sliding
-  cookie; 401 = needsAuth resting state; pushes still queue on 401).
-- **Programme-logic P2 pair** — PR #255: HOLD no longer rounds (returns
-  currentWeight); rounding increment driven from STEP_SIZES; recovery window
-  carries `inRecoveryUntil` + `preDeloadWeight` through `updateLiftStateFromSession`;
-  engine-level deload→recovery arc test.
-- **Date-doctrine class (3rd appearance) — named, not patched** — PR #256:
-  `analytics.js` + `storage.js` sites routed through `lib/dates.js`; class-lock
-  test bans `new Date(<string>)` + `.toISOString().slice(0,10)` outside dates.js.
-- **Token-path seam (3 symptoms)** — PR #259 + #256: blob fallback retired
-  (DB authoritative when present); `verifyAuthToken` scope-fail-closed; sliding
-  rotation capped against original ceremony (`authAt` + ABSOLUTE_CAP_MS).
-- **Security hardening batch** — PR #256: real CSP allow-list (default/script/
-  frame-src); HSTS in-repo (no preload); admin gate fails closed in prod;
-  dot-only name rejection; NFKC normalisation. Locks in `tests/hardening.test.js`.
-- **Check-oracle throttle** — PR #257.
-- **Photo upload tightening** — PR #263: client re-encodes ALL formats to JPEG
-  (strips EXIF); server validates SOI **and** EOI; decompression-bomb surface
-  reduced.
-- **Locker Room N+1 full-res reveal** — PR #264: bounded prefetch window
-  (PREFETCH=6, EVICT=9), mint dedupe. Closes the "under real photo volume" case.
-  **Follow-up (2026-07-27, PR #265):** external review (ChatGPT via boss) flagged
-  three edges. Fixed: the window now loads **centre-outward** so the visible
-  frame is requested first, not queued behind its prefetch (their point 1); and
-  the window geometry is extracted to pure `photoWindowIndices` / `outsideEvictBand`
-  helpers PINNED by `tests/locker-window.test.js` (+9) so the bounded contract
-  can't be refactored away (their point 3). Their point 2 (burst on rapid scrub)
-  is the open item just below.
-- **Node 22→24 + deps hygiene** — PR #262: `engines.node 24.x` (Vercel-authoritative),
-  `@types/node ^24`, `postcss` override floor `^8.5.18`, `playwright-core` gone,
-  `babel-plugin-react-compiler` KEPT (reactCompiler needs it — lock added after
-  the near-miss). `manifest-staged.webmanifest` deleted; `/locker-room` noindex;
-  homepage canonical added.
-- **Data-integrity + error-handling batch** — PR #265 (this batch): phantom
-  detector time-invariant; sorted-history `localeCompare`; unknown-key active-
-  prefix; snapshot shrink-guard fails CLOSED on unreadable prior; `serverError()`
-  generic client bodies (sync + photos); DELETE wipe token header-only (query
-  fallback retired); `/api/bugs` POST 16KB pre-parse body cap. +6 locks.
-- **UI-polish P2s** — already shipped in the modal-consistency sweep / earlier:
-  iOS install overlay corner-✕ gone (bottom-row dismiss); TakenNameModal dead
-  `paddingRight:40` gone; GlossaryTrigger 18px ring / 32px target; SessionScreen
-  travel knob on `T.text1` not `#fff`.
-- **Test-coverage adds** — ErrorBoundary render test, a11y hooks — task #16.
+Retro-session durability on delta devices; sync authorization; programme-logic
+correctness (HOLD rounding, post-deload recovery window); the date-doctrine
+class guard; token-store consolidation; transport and header hardening; photo
+upload validation; Locker Room bounded photo loading; Node 24 + dependency
+hygiene; detector correctness and error-handling in the audit-tail batch.
 
-### OPEN — codeable follow-ups (need a small proposal, not a decision)
+### Open — codeable
 
-- **Perf P2 · `dbInsertRecords` / `dbUpsertMetaFields` one-row-at-a-time —
-  `lib/db.js:162-185`.** N sequential Neon HTTP round-trips. P2 not P1: the hot
-  delta path is N≈1-2; large-N is the one-time backfill + retiring fat-PUT.
-  Next step: batch into a single multi-row parameterised INSERT (UNNEST or a
-  built VALUES list — keep it inside the tagged-template safety the audit
-  verified clean). Propose the query shape before touching the write path.
-- **nit · Cold-start ignores the lift's template reps/sets —
-  `lib/progression.js:~338`.** Uses `DEFAULT_REPS`/`DEFAULT_SETS`, so Power
-  Clean's first prescription disagrees with its 4×3 template. Seed cold-start
-  from the template block. Touches training output → propose + engine-level test.
-- **nit · `GET /api/sync` is side-effecting (lazy DB backfill) —
-  `app/api/sync/route.js:376`.** A GET mutates; a cross-site `<img>` can trigger
-  the write (idempotent + unauthenticated anyway). Can't just delete the backfill
-  (it keeps the DB warm from blob-era reads) — needs a design call on where the
-  backfill moves. Propose before changing.
-- **P3 · Cursor advances even if `persistToLocal` partially fails under quota —
-  `lib/storage.js:1294`.** Only advance the cursor once local writes are
-  confirmed. Needs care threading the confirmation back; small proposal first.
-- **P3 · `flip-dormant.test.js` / `photos.test.js` lock literal source.** Loosen
-  to regex on the invariant next time those files are touched. Not urgent.
-- **P3 · ESLint 9→10 major** — bump in isolation, run lint. As-and-when.
-- **Locker Room · rapid-scrub fetch burst has no cap or cancellation —
-  `app/locker-room/page.jsx` `mintUrl`.** (External review point 2, 2026-07-27.)
-  The window is bounded and centre-first now, but `mintUrl` fires each frame's
-  fetch with no `AbortController` and no concurrency cap, so a fast drag across a
-  LONG timeline kicks off a burst of full-res GETs (deduped, and eviction revokes
-  the ones you pass — but the in-flight ones still complete). Bounded in practice
-  by dedupe + the 1-hour browser cache; the real ceiling is the 90/min photo-read
-  limit, which only bites at ~90+ photos scrubbed end-to-end rapidly — a scale no
-  profile is near today. Low-probability, honestly named rather than gold-plated.
-  Next step when it earns attention: a small in-flight concurrency cap (2-3) with
-  a queue, OR an `AbortController` per fetch aborted on eviction — the cap is the
-  cheaper mitigation and drops the queued-but-now-evicted fetches for free. Do
-  NOT build speculatively; revisit if a real user reports blank frames on scrub
-  or the logs show photo-read 429s.
+- **DB write batching** (`lib/db.js`) — record/meta writes go one row at a time
+  over the HTTP driver. Hot path is N≈1-2, so this is a large-N nicety: batch
+  into a single multi-row insert. Propose the query shape first.
+- **Cold-start ignores the lift's template reps/sets** (`lib/progression.js`) —
+  Power Clean's first prescription disagrees with its 4×3 template. Seed from
+  the template block; touches training output, so engine-level test required.
+- **Cursor advance under local-storage quota pressure** (`lib/storage.js`) —
+  only advance once local writes are confirmed. Small proposal first.
+- **Locker Room rapid-scrub fetch burst** — the window is bounded and
+  centre-first, but in-flight fetches are uncapped. Only reachable at photo
+  counts no profile is near. Plan when it earns attention: a small concurrency
+  cap, or abort-on-evict. Don't build speculatively.
+- **Two test files pin literal source** (`flip-dormant`, `photos`) — loosen to
+  regex on the invariant next time they're touched.
+- **ESLint 9→10** — bump in isolation, run lint.
 
-### PARKED BY DECISION (not deferral — these are rulings)
+### Parked by decision (rulings, not deferrals)
 
-- **Nonce-based CSP** — DEFERRED, cautious (boss): outage risk via SW/analytics
-  interaction; the `'unsafe-inline'` allow-list ships now. Revisit only with a
-  measured middleware pass. Safari 248's nonce-source parsing fixes touch this
-  directly if reopened.
-- **Token hashing (`sha256(token)`)** — P3, parked. Neutralises replay on a
-  read-only Neon compromise at identical lookup cost, but no such exposure today
-  and it's a migration; revisit if the threat model changes.
-- **E2E photo encryption** — CONSIDERED AND DECLINED (boss, 2026-07-27): "I'll
-  take the onus of keeping users safe rather than creating obstacles." See the
-  Team-expansion entry below.
-- **TypeScript 6→7 (the Go rewrite)** — HELD, needs-testing: dedicated typecheck
-  pass + re-decide the stale `ignoreDeprecations: "6.0"` marker.
-- **UI-polish glow rule — `FocusPickerSheet` primary-CTA glow** — taste call,
-  folds into Phase 6 / #75 style sitting, not a correctness fix.
-- **`ForgeApp.jsx` decomposition (75 hooks, ~1120 lines)** — P3 structural, for
-  the record. Raise deliberately as its own session; no bug found inside it.
-- **Body-cap floors** — `/api/bugs` now capped (#265); the 5MB sync cap sits
-  above Vercel's ~4.5MB platform limit so the platform guard fires first anyway.
-  Left as-is by design.
-- **Stateless challenges not single-use** — accepted trade-off (requires
-  capturing a valid assertion inside a ~120s TTL first), recorded.
+Nonce-based CSP (deferred, cautious — deployment risk). Token hashing at rest
+(low risk, low cost, not urgent). E2E photo encryption (**declined** on product
+grounds — boss, 2026-07-27: onus of safety over obstacles to signup).
+TypeScript 6→7 (needs a dedicated verification pass). Primary-CTA glow rule
+(taste call → Phase 6 sitting). `ForgeApp.jsx` decomposition (~1120 lines, 75
+hooks — raise as its own session; no bug found inside it).
 
-### NEEDS THE BOSS / EXTERNAL (I cannot close these solo)
+### Needs the boss
 
-- **Stale PWA install screenshot — `public/screenshots/profile.png`.** Still
-  renders "**Forge** keeps your data yours" baked INTO the image (filename is
-  brand-neutral so the rename sweep couldn't see it). I cannot generate/replace
-  a screenshot asset — **boss must re-capture profile.png (and re-verify
-  home.png) at 1206×2622** on a Heatwayve build. This is a live first-run
-  surface (Android/Chrome install sheet).
-- **Owed verification passes** — see the "Reviews we owe" entry immediately below.
+- **Stale PWA install screenshot** — `public/screenshots/profile.png` still
+  renders the old brand name *inside the image*, so the rename sweep couldn't
+  see it. It feeds the Android/Chrome install prompt: a first-run surface.
+  **Re-capture profile.png (and re-verify home.png) at 1206×2622** — I can't
+  generate a screenshot asset.
+- **Verification passes only a real device/prod can settle** (below).
 
 ---
 
-- **Reviews we owe — verification the code changes cannot self-certify** ·
-  opened 2026-07-27 · A run of security/durability fixes shipped this session
-  that are correct in tests but whose FINAL proof is a real device, a
-  production probe, or the boss's eye. Named honestly so they don't get
-  "decks clear"'d away again. In rough priority:
-  1. **Record-path soak (post-#254 + #253).** Log a real workout — including a
-     RETRO/catch-up day — on the device, then confirm it lands in the cloud and
-     appears on a second device. #254 changed how retro ids are minted and #253
-     gated sync behind the sliding cookie; the whole point of both is
-     cross-device durability, and only a real round-trip proves it.
-  2. **Locker Room shakedown at photo volume (unblocked by #264).** #264 bounded
-     the reveal to a prefetch window; verify on a profile with many photos that
-     scrubbing is smooth and no 429s/blank frames appear. This was the exact
-     "under real photo volume" case flagged before the N+1 was found.
-  3. **Probe: can a client set `x-real-ip` through Vercel's edge?** (security
-     audit open-Q 1). Determines whether the rate limiter is a real enumeration
-     control or just burst protection. One curl with a forged header against the
-     deployed URL answers it. If spoofable, the limiter needs a different source.
-  4. **Probe: how many production profiles lack a verifiable passkey?**
-     (open-Q 2). That count was the blast radius of the closed no-passkey wipe
-     hole and it sizes any future J1 migration. Read-only census via the (now
-     `CRON_SECRET`-gated) diag route.
-  5. **Safari 27 / STP-248 eyeball checks (no code — boss is on iOS 27).** CSP
-     renders clean (no console CSP errors post-#256); ScrollDrum snap doesn't
-     fight the JS settle; /library cross-document VT still transitions. Detail
-     in the "Safari 27 opportunistic follow-ups" entry below.
-  6. **Vercel logs watch — flip + hardening aftermath.** The new `serverError()`
-     logging means genuine 5xx detail now lands server-side under
-     `[forge:sync|photos|…]` tags; a glance at the logs after real traffic
-     confirms nothing is quietly throwing (and that the shrink-guard / cookie
-     caps aren't misfiring).
-  Unblock: these are yours to run on device/prod when convenient — I can't
-  reach the device, the production edge, or your logged-in Vercel dashboard from
-  here. Tick them off in this entry as they pass.
-
----
-
+- **Reviews we owe — verification the code can't self-certify** · opened
+  2026-07-27 · Fixes that pass in tests but whose final proof is a device or
+  production. Named so they don't get waved away:
+  1. **Record-path soak** — log a real workout including a retro/catch-up day,
+     confirm it reaches the cloud and appears on a second device. Retro id
+     minting and sync gating both changed; only a round-trip proves durability.
+  2. **Locker Room at photo volume** — verify smooth scrubbing and no blank
+     frames on a profile with many photos.
+  3. **Two production probes** — recorded in the Drive notes (they concern
+     infrastructure behaviour, not app code).
+  4. **Safari 27 eyeball checks** — page renders clean with no console errors;
+     ScrollDrum snap doesn't fight the JS settle; /library transition intact.
+  5. **Vercel logs watch** — server-side error detail is now tagged; a glance
+     after real traffic confirms nothing is quietly throwing.
+  Unblock: yours to run — I can't reach the device, the production edge, or
+  your Vercel dashboard from here. Tick them off as they pass.
 - **README rework — flip-day item** · parked 2026-07-26 · the README is
   Forge head to toe (title, "Unveil the best you." tagline, theforged.fit
   links, forge-branded quickstart) — 11 brand mentions across 191 lines.
@@ -484,28 +383,21 @@ entry below.
 
 ### Team expansion — the trust checklist · DORMANT 2026-07-27
 
-Written when the boss asked how to limit a hypothetical "closet horny
-fucker" on a future admin team from ogling users' progress photos. Full
-detail in **docs/team-expansion.md**; the headlines:
+Written when the boss asked how a future admin team would be kept away from
+users' progress photos. **The analysis, the access model, and the checklist
+live in Drive ("Heatwayve — Internal Notes"), not here.**
 
-- The app has NO admin backdoor to photos — `/api/photos` contains zero
-  admin concepts, and the gate binds the token's stored profile to the
-  requested one. `ADMIN_PROFILE` is bug triage and nothing else.
-- The real boundary is `BLOB_READ_WRITE_TOKEN`: anyone with Vercel env
-  access can pull every photo directly, bypassing the app, untraceably.
-  Today the operator is one person and that IS the control.
-- Checklist, cheapest first: (1) grant app admin, never infrastructure —
-  free, works today; (2) split photos into their own Blob store; (3) log
-  photo reads; (4) E2E encryption.
-- **E2E CONSIDERED AND DECLINED** (boss, 2026-07-27): "I'll take the onus
-  of keeping users safe rather than creating obstacles to sign up and
-  experience." Recovery is unforgiving (lose the passkey, lose the
-  photos, no support path), multi-device needs key-wrapping, and it taxes
-  signup — the exact moment Heatwayve has to feel effortless. Revisit
-  triggers recorded in the doc.
+Settled points worth carrying in the open:
+- The app grants no admin access to anyone's photos — there is no such code
+  path. `ADMIN_PROFILE` covers bug triage and nothing else.
+- **E2E encryption: CONSIDERED AND DECLINED** (boss, 2026-07-27): "I'll take
+  the onus of keeping users safe rather than creating obstacles to sign up and
+  experience." Recovery would be unforgiving (lose the passkey, lose the
+  photos), multi-device needs key-wrapping, and it taxes signup — the exact
+  moment Heatwayve has to feel effortless. Revisit triggers are in the notes.
 
-**Trigger:** the first time anyone but the boss gets any access. Estimated
-at ~10k active users. Deliberately dormant until then.
+**Trigger:** the first time anyone but the boss gets any access. Estimated at
+~10k active users. Deliberately dormant until then.
 
 ### Preferred name ("What should we call you?") — QUEUED 2026-07-26, ready-anytime
 

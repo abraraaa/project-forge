@@ -1,6 +1,6 @@
 // tests/hardening.test.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Locks for the hardening batch (deep audit 2026-07-26, docs/audit-2026-07-*).
+// Locks for the hardening batch (internal review, 2026-07-26).
 // Each of these is a posture that is easy to weaken accidentally and hard to
 // notice once weakened — which is why they are pinned rather than trusted.
 // ─────────────────────────────────────────────────────────────────────────────
