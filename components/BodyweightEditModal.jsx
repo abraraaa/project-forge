@@ -45,7 +45,7 @@ const COPY = {
   secureCta: "Secure & continue",
   secureCancelled: "No pressure — your weight is saved. Photos will be here when you're ready.",
   cameraTitle: "Today's photo",
-  cameraBody: "Same spot, same light does wonders for the timeline.",
+  cameraBody: "Same spot, same light. You're tracking your body, not your camera.",
   cameraPick: "Take photo",
   cameraConfirm: "Use this photo",
   cameraRetake: "Retake",

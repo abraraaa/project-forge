@@ -81,7 +81,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
         </div>
         <div style={{fontSize:14, color:T.text2, marginTop:10, lineHeight:1.5}}>
           {isEmpty
-            ? "Complete your first session to start seeing the signal."
+            ? "Go train. The numbers follow."
             : `${counts.total} session${counts.total===1?"":"s"} · ${counts.last7} this week · ${counts.last30} this month`
           }
         </div>

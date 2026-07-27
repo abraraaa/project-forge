@@ -28,8 +28,11 @@ describe("PerformanceLab — empty state", () => {
     // Empty-state copy lives at PerformanceLab.jsx:125 — change copy, change test.
     expect(screen.getByText(/Nothing to show/i)).toBeTruthy();
     // The first-session prompt is the only call-to-action in the empty
-    // state; if it's missing, EmptyState wasn't rendered.
-    expect(screen.getByText(/Complete your first session/i)).toBeTruthy();
+    // state; if it's missing, EmptyState wasn't rendered. Copy updated in
+    // the intimacy pass (2026-07-27): "start seeing the signal" retired —
+    // "signal" is the LLM-era tell, and an empty stats screen telling you
+    // to go train is the more confident flex.
+    expect(screen.getByText(/Go train/i)).toBeTruthy();
   });
 
   it("renders the lab header even when empty (the page isn't blank)", () => {

@@ -223,8 +223,23 @@ passes, not just words):**
   the chart has a line to point at. A decline costs one visit, not a
   fortnight. Rule: offer only what isn't already visible (so the Locker
   Room, which shows "Add photo", never nags).
-- **cameraBody "…does wonders for the timeline"** spotted-but-untouched
-  ("timeline" is product-speak, "does wonders" is mild) — next copy pass.
+**Walk-one closing three (the boss's "bottom it out before shipping" call —
+a half-walk shouldn't merge as if it were finished):**
+- cameraBody: "…does wonders for the timeline" → "Same spot, same light.
+  You're tracking your body, not your camera." The instruction reframed as
+  its own reason, and dryly funny; it also forgives a rough setup without
+  apologising first ("if you can" was cut for exactly that).
+- Forged focus blurb: "…The default Heatwayve programme" (an administrative
+  footnote where a pitch belongs) → "Balanced strength and conditioning.
+  Nothing neglected."
+- Lab empty state: "…start seeing the signal" → "Go train. The numbers
+  follow." SIGNAL RETIRED BY RULING (boss): it is the LLM-era tell — the
+  word every chatbot reaches for, so it reads generic rather than sharp.
+  Also fixed a factual slip in an alternative draft: the Lab plots 1RM and
+  volume (load and sets), not rep count. An empty stats screen that tells
+  you to leave and go train is the more confident flex.
+  tests/components/PerformanceLab.test.jsx updated with it — the test's own
+  comment says "change copy, change test", so that coupling is intentional.
 
 **Remaining surfaces for later walks:** breather, focus picker, week editor,
 onboarding beats, Lab interior, the admin wing, plus #75's style-pass twin
