@@ -30,10 +30,25 @@ describe("computeTargetDims", () => {
   });
 });
 
-describe("isJpegBytes", () => {
-  it("accepts a JPEG SOI header, rejects others", () => {
-    expect(isJpegBytes(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBe(true);
+describe("isJpegBytes — SOI head AND EOI tail (2026-07-27 tightening)", () => {
+  // A real JPEG opens FF D8 FF and closes FF D9. Checking both ends rejects
+  // the "JPEG header stapled to an arbitrary payload" class (a zip/junk body
+  // wearing a JPEG hat) without decoding anything.
+  const jpeg = (...mid) => new Uint8Array([0xff, 0xd8, 0xff, ...mid, 0xff, 0xd9]);
+
+  it("accepts a well-formed JPEG (SOI + EOI)", () => {
+    expect(isJpegBytes(jpeg(0xe0, 0x00, 0x10))).toBe(true);
+  });
+
+  it("REJECTS a JPEG header with no EOI — the payload-smuggling case", () => {
+    // This exact shape used to PASS (header-only check). It's a JPEG magic
+    // number followed by arbitrary bytes that never terminate as a JPEG.
+    expect(isJpegBytes(new Uint8Array([0xff, 0xd8, 0xff, 0x50, 0x4b, 0x03, 0x04]))).toBe(false); // ...PK.. (zip)
+  });
+
+  it("rejects non-JPEG and malformed inputs", () => {
     expect(isJpegBytes(new Uint8Array([0x89, 0x50, 0x4e, 0x47]))).toBe(false); // PNG
+    expect(isJpegBytes(new Uint8Array([0xff, 0xd8, 0xff]))).toBe(false);       // too short for a tail
     expect(isJpegBytes(new Uint8Array([]))).toBe(false);
     expect(isJpegBytes(null)).toBe(false);
   });
