@@ -45,6 +45,13 @@ move it to SHIPPED with its PR number.
   reduced.
 - **Locker Room N+1 full-res reveal** — PR #264: bounded prefetch window
   (PREFETCH=6, EVICT=9), mint dedupe. Closes the "under real photo volume" case.
+  **Follow-up (2026-07-27, PR #265):** external review (ChatGPT via boss) flagged
+  three edges. Fixed: the window now loads **centre-outward** so the visible
+  frame is requested first, not queued behind its prefetch (their point 1); and
+  the window geometry is extracted to pure `photoWindowIndices` / `outsideEvictBand`
+  helpers PINNED by `tests/locker-window.test.js` (+9) so the bounded contract
+  can't be refactored away (their point 3). Their point 2 (burst on rapid scrub)
+  is the open item just below.
 - **Node 22→24 + deps hygiene** — PR #262: `engines.node 24.x` (Vercel-authoritative),
   `@types/node ^24`, `postcss` override floor `^8.5.18`, `playwright-core` gone,
   `babel-plugin-react-compiler` KEPT (reactCompiler needs it — lock added after
@@ -84,6 +91,20 @@ move it to SHIPPED with its PR number.
 - **P3 · `flip-dormant.test.js` / `photos.test.js` lock literal source.** Loosen
   to regex on the invariant next time those files are touched. Not urgent.
 - **P3 · ESLint 9→10 major** — bump in isolation, run lint. As-and-when.
+- **Locker Room · rapid-scrub fetch burst has no cap or cancellation —
+  `app/locker-room/page.jsx` `mintUrl`.** (External review point 2, 2026-07-27.)
+  The window is bounded and centre-first now, but `mintUrl` fires each frame's
+  fetch with no `AbortController` and no concurrency cap, so a fast drag across a
+  LONG timeline kicks off a burst of full-res GETs (deduped, and eviction revokes
+  the ones you pass — but the in-flight ones still complete). Bounded in practice
+  by dedupe + the 1-hour browser cache; the real ceiling is the 90/min photo-read
+  limit, which only bites at ~90+ photos scrubbed end-to-end rapidly — a scale no
+  profile is near today. Low-probability, honestly named rather than gold-plated.
+  Next step when it earns attention: a small in-flight concurrency cap (2-3) with
+  a queue, OR an `AbortController` per fetch aborted on eviction — the cap is the
+  cheaper mitigation and drops the queued-but-now-evicted fetches for free. Do
+  NOT build speculatively; revisit if a real user reports blank frames on scrub
+  or the logs show photo-read 429s.
 
 ### PARKED BY DECISION (not deferral — these are rulings)
 
