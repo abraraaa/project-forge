@@ -23,7 +23,12 @@ import { NextResponse } from "next/server";
 // device round-trip returned empty for every user. Determ paths eliminate
 // the read-back guesswork entirely.
 
-const normalise    = (name) => String(name || "").trim().toLowerCase();
+// NFKC before lowercasing (deep audit 2026-07-26). Without canonicalisation,
+// codepoints that lowercase to the same letter (e.g. the Kelvin sign U+212A →
+// "k") collapse onto one path while visually identical composed/decomposed
+// forms (café NFC vs NFD) resolve to DIFFERENT profiles — a squatting and
+// impersonation surface on a namespace where the NAME is the identity.
+const normalise    = (name) => String(name || "").normalize("NFKC").trim().toLowerCase();
 const metaPath     = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/meta.json`;
 const historyPath  = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/history.json`;
 // Trailing slash is load-bearing — without it, list() does a prefix match that
@@ -74,7 +79,15 @@ function validateProfile(rawName) {
   if (PATH_SEPS_RE.test(trimmed)) {
     return { ok: false, reason: "Profile contains path separators" };
   }
-  return { ok: true, normalised: trimmed.toLowerCase(), displayName: trimmed };
+  // Dot-only names ("." / ".." / "...") — defence in depth. encodeURIComponent
+  // leaves dots untouched, so such a name reaches the store as a relative path
+  // segment. Whether the platform collapses it is a property of someone else's
+  // code that could change without notice; the wipe gate's traversal (fixed in
+  // #251) is what that assumption cost last time.
+  if (/^\.+$/.test(trimmed)) {
+    return { ok: false, reason: "Profile name cannot be dots" };
+  }
+  return { ok: true, normalised: normalise(trimmed), displayName: trimmed };
 }
 
 // Body size guard — reject > 5MB request bodies before parsing. A typical
@@ -679,7 +692,13 @@ export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
     const profile = searchParams.get("profile");
-    const authToken = searchParams.get("authToken");
+    // Header first (deep audit 2026-07-26): the app's own law is "keys don't
+    // ride URLs" — /api/photos obeys it, the wipe did not, so the one
+    // credential authorising irreversible deletion was landing in access
+    // logs and Referer headers. The query fallback stays ONLY so a client
+    // mid-deploy isn't stranded; it is the deprecated path, not the design.
+    const authToken = request.headers.get("x-hw-auth")
+      || searchParams.get("authToken");
 
     const v = validateProfile(profile);
     if (!v.ok) return NextResponse.json({ error: v.reason }, { status: 400 });

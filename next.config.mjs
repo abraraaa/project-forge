@@ -34,20 +34,54 @@ const nextConfig = {
   // Bonus TLDs (.fit/.space/.life → .app) stay at the Vercel dashboard.
   // THIS PR MERGES ON FLIP DAY ONLY — the 301 is cached aggressively by
   // design; merging early strands users before DNS is ready.
-  // Minimal SAFE security headers (audit #24). Deliberately NO script-src
-  // CSP: Next App Router inlines bootstrap scripts, and a nonce pipeline is
-  // its own project — a broken-CSP outage serves no one. These four are
-  // pure win, zero breakage surface: no framing (also kills clickjacking on
-  // the passkey ceremonies), no MIME sniffing, tight referrers, and no
-  // camera/mic/geo access from any embedded context.
+  // Security headers. The CSP was previously three directives with no
+  // default-src and no script-src, which meant scripts were entirely
+  // unconstrained — it framed-blocked and nothing else (deep audit
+  // 2026-07-26: "zero XSS containment").
+  //
+  // Now a real allow-list, written from what the app ACTUALLY loads rather
+  // than from a template:
+  //   · fonts are self-hosted by next/font at build time (.next/static/media)
+  //   · Vercel Analytics + Speed Insights serve from same-origin /_vercel/*
+  //   · the ONLY external resource in the whole app is the YouTube exercise
+  //     embed, so frame-src names exactly that host and nothing else
+  //   · buymeacoffee / doi.org / github are LINKS, not resources — CSP does
+  //     not govern navigation targets, so they need no entry
+  //   · img-src needs blob: (photo object URLs) and data: (canvas share card)
+  //
+  // 'unsafe-inline' on script-src is load-bearing for now: the App Router
+  // inlines its hydration bootstrap, so removing it needs a nonce pipeline
+  // through middleware — a real project, and a broken CSP is an outage. The
+  // policy is still a large step up: an injected REMOTE script is now blocked
+  // outright, and base-uri/form-action/object-src close the classic escapes.
   async headers() {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self'",
+      "media-src 'self' blob:",
+      "connect-src 'self'",
+      "worker-src 'self'",
+      "frame-src https://www.youtube.com",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join("; ");
     return [{
       source: "/:path*",
       headers: [
-        { key: "Content-Security-Policy", value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'" },
+        { key: "Content-Security-Policy", value: csp },
         { key: "X-Content-Type-Options", value: "nosniff" },
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        // Asserted in-repo rather than relying on an unstated platform
+        // default. Two years, subdomains included. NOT preloaded: preload is
+        // effectively irreversible and both domains would need every
+        // subdomain HTTPS-only forever.
+        { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
       ],
     }];
   },

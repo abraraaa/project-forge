@@ -48,6 +48,7 @@ const photoPath = (profile, date) =>
 // suffixed orphans.
 const PHOTO_TTL_MS = 7 * 86400000;
 const ROTATE_AFTER_MS = 86400000; // any active day slides the window
+const PHOTO_ABSOLUTE_CAP_MS = 90 * 86400000; // ...but the chain is not infinite
 const COOKIE_OPTS = { httpOnly: true, secure: true, sameSite: "strict", path: "/api/photos", maxAge: 7 * 86400 };
 
 // Attach a rotated cookie (if the gate minted one) to any success response.
@@ -80,8 +81,20 @@ async function gate(request) {
   let refresh = null;
   if (data.scope === "photos" && token === cookieToken) {
     const age = Date.now() - new Date(data.createdAt || 0).getTime();
-    if (!Number.isFinite(age) || age > ROTATE_AFTER_MS) {
-      refresh = await mintAuthToken({ profile, ttlMs: PHOTO_TTL_MS, scope: "photos" });
+    // Absolute ceiling from the ORIGINAL ceremony (deep audit 2026-07-26).
+    // Rotation used to be uncapped: each refresh minted a fresh 7-day token
+    // with a new createdAt, so ONE captured cookie, used once a week, renewed
+    // itself forever — and the only revocation path in the app is the wipe.
+    // authAt is carried forward unchanged through every rotation (createdAt
+    // resets), so past the cap the cookie simply stops sliding and lapses,
+    // costing an active user one Face ID per quarter.
+    const authAge = Date.now() - new Date(data.authAt || data.createdAt || 0).getTime();
+    const withinCap = Number.isFinite(authAge) && authAge < PHOTO_ABSOLUTE_CAP_MS;
+    if ((!Number.isFinite(age) || age > ROTATE_AFTER_MS) && withinCap) {
+      refresh = await mintAuthToken({
+        profile, ttlMs: PHOTO_TTL_MS, scope: "photos",
+        authAt: data.authAt || data.createdAt || null,
+      });
     }
   }
   return { profile: normalise(profile), date, url, refresh };

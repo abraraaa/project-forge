@@ -41,6 +41,9 @@ export const metadata = {
   },
   description:
     "Unveil the best you. Evidence-based strength training — volume audits against MEV/MAV/MRV, focus-aware rotation, and progression that stays honest.",
+  // Explicit canonical for "/" — the library routes already set theirs, and
+  // the homepage is reachable as both apex and www.
+  alternates: { canonical: "https://heatwayve.app/" },
   manifest: "/manifest.json",
   openGraph: {
     title: "Heatwayve — Train with intention",
