@@ -235,6 +235,31 @@ entry below.
 
 ## Active parking list
 
+### Team expansion — the trust checklist · DORMANT 2026-07-27
+
+Written when the boss asked how to limit a hypothetical "closet horny
+fucker" on a future admin team from ogling users' progress photos. Full
+detail in **docs/team-expansion.md**; the headlines:
+
+- The app has NO admin backdoor to photos — `/api/photos` contains zero
+  admin concepts, and the gate binds the token's stored profile to the
+  requested one. `ADMIN_PROFILE` is bug triage and nothing else.
+- The real boundary is `BLOB_READ_WRITE_TOKEN`: anyone with Vercel env
+  access can pull every photo directly, bypassing the app, untraceably.
+  Today the operator is one person and that IS the control.
+- Checklist, cheapest first: (1) grant app admin, never infrastructure —
+  free, works today; (2) split photos into their own Blob store; (3) log
+  photo reads; (4) E2E encryption.
+- **E2E CONSIDERED AND DECLINED** (boss, 2026-07-27): "I'll take the onus
+  of keeping users safe rather than creating obstacles to sign up and
+  experience." Recovery is unforgiving (lose the passkey, lose the
+  photos, no support path), multi-device needs key-wrapping, and it taxes
+  signup — the exact moment Heatwayve has to feel effortless. Revisit
+  triggers recorded in the doc.
+
+**Trigger:** the first time anyone but the boss gets any access. Estimated
+at ~10k active users. Deliberately dormant until then.
+
 ### Preferred name ("What should we call you?") — QUEUED 2026-07-26, ready-anytime
 
 The login name is a permanent claim key (sync, blobs, passkeys find you
