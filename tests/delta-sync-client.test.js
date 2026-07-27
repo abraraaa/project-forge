@@ -132,6 +132,11 @@ describe("delta push — dirty diff over THE payload builder", () => {
   it("with a cursor: ships only dirty fields + new records; commits state so the next push is empty (and skips the wire)", async () => {
     P.saveWeightsRaw("p3", { Squat: 100 }, { Squat: "2026-07-20T00:00:00.000Z" });
     DeltaSync.setCursor("p3", "2026-07-24T00:00:00.000Z");
+    // A device already on the current watermark schema. Without the version
+    // marker this is a v1 device, and pushNow correctly spends one full push
+    // reconciling it (see the reconciliation test below) — which is the
+    // right behaviour, but not what THIS test is about.
+    DeltaSync.commitPushState("p3", { meta: {}, history: [] });
     stubFetch(() => okJson({ ok: true, delta: true, cursor: "x" }));
     await pushNow("p3");
     const put = fetchCalls.find((c) => c.opts.method === "PUT");
