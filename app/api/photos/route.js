@@ -1,4 +1,10 @@
 import { NextResponse } from "next/server";
+
+function serverError(e, { status = 500, label = "photos" } = {}) {
+  // Generic to the client, full detail to the server log (audit 2026-07-26).
+  console.error(`[forge:${label}]`, e?.stack || e?.message || e);
+  return NextResponse.json({ error: "Something went wrong. Try again." }, { status });
+}
 import { rateLimit } from "@/lib/rate-limit";
 import { put, get, list, del } from "@vercel/blob";
 import { isTokenValid, readTokenData, mintAuthToken } from "@/lib/auth-server";
@@ -130,7 +136,7 @@ export async function POST(request) {
     await dbUpsertPhoto(g.profile, { date: g.date, blobPath: path, bodyweightAt });
     return withCookie(NextResponse.json({ ok: true, date: g.date }), g);
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e);
   }
 }
 
@@ -162,7 +168,7 @@ export async function GET(request) {
       },
     }), g);
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e);
   }
 }
 
@@ -189,10 +195,10 @@ export async function DELETE(request) {
       const exact = blobs.filter((b) => b.pathname === path);
       if (exact.length) await del(exact.map((b) => b.url));
     } catch (e) {
-      return NextResponse.json({ error: `Photo removed from index; blob delete failed: ${e.message}` }, { status: 500 });
+      return serverError(e, { label: "photos-delete" });
     }
     return withCookie(NextResponse.json({ ok: true, deleted: g.date }), g);
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e);
   }
 }

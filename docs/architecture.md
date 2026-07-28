@@ -92,7 +92,7 @@ Three. Removing one needs a written argument for what now covers the failure mod
 2. **On `visibilitychange = hidden`** — `flushDeferred` fires from the listener in `lib/storage.js`. The user's "I'll close this for now" event.
 3. **On `pagehide`** — same flush. iOS Safari's more reliable termination signal in PWA install mode.
 
-> NOTE (audit 2026-07, finding #3): the class-2 deferred tier (`pushDeferred`) currently has no callers, so save points 2–3 are effectively no-ops — every mutation routes through `pushNow`. Reconciling this is part of the open sync-payload design question (`docs/audit-2026-07.md` #2/#3), not yet resolved. `pushUserStateSnapshot`/`_flushSnapshotPush` named in earlier drafts of this doc were removed in the push refactor.
+> NOTE (audit 2026-07, finding #3): the class-2 deferred tier (`pushDeferred`) currently has no callers, so save points 2–3 are effectively no-ops — every mutation routes through `pushNow`. Reconciling this is part of the open sync-payload design question (tracked in internal notes), not yet resolved. `pushUserStateSnapshot`/`_flushSnapshotPush` named in earlier drafts of this doc were removed in the push refactor.
 
 ### Merge rules, per entity
 

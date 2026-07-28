@@ -53,6 +53,28 @@ describe("checkStoreHealth", () => {
       .toContain("days: no future-dated phantom completions (straddle class)");
   });
 
+  it("still flags a phantom whose date has ALREADY passed (time-invariant)", () => {
+    // The straddle phantom persists in the store forever, so the detector must
+    // too. The old `&& date > today` clause stopped flagging it the day after
+    // its date — a real corruption that self-healed from the report but not the
+    // store. Here the phantom is dated 2026-07-12 (before today 2026-07-14) yet
+    // written on 2026-07-10, so `date > written` still holds and it must red.
+    const s = healthy();
+    s.days["2026-07-12"] = { date: "2026-07-12", scheduledType: "strength", completedType: "strength", sessionId: null, marks: {}, updatedAt: T1 };
+    expect(failing(checkStoreHealth(s, { todayIso: TODAY })))
+      .toContain("days: no future-dated phantom completions (straddle class)");
+  });
+
+  it("does NOT flag a same-day completion with no session (written == date)", () => {
+    // The clause that saves honest data is `date > written`, NOT sessionId. A
+    // completion logged the day it happened (written == date) with no session —
+    // e.g. cardio — must stay green; only strictly-early writes are phantoms.
+    const s = healthy();
+    s.days["2026-07-11"] = { date: "2026-07-11", scheduledType: "cardio", completedType: "cardio", sessionId: null, marks: {}, updatedAt: "2026-07-11T09:00:00.000Z" };
+    expect(failing(checkStoreHealth(s, { todayIso: TODAY })))
+      .not.toContain("days: no future-dated phantom completions (straddle class)");
+  });
+
   it("flags duplicate history ids and unsorted history", () => {
     const s = healthy();
     s.history = [

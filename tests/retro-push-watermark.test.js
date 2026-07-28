@@ -131,8 +131,11 @@ describe("the false invariant that hid the bug is gone", () => {
   it("the header no longer claims retro records mint now() ids", () => {
     const s = readFileSync(resolve(root, "lib/sync-delta.js"), "utf8");
     expect(s).not.toContain("retro-logged sessions still mint now() ids and are never missed");
-    // and the real contract is stated
-    expect(s).toContain("PUSH ordering key");
+    // The contract must stay documented, but assert the INVARIANT rather than
+    // one exact sentence — a prose-pinned lock breaks on harmless rewording
+    // and gets "fixed" by deleting the documentation.
+    expect(s).toMatch(/push[- ]ordering key/i);
+    expect(s).toMatch(/pushKey[^\n]*\bnever\b[^\n]*raw record id/i);
   });
 
   it("retro records still sort by DATE TRAINED — the fix must not move them", () => {

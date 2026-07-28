@@ -34,6 +34,37 @@ import { preparePhoto, uploadPhoto, deletePhoto, fetchPhotoIndex, fetchPhotoObje
 import { todayLocalIso, parseLocalDate } from "@/lib/dates";
 import BodyweightDrum from "@/components/BodyweightDrum";
 
+// ── Prefetch/eviction geometry — pure, exported, and PINNED ──────────────────
+// The bounded-window loader that replaced the N+1 reveal (#264) is a real
+// contract: which frames load, in what order, and which get revoked. An
+// external review rightly noted it was undone-able by the next "harmless"
+// refactor because nothing tested it. These two pure functions ARE that
+// contract; tests/locker-window.test.js pins them.
+export const PREFETCH = 6;   // frames each side to preload (<=13 photos load whole)
+export const EVICT = 9;      // frames each side to keep; beyond this, revoke
+
+// Indices to load around `center`, CENTRE-OUTWARD so the frame the user is
+// actually looking at — and its immediate neighbour across a drag — are
+// requested FIRST, not queued behind their own prefetch. This is the external
+// review's point 1: on a slow link the visible frame must not compete equally
+// with the six frames past it.
+export function photoWindowIndices(center, length, prefetch = PREFETCH) {
+  if (!length) return [];
+  const lo = Math.max(0, center - prefetch);
+  const hi = Math.min(length - 1, center + prefetch);
+  const out = [];
+  const push = (i) => { if (i >= lo && i <= hi && !out.includes(i)) out.push(i); };
+  push(center);
+  for (let d = 1; d <= prefetch; d++) { push(center + d); push(center - d); }
+  return out;
+}
+
+// True when frame `i` should have its object URL revoked: outside the keep-band,
+// or `i < 0` meaning the frame is no longer in the list at all (e.g. deleted).
+export function outsideEvictBand(i, center, evict = EVICT) {
+  return i < 0 || i < center - evict || i > center + evict;
+}
+
 export default function LockerRoom() {
   const router = useRouter();
   // Hydration-safe (#76): SSR renders the empty shell; the first client
@@ -78,23 +109,18 @@ export default function LockerRoom() {
       .catch(() => inflightRef.current.delete(date));
   }, [profile]);
 
-  // Bounded prefetch window + LRU eviction. PREFETCH each side keeps the drag
-  // smooth (neighbours are already loading before you reach them); anything
-  // past EVICT is revoked so a long timeline never holds every full-res frame
-  // (or trips the 90/min photo-read limit). Sized so a collection that fits in
-  // the window loads fully — i.e. today's small collections behave EXACTLY as
-  // before; the bounding only engages once there are more photos than the
-  // window. PREFETCH/EVICT are the tunable knobs if the drag feel wants it.
-  const PREFETCH = 6;   // collections <= 13 photos load in full (no change)
-  const EVICT = 9;      // beyond ±9 frames, revoke to stay bounded
+  // Bounded prefetch window + LRU eviction (geometry in photoWindowIndices /
+  // outsideEvictBand above). The window keeps the drag smooth (neighbours load
+  // before you reach them); anything past the keep-band is revoked so a long
+  // timeline never holds every full-res frame (or trips the 90/min read limit).
+  // A collection that fits in the window loads fully — today's small collections
+  // behave EXACTLY as before; the bounding only engages past the window.
   const syncWindow = useCallback((center, tok, list) => {
     if (!tok || !list?.length) return;
-    const lo = Math.max(0, center - PREFETCH);
-    const hi = Math.min(list.length - 1, center + PREFETCH);
-    for (let i = lo; i <= hi; i++) mintUrl(tok, list[i].date);
+    for (const i of photoWindowIndices(center, list.length)) mintUrl(tok, list[i].date);
     for (const d of Object.keys(urlsRef.current)) {
       const i = list.findIndex((p) => p.date === d);
-      if (i < 0 || i < center - EVICT || i > center + EVICT) {
+      if (outsideEvictBand(i, center)) {
         URL.revokeObjectURL(urlsRef.current[d]);
         delete urlsRef.current[d];
         setUrls((prev) => { const n = { ...prev }; delete n[d]; return n; });

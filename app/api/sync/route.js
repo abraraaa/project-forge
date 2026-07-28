@@ -6,6 +6,14 @@ import { hasRealPasskey, readTokenData, isTokenValid, mintAuthToken } from "@/li
 import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbDeleteToken, dbReadProfileSince, dbReadMetaFields, dbCursorNow } from "@/lib/db";
 import { NextResponse } from "next/server";
 
+// Generic client error + full server-side log. Raw exception text (Neon/blob
+// driver detail, query fragments, schema names) must not reach the client —
+// audit 2026-07-26, P3 info-disclosure. Detail stays in the server log.
+function serverError(e, { status = 500, label = "sync" } = {}) {
+  console.error(`[forge:${label}]`, e?.stack || e?.message || e);
+  return NextResponse.json({ error: "Something went wrong. Try again." }, { status });
+}
+
 // Blob layout (case-insensitive — path uses lowercase, display name lives in meta):
 //   forge/profiles/{lowerName}/meta.json    — weights, reps, streak, programmeBlock, displayName
 //   forge/profiles/{lowerName}/history.json — full session history (append-only)
@@ -13,15 +21,9 @@ import { NextResponse } from "next/server";
 // Store access: PRIVATE.
 // Requires @vercel/blob@^2 (adds private-store support + get() for auth'd reads).
 //
-// PATH SCHEME: deterministic. We use { allowOverwrite: true } rather than
-// addRandomSuffix because addRandomSuffix inserts the suffix BEFORE the
-// extension (per Vercel docs: 'avatar-oYnXSVc….jpg', not 'avatar.jpg-oYnXSVc…').
-// An earlier version used addRandomSuffix and tried to find writes back via
-// `pathname === path || pathname.startsWith(path + '-')` — that pattern
-// never matches the actual format, so every PUT wrote a blob the GET could
-// never read. Sync looked silently fine (200s on both sides) but cross-
-// device round-trip returned empty for every user. Determ paths eliminate
-// the read-back guesswork entirely.
+// PATH SCHEME: deterministic, and it must stay that way. Writes overwrite in
+// place; never introduce randomised pathnames here. A write the reader cannot
+// find back is silent — both sides return success and the data is simply gone.
 
 // NFKC before lowercasing (deep audit 2026-07-26). Without canonicalisation,
 // codepoints that lowercase to the same letter (e.g. the Kelvin sign U+212A →
@@ -115,45 +117,24 @@ async function safeReadJson(request) {
   }
 }
 
-// ─── The sync gate (J1, boss decision 2026-07-26) ───────────────────────────
-// Until now GET/PUT/POST here asserted nothing about WHO was calling: the
-// profile name was the only key, so anyone who could guess a handle could
-// read a stranger's training history and bodyweight, and merge-write into it.
-// The auth machinery built through July (SimpleWebAuthn, auth_tokens, the
-// photo cookie) was wired into /api/photos and /api/bugs and never into the
-// route that carries the most data.
+// ─── The sync gate ──────────────────────────────────────────────────────────
+// The contract, matching /api/photos: the credential's STORED profile is
+// compared against the REQUESTED profile, and every path below is derived from
+// the gate's normalised value — no seam between what was authorised and what
+// gets used. Keep it that way.
 //
-// The contract now matches /api/photos exactly — the token's STORED profile
-// is compared against the REQUESTED profile, and every path below is derived
-// from the gate's normalised value, so there is no seam between what was
-// authorised and what gets used.
+// Deliberately pre-identity, and must stay open:
+//   · POST (name claim) — the bootstrap; you cannot hold a credential for a
+//     profile that does not exist yet. Claiming grants nothing on its own.
+//   · GET ?check=1 — availability, needed before a claim exists.
+// Neither returns user data.
 //
-// WHY A COOKIE, not the in-memory ceremony token: sync is ambient (visibility
-// change, reconnect, every mutation). A memory-only token dies with the tab,
-// so binding sync to it would demand Face ID before a fresh tab could sync.
-// The sliding httpOnly cookie means a ceremony only after a week of NOT
-// using the app on this device — never once per tab. It
-// is never readable by JS, so lib/auth-session.js's "nothing plaintext gets
-// thrown around" law holds — that law governs JS-readable persistence.
-//
-// WHAT STAYS OPEN, deliberately:
-//   · POST (name claim) — the bootstrap. You cannot hold a token for a
-//     profile that does not exist yet. Claiming grants nothing: a claimed
-//     profile with no passkey syncs nothing in or out.
-//   · GET ?check=1 — name availability, needed BEFORE a claim exists.
-// Both are pre-identity by construction, and neither returns user data.
-//
-// A profile with no passkey keeps working FOREVER, locally: the app is
-// local-first (lib/storage.js — "loads INSTANTLY from localStorage, works
-// offline"). It simply does not sync. That is the product story, not a
-// punishment: your training lives on your device; a passkey is what carries
-// it between devices.
-// SLIDING 7 days, matching hw_photos exactly (boss, 2026-07-26). The window
-// length is not a UX dial: because ANY active day rotates it, a trusted
-// high-touch device never re-auths no matter what this number is. A longer
-// window therefore buys the honest user nothing and hands a LOST phone extra
-// days. 7 is the tighter choice at identical convenience — the same reasoning
-// that set the photo cookie, applied consistently rather than re-litigated.
+// A profile without a passkey keeps working locally, forever. The app is
+// local-first; it simply does not sync. That is the product story, not a
+// punishment.
+// Sliding window, matching the photo cookie. Because any active day rotates
+// it, lengthening this buys a regularly-used device nothing and only extends
+// the window on a lost one. Keep the two values consistent.
 const SYNC_TTL_MS = 7 * 86400000;
 const SYNC_ROTATE_AFTER_MS = 86400000;   // any active day slides it
 // ...but the chain is not infinite: rotation stops at 90 days from the
@@ -297,7 +278,7 @@ export async function GET(request) {
   // claim's 409 leaks existence unavoidably, so the goal is not to close it
   // (you cannot) but to make BULK probing expensive. Its own tight bucket
   // does exactly that — invisible to the one person signing up, a 12x
-  // throttle on anyone mapping the namespace. See docs/audit-2026-07-*.
+  // throttle on anyone mapping the namespace.
   const [bucket, budget] = check ? ["sync-check", 10] : ["sync-read", 120];
   const limited = rateLimit(request, bucket, budget);
   if (limited) return limited;
@@ -428,7 +409,7 @@ export async function GET(request) {
       history: Array.isArray(history) ? history : [],
     }), gate);
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e);
   }
 }
 
@@ -482,7 +463,7 @@ export async function PUT(request) {
     } catch (e) {
       // Refuse silently-dropped deltas: the client keeps its dirty set and
       // retries — same posture as the fat path's 503s.
-      return NextResponse.json({ error: `Delta write failed: ${e.message}` }, { status: 503 });
+      return serverError(e, { status: 503, label: "sync-delta" });
     }
   }
 
@@ -530,7 +511,7 @@ export async function PUT(request) {
       }), gate);
     } catch (e) {
       console.error("[forge:put:db]", profile, e?.message || e);
-      return NextResponse.json({ error: `Write failed: ${e.message}` }, { status: 503 });
+      return serverError(e, { status: 503, label: "sync-write" });
     }
   }
 
@@ -629,7 +610,7 @@ export async function PUT(request) {
     // Tagged log so the runtime error surface tells us which call exploded
     // next time something goes wrong. Aggregate logs truncate without this.
     console.error("[forge:put:outer]", profile, e?.message || e, e?.stack);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e);
   }
 }
 
@@ -687,7 +668,7 @@ export async function POST(request) {
 
     return NextResponse.json({ ok: true, claimed: true });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e);
   }
 }
 
@@ -704,13 +685,12 @@ export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
     const profile = searchParams.get("profile");
-    // Header first (deep audit 2026-07-26): the app's own law is "keys don't
-    // ride URLs" — /api/photos obeys it, the wipe did not, so the one
-    // credential authorising irreversible deletion was landing in access
-    // logs and Referer headers. The query fallback stays ONLY so a client
-    // mid-deploy isn't stranded; it is the deprecated path, not the design.
-    const authToken = request.headers.get("x-hw-auth")
-      || searchParams.get("authToken");
+    // Header ONLY (finalised 2026-07-27). The app's law is "keys don't ride
+    // URLs"; the query fallback existed briefly so a mid-deploy client wasn't
+    // stranded, and every client has long since reloaded onto the header path
+    // (lib/storage.js blobDelete). Retired so a wipe token can never land in
+    // an access log or Referer again.
+    const authToken = request.headers.get("x-hw-auth");
 
     const v = validateProfile(profile);
     if (!v.ok) return NextResponse.json({ error: v.reason }, { status: 400 });
@@ -800,7 +780,7 @@ export async function DELETE(request) {
       catch (e) {
         // Refuse a half-wipe: if DB rows survive while blobs die, the next
         // GET would serve the "deleted" profile straight back from the DB.
-        return NextResponse.json({ error: `Delete failed (db): ${e.message}` }, { status: 500 });
+        return serverError(e, { label: "sync-delete-db" });
       }
     }
     // Snapshot generations live OUTSIDE the profile prefix and must die
@@ -823,11 +803,11 @@ export async function DELETE(request) {
     try {
       await del(blobs.map(b => b.url));
     } catch (e) {
-      return NextResponse.json({ error: `Delete failed: ${e.message}` }, { status: 500 });
+      return serverError(e, { label: "sync-delete" });
     }
 
     return NextResponse.json({ ok: true, deleted: blobs.length });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e);
   }
 }

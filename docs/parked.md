@@ -9,6 +9,74 @@ specific next step that would unblock it.
 
 ---
 
+## Open work — reconciled 2026-07-27
+
+The July internal review closed out across this session's PRs. What remains is
+listed below in plain terms. **Detail, rationale, and anything security-shaped
+lives in Drive ("Heatwayve — Internal Notes"), not here** — see
+`docs/internal-notes.md` for why.
+
+### Landed this cycle
+
+Retro-session durability on delta devices; sync authorization; programme-logic
+correctness (HOLD rounding, post-deload recovery window); the date-doctrine
+class guard; token-store consolidation; transport and header hardening; photo
+upload validation; Locker Room bounded photo loading; Node 24 + dependency
+hygiene; detector correctness and error-handling in the audit-tail batch.
+
+### Open — codeable
+
+- **DB write batching** (`lib/db.js`) — record/meta writes go one row at a time
+  over the HTTP driver. Hot path is N≈1-2, so this is a large-N nicety: batch
+  into a single multi-row insert. Propose the query shape first.
+- **Cold-start ignores the lift's template reps/sets** (`lib/progression.js`) —
+  Power Clean's first prescription disagrees with its 4×3 template. Seed from
+  the template block; touches training output, so engine-level test required.
+- **Cursor advance under local-storage quota pressure** (`lib/storage.js`) —
+  only advance once local writes are confirmed. Small proposal first.
+- **Locker Room photo loading — further tuning available.** The bounded
+  centre-first window covers today's usage. Options if it ever earns attention
+  are in the internal notes. Don't build speculatively.
+- **Two test files pin literal source** (`flip-dormant`, `photos`) — loosen to
+  regex on the invariant next time they're touched.
+- **ESLint 9→10** — bump in isolation, run lint.
+
+### Parked by decision (rulings, not deferrals)
+
+Nonce-based CSP (deferred, cautious — deployment risk). Token hashing at rest
+(low risk, low cost, not urgent). E2E photo encryption (**declined** on product
+grounds — boss, 2026-07-27: onus of safety over obstacles to signup).
+TypeScript 6→7 (needs a dedicated verification pass). Primary-CTA glow rule
+(taste call → Phase 6 sitting). `ForgeApp.jsx` decomposition (~1120 lines, 75
+hooks — raise as its own session; no bug found inside it).
+
+### Needs the boss
+
+- **Stale PWA install screenshot** — `public/screenshots/profile.png` still
+  renders the old brand name *inside the image*, so the rename sweep couldn't
+  see it. It feeds the Android/Chrome install prompt: a first-run surface.
+  **Re-capture profile.png (and re-verify home.png) at 1206×2622** — I can't
+  generate a screenshot asset.
+- **Verification passes only a real device/prod can settle** (below).
+
+---
+
+- **Reviews we owe — verification the code can't self-certify** · opened
+  2026-07-27 · Fixes that pass in tests but whose final proof is a device or
+  production. Named so they don't get waved away:
+  1. **Record-path soak** — log a real workout including a retro/catch-up day,
+     confirm it reaches the cloud and appears on a second device. Retro id
+     minting and sync gating both changed; only a round-trip proves durability.
+  2. **Locker Room at photo volume** — verify smooth scrubbing and no blank
+     frames on a profile with many photos.
+  3. **Two production probes** — recorded in the Drive notes (they concern
+     infrastructure behaviour, not app code).
+  4. **Safari 27 eyeball checks** — page renders clean with no console errors;
+     ScrollDrum snap doesn't fight the JS settle; /library transition intact.
+  5. **Vercel logs watch** — server-side error detail is now tagged; a glance
+     after real traffic confirms nothing is quietly throwing.
+  Unblock: yours to run — I can't reach the device, the production edge, or
+  your Vercel dashboard from here. Tick them off as they pass.
 - **README rework — flip-day item** · parked 2026-07-26 · the README is
   Forge head to toe (title, "Unveil the best you." tagline, theforged.fit
   links, forge-branded quickstart) — 11 brand mentions across 191 lines.
@@ -314,28 +382,21 @@ entry below.
 
 ### Team expansion — the trust checklist · DORMANT 2026-07-27
 
-Written when the boss asked how to limit a hypothetical "closet horny
-fucker" on a future admin team from ogling users' progress photos. Full
-detail in **docs/team-expansion.md**; the headlines:
+Written when the boss asked how a future admin team would be kept away from
+users' progress photos. **The analysis, the access model, and the checklist
+live in Drive ("Heatwayve — Internal Notes"), not here.**
 
-- The app has NO admin backdoor to photos — `/api/photos` contains zero
-  admin concepts, and the gate binds the token's stored profile to the
-  requested one. `ADMIN_PROFILE` is bug triage and nothing else.
-- The real boundary is `BLOB_READ_WRITE_TOKEN`: anyone with Vercel env
-  access can pull every photo directly, bypassing the app, untraceably.
-  Today the operator is one person and that IS the control.
-- Checklist, cheapest first: (1) grant app admin, never infrastructure —
-  free, works today; (2) split photos into their own Blob store; (3) log
-  photo reads; (4) E2E encryption.
-- **E2E CONSIDERED AND DECLINED** (boss, 2026-07-27): "I'll take the onus
-  of keeping users safe rather than creating obstacles to sign up and
-  experience." Recovery is unforgiving (lose the passkey, lose the
-  photos, no support path), multi-device needs key-wrapping, and it taxes
-  signup — the exact moment Heatwayve has to feel effortless. Revisit
-  triggers recorded in the doc.
+Settled points worth carrying in the open:
+- The app grants no admin access to anyone's photos — there is no such code
+  path. `ADMIN_PROFILE` covers bug triage and nothing else.
+- **E2E encryption: CONSIDERED AND DECLINED** (boss, 2026-07-27): "I'll take
+  the onus of keeping users safe rather than creating obstacles to sign up and
+  experience." Recovery would be unforgiving (lose the passkey, lose the
+  photos), multi-device needs key-wrapping, and it taxes signup — the exact
+  moment Heatwayve has to feel effortless. Revisit triggers are in the notes.
 
-**Trigger:** the first time anyone but the boss gets any access. Estimated
-at ~10k active users. Deliberately dormant until then.
+**Trigger:** the first time anyone but the boss gets any access. Estimated at
+~10k active users. Deliberately dormant until then.
 
 ### Preferred name ("What should we call you?") — QUEUED 2026-07-26, ready-anytime
 

@@ -22,7 +22,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { put, list } from "@vercel/blob";
 import { readJsonDirect } from "@/lib/blob-utils";
 import { hasDb, sql, ensureSchema, dbReadProfile } from "@/lib/db";
 
@@ -77,6 +77,20 @@ export async function GET(request) {
         guarded.push(profile);
         console.error(`[forge:cron-snapshot] SHRINK GUARD: ${profile} history ${prior.history.length}→${(data.history || []).length} — refusing to overwrite the restore point`);
         continue;
+      }
+      // FAIL CLOSED on an unreadable prior (audit 2026-07-26). readJsonDirect
+      // returns null for BOTH "no prior snapshot" and "prior exists but the
+      // read threw" — so a transient read error used to DISABLE the guard and
+      // overwrite a good restore point with post-disaster state. If a prior
+      // blob EXISTS but we couldn't read it, we cannot judge the shrink, so we
+      // refuse rather than clobber the very thing the guard protects.
+      if (prior === null) {
+        const { blobs } = await list({ prefix: dailyPath });
+        if (blobs.some((b) => b.pathname === dailyPath)) {
+          guarded.push(profile);
+          console.error(`[forge:cron-snapshot] UNREADABLE PRIOR: ${profile} — a snapshot exists but could not be read; refusing to overwrite a restore point we cannot inspect`);
+          continue;
+        }
       }
 
       const body = JSON.stringify({

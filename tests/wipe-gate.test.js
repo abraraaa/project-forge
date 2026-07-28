@@ -1,21 +1,19 @@
 // tests/wipe-gate.test.js
 // ─────────────────────────────────────────────────────────────────────────────
-// The DELETE /api/sync wipe gate — locks shut the two holes the 2026-07-26
-// deep audit found in it. Both were reachable by an ANONYMOUS caller and both
-// ended in the same place: irreversible destruction of a profile's blobs, DB
-// rows, snapshots and progress photos. This is the wipe protocol's own
-// territory, so the locks are deliberately blunt and stay forever.
+// The DELETE /api/sync wipe gate. Deletion here is irreversible — blobs, DB
+// rows, snapshots and progress photos — so this is wipe-protocol territory and
+// the locks are deliberately blunt and stay forever.
 //
-//  HOLE 1 — TRAVERSAL. The gate read its token with a route-local blob helper
-//  via `forge/tokens/${authToken}`, raw and unencoded. The SDK interpolates a
-//  pathname straight into a URL string and fetch() collapses `../`, so
-//  `authToken=../snapshots/daily/<name>.json` aimed the "token" read at that
-//  profile's own snapshot — a file the app itself writes, guaranteed to exist,
-//  and whose shape satisfied every check the gate then performed.
-//
-//  HOLE 2 — NO-PASSKEY PASS-THROUGH. The gate ran only `if (hasPasskeys)`, so
-//  a profile with no verifiable credential was deletable by anyone who could
-//  name it — and /api/auth/check tells any caller which profiles those are.
+// The invariants, stated positively. Each must hold on every future edit:
+//   1. The gate resolves its credential through the shared, encoding-safe
+//      helper against the one authoritative store — never a route-local read
+//      built from caller-supplied text.
+//   2. Validity is a positive assertion (correct shape, correct type, correct
+//      profile), never the absence of a failure.
+//   3. Proof of control is required UNCONDITIONALLY. There is no branch in
+//      which the destructive path runs without it; a profile that cannot yet
+//      prove control gets a recoverable prompt, not a deletion.
+//   4. The guard precedes every destructive call, with nothing between.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
@@ -28,9 +26,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const routeSrc = readFileSync(resolve(root, "app/api/sync/route.js"), "utf8");
 const deleteSrc = routeSrc.slice(routeSrc.indexOf("export async function DELETE"));
 
-describe("wipe gate — traversal (the snapshot-as-token forgery)", () => {
-  it("the DELETE gate never builds a blob path from a raw authToken", () => {
-    // The exact shape of the bug: an unencoded token interpolated into a path.
+describe("wipe gate — credential resolution is safe and positive", () => {
+  it("never builds a storage path from raw credential text", () => {
+    // Credential text must never be interpolated raw into a storage path.
     expect(deleteSrc).not.toMatch(/`forge\/tokens\/\$\{authToken\}`/);
     // Any token path in the wipe path must encode.
     for (const use of deleteSrc.match(/`forge\/tokens\/[^`]*`/g) || []) {
@@ -39,28 +37,25 @@ describe("wipe gate — traversal (the snapshot-as-token forgery)", () => {
   });
 
   it("the gate resolves the token through the shared, encoding reader", () => {
-    // readTokenData encodes AND reads the same store mintAuthToken writes to.
-    // The old route-local blob read was both forgeable and (post-Rec-11b)
-    // blind to every DB-minted token, so real wipes 401'd while the forgery
-    // sailed through — the lock rejected the key and admitted the crowbar.
+    // readTokenData encodes, and reads the same store mintAuthToken writes
+    // to. Mint and read must never disagree about which store is authoritative.
     expect(deleteSrc).toContain("await readTokenData(authToken)");
     expect(deleteSrc).toContain("isTokenValid(tokenData, profile, Date.now())");
   });
 
-  it("isTokenValid rejects a snapshot blob masquerading as a token", () => {
-    // This is the forged object, verbatim in shape: what the snapshot cron
-    // writes at forge/snapshots/daily/<profile>.json.
+  it("rejects a structurally-similar object that is not a minted token", () => {
+    // A plausible-looking object that is NOT a minted credential: validity
+    // must not fall out of mere structural resemblance.
     const snapshotAsToken = {
       profile: "sarah",
       snappedAt: "2026-07-26T03:00:00.000Z",
       meta: {},
       history: [],
     };
-    // The old inline check was `Date.now() > tokenData.expires`, and
-    // `Date.now() > undefined` is false — a NaN comparison is not a rejection.
-    // Proving the trap still bites, so nobody re-introduces the bare compare:
+    // Expiry must be asserted positively. A comparison against a missing
+    // value is not a rejection, so the type check is the thing that matters:
     expect(Date.now() > snapshotAsToken.expires).toBe(false);
-    // isTokenValid requires expires to BE a number, which is what kills it.
+    // isTokenValid requires expires to BE a number.
     expect(isTokenValid(snapshotAsToken, "sarah", Date.now())).toBe(false);
   });
 
@@ -75,8 +70,8 @@ describe("wipe gate — traversal (the snapshot-as-token forgery)", () => {
 });
 
 describe("wipe gate — fails closed, always", () => {
-  it("no passkey no longer means no gate: the token check is unconditional", () => {
-    // The bug was a conditional wrapper around the whole auth block.
+  it("the credential check is unconditional and precedes every destructive call", () => {
+    // Proof of control is unconditional — no branch may skip the auth block.
     expect(deleteSrc).not.toMatch(/if\s*\(\s*hasPasskeys\s*\)\s*\{/);
     // An absent token is refused before anything destructive is reached.
     const tokenGuard = deleteSrc.indexOf("if (!authToken)");
@@ -99,8 +94,8 @@ describe("wipe gate — fails closed, always", () => {
   });
 });
 
-describe("diag census — no longer an anonymous namespace dump", () => {
-  it("db-import requires the CRON_SECRET bearer and fails closed when unset", () => {
+describe("diag inventory route — authorization required, fails closed", () => {
+  it("requires the operator bearer and fails closed when unset", () => {
     const s = readFileSync(resolve(root, "app/api/diag/db-import/route.js"), "utf8");
     expect(s).toContain('request.headers.get("authorization")');
     expect(s).toContain("process.env.CRON_SECRET");
