@@ -486,66 +486,19 @@ and blends into both, as the top edge always did.
 
 ### Safari 27 opportunistic follow-ups (user base is on the beta)
 
-**STP 248 device re-tests (2026-07-27, from the release notes — browser-side
-fixes, NO code change on our end; the boss is on iOS 27 so these are eyeball
-checks against what's already deployed):**
-- **The ScrollDrum** (bodyweight / weight-reps pickers) — 248 has THREE
-  scroll-snap fixes, one of which makes re-snap prefer the focused/target
-  snap area. Our drum runs `scroll-snap-type: y mandatory` PLUS a JS
-  onScroll settle that programmatically sets scrollTop. Watch for the two
-  fighting: if the flick now feels like it double-settles or overrides the
-  native snap, that's the seam and the fix is to lean more on native snap
-  and less on the JS settle. If it feels like butter, do nothing.
-  `overflow-anchor: none` STAYS regardless — it guards the settle maths
-  against Safari's scroll anchoring, unrelated to the 248 snap fixes.
-- **The /library cross-document view transition** — 248 fixes
-  CSSViewTransitionRule serialization, a "snap to final state" bug, and a
-  render-blocked pagereveal misfire. All reliability improvements to our
-  exact path; confirm the library nav still transitions cleanly.
-- **The CSP** — 248 patched five CSP-engine bugs (one where "some websites
-  failed to display"). We shipped a real CSP in the hardening batch;
-  confirm it renders clean on Safari 27 (no console CSP errors, nothing
-  blocked). Doubly relevant if we ever take the deferred nonce-CSP
-  hardening — 248's nonce-source parsing fixes touch that directly.
-- RULED OUT by grep so nobody re-checks: the `filter: drop-shadow()`
-  repaint fix (we use box-shadow), IndexedDB (we don't use it), and the
-  Digital Credentials fixes (that's the wallet API, not our WebAuthn
-  passkeys).
+**The full iOS 27 pass now lives in `docs/frontend-audit.md`** (appended
+2026-07-27) — settled verdicts, what the release fixes on our exact paths,
+and what is ruled out so nobody re-litigates it. Kept there rather than
+duplicated here, so the two can't drift.
 
+Carried in this list because they are actual queued work, not findings:
 
-- **v2 research-doc verdicts (2026-07-13, cross-model-reviewed edition):**
-  the static-routing three-tier correction CONFIRMS our shipped
-  architecture — public/sw.js already routes /api/* → network (tier 2),
-  the install-time precache set → cache (tier 1), and leaves the
-  dynamic middle to the fetch listener (tier 3); no shell asset was
-  ever network-routed, and the recorded refusal to cache-route
-  /_next/static (a cache-source route never populates) stands
-  compatible with tier 1. The §8 iOS-26 fixed-overlay bug does NOT
-  apply to the "Restoring" hydration view — it is in-flow inside the
-  shell, not fixed; the chin-law architecture inoculated us. Rec 8
-  (Blob.slice grep) re-confirmed absent. Customizable <select>
-  (base-select) assessed N/A today — Forge has zero <select> elements
-  (pickers are button-lists by design); revisit only if a real
-  dropdown ever ships. Safari MCP server is local-Mac tooling for the
-  boss's own Claude Code setup, not wireable from remote sessions.
-- **Sync-layer verdicts (2026-07-13, against the WebKit research):**
-  `navigator.storage.persist()` ADOPTED (Safari 17+; protects the
-  local-first cache from iOS eviction — local is the recovery source).
-  **Background Sync API: RULED OUT** — unavailable on Apple platforms,
-  do not re-propose; PQ retries stay app-lifecycle-driven.
-  `Blob.slice()` rounding change: N/A, verified — no client-side blob
-  chunking exists. IndexedDB/FileSystemHandle improvements: N/A, no IDB
-  usage.
-
-- **ScrollDrum feel:** 27 fixes scroll-snap overshoot-to-farther-point
-  and re-snap-after-layout. Any drum quirk reports: retest on current
-  beta before tuning our code.
-- **SW static routing:** declare /_next/static/* as service-worker
-  bypass (addRoutes) — the cache-first logic for hashed assets becomes
-  browser-native. Small win, do alongside the next SW change.
-- **Scroll anchoring — DONE, device-verified 2026-07-11 (PR #206):**
-  the +55px restoration drift is FIXED ("works beautifully") by leaving
-  anchoring on app-wide with overflow-anchor: none on ScrollDrum only.
+- **SW static routing:** declare `/_next/static/*` as a service-worker bypass
+  (`addRoutes`) so cache-first for hashed assets becomes browser-native. Small
+  win — do it alongside the next service-worker change.
+- **Three device eyeball checks** are owed against what's already deployed
+  (ScrollDrum flick feel, `/library` transition, CSP console clean). Listed in
+  the audit doc and in "Reviews we owe" above.
 
 ### Rebrand — "Forge" is diluted in fitness · IN FLIGHT (way ahead of the winter schedule)
 
