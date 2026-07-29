@@ -53,12 +53,18 @@ describe("who + when gates (boss catches, 2026-07-27)", () => {
 
 describe("dormant surfaces (code shape)", () => {
   it("the install overlay carries the migration voice behind the prop", () => {
+    // Assert the INVARIANT — the migration voice is gated on all three
+    // conditions — rather than one exact JSX string. A literal lock breaks on
+    // harmless reformatting and gets "fixed" by deleting the assertion.
     const s = readFileSync(resolve(root, "components/ForgeApp.jsx"), "utf8");
-    expect(s).toContain("IosInstallOverlay migration={isHeatwayveOrigin() && migrationWindowOpen() && hasPreFlipStory(history)}");
+    const prop = s.match(/<IosInstallOverlay[^>]*migration=\{([^}]*)\}/)?.[1] || "";
+    expect(prop).toMatch(/isHeatwayveOrigin\(\)/);
+    expect(prop).toMatch(/migrationWindowOpen\(\)/);
+    expect(prop).toMatch(/hasPreFlipStory\(/);
+    // Both voices are present: the migration line and the default.
     expect(s).toContain("Same fire, new home");
-    expect(s).toContain("Add <span");
-    // the pre-flip voice remains the default
-    expect(s).toContain("Install <span");
+    expect(s).toMatch(/\bAdd\b\s*<span/);
+    expect(s).toMatch(/\bInstall\b\s*<span/);
   });
   it("the welcome-back beat greets the move only on the new origin", () => {
     const s = readFileSync(resolve(root, "components/TakenNameModal.jsx"), "utf8");

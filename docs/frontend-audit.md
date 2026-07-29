@@ -1,6 +1,6 @@
-# Frontend architecture audit — iOS 26 / Next 16
+# Frontend architecture audit — iOS 26–27 / Next 16
 
-**Date:** 2026-06-24
+**Date:** 2026-06-24 · **iOS 27 pass appended 2026-07-27** (see the last section)
 **Purpose:** Map our frontend against current best practice (Next.js 16, Safari/iOS 26)
 so we can take advantage of up-to-date APIs rather than crowbar bandaids over
 unexpected behaviour. No code changes in this pass — this is the map we
@@ -413,3 +413,86 @@ state.
 
 After PR 3: return to the parked-items / backlog list (docs/parked.md), now
 unblocked for the URL-dependent items (shortcuts, deep-links, share).
+
+---
+
+# iOS 27 / Safari 27 pass — appended 2026-07-27
+
+The June audit above was written against iOS 26. The user base moved onto the
+27 beta, so this section carries the follow-up: what the new release changes
+for us, what we adopted, and — the part that saves the most time — what has
+been **ruled out**, so nobody re-litigates it.
+
+**No code changes in this pass.** Everything below is either a browser-side
+fix that improves our existing path for free, a verdict already applied, or a
+device check that only the boss's eyes can settle.
+
+## Verdicts — settled, do not re-propose
+
+| Item | Verdict | Why |
+|---|---|---|
+| `navigator.storage.persist()` | **ADOPTED** | Safari 17+. Protects the local-first cache from iOS eviction, and local is our recovery source. |
+| **Background Sync API** | **RULED OUT** | Unavailable on Apple platforms. Pending-push retries stay app-lifecycle-driven. Do not re-propose. |
+| `Blob.slice()` rounding change | **N/A** | Verified — no client-side blob chunking exists. |
+| IndexedDB / FileSystemHandle improvements | **N/A** | No IDB usage anywhere. |
+| Customizable `<select>` (base-select) | **N/A today** | Zero `<select>` elements — pickers are button-lists by design. Revisit only if a real dropdown ever ships. |
+| `filter: drop-shadow()` repaint fix | **N/A** | We use `box-shadow`. Confirmed by grep. |
+| Digital Credentials fixes | **N/A** | That's the wallet API, not our WebAuthn passkeys. |
+| Safari MCP server | **N/A remotely** | Local-Mac tooling for the boss's own setup; not wireable from a remote session. |
+
+## Confirmations — the shipped architecture held up
+
+- **Service-worker static routing.** The three-tier correction in the v2
+  research doc *confirms* what we ship: `/api/*` → network (tier 2), the
+  install-time precache set → cache (tier 1), the dynamic middle left to the
+  fetch listener (tier 3). No shell asset was ever network-routed, and the
+  recorded refusal to cache-route `/_next/static` (a cache-source route never
+  populates, so offline statics would silently break after each deploy) stands
+  compatible with tier 1.
+- **The iOS-26 fixed-overlay bug does not reach us.** It does not apply to the
+  hydration/"Restoring" view, which is in-flow inside the shell rather than
+  fixed. The chin-law architecture — no fixed element bordering a viewport
+  edge — inoculated us by construction.
+- **Scroll anchoring.** Already resolved and device-verified: anchoring stays
+  on app-wide, with `overflow-anchor: none` on the ScrollDrum only.
+
+## Browser-side fixes that touch our exact paths
+
+These are reliability improvements we get for free; the only work is
+confirming they landed cleanly on device.
+
+- **Scroll-snap (three fixes, one making re-snap prefer the focused/target
+  snap area).** The ScrollDrum runs `scroll-snap-type: y mandatory` *plus* a JS
+  settle that sets `scrollTop` programmatically. The thing to watch is the two
+  fighting — if a flick now double-settles or overrides the native snap, that's
+  the seam, and the fix is to lean harder on native snap and less on the JS
+  settle. If it feels like butter, do nothing. **`overflow-anchor: none` stays
+  regardless** — it guards the settle maths against scroll anchoring, which is
+  unrelated to these snap fixes.
+- **Cross-document view transitions.** Fixes to `CSSViewTransitionRule`
+  serialization, a "snap to final state" bug, and a render-blocked
+  `pagereveal` misfire — all on the `/library` navigation path.
+- **CSP engine (five bugs, including one where sites failed to display).**
+  We ship a real allow-list policy; confirm it renders clean with no console
+  CSP errors. Doubly relevant if the deferred nonce-based CSP is ever taken —
+  the nonce-source parsing fixes touch that directly.
+
+## Owed device checks
+
+Eyeball passes against what is already deployed. No code waiting on them.
+
+1. ScrollDrum flick feel — butter, or double-settling?
+2. `/library` navigation still transitions cleanly.
+3. No console CSP errors on Safari 27.
+
+## Still open from the iOS 26 era
+
+- **Session CTA clearance above the floating tab bar.** In browser mode the
+  Log-set button sits close to the floating pill. The native instruction is
+  already in the markup — the session frame pads bottom with
+  `env(safe-area-inset-bottom)` — but non-`viewport-fit=cover` pages currently
+  get 0 there while the pill visually intrudes anyway. Deliberately *not*
+  fixed via `viewport-fit=cover` (removed per WebKit guidance; it reopens the
+  PWA status-bar wars) or custom offsets. **Revisit trigger:** each new beta —
+  re-test whether the inset starts reporting for the floating-bar state. If it
+  does, we are done with zero code.
