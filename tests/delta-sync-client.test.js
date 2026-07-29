@@ -101,6 +101,48 @@ describe("delta pull — the two traps", () => {
     expect(DeltaSync.getCursor("p")).toBe("2026-07-25T01:00:00.000Z");
   });
 
+  it("a FAILED local write holds the cursor, so the rows get re-pulled", async () => {
+    // Storage pressure can make a local write fail. If the cursor advanced
+    // anyway, the rows it carried would sit behind it and never be pulled
+    // again — silent, permanent divergence. Holding costs one extra pull.
+    DeltaSync.setCursor("p", "2026-07-25T00:00:00.000Z");
+    stubFetch(() => okJson({
+      delta: true,
+      meta: { streak: { count: 5, lastDate: "2026-07-25" } },
+      history: [],
+      cursor: "2026-07-25T03:00:00.000Z",
+    }));
+    // SELECTIVE failure is the realistic shape and the only discriminating
+    // one: a large profile write exceeds the quota while the tiny cursor
+    // string still fits. (Failing every write proves nothing — the cursor
+    // write fails too, so it can't advance either way.)
+    const realSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (!String(key).endsWith(":syncCursor")) {
+        throw new DOMException("full", "QuotaExceededError");
+      }
+      return realSetItem.call(this, key, value);
+    };
+    try {
+      await backgroundSync("p");
+    } finally {
+      Storage.prototype.setItem = realSetItem;
+    }
+    expect(DeltaSync.getCursor("p")).toBe("2026-07-25T00:00:00.000Z"); // held, not advanced
+  });
+
+  it("a clean local write DOES advance the cursor (the guard isn't over-tight)", async () => {
+    DeltaSync.setCursor("p", "2026-07-25T00:00:00.000Z");
+    stubFetch(() => okJson({
+      delta: true,
+      meta: { streak: { count: 5, lastDate: "2026-07-25" } },
+      history: [],
+      cursor: "2026-07-25T04:00:00.000Z",
+    }));
+    await backgroundSync("p");
+    expect(DeltaSync.getCursor("p")).toBe("2026-07-25T04:00:00.000Z");
+  });
+
   it("hydration ACKNOWLEDGES the merged state — no phantom all-dirty baseline (boss find, 2026-07-26)", async () => {
     DeltaSync.clearCursor("p");
     stubFetch((url, opts) => {
