@@ -29,9 +29,20 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
 - **DB write batching** (`lib/db.js`) — record/meta writes go one row at a time
   over the HTTP driver. Hot path is N≈1-2, so this is a large-N nicety: batch
   into a single multi-row insert. Propose the query shape first.
-- **Cold-start ignores the lift's template reps/sets** (`lib/progression.js`) —
-  Power Clean's first prescription disagrees with its 4×3 template. Seed from
-  the template block; touches training output, so engine-level test required.
+- ~~**Cold-start ignores the lift's template reps/sets**~~ — **CLOSED
+  2026-07-29, not deferred. Traced end to end: the fields are dead.**
+  `computeNextPrescription`'s cold-start branch does return `DEFAULT_REPS` /
+  `DEFAULT_SETS` rather than the lift's template — but nothing reads them.
+  `session-engine.js` consumes `prescription.weight` and only that; recorded
+  reps come from the logged sets. The session screen renders
+  `workingReps[name] ?? ex.reps`, which falls back to the TEMPLATE for a new
+  user (empty reps map), and sets come from `block.sets`. So a first Power
+  Clean correctly shows 4×3.
+  Also worth recording, since it would have shaped any fix: focus rewrites
+  sets and reps, so there is no stable "template value" to seed from anyway.
+  **Reopen only if** `prescription.reps` / `prescription.sets` ever gain a
+  consumer — at that point the cold-start branch needs the focus-resolved
+  values, not the raw block.
 - **Cursor advance under local-storage quota pressure** (`lib/storage.js`) —
   only advance once local writes are confirmed. Small proposal first.
 - **Locker Room photo loading — further tuning available.** The bounded
