@@ -26,12 +26,67 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
 
 ### Open — codeable
 
-- **DB write batching** (`lib/db.js`) — record/meta writes go one row at a time
-  over the HTTP driver. Hot path is N≈1-2, so this is a large-N nicety: batch
-  into a single multi-row insert. Propose the query shape first.
-- **Cold-start ignores the lift's template reps/sets** (`lib/progression.js`) —
-  Power Clean's first prescription disagrees with its 4×3 template. Seed from
-  the template block; touches training output, so engine-level test required.
+- **Unbounded work on a request path** (`app/api/sync/route.js` lazy backfill →
+  `lib/db.js`). Reframed 2026-07-29; the earlier "batch the DB writes" framing
+  undersold it as performance and it was rightly dismissed as such.
+  The lazy blob→DB migration runs INSIDE a user-facing GET and is awaited
+  before the response returns, writing one row per record over the HTTP
+  driver. The `try/catch` around it handles a thrown backfill but NOT a
+  function timeout, which kills the whole request — and every retry re-enters
+  the same unbounded path. That is a silent, deterministic sync outage for
+  exactly the users with the most history.
+  **MEASURED 2026-07-29.** The write path was benchmarked with a stubbed
+  driver at known latency: elapsed tracks queries × latency exactly at
+  N=50/150/300, confirming it is strictly sequential with no pipelining.
+  Query count is **N + 14** (one per record, plus the meta fields). No
+  `maxDuration` is set anywhere, so the platform default applies (10s).
+  Allowing ~8s for the backfill after the blob reads, the per-query latency
+  it can absorb is:
+
+  | history | queries | max ms/query |
+  |---|---|---|
+  | 50 (~4 months) | 64 | 125 — comfortable |
+  | 150 (~1 year) | 164 | 49 — plausible to exceed |
+  | 300 (~2 years) | 314 | 25 — likely to exceed |
+
+  So the theory holds structurally, and today's realistic history (~50
+  sessions since April) sits well inside the budget. It becomes real
+  somewhere between one and two years of history.
+  **Reachability is the saving grace and the sting:** the path only fires
+  when the DB has no rows but a blob does, so migrated profiles never re-enter
+  it. The realistic trigger is DB loss / restore-from-blob — precisely when a
+  deterministic failure loop is least welcome.
+  **CLOSED 2026-07-29 with a bounded MVP.** `MAX_INLINE_BACKFILL = 100` in
+  `app/api/sync/route.js`: at or under the cap, behaviour is unchanged; over
+  it, the record backfill is SKIPPED with a loud log and the blob serves the
+  request as before.
+  **Why skip rather than migrate a prefix** — this is the part worth
+  remembering. A partial DB is indistinguishable from a complete one on the
+  next read: the response serves the blob, the client acknowledges that full
+  state as pushed (`commitPushState`), and the un-migrated records then exist
+  only in the blob, invisible to any future device. "Write as many as fit" is
+  the obvious implementation and it loses history silently. Skipping keeps the
+  blob authoritative and leaves the DB empty, so the trigger stays live.
+  Pinned by `tests/delta-sync.test.js` — verified red against a truncating
+  version.
+  **Accepted limitation:** a profile over the cap never auto-migrates; it
+  serves from blob indefinitely, correctly, and logs each time. If that ever
+  fires, the follow-up is a deliberate migration path off the request path —
+  not raising the cap.
+- ~~**Cold-start ignores the lift's template reps/sets**~~ — **CLOSED
+  2026-07-29, not deferred. Traced end to end: the fields are dead.**
+  `computeNextPrescription`'s cold-start branch does return `DEFAULT_REPS` /
+  `DEFAULT_SETS` rather than the lift's template — but nothing reads them.
+  `session-engine.js` consumes `prescription.weight` and only that; recorded
+  reps come from the logged sets. The session screen renders
+  `workingReps[name] ?? ex.reps`, which falls back to the TEMPLATE for a new
+  user (empty reps map), and sets come from `block.sets`. So a first Power
+  Clean correctly shows 4×3.
+  Also worth recording, since it would have shaped any fix: focus rewrites
+  sets and reps, so there is no stable "template value" to seed from anyway.
+  **Reopen only if** `prescription.reps` / `prescription.sets` ever gain a
+  consumer — at that point the cold-start branch needs the focus-resolved
+  values, not the raw block.
 - **Cursor advance under local-storage quota pressure** (`lib/storage.js`) —
   only advance once local writes are confirmed. Small proposal first.
 - **Locker Room photo loading — further tuning available.** The bounded
@@ -39,7 +94,48 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
   are in the internal notes. Don't build speculatively.
 - **Two test files pin literal source** (`flip-dormant`, `photos`) — loosen to
   regex on the invariant next time they're touched.
-- **ESLint 9→10** — bump in isolation, run lint.
+- **ESLint 9→10 — VETTED 2026-07-29, BLOCKED. Not a config problem; it does
+  not run.** Installed 10.8.0 against our tree: `eslint .` dies immediately
+  with `TypeError: scopeManager.addGlobals is not a function`. Isolated —
+  ESLint 10 lints correctly under a minimal config, so the binary is fine.
+  **Cause (corrected — the first diagnosis here was wrong):** it is NOT a
+  scope-manager version problem. `eslint-scope@9.1.2` is the latest release,
+  ESLint 10 itself depends on `^9.1.2`, and that version *does* implement
+  `addGlobals`. `eslint-config-next` is not in that dependency chain at all.
+  The real cause is that `eslint-config-next` supplies **its own parser**
+  (`eslint-config-next/parser`) for every `js,jsx,mjs,ts,tsx` file rather
+  than using espree. That parser returns its own `scopeManager`, which does
+  not implement `addGlobals`. Hence: minimal config (espree) fine, Next
+  preset fatal.
+
+  **Confirmed against the v10 migration guide**, which makes this an
+  intended, documented break: *"custom ScopeManager implementations must …
+  provide an instance method `addGlobals(names: string[])` … The default
+  ScopeManager implementation (eslint-scope) has already been updated.
+  Custom ScopeManager implementations are expected to be updated
+  accordingly."*
+
+  **Chain:** ESLint 10 → `eslint-config-next/parser` → `typescript-eslint`
+  (`^8.46.0`, a direct dependency of eslint-config-next) → its ScopeManager,
+  which lacks the method. This is ecosystem-wide, not a Next quirk — Babel's
+  parser has the same break. It will be fixed upstream; we have no lever.
+
+  **Watch signal, in order:** typescript-eslint ships `addGlobals`
+  (tracking: typescript-eslint#11829 / #11830), then `eslint-config-next`
+  picks up that version. Watching Next's release notes alone is the wrong
+  signal — the fix lands a layer below.
+  Peer ranges do NOT catch this: `eslint-config-next@16` declares
+  `eslint: ">=9.0.0"`, which v10 satisfies while crashing on every file.
+  **Watch signal:** `eslint-config-next` shipping an ESLint 10-compatible
+  parser. Nothing on our side unblocks it — the parser is theirs.
+  Re-test by setting `eslint` to `^10` in package.json and running
+  `npm install && npx eslint .`; `npm ci` restores. Use a real install, not
+  `npm i --no-save`, which leaves the tree half-resolved and can produce a
+  misleading result.
+  Expected when it does land: config lookup resolves from each linted file's
+  directory rather than cwd (fine — one root config); the removed
+  `FlatESLint`/`LegacyESLint` APIs are unused here (we run the CLI); JSX
+  reference tracking may shift `no-unused-vars` results across components.
 
 ### Parked by decision (rulings, not deferrals)
 
@@ -493,9 +589,16 @@ duplicated here, so the two can't drift.
 
 Carried in this list because they are actual queued work, not findings:
 
-- **SW static routing:** declare `/_next/static/*` as a service-worker bypass
-  (`addRoutes`) so cache-first for hashed assets becomes browser-native. Small
-  win — do it alongside the next service-worker change.
+- ~~**SW static routing**~~ — **ALREADY SHIPPED; note was stale and wrong.**
+  `addRoutes` is live in `public/sw.js`: `/api/*` → network, plus this build's
+  manifest assets → cache. Note the entry above described it as declaring
+  `/_next/static/*` wholesale — which is the version we deliberately DID NOT
+  build. A `cache` route never runs the fetch handler, so it never populates;
+  mid-rollout (new HTML under the old worker) the new hashes would match the
+  pattern, resolve against a cache that has never seen them, and break
+  offline. Exact per-asset paths fall through to the fetch router instead,
+  where cacheFirst populates them. Now pinned by `tests/sw-precache.test.js`
+  so the "tidy-up" can't land.
 - **Three device eyeball checks** are owed against what's already deployed
   (ScrollDrum flick feel, `/library` transition, CSP console clean). Listed in
   the audit doc and in "Reviews we owe" above.

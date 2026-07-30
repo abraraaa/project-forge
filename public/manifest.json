@@ -81,11 +81,11 @@
       "label": "Today's training at a glance — week rhythm, session overview, and the Performance Lab"
     },
     {
-      "src": "/screenshots/profile.png",
+      "src": "/screenshots/lab.png",
       "sizes": "1206x2622",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Profiles travel across devices — bodyweight, training focus, and sync in one place"
+      "label": "Your volume held against evidence-based landmarks — what is productive, and what is short"
     }
   ]
 }

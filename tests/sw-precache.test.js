@@ -80,6 +80,38 @@ describe("wiring", () => {
   });
 });
 
+describe("static routing (addRoutes) — the shape, not the feature", () => {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const sw = readFileSync(resolve(root, "public/sw.js"), "utf8");
+  const block = sw.slice(sw.indexOf('if ("addRoutes" in event)'), sw.indexOf("event.waitUntil"));
+
+  it("is feature-guarded and can never block install", () => {
+    // A browser without addRoutes must simply use the fetch router, and a
+    // malformed rule must not take the install down with it.
+    expect(sw).toContain('if ("addRoutes" in event)');
+    expect(block).toContain("try {");
+    expect(block).toMatch(/\.catch\(/);
+  });
+
+  it("routes /api to the network — the router already declines it", () => {
+    expect(block).toMatch(/pathname: "\/api\/\*"[^}]*\}[^}]*\}, source: "network"/);
+  });
+
+  it("routes build assets as EXACT paths, never the wholesale /_next/static/* pattern", () => {
+    // LOAD-BEARING, and the reason is not obvious. A "cache" route never runs
+    // the fetch handler, so it never POPULATES. Routing /_next/static/*
+    // wholesale means that mid-rollout — new HTML served under the old worker
+    // — the new build's hashes match the pattern, resolve to a cache that has
+    // never seen them, and offline breaks. Exact per-asset paths from the
+    // manifest fall through to the fetch router instead, where cacheFirst
+    // populates them. Looks like a tidy-up waiting to happen; it is not.
+    expect(block).toContain("PRECACHE.assets");
+    expect(block).toMatch(/urlPattern: \{ pathname: path \}[^}]*\}, source: "cache"/);
+    expect(block).not.toMatch(/pathname: "\/_next\/static\/\*"/);
+    expect(sw).not.toMatch(/pathname: `\/_next\/static\//);
+  });
+});
+
 describe("#39 — update UX: waiting worker, safe promotion (code shape)", () => {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const sw = readFileSync(resolve(root, "public/sw.js"), "utf8");
