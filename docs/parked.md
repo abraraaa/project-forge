@@ -26,9 +26,21 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
 
 ### Open — codeable
 
-- **DB write batching** (`lib/db.js`) — record/meta writes go one row at a time
-  over the HTTP driver. Hot path is N≈1-2, so this is a large-N nicety: batch
-  into a single multi-row insert. Propose the query shape first.
+- **Unbounded work on a request path** (`app/api/sync/route.js` lazy backfill →
+  `lib/db.js`). Reframed 2026-07-29; the earlier "batch the DB writes" framing
+  undersold it as performance and it was rightly dismissed as such.
+  The lazy blob→DB migration runs INSIDE a user-facing GET and is awaited
+  before the response returns, writing one row per record over the HTTP
+  driver. The `try/catch` around it handles a thrown backfill but NOT a
+  function timeout, which kills the whole request — and every retry re-enters
+  the same unbounded path. That is a silent, deterministic sync outage for
+  exactly the users with the most history.
+  **Dormant today** (most profiles migrated on their first post-deploy read)
+  and the cost is unmeasured from here, which is why it is parked rather than
+  built. **Trigger:** a real timeout in the logs, or any restore-from-blob
+  event. **When it fires, batching is only one option** — taking the backfill
+  off the request path (fire-and-forget, or chunked across reads) addresses
+  the ceiling itself rather than buying headroom under it.
 - ~~**Cold-start ignores the lift's template reps/sets**~~ — **CLOSED
   2026-07-29, not deferred. Traced end to end: the fields are dead.**
   `computeNextPrescription`'s cold-start branch does return `DEFAULT_REPS` /
@@ -504,9 +516,16 @@ duplicated here, so the two can't drift.
 
 Carried in this list because they are actual queued work, not findings:
 
-- **SW static routing:** declare `/_next/static/*` as a service-worker bypass
-  (`addRoutes`) so cache-first for hashed assets becomes browser-native. Small
-  win — do it alongside the next service-worker change.
+- ~~**SW static routing**~~ — **ALREADY SHIPPED; note was stale and wrong.**
+  `addRoutes` is live in `public/sw.js`: `/api/*` → network, plus this build's
+  manifest assets → cache. Note the entry above described it as declaring
+  `/_next/static/*` wholesale — which is the version we deliberately DID NOT
+  build. A `cache` route never runs the fetch handler, so it never populates;
+  mid-rollout (new HTML under the old worker) the new hashes would match the
+  pattern, resolve against a cache that has never seen them, and break
+  offline. Exact per-asset paths fall through to the fetch router instead,
+  where cacheFirst populates them. Now pinned by `tests/sw-precache.test.js`
+  so the "tidy-up" can't land.
 - **Three device eyeball checks** are owed against what's already deployed
   (ScrollDrum flick feel, `/library` transition, CSP console clean). Listed in
   the audit doc and in "Reviews we owe" above.
