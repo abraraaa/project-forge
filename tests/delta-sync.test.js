@@ -84,6 +84,33 @@ describe("route + db shapes (code)", () => {
     expect(branch).toContain("status: 503");
   });
 
+  it("the inline blob→DB backfill is bounded, and refuses rather than half-migrating", () => {
+    // Two properties, and the second is the subtle one.
+    //
+    // BOUNDED: the migration writes one sequential round-trip per record and
+    // is awaited before the response returns, so an unbounded history can
+    // outrun the function timeout — deterministically, since every retry
+    // re-enters the same path.
+    //
+    // ALL-OR-NOTHING: over the cap it must SKIP, never write a prefix. A
+    // partial DB reads as complete on the next request — the response serves
+    // the blob, the client acknowledges that full state as pushed, and the
+    // un-migrated records then live only in the blob, invisible to any future
+    // device. Writing "as many as fit" is the tempting version and it loses
+    // history silently.
+    expect(route).toMatch(/const MAX_INLINE_BACKFILL = \d+/);
+    const guard = route.slice(route.indexOf("records.length > MAX_INLINE_BACKFILL"));
+    expect(guard.slice(0, 600)).toContain("backfill SKIPPED");
+    // The write must be in the ELSE branch — i.e. unreachable when over cap.
+    const skipAt = route.indexOf("records.length > MAX_INLINE_BACKFILL");
+    const writeAt = route.indexOf("dbUpsertProfile(normalise(profile)");
+    expect(skipAt).toBeGreaterThan(-1);
+    expect(writeAt).toBeGreaterThan(skipAt);
+    expect(route.slice(skipAt, writeAt)).toContain("} else {");
+    // No slicing/truncation of the record set anywhere in the backfill.
+    expect(route.slice(skipAt, writeAt + 400)).not.toMatch(/records\.slice\(/);
+  });
+
   it("full reads hand out a cursor taken BEFORE the row queries (at-least-once)", () => {
     const read = db.slice(db.indexOf("export async function dbReadProfile("), db.indexOf("export async function dbUpsertProfile"));
     expect(read.indexOf("dbNowCursor")).toBeLessThan(read.indexOf("SELECT field, value"));

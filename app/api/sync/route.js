@@ -9,6 +9,25 @@ import { NextResponse } from "next/server";
 // Generic client error + full server-side log. Raw exception text (Neon/blob
 // driver detail, query fragments, schema names) must not reach the client —
 // audit 2026-07-26, P3 info-disclosure. Detail stays in the server log.
+// Ceiling on the blob→DB migration that runs inline on a GET. The write path
+// is one sequential round-trip per record plus ~14 for meta fields, and it is
+// AWAITED before the response returns — so an unbounded history can outrun the
+// platform's function timeout. That failure is deterministic (every retry
+// re-enters the same path) and it lands during restore-from-blob, when it is
+// least welcome.
+//
+// Above the cap we REFUSE rather than migrate part of the history. A partial
+// DB would be indistinguishable from a complete one on the next read: the
+// response serves the blob, the client acknowledges that full state as pushed
+// (storage.js commitPushState), and the un-migrated records would then exist
+// only in the blob — invisible to any future device. Skipping keeps the blob
+// authoritative, leaves the DB empty so the trigger stays live, and says so
+// loudly.
+//
+// Sized from measurement (docs/parked.md): ~114 queries at 100 records, which
+// leaves ~70ms per round-trip inside a 10s budget. Raise only with numbers.
+const MAX_INLINE_BACKFILL = 100;
+
 function serverError(e, { status = 500, label = "sync" } = {}) {
   console.error(`[forge:${label}]`, e?.stack || e?.message || e);
   return NextResponse.json({ error: "Something went wrong. Try again." }, { status });
@@ -352,14 +371,21 @@ export async function GET(request) {
     // read. Blobs are never deleted. Failure is logged and harmless — the
     // next read retries.
     if (metaDirect !== null && historyDirect !== null) {
+      const records = Array.isArray(historyDirect) ? historyDirect : [];
       if (hasDb()) {
-        try {
-          await dbUpsertProfile(normalise(profile), {
-            meta: metaDirect,
-            history: Array.isArray(historyDirect) ? historyDirect : [],
-          });
-        } catch (e) {
-          console.error("[forge:sync GET] lazy backfill failed:", e?.message || e);
+        if (records.length > MAX_INLINE_BACKFILL) {
+          // Refuse, don't half-migrate. See MAX_INLINE_BACKFILL.
+          console.error(
+            `[forge:sync GET] backfill SKIPPED: ${profile} has ${records.length} records, ` +
+            `over the inline cap of ${MAX_INLINE_BACKFILL}. Serving from blob; the blob ` +
+            `remains complete and authoritative. Run a deliberate migration.`,
+          );
+        } else {
+          try {
+            await dbUpsertProfile(normalise(profile), { meta: metaDirect, history: records });
+          } catch (e) {
+            console.error("[forge:sync GET] lazy backfill failed:", e?.message || e);
+          }
         }
       }
       return withSyncCookie(NextResponse.json({

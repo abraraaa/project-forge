@@ -56,10 +56,23 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
   when the DB has no rows but a blob does, so migrated profiles never re-enter
   it. The realistic trigger is DB loss / restore-from-blob — precisely when a
   deterministic failure loop is least welcome.
-  **Trigger:** a timeout in the logs, or any restore event. **Batching is
-  only one option** — taking the backfill off the request path
-  (fire-and-forget, or chunked across reads) addresses the ceiling itself
-  rather than buying headroom under it.
+  **CLOSED 2026-07-29 with a bounded MVP.** `MAX_INLINE_BACKFILL = 100` in
+  `app/api/sync/route.js`: at or under the cap, behaviour is unchanged; over
+  it, the record backfill is SKIPPED with a loud log and the blob serves the
+  request as before.
+  **Why skip rather than migrate a prefix** — this is the part worth
+  remembering. A partial DB is indistinguishable from a complete one on the
+  next read: the response serves the blob, the client acknowledges that full
+  state as pushed (`commitPushState`), and the un-migrated records then exist
+  only in the blob, invisible to any future device. "Write as many as fit" is
+  the obvious implementation and it loses history silently. Skipping keeps the
+  blob authoritative and leaves the DB empty, so the trigger stays live.
+  Pinned by `tests/delta-sync.test.js` — verified red against a truncating
+  version.
+  **Accepted limitation:** a profile over the cap never auto-migrates; it
+  serves from blob indefinitely, correctly, and logs each time. If that ever
+  fires, the follow-up is a deliberate migration path off the request path —
+  not raising the cap.
 - ~~**Cold-start ignores the lift's template reps/sets**~~ — **CLOSED
   2026-07-29, not deferred. Traced end to end: the fields are dead.**
   `computeNextPrescription`'s cold-start branch does return `DEFAULT_REPS` /
