@@ -92,9 +92,25 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
   The real cause is that `eslint-config-next` supplies **its own parser**
   (`eslint-config-next/parser`) for every `js,jsx,mjs,ts,tsx` file rather
   than using espree. That parser returns its own `scopeManager`, which does
-  not implement `addGlobals` — so ESLint 10's new JSX reference tracking
-  calls a method that object lacks. Hence: minimal config (espree) fine,
-  Next preset fatal.
+  not implement `addGlobals`. Hence: minimal config (espree) fine, Next
+  preset fatal.
+
+  **Confirmed against the v10 migration guide**, which makes this an
+  intended, documented break: *"custom ScopeManager implementations must …
+  provide an instance method `addGlobals(names: string[])` … The default
+  ScopeManager implementation (eslint-scope) has already been updated.
+  Custom ScopeManager implementations are expected to be updated
+  accordingly."*
+
+  **Chain:** ESLint 10 → `eslint-config-next/parser` → `typescript-eslint`
+  (`^8.46.0`, a direct dependency of eslint-config-next) → its ScopeManager,
+  which lacks the method. This is ecosystem-wide, not a Next quirk — Babel's
+  parser has the same break. It will be fixed upstream; we have no lever.
+
+  **Watch signal, in order:** typescript-eslint ships `addGlobals`
+  (tracking: typescript-eslint#11829 / #11830), then `eslint-config-next`
+  picks up that version. Watching Next's release notes alone is the wrong
+  signal — the fix lands a layer below.
   Peer ranges do NOT catch this: `eslint-config-next@16` declares
   `eslint: ">=9.0.0"`, which v10 satisfies while crashing on every file.
   **Watch signal:** `eslint-config-next` shipping an ESLint 10-compatible
