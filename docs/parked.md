@@ -85,14 +85,24 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
   not run.** Installed 10.8.0 against our tree: `eslint .` dies immediately
   with `TypeError: scopeManager.addGlobals is not a function`. Isolated —
   ESLint 10 lints correctly under a minimal config, so the binary is fine.
-  The failure comes from spreading `eslint-config-next`, whose dependency
-  tree hoists `eslint-scope@9`; ESLint 10 added JSX reference tracking and
-  needs the newer scope manager, and the v9 one wins hoisting.
+  **Cause (corrected — the first diagnosis here was wrong):** it is NOT a
+  scope-manager version problem. `eslint-scope@9.1.2` is the latest release,
+  ESLint 10 itself depends on `^9.1.2`, and that version *does* implement
+  `addGlobals`. `eslint-config-next` is not in that dependency chain at all.
+  The real cause is that `eslint-config-next` supplies **its own parser**
+  (`eslint-config-next/parser`) for every `js,jsx,mjs,ts,tsx` file rather
+  than using espree. That parser returns its own `scopeManager`, which does
+  not implement `addGlobals` — so ESLint 10's new JSX reference tracking
+  calls a method that object lacks. Hence: minimal config (espree) fine,
+  Next preset fatal.
   Peer ranges do NOT catch this: `eslint-config-next@16` declares
   `eslint: ">=9.0.0"`, which v10 satisfies while crashing on every file.
-  **Watch signal:** `eslint-config-next` shipping explicit ESLint 10 support.
-  Re-test with `npm i eslint@10 --no-save && npx eslint .` — a 2-minute
-  check, and `npm ci` restores.
+  **Watch signal:** `eslint-config-next` shipping an ESLint 10-compatible
+  parser. Nothing on our side unblocks it — the parser is theirs.
+  Re-test by setting `eslint` to `^10` in package.json and running
+  `npm install && npx eslint .`; `npm ci` restores. Use a real install, not
+  `npm i --no-save`, which leaves the tree half-resolved and can produce a
+  misleading result.
   Expected when it does land: config lookup resolves from each linted file's
   directory rather than cwd (fine — one root config); the removed
   `FlatESLint`/`LegacyESLint` APIs are unused here (we run the CLI); JSX
