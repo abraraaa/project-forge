@@ -35,12 +35,31 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
   function timeout, which kills the whole request — and every retry re-enters
   the same unbounded path. That is a silent, deterministic sync outage for
   exactly the users with the most history.
-  **Dormant today** (most profiles migrated on their first post-deploy read)
-  and the cost is unmeasured from here, which is why it is parked rather than
-  built. **Trigger:** a real timeout in the logs, or any restore-from-blob
-  event. **When it fires, batching is only one option** — taking the backfill
-  off the request path (fire-and-forget, or chunked across reads) addresses
-  the ceiling itself rather than buying headroom under it.
+  **MEASURED 2026-07-29.** The write path was benchmarked with a stubbed
+  driver at known latency: elapsed tracks queries × latency exactly at
+  N=50/150/300, confirming it is strictly sequential with no pipelining.
+  Query count is **N + 14** (one per record, plus the meta fields). No
+  `maxDuration` is set anywhere, so the platform default applies (10s).
+  Allowing ~8s for the backfill after the blob reads, the per-query latency
+  it can absorb is:
+
+  | history | queries | max ms/query |
+  |---|---|---|
+  | 50 (~4 months) | 64 | 125 — comfortable |
+  | 150 (~1 year) | 164 | 49 — plausible to exceed |
+  | 300 (~2 years) | 314 | 25 — likely to exceed |
+
+  So the theory holds structurally, and today's realistic history (~50
+  sessions since April) sits well inside the budget. It becomes real
+  somewhere between one and two years of history.
+  **Reachability is the saving grace and the sting:** the path only fires
+  when the DB has no rows but a blob does, so migrated profiles never re-enter
+  it. The realistic trigger is DB loss / restore-from-blob — precisely when a
+  deterministic failure loop is least welcome.
+  **Trigger:** a timeout in the logs, or any restore event. **Batching is
+  only one option** — taking the backfill off the request path
+  (fire-and-forget, or chunked across reads) addresses the ceiling itself
+  rather than buying headroom under it.
 - ~~**Cold-start ignores the lift's template reps/sets**~~ — **CLOSED
   2026-07-29, not deferred. Traced end to end: the fields are dead.**
   `computeNextPrescription`'s cold-start branch does return `DEFAULT_REPS` /
@@ -62,7 +81,22 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
   are in the internal notes. Don't build speculatively.
 - **Two test files pin literal source** (`flip-dormant`, `photos`) — loosen to
   regex on the invariant next time they're touched.
-- **ESLint 9→10** — bump in isolation, run lint.
+- **ESLint 9→10 — VETTED 2026-07-29, BLOCKED. Not a config problem; it does
+  not run.** Installed 10.8.0 against our tree: `eslint .` dies immediately
+  with `TypeError: scopeManager.addGlobals is not a function`. Isolated —
+  ESLint 10 lints correctly under a minimal config, so the binary is fine.
+  The failure comes from spreading `eslint-config-next`, whose dependency
+  tree hoists `eslint-scope@9`; ESLint 10 added JSX reference tracking and
+  needs the newer scope manager, and the v9 one wins hoisting.
+  Peer ranges do NOT catch this: `eslint-config-next@16` declares
+  `eslint: ">=9.0.0"`, which v10 satisfies while crashing on every file.
+  **Watch signal:** `eslint-config-next` shipping explicit ESLint 10 support.
+  Re-test with `npm i eslint@10 --no-save && npx eslint .` — a 2-minute
+  check, and `npm ci` restores.
+  Expected when it does land: config lookup resolves from each linted file's
+  directory rather than cwd (fine — one root config); the removed
+  `FlatESLint`/`LegacyESLint` APIs are unused here (we run the CLI); JSX
+  reference tracking may shift `no-unused-vars` results across components.
 
 ### Parked by decision (rulings, not deferrals)
 
