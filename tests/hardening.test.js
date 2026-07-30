@@ -213,6 +213,53 @@ describe("the snapshot shrink-guard fails CLOSED on an unreadable prior", () => 
   });
 });
 
+describe("operational surfaces stay unindexed without advertising themselves", () => {
+  it("diag routes carry a noindex response header", () => {
+    // Header rather than page metadata: they are client components and cannot
+    // export `metadata`, and a header holds however the page is rendered.
+    const cfg = read("next.config.mjs");
+    expect(cfg).toContain('source: "/diag-:path*"');
+    const block = cfg.slice(cfg.indexOf('source: "/diag-:path*"'));
+    expect(block.slice(0, 300)).toMatch(/X-Robots-Tag[\s\S]{0,60}noindex/);
+  });
+
+  it("robots.txt does NOT list the diag routes", () => {
+    // robots.txt is world-readable, so a Disallow line publishes the path it
+    // asks crawlers to skip — it hands over a directory of exactly the routes
+    // you would rather nobody enumerated. noindex does the real work.
+    const robots = read("app/robots.js");
+    expect(robots).not.toContain("/diag-sync");
+    expect(robots).not.toContain("/diag-vt");
+    expect(robots).not.toContain("/diag-bugs");
+    // The state-dependent app routes still belong there — they are not secret,
+    // they are just not content.
+    expect(robots).toContain("/locker-room");
+    expect(robots).toContain("/session");
+  });
+});
+
+describe("name entry states are announced, not just coloured", () => {
+  const src = read("components/ProfileScreen.jsx");
+
+  it("the status line is a live region the input points at", () => {
+    // Before: a coloured glyph and a disabled button. A screen-reader user got
+    // no reason for being stuck.
+    expect(src).toContain('id="name-status"');
+    expect(src).toContain('role="status"');
+    expect(src).toContain('aria-live="polite"');
+    expect(src).toContain('aria-describedby="name-status"');
+  });
+
+  it("invalid input is exposed as invalid, and the glyph is not read twice", () => {
+    expect(src).toMatch(/aria-invalid=\{[^}]*availability === "taken"/);
+    expect(src).toContain('aria-hidden="true"');
+  });
+
+  it("a one-character name explains itself instead of failing silently", () => {
+    expect(src).toMatch(/name\.trim\(\)\.length === 1/);
+  });
+});
+
 describe("hygiene", () => {
   const pkg = JSON.parse(read("package.json"));
 

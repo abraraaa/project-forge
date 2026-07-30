@@ -83,6 +83,21 @@ const nextConfig = {
         // subdomain HTTPS-only forever.
         { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
       ],
+    }, {
+      // Operational surfaces stay out of the index. A response HEADER rather
+      // than page metadata: these routes are client components and cannot
+      // export `metadata`, and the header applies to the response itself so
+      // it holds however the page is rendered or linked.
+      //
+      // Paired with REMOVING them from robots.txt. Listing a path under
+      // Disallow publishes it — robots.txt is world-readable, so it turns a
+      // path nobody was looking for into a directory of exactly the routes
+      // you would rather they skipped. noindex does the real job; the
+      // Disallow line only advertised.
+      source: "/diag-:path*",
+      headers: [
+        { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+      ],
     }];
   },
   async redirects() {
