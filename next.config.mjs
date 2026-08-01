@@ -94,7 +94,10 @@ const nextConfig = {
       // path nobody was looking for into a directory of exactly the routes
       // you would rather they skipped. noindex does the real job; the
       // Disallow line only advertised.
-      source: "/diag-:path*",
+      // Regex param, NOT "/diag-:path*" — a repeat modifier has to own its
+      // whole segment, so gluing it to a prefix fails path-to-regexp at build
+      // time ("Can not repeat 'path' without a prefix and suffix").
+      source: "/:diag(diag-.*)",
       headers: [
         { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
       ],

@@ -218,9 +218,20 @@ describe("operational surfaces stay unindexed without advertising themselves", (
     // Header rather than page metadata: they are client components and cannot
     // export `metadata`, and a header holds however the page is rendered.
     const cfg = read("next.config.mjs");
-    expect(cfg).toContain('source: "/diag-:path*"');
-    const block = cfg.slice(cfg.indexOf('source: "/diag-:path*"'));
-    expect(block.slice(0, 300)).toMatch(/X-Robots-Tag[\s\S]{0,60}noindex/);
+    const src = cfg.match(/source: "([^"]*diag[^"]*)"/)?.[1];
+    expect(src, "a diag header source must exist").toBeTruthy();
+    const block = cfg.slice(cfg.indexOf(`source: "${src}"`));
+    expect(block.slice(0, 300)).toMatch(/X-Robots-Tag[\s\S]{0,80}noindex/);
+  });
+
+  it("the diag matcher is not the repeat form that fails the build", () => {
+    // "/diag-:path*" is INVALID path-to-regexp: a repeat modifier must own its
+    // whole segment, so gluing it to a prefix throws "Can not repeat 'path'
+    // without a prefix and suffix" — at BUILD time only. Lint, typecheck and
+    // the test suite all pass with it in place, which is exactly how it
+    // reached CI. Pinned here so the cheap gates catch the next one.
+    const cfg = read("next.config.mjs");
+    expect(cfg).not.toMatch(/source: "\/[^"]*-:[A-Za-z]+\*"/);
   });
 
   it("robots.txt does NOT list the diag routes", () => {
