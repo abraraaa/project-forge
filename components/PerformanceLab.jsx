@@ -13,7 +13,8 @@ import {
   mainLiftTrend, weeklyVolumeByMuscle, weeklyRhythm,
   readinessBreakdown, sessionCount, detectPlateaus, weeklyTonnage, formatTonnage,
 } from "@/lib/analytics";
-import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
+import { auditHistoryVolume, AUDIT_MUSCLE_ORDER, VOLUME_TARGETS } from "@/lib/volume-audit";
+import Glyph from "@/components/Glyph";
 import { W } from "@/lib/storage";
 import { WEEK } from "@/lib/programme";
 import { T, DISPLAY, HATCH } from "@/lib/tokens";
@@ -52,6 +53,7 @@ const BAND_LABEL = {
 const linkBtn = {
   background: "none", border: "none", padding: 0, cursor: "pointer",
   fontFamily: T.text, fontSize: 13, color: T.ink3,
+  display: "inline-flex", alignItems: "center", gap: 5,
 };
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -106,7 +108,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
       {/* Top clearance is self-sufficient: max() guarantees the back nav
           clears the translucent status bar in the installed PWA. */}
       <div style={{padding:"max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
-        <button onClick={onBack} style={linkBtn}>← Home</button>
+        <button onClick={onBack} style={linkBtn}><Glyph name="arrowLeft" size={12}/> Home</button>
         {!isEmpty && (
           <span style={{fontSize:12,color:T.ink3}}>
             <span style={{fontFamily:T.measured}}>{counts.last7}</span> this week · <span style={{fontFamily:T.measured}}>{counts.total}</span> logged
@@ -193,7 +195,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
                   style={{...linkBtn,fontSize:12}}
                   aria-label={`Share ${activeLift} trend`}
                 >
-                  Share →
+                  Share <Glyph name="arrowUpRight" size={11}/>
                 </button>
               </div>
               {mainLifts.length > 1 && (
@@ -263,27 +265,55 @@ function ScrollCue() {
 }
 
 // ─── Empty state — the first-run promise, in the system's own grammar ────────
-// Solid ink for real work, hatched continuation for the shape of what
-// accumulates. Never simulated data: the hatch says "this is a sketch".
+// Audit §10.7: the empty Lab shows the SHAPE of the finished Lab from day
+// one — per-muscle glance rails, grouped by training day, with real
+// MEV/MRV landmarks and a hatched continuation drawn in pencil (ink), not
+// heat. Nothing simulated: the landmarks are the programme's own targets,
+// the counts are honestly zero, the hatch says "this is a sketch".
+const INK_HATCH = "repeating-linear-gradient(45deg, var(--ink-3) 0 2px, transparent 2px 6px)";
 function EmptyState() {
+  const groups = DAY_GROUPS.map(g => ({
+    label: g.label,
+    rows: g.muscles.filter(m => VOLUME_TARGETS[m]),
+  })).filter(g => g.rows.length > 0);
   return (
-    <div style={{margin:"36px 24px 0"}}>
-      <div style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:10}}>
-        Nothing to show yet
+    <div style={{margin:"32px 0 0"}}>
+      <div style={{padding:"0 24px"}}>
+        <div style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:10}}>
+          Week one
+        </div>
+        <p style={{fontSize:13, color:T.ink2, lineHeight:1.6, maxWidth:"36ch"}}>
+          This is the shape of your Lab. Your first session starts filling
+          it in: solid ink for work done, MEV and MRV ticks marking each
+          muscle&rsquo;s productive band. The hatch is where it&rsquo;s going.
+        </p>
       </div>
-      <p style={{fontSize:13, color:T.ink2, lineHeight:1.6, maxWidth:"36ch"}}>
-        Your first session plots your estimated 1RM. After a few weeks the
-        Lab holds every muscle against its MEV/MAV/MRV bands and flags
-        what&rsquo;s worth knowing.
-      </p>
-      <div style={{marginTop:18,display:"flex",alignItems:"center",gap:10}}>
-        <span style={{width:60,height:8,background:T.ink}}/>
-        {/* Ink hatch, not the over-MRV hatch: this is a sketch of what
-            accumulates, drawn in pencil rather than heat. */}
-        <span style={{flex:1,height:8,backgroundImage:"repeating-linear-gradient(45deg, var(--ink-3) 0 2px, transparent 2px 6px)"}}/>
-      </div>
-      <div style={{marginTop:8,fontSize:12,color:T.ink3}}>
-        Solid is what you&rsquo;ve done. The hatch is where it&rsquo;s going.
+      {groups.map(g => (
+        <div key={g.label}>
+          <div style={{padding:"14px 24px 5px",fontSize:12,color:T.ink3}}>{g.label}</div>
+          <div style={{padding:"0 24px"}}>
+            {g.rows.map(m => {
+              const t = VOLUME_TARGETS[m];
+              const barMax = t.mrv * 1.28;
+              const displayName = m.replace(" Delts", " delt").replace("Upper Back", "Upper back");
+              return (
+                <div key={m} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:`1px solid ${T.ruleFaint}`}}
+                  aria-label={`${displayName}: no sets yet — MEV ${t.mev}, MRV ${t.mrv}`}>
+                  <span style={{width:82,fontSize:15,color:T.ink2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayName}</span>
+                  <div style={{flex:1,position:"relative",height:8,background:T.well}} aria-hidden="true">
+                    <div style={{position:"absolute",left:0,top:0,height:8,width:`${(t.mev / barMax) * 100}%`,backgroundImage:INK_HATCH}}/>
+                    <div style={{position:"absolute",left:`${(t.mev / barMax) * 100}%`,top:-3,width:1,height:14,background:T.ink,opacity:0.3}}/>
+                    <div style={{position:"absolute",left:`${(t.mrv / barMax) * 100}%`,top:-3,width:1,height:14,background:T.ink,opacity:0.3}}/>
+                  </div>
+                  <span style={{width:26,textAlign:"right",fontFamily:T.measured,fontSize:13,color:T.ink3}}>0</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      <div style={{margin:"14px 24px 0",fontSize:12,color:T.ink3,lineHeight:1.5}}>
+        Hatched to each muscle&rsquo;s minimum effective volume · ticks at MEV and MRV · real landmarks, no simulated data.
       </div>
     </div>
   );

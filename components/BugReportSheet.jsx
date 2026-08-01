@@ -6,7 +6,7 @@
 // the API bounds abuse with a hard rate limit + length cap.
 
 import { useState } from "react";
-import { T, DISPLAY } from "@/lib/tokens";
+import { T } from "@/lib/tokens";
 import { fetchWithTimeout } from "@/lib/net";
 import { useModalA11y } from "@/lib/a11y";
 
@@ -50,7 +50,7 @@ export default function BugReportSheet({ profileName = null, onClose }) {
         <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
           {COPY.eyebrow}
         </div>
-        <div id="bug-title" style={{ ...DISPLAY, fontSize: 28, color: T.ink, marginBottom: 16 }}>
+        <div id="bug-title" style={{ fontSize: 18, fontWeight: 500, fontFamily: T.text, color: T.ink, lineHeight: 1.3, marginBottom: 16 }}>
           {COPY.title}
         </div>
 

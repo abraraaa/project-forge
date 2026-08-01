@@ -13,6 +13,8 @@ import { notFound } from "next/navigation";
 import { LIBRARY, getExercise, exerciseDescription } from "@/lib/library";
 import { getTempo, decodeTempo, TEMPO_SOURCES } from "@/lib/exercise-tempo";
 import { T, DISPLAY } from "@/lib/tokens";
+import Glyph from "@/components/Glyph";
+import { MonoNums } from "@/components/ui";
 
 export const dynamicParams = false;
 
@@ -104,8 +106,8 @@ export default async function ExercisePage({ params }) {
     <div style={{ minHeight: "100vh", padding: "max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 64px", maxWidth: 640, margin: "0 auto" }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
 
-      <Link href="/library" style={{ fontSize: 13, color: T.ink3, fontFamily: T.text, textDecoration: "none" }}>
-        ← Library
+      <Link href="/library" style={{ fontSize: 13, color: T.ink3, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+        <Glyph name="arrowLeft" size={12}/> Library
       </Link>
 
       <div style={{ marginTop: 32 }}>
@@ -131,7 +133,7 @@ export default async function ExercisePage({ params }) {
         ))}
         <p style={{ fontSize: 13, color: T.ink3, marginTop: 12, lineHeight: 1.6 }}>
           These are the weights Heatwayve&apos;s volume audit actually computes with — deliberately
-          conservative, so compounds don&apos;t masquerade as full coverage. A 0.5 means a set
+          conservative, so compounds don&apos;t masquerade as full coverage. A <span style={{ fontFamily: T.measured }}>0.5</span> means a set
           counts as half a set for that muscle: meaningful help, not a replacement for direct work.
         </p>
       </section>
@@ -142,7 +144,7 @@ export default async function ExercisePage({ params }) {
         <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 6px" }}>
           How Heatwayve progresses it
         </h2>
-        <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>{entry.progression}</p>
+        <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}><MonoNums>{entry.progression}</MonoNums></p>
       </section>
 
       {entry.swaps.length > 0 && (
@@ -154,11 +156,11 @@ export default async function ExercisePage({ params }) {
             {entry.swaps.map((s) => (
               <li key={s.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "11px 0", borderBottom: `1px solid ${T.ruleFaint}` }}>
                 {s.slug ? (
-                  <Link href={`/library/${s.slug}`} style={{ fontSize: 15, fontWeight: 500, color: T.ink, fontFamily: T.text, textDecoration: "none" }}>
+                  <Link href={`/library/${s.slug}`} style={{ fontSize: 15, fontWeight: 400, color: T.ink, fontFamily: T.text, textDecoration: "none" }}>
                     {s.name}
                   </Link>
                 ) : (
-                  <span style={{ fontSize: 15, fontWeight: 500, color: T.ink, fontFamily: T.text }}>{s.name}</span>
+                  <span style={{ fontSize: 15, fontWeight: 400, color: T.ink, fontFamily: T.text }}>{s.name}</span>
                 )}
                 <span style={{ fontSize: 12, color: T.ink3, fontFamily: T.text, flexShrink: 0 }}>{s.equipment}</span>
               </li>

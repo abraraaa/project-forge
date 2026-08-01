@@ -16,7 +16,8 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
-import { Fade, Card, Tag } from "@/components/ui";
+import { Fade, Card, Tag, MonoNums } from "@/components/ui";
+import Glyph from "@/components/Glyph";
 import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession } from "@/lib/programme";
 import { deloadCardCopy } from "@/lib/progression";
@@ -44,6 +45,7 @@ const BLOCK_RPE = { main: 8, superset: 8, finisher: 9 };
 const linkBtn = {
   background: "none", border: "none", padding: 0, cursor: "pointer",
   fontFamily: T.text, fontSize: 13, color: T.ink3,
+  display: "inline-flex", alignItems: "center", gap: 5,
 };
 
 export default
@@ -168,7 +170,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             ) : syncState === "error" ? (
               <span style={{width:6,height:6,borderRadius:"50%",background:T.heat[3],opacity:0.7}}/>
             ) : null}
-            <span style={{marginLeft:2}}>→</span>
+            <Glyph name="arrowRight" size={12}/>
           </button>
         </div>
       </Fade>
@@ -204,7 +206,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                     transition:`all 200ms ${T.ease}`,
                   }}/>
                   {isDone && (
-                    <span style={{position:"absolute",top:-11,fontSize:9,color:key,lineHeight:1}}>✓</span>
+                    <span style={{position:"absolute",top:-11,lineHeight:1}}><Glyph name="check" size={9} color={key}/></span>
                   )}
                 </span>
                 <span style={{width:18,height:1,background:isView?T.ink:"transparent",transition:`background 200ms ${T.ease}`}}/>
@@ -215,7 +217,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         {onEditWeek && (
           <div style={{display:"flex",justifyContent:"center",marginTop:6}}>
             <button onClick={onEditWeek} style={{...linkBtn,fontSize:12,padding:"4px 8px"}}>
-              Edit week →
+              Edit week <Glyph name="arrowRight" size={11}/>
             </button>
           </div>
         )}
@@ -240,7 +242,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <div aria-hidden="true" style={{width:40,height:3,background:dayKey,marginTop:10,transition:`background 300ms ${T.ease}`}}/>
           {subText && (
             <div style={{fontSize:16,color:T.ink2,marginTop:11,lineHeight:1.45,maxWidth:"32ch"}}>
-              {subText}
+              <MonoNums>{subText}</MonoNums>
             </div>
           )}
         </div>
@@ -333,7 +335,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             </div>
             {cfg.tips.map((tip,i)=>(
               <div key={i} style={{padding:"10px 0",borderBottom:i<cfg.tips.length-1?`1px solid ${T.ruleFaint}`:`1px solid ${T.rule}`,fontSize:14,color:T.ink2,lineHeight:1.5}}>
-                {tip}
+                <MonoNums>{tip}</MonoNums>
               </div>
             ))}
           </div>
@@ -343,20 +345,20 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         <Fade d={220}>
           {weekDone[todayIdx] ? (
             <div style={{margin:"14px 24px 0",padding:"14px 0",display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:15,color:dayKey}}>✓</span>
+              <Glyph name="check" size={14} color={dayKey}/>
               <span style={{fontSize:15,color:T.ink2}}>Done. Rhythm kept.</span>
             </div>
           ) : (
             <button className="forge-press" onClick={()=>onMarkDayDone(viewDateStr)} style={{
               margin:"16px 24px 0",width:"calc(100% - 48px)",
-              height:52,background:T.surface,border:"none",
+              height:58,background:T.commit,border:"none",
               borderRadius:T.r,cursor:"pointer",
               display:"flex",alignItems:"center",justifyContent:"space-between",
-              padding:"0 20px",boxShadow:T.elev,
-              fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink,
+              padding:"0 20px",boxShadow:T.elevStrong,
+              fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,
             }}>
               Mark complete
-              <span style={{fontSize:15,color:T.ink2}}>✓</span>
+              <Glyph name="check" size={15}/>
             </button>
           )}
         </Fade>
@@ -374,17 +376,17 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               {dayBonus.name}
             </div>
             <div style={{fontSize:13,color:T.ink2,lineHeight:1.5,marginBottom:dayBonus.vid?8:14}}>
-              {dayBonus.detail}
+              <MonoNums>{dayBonus.detail}</MonoNums>
             </div>
             {dayBonus.vid && (
               <a href={`https://www.youtube.com/watch?v=${dayBonus.vid}`} target="_blank" rel="noopener noreferrer"
                 style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:13,color:T.ink3,textDecoration:"none",marginBottom:14}}>
-                Watch demo →
+                Watch demo <Glyph name="arrowRight" size={11}/>
               </a>
             )}
             {bonusDone[todayIdx] ? (
               <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <span style={{fontSize:14,color:dayKey}}>✓</span>
+                <Glyph name="check" size={13} color={dayKey}/>
                 <span style={{fontSize:14,color:T.ink2}}>Bonus banked. Animal.</span>
               </div>
             ) : (
@@ -395,7 +397,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,
               }}>
                 Mark bonus done
-                <span style={{fontSize:14,color:T.ink2}}>+</span>
+                <Glyph name="plus" size={13} color={T.ink2}/>
               </button>
             )}
           </Card>
@@ -445,8 +447,8 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             </div>
             <div style={{display:"flex",gap:8,marginTop:14}}>
               <button className="forge-press" onClick={onResumeDraft}
-                style={{flex:1,height:48,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
-                Resume →
+                style={{flex:1,height:48,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                Resume <Glyph name="arrowRight" size={12}/>
               </button>
               <button className="forge-press" onClick={onDiscardDraft}
                 style={{height:48,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,fontWeight:500,color:T.ink2}}>
@@ -472,7 +474,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 </div>
               </div>
               <button onClick={(e)=>{e.stopPropagation();onDismissBwCard();}} aria-label="Dismiss"
-                style={{...linkBtn,flexShrink:0,padding:"4px 8px",fontSize:14}}>✕</button>
+                style={{...linkBtn,flexShrink:0,padding:"4px 8px"}}><Glyph name="cross" size={12}/></button>
             </div>
           </Card>
         </Fade>
@@ -495,8 +497,8 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               </div>
               <div style={{display:"flex",gap:10}}>
                 <button className="forge-press" onClick={onAcceptDeload}
-                  style={{flex:1,height:46,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
-                  Run the deload →
+                  style={{flex:1,height:46,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                  Run the deload <Glyph name="arrowRight" size={12}/>
                 </button>
                 <button className="forge-press" onClick={onDismissDeload}
                   style={{flexShrink:0,height:46,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,color:T.ink2}}>
@@ -519,10 +521,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
               Milestone · <span style={{fontFamily:T.measured}}>{formatTonnage(tonnageMilestone)}</span>
             </div>
-            <div style={{...DISPLAY,fontWeight:500,fontSize:28,color:T.ink,lineHeight:1.1}}>
-              {formatTonnage(tonnageTotalKg)} moved
+            <div style={{fontFamily:T.measured,fontWeight:300,fontSize:34,letterSpacing:"-0.04em",color:T.ink,lineHeight:1}}>
+              {formatTonnage(tonnageTotalKg)}<span style={{fontSize:15,color:T.ink3,letterSpacing:0}}> moved</span>
             </div>
-            <div style={{fontSize:13,color:T.ink2,marginTop:8,lineHeight:1.5}}>
+            <div style={{fontSize:13,color:T.ink2,marginTop:9,lineHeight:1.5}}>
               Since you started with Heatwayve. The bar remembers.
             </div>
           </button>
@@ -541,7 +543,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 </div>
               </div>
               <button onClick={onDismissRecovery} aria-label="Dismiss"
-                style={{...linkBtn,flexShrink:0,padding:"4px 8px",fontSize:14}}>✕</button>
+                style={{...linkBtn,flexShrink:0,padding:"4px 8px"}}><Glyph name="cross" size={12}/></button>
             </div>
           </Card>
         </Fade>
@@ -559,7 +561,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 </p>
               </div>
               <button onClick={onDismissAbsenceNudge} aria-label="Dismiss"
-                style={{...linkBtn,flexShrink:0,padding:"4px 8px",fontSize:14}}>✕</button>
+                style={{...linkBtn,flexShrink:0,padding:"4px 8px"}}><Glyph name="cross" size={12}/></button>
             </div>
             <button className="forge-press" onClick={onOpenBreather}
               style={{marginTop:12,height:42,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink}}>
@@ -574,7 +576,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         <Fade d={190}>
           <div style={{margin:"18px 24px 0",display:"flex",justifyContent:"center"}}>
             <button onClick={onOpenRetroPicker} style={{...linkBtn,padding:"6px 4px"}}>
-              Anything missed? →
+              Anything missed? <Glyph name="arrowRight" size={11}/>
             </button>
           </div>
         </Fade>
@@ -586,11 +588,11 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <div style={{margin:"14px 24px 0",display:"flex",justifyContent:"center",alignItems:"center",gap:8}}>
             <button onClick={onPnRegister} disabled={pnBusy}
               style={{...linkBtn,padding:"6px 4px",cursor:pnBusy?"default":"pointer",opacity:pnBusy?0.6:1}}>
-              {pnBusy ? "Setting up…" : "Secure your name across devices →"}
+              {pnBusy ? "Setting up…" : <>Secure your name across devices <Glyph name="arrowRight" size={11}/></>}
             </button>
             {!pnBusy && (
               <button onClick={onPnSnooze} aria-label="Dismiss for a week"
-                style={{...linkBtn,padding:"4px 6px",fontSize:11}}>✕</button>
+                style={{...linkBtn,padding:"4px 6px"}}><Glyph name="cross" size={10}/></button>
             )}
           </div>
           {pnError && (
@@ -616,11 +618,11 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 </p>
               </div>
               <button onClick={onPnSnooze} aria-label="Dismiss"
-                style={{...linkBtn,flexShrink:0,padding:"4px 8px",fontSize:14}}>✕</button>
+                style={{...linkBtn,flexShrink:0,padding:"4px 8px"}}><Glyph name="cross" size={12}/></button>
             </div>
             <button onClick={onPnRegister} disabled={pnBusy}
-              style={{width:"100%",height:46,background:T.commit,border:"none",borderRadius:T.r,cursor:pnBusy?"default":"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,opacity:pnBusy?0.6:1}}>
-              {pnBusy ? "Setting up…" : "Set up passkey →"}
+              style={{width:"100%",height:46,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:pnBusy?"default":"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:pnBusy?0.6:1}}>
+              {pnBusy ? "Setting up…" : <>Set up passkey <Glyph name="arrowRight" size={12}/></>}
             </button>
             {pnError && (
               <div style={{marginTop:10,fontSize:12,color:T.heat[4]}}>
@@ -663,8 +665,8 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                     : "Your body has adapted. New exercises, same muscle targets."}
                 </div>
               </div>
-              <button className="forge-press" onClick={handleRotateTap} style={{flexShrink:0,marginTop:2,height:42,padding:"0 16px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
-                {offerRotationChoice ? "Choose →" : "Rotate →"}
+              <button className="forge-press" onClick={handleRotateTap} style={{flexShrink:0,marginTop:2,height:42,padding:"0 14px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"inline-flex",alignItems:"center",gap:6}}>
+                {offerRotationChoice ? "Choose" : "Rotate"} <Glyph name="arrowRight" size={12}/>
               </button>
             </div>
           </Card>
@@ -684,7 +686,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                   : <><span style={{fontFamily:T.measured}}>{historyCount}</span> session{historyCount===1?"":"s"} · volume vs the bands · 1RM trends</>}
               </div>
             </div>
-            <span style={{fontSize:15,color:T.ink3,flexShrink:0}}>→</span>
+            <Glyph name="arrowRight" size={14} color={T.ink3} style={{flexShrink:0}}/>
           </button>
 
           <button className="forge-press" onClick={onLockerRoom}
@@ -693,7 +695,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               <div style={{fontSize:16,fontWeight:500,color:T.ink,marginBottom:2}}>Locker room</div>
               <div style={{fontSize:13,color:T.ink3,lineHeight:1.45}}>Bodyweight and photos, yours alone</div>
             </div>
-            <span style={{fontSize:15,color:T.ink3,flexShrink:0}}>→</span>
+            <Glyph name="arrowRight" size={14} color={T.ink3} style={{flexShrink:0}}/>
           </button>
         </div>
       </Fade>
@@ -752,7 +754,7 @@ function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFo
           <span style={{fontFamily:T.measured}}>{weeksOnBlock}</span> weeks on this block
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:30,color:T.ink,marginBottom:8}}>
-          Time to rotate
+          Rotation
         </div>
         <p style={{fontSize:13,color:T.ink2,marginBottom:18,lineHeight:1.5}}>
           You&apos;re on <strong style={{fontWeight:600}}>{currentFocus}</strong>. Refresh the accessory picks within it, or rethink the whole focus.

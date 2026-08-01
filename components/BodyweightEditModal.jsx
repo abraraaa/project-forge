@@ -28,6 +28,7 @@
 import { useRef, useState } from "react";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import { T, DISPLAY } from "@/lib/tokens";
+import Glyph from "@/components/Glyph";
 import BodyweightDrum from "@/components/BodyweightDrum";
 import { hasPasskey, registerPasskey, isWebAuthnSupported } from "@/lib/webauthn";
 import { getAuthTokenWithCeremony } from "@/lib/auth-session";
@@ -171,7 +172,7 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
   const cta = (label, onClick, { disabled = false } = {}) => (
     <button onClick={onClick} disabled={disabled || busy} style={{ width: "100%", padding: "16px", background: T.commit, border: "none", borderRadius: T.r, cursor: busy ? "default" : "pointer", fontFamily: T.text, fontSize: 16, fontWeight: 500, color: T.commitInk, boxShadow: T.elevStrong, display: "flex", alignItems: "center", justifyContent: "space-between", opacity: busy ? 0.6 : 1 }}>
       <span>{busy ? "One sec…" : label}</span>
-      <span style={{ fontSize: 16 }}>→</span>
+      <Glyph name="arrowRight" size={13}/>
     </button>
   );
   const quiet = (label, onClick) => (
@@ -183,7 +184,7 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
   const PICKER_ID = "bw-photo-input";
   const ctaLabel = (label) => (
     <label htmlFor={PICKER_ID} role="button" style={{ width: "100%", padding: "16px", background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer", fontFamily: T.text, fontSize: 16, fontWeight: 500, color: T.commitInk, boxShadow: T.elevStrong, display: "flex", alignItems: "center", justifyContent: "space-between", boxSizing: "border-box" }}>
-      <span>{label}</span><span style={{ fontSize: 16 }}>→</span>
+      <span>{label}</span><Glyph name="arrowRight" size={13}/>
     </label>
   );
   const quietLabel = (label) => (
@@ -202,7 +203,13 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
-            <div id={titleId} style={{ ...DISPLAY, fontSize: 28, color: T.ink }}>{titles[step]}</div>
+            <div id={titleId} style={
+              // Serif fence: only the noun titles (Bodyweight, Today's
+              // photo) wear the display face; imperative steps stay text.
+              step === "weight" || step === "camera"
+                ? { ...DISPLAY, fontSize: 28, color: T.ink }
+                : { fontSize: 18, fontWeight: 500, fontFamily: T.text, color: T.ink, lineHeight: 1.3 }
+            }>{titles[step]}</div>
             {sub(subs[step])}
           </div>
         </div>
@@ -249,7 +256,7 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
         </>)}
 
         {step === "done" && (
-          <div style={{ textAlign: "center", padding: "8px 0 16px", fontSize: 40 }}>✓</div>
+          <div style={{ textAlign: "center", padding: "8px 0 16px" }}><Glyph name="check" size={32} color={T.ink2}/></div>
         )}
       </div>
     </div>

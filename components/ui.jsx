@@ -47,6 +47,27 @@ export function Card({ children, style = {} }) {
   );
 }
 
+// MonoNums — digits are mono, no exceptions (audit §10.3): every measured
+// value renders in Spline Sans Mono with the surrounding words in the text
+// face. This helper applies the mixed-run pattern to data-driven copy
+// ("60 min at conversational pace", "8–10 rounds of 20s") where hand-
+// splitting spans isn't possible. Number runs include their decimal
+// points, ranges (8–10), times (2:00) and multipliers (3×12).
+const NUM_RUN = /(\d[\d.,:×–\-]*\d|\d)/g;
+export function MonoNums({ children, style = {} }) {
+  const text = String(children ?? "");
+  const parts = text.split(NUM_RUN);
+  return (
+    <>
+      {parts.map((p, i) =>
+        i % 2 === 1
+          ? <span key={i} style={{ fontFamily: T.measured, ...style }}>{p}</span>
+          : p
+      )}
+    </>
+  );
+}
+
 // Tag — a small identifier: a key mark (short bar in the given colour)
 // beside sentence-case text. Replaces the pill chip — pills are on the
 // never-list; categorical colour reads as a mark, not a costume.

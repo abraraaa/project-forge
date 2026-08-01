@@ -67,13 +67,9 @@ export default class ErrorBoundary extends Component {
         >
           <div
             style={{
-              fontFamily: T.display,
-              fontOpticalSizing: "none",
-              fontVariationSettings: "'opsz' 11",
-              fontKerning: "normal",
-              letterSpacing: "0.004em",
-              fontSize: 32,
-              fontWeight: 400,
+              fontFamily: T.text,
+              fontSize: 22,
+              fontWeight: 500,
               marginBottom: 16,
               color: T.ink,
             }}

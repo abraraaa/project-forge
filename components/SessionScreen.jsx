@@ -18,7 +18,8 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { T, DISPLAY, heatForRpe, heatMarkHeight, rpeForEffort } from "@/lib/tokens";
-import { Fade, Card } from "@/components/ui";
+import { Fade, Card, MonoNums } from "@/components/ui";
+import Glyph from "@/components/Glyph";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { WEEK, SWAP_DB } from "@/lib/programme";
@@ -53,6 +54,7 @@ function rirText(rpe) {
 const linkBtn = {
   background: "none", border: "none", padding: 0, cursor: "pointer",
   fontFamily: T.text, fontSize: 13, color: T.ink3,
+  display: "inline-flex", alignItems: "center", gap: 5,
 };
 
 // ─── RPE track ───────────────────────────────────────────────────────────────
@@ -138,7 +140,7 @@ function EffortPanel({ label = "How hard was that?", onCommit }) {
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:12}}>
         <div>
           <div style={{fontSize:13,color:T.ink3,marginBottom:5}}>{label}</div>
-          <div style={{fontSize:16,color:T.ink,fontWeight:500}}>{rirText(rpe)}</div>
+          <div style={{fontSize:16,color:T.ink,fontWeight:500}}><MonoNums>{rirText(rpe)}</MonoNums></div>
         </div>
         <div style={{
           fontFamily:T.measured,fontSize:40,lineHeight:0.9,letterSpacing:"-0.04em",
@@ -202,13 +204,13 @@ export function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJum
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
         className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
         <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
-          {session.name}
+          Session overview
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:6}}>
-          Train in any order
+          {session.name}
         </div>
         <p style={{fontSize:13,color:T.ink2,marginBottom:16,lineHeight:1.5}}>
-          Auto-advance still happens — this is for when the gym dictates a different order.
+          Train in any order — auto-advance still happens; this is for when the gym dictates.
         </p>
 
         <div style={{flex:1,overflowY:"auto",marginRight:-8,paddingRight:8}}>
@@ -348,9 +350,9 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
     <div style={{maxWidth:430,margin:"0 auto",padding:"72px 24px 48px"}}>
       <Fade d={0}>
         <h1 style={{...DISPLAY,fontSize:38,color:T.ink,marginBottom:10}}>
-          How are you feeling?
+          Readiness
         </h1>
-        <p style={{fontSize:14,color:T.ink2,marginBottom:36,lineHeight:1.6}}>We&rsquo;ll shape the session around you.</p>
+        <p style={{fontSize:14,color:T.ink2,marginBottom:36,lineHeight:1.6}}>How are you feeling? We&rsquo;ll shape the session around you.</p>
       </Fade>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {opts.map((o,i)=>(
@@ -367,10 +369,10 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
                 <span aria-hidden="true" style={{width:24,height:heatMarkHeight(o.rpe),background:heatForRpe(o.rpe),flexShrink:0}}/>
                 <div>
                   <div style={{fontSize:17,fontWeight:500,color:T.ink}}>{o.label}</div>
-                  <div style={{fontSize:13,color:T.ink3,marginTop:2}}>{o.sub}</div>
+                  <div style={{fontSize:13,color:T.ink3,marginTop:2}}><MonoNums>{o.sub}</MonoNums></div>
                 </div>
               </div>
-              <span style={{fontSize:14,color:readiness===o.id?T.ink:T.rule,transition:`color 180ms ${T.ease}`}}>✓</span>
+              <Glyph name="check" size={13} color={readiness===o.id?T.ink:T.rule}/>
             </button>
           </Fade>
         ))}
@@ -414,8 +416,9 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
             fontFamily:T.text,fontSize:17,fontWeight:500,
             color:readiness?T.commitInk:T.ink3,
             boxShadow:readiness?T.elevStrong:"none",
-            transition:`background 220ms ${T.ease}, color 220ms ${T.ease}`}}>
-          Start session →
+            transition:`background 220ms ${T.ease}, color 220ms ${T.ease}`,
+            display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+          Start session <Glyph name="arrowRight" size={13}/>
         </button>
       </Fade>
     </div>
@@ -504,12 +507,12 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         <div style={{height:"100%",width:`${progress}%`,background:T.dayKey.strength,transition:`width 600ms ${T.ease}`}}/>
       </div>
       <div style={{padding:"14px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <button onClick={onQuit} style={{...linkBtn,fontSize:13}}>← Quit</button>
+        <button onClick={onQuit} style={{...linkBtn,fontSize:13}}><Glyph name="arrowLeft" size={12}/> Quit</button>
         <button onClick={onShowOverview} aria-label="Open session overview"
           style={{background:"none",border:"none",padding:0,cursor:"pointer",textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",fontFamily:T.text}}>
           <div style={{fontSize:13,fontWeight:500,color:T.ink2,display:"flex",alignItems:"center",gap:6}}>
             {session.name}
-            <span style={{fontSize:9,opacity:0.7}}>▾</span>
+            <Glyph name="chevronDown" size={10} style={{opacity:0.7}}/>
           </div>
           <div style={{fontSize:12,color:T.ink3,marginTop:1}}>{block.label} · {typeLabel}{isSS?` · ${phase}`:""}</div>
         </button>
@@ -522,7 +525,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             <h1 style={{...DISPLAY,fontSize:nameFz,color:T.ink,margin:0}}>{activeEx?.name}</h1>
             <div style={{display:"flex",alignItems:"center",gap:12,marginTop:9,flexWrap:"wrap"}}>
               {activeEx?.vid && (
-                <span style={{fontSize:13,color:T.ink2,fontWeight:500}}>Watch demo →</span>
+                <span style={{fontSize:13,color:T.ink2,fontWeight:500,display:"inline-flex",alignItems:"center",gap:5}}>Watch demo <Glyph name="arrowRight" size={11}/></span>
               )}
               <span style={{fontSize:13,color:T.ink3}}>{activeEx?.muscle}</span>
               {tempoEntry?.tempo && (
@@ -541,14 +544,14 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             onClick={()=>setSwapEx({block,phase})}
             style={{marginTop:4,flexShrink:0,background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,padding:"9px 12px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:T.text}}
           >
-            <span style={{fontSize:14,color:T.ink}}>⇄</span>
+            <Glyph name="swap" size={16} color={T.ink}/>
             <span style={{fontSize:11,fontWeight:500,color:T.ink3}}>Swap</span>
           </button>
         </div>
         <div style={{fontSize:13,color:T.ink3,marginTop:10}}>
           Set <span style={{fontFamily:T.measured,color:T.ink2}}>{setNum}</span> of <span style={{fontFamily:T.measured,color:T.ink2}}>{block.sets}</span>
           {loadTypeSubtitle && <> · {loadTypeSubtitle}</>}
-          {deloadDayTag && <> · {deloadDayTag}</>}
+          {deloadDayTag && <> · <MonoNums>{deloadDayTag}</MonoNums></>}
         </div>
         {tempoEntry?.tempo && tempoOpen && (
           <Fade>
@@ -590,9 +593,9 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         {showWeightPicker && currentW!==null && (
           <div style={{display:"flex",flexDirection:"column",gap:8,paddingBottom:4}}>
             <button aria-label={`Add ${weightStep} kg`} onClick={()=>nudgeWeight(1)} className="forge-press"
-              style={{width:46,height:46,background:T.surface,border:"none",borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"center",color:T.ink2,fontSize:20,boxShadow:T.elev,cursor:"pointer"}}>+</button>
+              style={{width:46,height:46,background:T.surface,border:"none",borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:T.elev,cursor:"pointer"}}><Glyph name="plus" size={16} color={T.ink2}/></button>
             <button aria-label={`Remove ${weightStep} kg`} onClick={()=>nudgeWeight(-1)} className="forge-press"
-              style={{width:46,height:46,background:T.surface,border:"none",borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"center",color:T.ink2,fontSize:20,boxShadow:T.elev,cursor:"pointer"}}>−</button>
+              style={{width:46,height:46,background:T.surface,border:"none",borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:T.elev,cursor:"pointer"}}><Glyph name="minus" size={16} color={T.ink2}/></button>
           </div>
         )}
       </div>
@@ -672,8 +675,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           {/* Superset partner reads BEFORE the action it explains. */}
           {isSS&&(
             <Card style={{margin:"14px 20px 0",padding:"13px 16px"}}>
-              <div style={{fontSize:12,color:T.ink3,marginBottom:5}}>
-                {phase==="A"?"Immediately after →":"Just completed ✓"}
+              <div style={{fontSize:12,color:T.ink3,marginBottom:5,display:"flex",alignItems:"center",gap:5}}>
+                {phase==="A"?<>Immediately after <Glyph name="arrowRight" size={10}/></>:<>Just completed <Glyph name="check" size={10}/></>}
               </div>
               <div style={{fontSize:17,fontWeight:500,color:phase==="A"?T.ink:T.ink3,lineHeight:1.2}}>{partnerEx?.name}</div>
               <div style={{fontSize:13,color:T.ink3,marginTop:3}}>
@@ -722,7 +725,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 <div style={{...DISPLAY,fontSize:28,color:T.ink}}>{vidEx.name}</div>
                 <div style={{fontSize:13,color:T.ink3,marginTop:5}}>{vidEx.muscle}</div>
               </div>
-              <button onClick={()=>setShowVid(false)} style={{background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,padding:"6px 10px",cursor:"pointer",color:T.ink2,fontSize:13}}>✕</button>
+              <button onClick={()=>setShowVid(false)} aria-label="Close video" style={{background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,padding:"8px 10px",cursor:"pointer"}}><Glyph name="cross" size={12} color={T.ink2}/></button>
             </div>
             <VideoEmbed vid={vidEx.vid} name={vidEx.name}/>
           </div>
@@ -741,7 +744,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           <button onClick={()=>setHistoryOpen(true)}
             aria-label={`Recent history for ${activeEx?.name}`}
             style={{...linkBtn,fontSize:12,padding:"2px 8px"}}>
-            Recent →
+            Recent <Glyph name="arrowRight" size={11}/>
           </button>
         </div>
       )}
@@ -766,7 +769,7 @@ function VideoEmbed({vid,name}){
             : `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} form`)}`}
           target="_blank" rel="noopener noreferrer"
           style={{fontSize:13,color:T.ink,fontWeight:500,textDecoration:"none"}}>
-          {vid?"Watch on YouTube →":"Search YouTube →"}
+          {vid?"Watch on YouTube":"Search YouTube"} <Glyph name="arrowUpRight" size={11}/>
         </a>
       </div>
     );
@@ -888,8 +891,8 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
           if(hasWeight) setWW(p=>({...p,[target.exName]:kg}));
           setWR(p=>({...p,[target.exName]:reps}));
           onClose();
-        }} style={{flex:2,padding:"16px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
-          Confirm →
+        }} style={{flex:2,padding:"16px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+          Confirm <Glyph name="arrowRight" size={13}/>
         </button>
         </div>
       </div>
@@ -973,7 +976,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
         <h1 style={{...DISPLAY,fontWeight:500,fontSize:46,color:T.ink,marginBottom:12}}>
           {hi[0]}<br/>{hi[1]}
         </h1>
-        <p style={{fontSize:14,color:T.ink2,marginBottom:30,lineHeight:1.6}}>{nextMsg}</p>
+        <p style={{fontSize:14,color:T.ink2,marginBottom:30,lineHeight:1.6}}><MonoNums>{nextMsg}</MonoNums></p>
       </Fade>
       {nudges.length > 0 && (
         <Fade d={80}>
@@ -1014,8 +1017,8 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
         </Fade>
       )}
       <Fade d={260}>
-        <button className="forge-press" onClick={onHome} style={{marginTop:24,width:"100%",height:58,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
-          Home →
+        <button className="forge-press" onClick={onHome} style={{marginTop:24,width:"100%",height:58,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+          Home <Glyph name="arrowRight" size={13}/>
         </button>
       </Fade>
 

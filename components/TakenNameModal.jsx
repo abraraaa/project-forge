@@ -13,6 +13,7 @@ import { useState, useEffect } from "react";
 import { useModalA11y } from "@/lib/a11y";
 import { isHeatwayveOrigin, migrationWindowOpen } from "@/lib/origin";
 import { T, DISPLAY } from "@/lib/tokens";
+import Glyph from "@/components/Glyph";
 import { P } from "@/lib/storage";
 import { hasPasskey, authenticatePasskey } from "@/lib/webauthn";
 import { cacheAuthToken } from "@/lib/auth-session";
@@ -79,7 +80,7 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
     return (
       <div className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div className="forge-vellum" style={{borderRadius:T.r,padding:"40px 32px",textAlign:"center",boxShadow:"0 10px 24px -14px rgba(36,28,25,0.35)"}}>
-          <div style={{fontSize:40,marginBottom:16,color:T.ink2}}>✓</div>
+          <div style={{marginBottom:16}}><Glyph name="check" size={34} color={T.ink2}/></div>
           <div style={{...DISPLAY,fontSize:28,color:T.ink}}>
             Welcome back, {name}
           </div>
@@ -107,7 +108,7 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
         <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
           Is this you?
         </div>
-        <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:12}}>
+        <div id={titleId} style={{fontSize:18,fontWeight:500,fontFamily:T.text,color:T.ink,lineHeight:1.3,marginBottom:12}}>
           {hasProfilePasskey === null ? "Checking…" : hasProfilePasskey ? "Sign in with passkey" : "Signing in on a new device"}
         </div>
 

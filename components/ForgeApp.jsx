@@ -38,7 +38,8 @@ import {
 import { useModalA11y, haptic } from "@/lib/a11y";
 import { withNavTransition } from "@/lib/nav-transitions";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { Fade } from "@/components/ui";
+import { Fade, MonoNums } from "@/components/ui";
+import Glyph from "@/components/Glyph";
 import ScrollDrum from "@/components/ScrollDrum";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
 import ProfileScreen from "@/components/ProfileScreen";
@@ -1235,7 +1236,7 @@ function OnboardingScreen({ onContinue }) {
           padding: "0 22px",
         }}>
           <span>Unveil the best you</span>
-          <span style={{ fontSize: 17 }}>→</span>
+          <Glyph name="arrowRight" size={15}/>
         </button>
       </Fade>
     </div>
@@ -1317,10 +1318,10 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
           Weekly schedule
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:6}}>
-          Shape your week
+          The week
         </div>
         <p style={{fontSize:13,color:T.ink2,marginBottom:16,lineHeight:1.5}}>
-          Pick what each day is. Strength days map to sessions A → B → C in order.
+          Shape it: pick what each day is. Strength days map to sessions A → B → C in order.
         </p>
 
         <div style={{flex:1,overflowY:"auto",marginRight:-8,paddingRight:8}}>
@@ -1349,7 +1350,7 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
 
         {warning && (
           <div style={{marginTop:14,padding:"10px 12px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,fontSize:13,color:T.ink2,lineHeight:1.5}}>
-            {warning}
+            <MonoNums>{warning}</MonoNums>
           </div>
         )}
 
@@ -1430,7 +1431,7 @@ function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
               <div style={{fontSize:12,color:T.ink3,marginBottom:4}}>{c.slot}</div>
               <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                 <span style={{fontSize:14,color:T.ink3,textDecoration:"line-through",textDecorationColor:T.ink3}}>{c.from}</span>
-                <span style={{fontSize:13,color:T.ink2}}>→</span>
+                <Glyph name="arrowRight" size={12} color={T.ink2}/>
                 <span style={{fontSize:15,fontWeight:500,color:T.ink}}>{c.to}</span>
               </div>
             </div>
@@ -1513,14 +1514,14 @@ function RotationSummaryModal({summary,onContinue}){
               <div style={{fontSize:12,color:T.ink3,marginBottom:4}}>{c.slot}</div>
               <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                 <span style={{fontSize:14,color:T.ink3,textDecoration:"line-through",textDecorationColor:T.ink3}}>{c.from}</span>
-                <span style={{fontSize:13,color:T.ink2}}>→</span>
+                <Glyph name="arrowRight" size={12} color={T.ink2}/>
                 <span style={{fontSize:15,fontWeight:500,color:T.ink}}>{c.to}</span>
               </div>
             </div>
           ))}
         </div>
-        <button onClick={onContinue} style={{width:"100%",height:54,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
-          Continue to readiness →
+        <button onClick={onContinue} style={{width:"100%",height:54,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+          Continue to readiness <Glyph name="arrowRight" size={13}/>
         </button>
       </div>
     </div>
@@ -1583,7 +1584,7 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
           {visible.length === 0 && (
             dismissed.size > 0 ? (
               <div style={{padding:"20px 4px 6px",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
-                <span style={{fontSize:16,color:T.ink2,lineHeight:1}}>✓</span>
+                <Glyph name="check" size={14} color={T.ink2}/>
                 <span style={{fontSize:14,color:T.ink2}}>Well kept.</span>
               </div>
             ) : (
@@ -1623,7 +1624,7 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
                   </span>
                 </span>
                 {!draftBlocks && (isLog
-                  ? <span style={{fontSize:13,fontWeight:500,color:T.ink}}>Log →</span>
+                  ? <span style={{fontSize:13,fontWeight:500,color:T.ink,display:"inline-flex",alignItems:"center",gap:5}}>Log <Glyph name="arrowRight" size={11}/></span>
                   : <span style={{fontSize:13,fontWeight:500,color:T.ink2}}>Yes, done</span>
                 )}
               </button>
@@ -1744,7 +1745,7 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
     return (
       <div style={{padding:"72px 24px",fontFamily:T.text,color:T.ink2,textAlign:"center"}}>
         <p>Couldn&apos;t resolve the session for that date.</p>
-        <button onClick={onCancel} style={{marginTop:20,padding:"12px 20px",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,color:T.ink,cursor:"pointer",fontFamily:T.text}}>← Back</button>
+        <button onClick={onCancel} style={{marginTop:20,padding:"12px 20px",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,color:T.ink,cursor:"pointer",fontFamily:T.text,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12}/> Back</button>
       </div>
     );
   }
@@ -1755,7 +1756,7 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
       <Fade d={0}>
         <div style={{padding:"20px 20px 0",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
           <button onClick={onCancel} aria-label="Cancel"
-            style={{background:"none",border:"none",padding:"4px 0",cursor:"pointer",fontSize:13,color:T.ink3,fontFamily:T.text,flexShrink:0}}>← Cancel</button>
+            style={{background:"none",border:"none",padding:"4px 0",cursor:"pointer",fontSize:13,color:T.ink3,fontFamily:T.text,flexShrink:0,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12}/> Cancel</button>
           <div style={{textAlign:"right",flex:1}}>
             <div style={{fontSize:16,fontWeight:500,lineHeight:1.25,color:T.ink}}>
               {meta.sessionName} <span style={{color:T.ink3,fontWeight:400}}>· {meta.dateLabel}</span>
@@ -1907,7 +1908,7 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
             transition:`background 200ms ${T.ease}, color 200ms ${T.ease}`,
           }}>
           <span>{allSkipped ? "Skip everything?" : "Log session"}</span>
-          {!allSkipped && <span style={{fontSize:16}}>→</span>}
+          {!allSkipped && <Glyph name="arrowRight" size={14}/>}
         </button>
       </div>
 
@@ -2009,12 +2010,12 @@ function IosInstallOverlay({ onDismiss, migration = false }) {
           {migration ? "Same fire, new home" : "Live on your home screen"}
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:10}}>
-          {migration ? "Add Heatwayve back" : "Install Heatwayve"}
+          Heatwayve
         </div>
         <p style={{fontSize:13,color:T.ink2,marginBottom:20,lineHeight:1.6}}>
           {migration
-            ? "We moved — your story came with us. One re-add and the home screen is yours again."
-            : "Fullscreen. One tap to open. Works offline between sessions."}
+            ? "Add it back — we moved, and your story came with us. One re-add and the home screen is yours again."
+            : "Install it: fullscreen, one tap to open, works offline between sessions."}
         </p>
 
         {/* Three steps — Safari's share flow */}
@@ -2053,13 +2054,13 @@ function ShareGlyph() {
     >
       {/* Box — lower two thirds */}
       <rect x="2" y="8" width="14" height="12" rx="2" ry="2"
-        fill="none" stroke="var(--ink-2)" strokeWidth="1.5"/>
+        fill="none" stroke="var(--ink-2)" strokeWidth="2.25"/>
       {/* Arrow shaft */}
       <line x1="9" y1="2" x2="9" y2="13"
-        stroke="var(--ink-2)" strokeWidth="1.5" strokeLinecap="round"/>
+        stroke="var(--ink-2)" strokeWidth="2.25" strokeLinecap="round"/>
       {/* Arrow head */}
       <polyline points="5,6 9,2 13,6"
-        fill="none" stroke="var(--ink-2)" strokeWidth="1.5"
+        fill="none" stroke="var(--ink-2)" strokeWidth="2.25"
         strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );

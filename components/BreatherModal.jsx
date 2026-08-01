@@ -31,10 +31,10 @@ export default function BreatherModal({ onConfirm, onCancel }) {
         onClick={(e) => e.stopPropagation()}
         className="forge-sheet-ground forge-vellum" style={{ padding: "26px 24px calc(32px + env(safe-area-inset-bottom))", width: "100%", animation: `slideUp 280ms ${T.ease}`, outline: "none" }}>
         <div id={titleId} style={{ ...DISPLAY, fontSize: 28, color: T.ink, marginBottom: 10 }}>
-          Need a breather?
+          A breather
         </div>
         <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, marginBottom: 20 }}>
-          Rest is a training variable, not a lapse. Tell Heatwayve you&apos;re stepping back and your
+          Need one? Rest is a training variable, not a lapse. Tell Heatwayve you&apos;re stepping back and your
           rhythm holds where it is. It picks up the moment you train again.
         </p>
 

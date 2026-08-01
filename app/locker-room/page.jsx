@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { T, DISPLAY } from "@/lib/tokens";
+import Glyph from "@/components/Glyph";
 import { P, BW, getLocalProfile, pushNow } from "@/lib/storage";
 import { haptic } from "@/lib/a11y";
 import { ensurePhotoAccess } from "@/lib/auth-session";
@@ -348,8 +349,8 @@ export default function LockerRoom() {
           contract — the ratchet rejects new safe-area-inset padding here,
           unlike the Lab's grandfathered header). Design spacing only. */}
       <div style={{ padding: "32px 0 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <button onClick={() => router.push("/")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, color: T.ink3, fontFamily: T.text }}>
-          ← Home
+        <button onClick={() => router.push("/")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, color: T.ink3, fontFamily: T.text, display: "inline-flex", alignItems: "center", gap: 5 }}>
+          <Glyph name="arrowLeft" size={12}/> Home
         </button>
         {photosVisible ? (
           <button onClick={() => setShown(false)} style={{ padding: "8px 14px", background: T.surface, border: "none", boxShadow: T.elev, borderRadius: T.r, fontSize: 12, fontWeight: 500, color: T.ink2, cursor: "pointer", fontFamily: T.text }}>Hide photos</button>
@@ -359,10 +360,10 @@ export default function LockerRoom() {
       </div>
       <div style={{ padding: "24px 0 0" }}>
         <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
-          Locker room
+          Where it shows
         </div>
         <h1 className="home-headline" style={{ ...DISPLAY, fontSize: 45, color: T.ink, margin: 0, transformOrigin: "left top" }}>
-          Where it shows
+          Locker room
         </h1>
         <p style={{ fontSize: 15, color: T.ink2, margin: "10px 0 16px", lineHeight: 1.5 }}>The chart is always here; photos stay behind the door until you ask.</p>
       </div>
@@ -383,7 +384,7 @@ export default function LockerRoom() {
             date anchors (2026-07-26) — saying it twice was the opposite of
             elegant. */}
         <div style={{ display: "flex", justifyContent: "flex-end", margin: "14px 0 10px" }}>
-          <label htmlFor={PICK_ID} role="button" style={{ padding: "8px 14px", background: T.surface, boxShadow: T.elev, borderRadius: T.r, fontSize: 12, fontWeight: 500, color: T.ink2, cursor: "pointer" }}>+ Add photo</label>
+          <label htmlFor={PICK_ID} role="button" style={{ padding: "8px 14px", background: T.surface, boxShadow: T.elev, borderRadius: T.r, fontSize: 12, fontWeight: 500, color: T.ink2, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}><Glyph name="plus" size={11} color={T.ink2}/> Add photo</label>
         </div>
 
         {askBw && (

@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import { T, DISPLAY } from "@/lib/tokens";
+import Glyph from "@/components/Glyph";
 import { FOCUS_OPTIONS, FOCUS_SUMMARIES, DEFAULT_FOCUS } from "@/lib/programme";
 
 // Tap a focus to preview its summary, then Save to apply. Save triggers an
@@ -28,10 +29,10 @@ export default function FocusPickerSheet({ current, onSave, onCancel }) {
           Training focus
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:8}}>
-          What are you training for?
+          Focus
         </div>
         <p style={{fontSize:13,color:T.ink2,marginBottom:16,lineHeight:1.5}}>
-          Every focus trains your whole body. A focus sets the <em>shape</em> of your week: where each muscle sits in its training band. Rotation solves for it. Main lifts never change.
+          What are you training for? Every focus trains your whole body. A focus sets the <em>shape</em> of your week: where each muscle sits in its training band. Rotation solves for it. Main lifts never change.
         </p>
 
         <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
@@ -43,7 +44,7 @@ export default function FocusPickerSheet({ current, onSave, onCancel }) {
                 style={{padding:"14px 16px",background:active?T.surface:"transparent",border:`1px solid ${active?"transparent":T.rule}`,boxShadow:active?T.elev:"none",borderRadius:T.r,cursor:"pointer",textAlign:"left",fontFamily:T.text,transition:`background 160ms ${T.ease}`}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
                   <span style={{fontSize:16,fontWeight:active?600:500,color:T.ink}}>{f}</span>
-                  {active && <span style={{fontSize:13,color:T.ink2}}>✓</span>}
+                  {active && <Glyph name="check" size={12} color={T.ink2}/>}
                 </div>
                 <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>{FOCUS_SUMMARIES[f]}</div>
               </button>

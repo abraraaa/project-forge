@@ -25,6 +25,7 @@ import { isAdminSession } from "@/lib/auth-session";
 import { useInlineModalA11y } from "@/lib/a11y";
 import { PROFILE_SUFFIXES, LEGACY_PROFILE_KEY_PREFIXES } from "@/lib/store-health";
 import { Fade } from "@/components/ui";
+import Glyph from "@/components/Glyph";
 import { SyncStatusCard, SyncNowRow } from "@/components/sync-cards";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
 import TakenNameModal from "@/components/TakenNameModal";
@@ -331,13 +332,13 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             Secure across devices
           </div>
           <div style={{ ...DISPLAY, fontSize: 38, color: T.ink, marginBottom: 16 }}>
-            Add a passkey?
+            A passkey
           </div>
         </Fade>
 
         <Fade d={80}>
           <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, marginBottom: 12 }}>
-            Without one, your data lives only on this device — clearing your browser would lose everything.
+            Add one? Without it, your data lives only on this device — clearing your browser would lose everything.
           </p>
           <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, marginBottom: 32 }}>
             With one, your name is yours across phone, laptop, anywhere. Face ID, Touch ID, or your device PIN.
@@ -366,7 +367,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               opacity: onboardingPasskeyBusy ? 0.6 : 1,
             }}>
               <span>{onboardingPasskeyBusy ? "Setting up…" : "Add passkey"}</span>
-              {!onboardingPasskeyBusy && <span style={{ fontSize: 18 }}>→</span>}
+              {!onboardingPasskeyBusy && <Glyph name="arrowRight" size={14}/>}
             </button>
             <button onClick={handlePasskeyLater} disabled={onboardingPasskeyBusy} style={{
               width: "100%", padding: "14px 24px",
@@ -402,16 +403,16 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       }}>
         <Fade d={0}>
           <div style={{ fontSize: 13, color: T.ink3, marginBottom: 18 }}>
-            Bodyweight
+            One measurement
           </div>
           <div style={{ ...DISPLAY, fontSize: 38, color: T.ink, marginBottom: 16 }}>
-            What do you weigh?
+            Bodyweight
           </div>
         </Fade>
 
         <Fade d={80}>
           <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, marginBottom: 32 }}>
-            Optional — but it lets us track bodyweight movements (pull-ups, dips, planks) properly.
+            What do you weigh? Optional — but it lets us track bodyweight movements (pull-ups, dips, planks) properly.
           </p>
         </Fade>
 
@@ -431,7 +432,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
               <span>Save & continue</span>
-              <span style={{ fontSize: 18 }}>→</span>
+              <Glyph name="arrowRight" size={14}/>
             </button>
             <button onClick={handleBwSkip} style={{
               width: "100%", padding: "14px 24px",
@@ -448,13 +449,13 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
   return (
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"clip"}}>
-      {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:12,color:T.ink3,fontFamily:T.text,marginBottom:32,display:"block"}}>← Back</button>}
+      {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:13,color:T.ink3,fontFamily:T.text,marginBottom:32,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12}/> Back</button>}
       <Fade d={0}>
         <div style={{...DISPLAY,fontSize:38,color:T.ink,marginBottom:10}}>
-          {current?"Switch profile":"Who's training?"}
+          {current?"Profiles":"Your name"}
         </div>
         <p style={{fontSize:14,color:T.ink2,marginBottom:36,lineHeight:1.6}}>
-          {current?"Pick a profile or add someone new.":"Pick a name. It travels with you across devices."}
+          {current?"Pick a profile or add someone new.":"Who's training? Pick a name — it travels with you across devices."}
         </p>
       </Fade>
       {existing.length>0&&(
@@ -467,7 +468,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                   <span onClick={()=>onActivate(n)} style={{fontSize:17,fontWeight:500,color:T.ink,cursor:"pointer",flex:1}}>{n}</span>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
                     {n===current&&<span style={{fontSize:12,color:T.ink2,fontWeight:500}}>Active</span>}
-                    <button onClick={()=>setConfirmWipe(n)} style={{background:"none",border:"none",padding:"2px 6px",cursor:"pointer",fontSize:12,color:T.ink3,fontFamily:T.text}} title="Wipe progress">✕</button>
+                    <button onClick={()=>setConfirmWipe(n)} style={{background:"none",border:"none",padding:"2px 6px",cursor:"pointer"}} title="Wipe progress" aria-label={`Wipe ${n}`}><Glyph name="cross" size={11} color={T.ink3}/></button>
                   </div>
                 </div>
               ))}
@@ -490,13 +491,15 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               />
               {pip && (
                 <div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",display:"flex",alignItems:"center",gap:6,pointerEvents:"none"}}>
-                  <span style={{fontSize:14,color:pip.colour,fontWeight:500}}>{pip.icon}</span>
+                  {pip.icon === "✓" ? <Glyph name="check" size={12} color={pip.colour}/>
+                    : pip.icon === "✕" ? <Glyph name="cross" size={12} color={pip.colour}/>
+                    : <span style={{fontSize:14,color:pip.colour,fontWeight:500}}>{pip.icon}</span>}
                 </div>
               )}
             </div>
             <button className={canSubmit?"forge-press":undefined} onClick={handleSubmit} disabled={!canSubmit}
               style={{padding:"14px 20px",background:canSubmit?T.commit:T.well,border:"none",borderRadius:T.r,cursor:canSubmit?"pointer":"default",fontFamily:T.text,fontSize:17,fontWeight:500,color:canSubmit?T.commitInk:T.ink3,boxShadow:canSubmit?T.elevStrong:"none",transition:`background 200ms ${T.ease}`}}>
-              {submitting ? "…" : "→"}
+              {submitting ? "…" : <Glyph name="arrowRight" size={15}/>}
             </button>
           </div>
           {/* Subscript — availability status or helper text */}
@@ -526,8 +529,9 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 marginTop:12,background:"none",border:"none",padding:0,
                 cursor:"pointer",fontFamily:T.text,fontSize:12,
                 color:T.ink,textDecoration:"underline",textUnderlineOffset:3,textAlign:"left",
+                display:"inline-flex",alignItems:"center",gap:4,
               }}>
-              That's me →
+              That&apos;s me <Glyph name="arrowRight" size={11}/>
             </button>
           )}
         </div>
@@ -577,7 +581,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Need a breather?</div>
               <div style={{fontSize:11,color:T.ink3,marginTop:2}}>Pause your rhythm while life happens</div>
             </div>
-            <span style={{fontSize:14,color:T.ink3}}>→</span>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </button>
         </Fade>
       ) : null}
@@ -597,10 +601,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                     const agoStr = daysAgo === 0 ? "today" : daysAgo === 1 ? "yesterday" : daysAgo !== null ? `${daysAgo} days ago` : "";
                     return `${bodyweight} kg${agoStr ? ` · updated ${agoStr}` : ""}`;
                   })()
-                ) : "Not set · add one →"}
+                ) : "Not set — tap to add one"}
               </div>
             </div>
-            <span style={{fontSize:14,color:T.ink3}}>→</span>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </div>
         </Fade>
       )}
@@ -617,7 +621,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 {userFocus} · {FOCUS_SUMMARIES[userFocus] || FOCUS_SUMMARIES.Forged}
               </div>
             </div>
-            <span style={{fontSize:14,color:T.ink3}}>→</span>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </div>
         </Fade>
       )}
@@ -724,7 +728,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Bug reports</div>
               <div style={{fontSize:11,color:T.ink3,marginTop:2}}>The list — fill or kill</div>
             </div>
-            <span style={{fontSize:14,color:T.ink3}}>↗︎</span>
+            <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
           </a>
         </Fade>
       )}
@@ -736,7 +740,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Sync diagnostics</div>
               <div style={{fontSize:11,color:T.ink3,marginTop:2}}>Local store counts + force pull/push</div>
             </div>
-            <span style={{fontSize:14,color:T.ink3}}>↗︎</span>
+            <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
           </a>
         </Fade>
       )}
@@ -752,7 +756,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Report a bug</div>
               <div style={{fontSize:11,color:T.ink3,marginTop:2}}>Something off? Tell me where it hurts.</div>
             </div>
-            <span style={{fontSize:14,color:T.ink3}}>→</span>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </button>
         </Fade>
       )}
@@ -767,7 +771,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         <Fade d={310}>
           <a href="https://buymeacoffee.com/heatwayve" target="_blank" rel="noopener noreferrer"
             style={{marginTop:24,display:"block",textAlign:"center",fontFamily:T.text,fontSize:13,color:T.ink3,textDecoration:"none"}}>
-            Buy me a protein shake&nbsp;↗
+            Buy me a protein shake <Glyph name="arrowUpRight" size={11}/>
           </a>
         </Fade>
       )}

@@ -89,8 +89,9 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
         onClose={() => {}}
       />
     );
-    // The "Log →" affordance is the action on a "log" row
-    fireEvent.click(screen.getByText("Log →"));
+    // The "Log" affordance (drawn arrow glyph beside it) is the action on
+    // a "log" row
+    fireEvent.click(screen.getByText(/^Log$/, { trim: true }));
     expect(onPick).toHaveBeenCalledTimes(1);
     expect(onPick.mock.calls[0][0]).toBe("2026-06-13");
   });

@@ -26,7 +26,7 @@ describe("PerformanceLab — empty state", () => {
   it("renders the editorial empty state when history is []", () => {
     render(<PerformanceLab history={[]} onBack={() => {}} />);
     // Empty-state copy lives at PerformanceLab.jsx:125 — change copy, change test.
-    expect(screen.getByText(/Nothing to show/i)).toBeTruthy();
+    expect(screen.getByText(/Week one/i)).toBeTruthy();
     // The first-session prompt is the only call-to-action in the empty
     // state; if it's missing, EmptyState wasn't rendered. Copy updated in
     // the intimacy pass (2026-07-27): "start seeing the signal" retired —
@@ -45,7 +45,7 @@ describe("PerformanceLab — empty state", () => {
   it("Back link fires onBack", () => {
     let backCalls = 0;
     render(<PerformanceLab history={[]} onBack={() => { backCalls++; }} />);
-    fireEvent.click(screen.getByText(/← Home/));
+    fireEvent.click(screen.getByText(/Home/, { selector: "button" }));
     expect(backCalls).toBe(1);
   });
 });

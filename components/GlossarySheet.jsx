@@ -15,6 +15,7 @@
 
 import { useEffect, useRef } from "react";
 import { T, DISPLAY } from "@/lib/tokens";
+import Glyph from "@/components/Glyph";
 import { useModalA11y } from "@/lib/a11y";
 
 // Entries grouped so related terms cluster (MEV/MAV/MRV → one block,
@@ -174,9 +175,8 @@ export function GlossaryTrigger({ anchorTerm = null, onOpen, label = "Open gloss
         display:"inline-flex",alignItems:"center",justifyContent:"center",
         width:18,height:18,boxSizing:"border-box",
         border:`1px solid ${T.rule}`,borderRadius:"50%",
-        fontFamily:T.text,fontSize:11,fontWeight:500,color:T.ink3,
         lineHeight:1,
-      }}>i</span>
+      }}><Glyph name="info" size={10} color={T.ink3}/></span>
     </button>
   );
 }

@@ -12,6 +12,7 @@
 import { useState, useEffect } from "react";
 import { SyncStatus, backgroundSync, pushNow } from "@/lib/storage";
 import { T } from "@/lib/tokens";
+import Glyph from "@/components/Glyph";
 
 // ─── Sync Status Card ──────────────────────────────────────────────────────────
 export function SyncStatusCard({ profile }) {
@@ -183,7 +184,7 @@ export function SyncNowRow({ profile }) {
         <div style={{ fontSize: 13, fontWeight: 500, color: T.ink }}>Sync now</div>
         <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>{subtitle}</div>
       </div>
-      <span style={{ fontSize: 14, color: T.ink3 }}>{busy ? "…" : "↻"}</span>
+      {busy ? <span style={{ fontSize: 14, color: T.ink3 }}>…</span> : <Glyph name="refresh" size={14} color={T.ink3}/>}
     </div>
   );
 }
