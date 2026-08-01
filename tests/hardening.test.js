@@ -251,10 +251,11 @@ describe("hygiene", () => {
   });
 
   it("the rejected staged manifest is gone, not lying in wait", () => {
-    // It carried the raw #131110 that lost to the grain-lifted #1D1A19.
-    // A stale to-do pointing at it was a regression waiting for a tidy-up.
+    // The staged manifest carried a stale palette; the live manifest now
+    // carries the Bone & Ember bone ground (light is the identity — the
+    // launch splash and Android chrome read this value).
     expect(() => read("public/heatwayve/manifest-staged.webmanifest")).toThrow();
-    expect(read("public/manifest.json")).toContain("#1D1A19");
+    expect(read("public/manifest.json")).toContain("#F2E9E3");
   });
 
   it("state-dependent routes stay out of the index", () => {

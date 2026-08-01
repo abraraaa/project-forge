@@ -23,7 +23,7 @@ import { isHeatwayveOrigin, migrationWindowOpen, hasPreFlipStory } from "@/lib/o
 import { activeBreak } from "@/lib/breaks";
 import { todayLocalIso } from "@/lib/dates";
 import BreatherModal from "@/components/BreatherModal";
-import { T, MUSCLE_COLOURS } from "@/lib/tokens";
+import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
 import { shouldOfferDeload, startDeload, dismissDeloadOffer } from "@/lib/progression";
 import { applySessionToEngine } from "@/lib/session-engine";
 import { getLiftProfile, sanitiseWorkingWeights, getLoadType, weightStepForLoadType } from "@/lib/lift-translations";
@@ -1124,17 +1124,16 @@ export default function ForgeApp(){
 
   if (showHydrating) {
     return (
-      <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px",position:"relative",overflow:"clip"}}>
-        <div style={{position:"absolute",top:"30%",left:"50%",transform:"translateX(-50%)",width:400,height:300,background:`radial-gradient(ellipse,${T.sage}1A 0%,transparent 65%)`,pointerEvents:"none"}}/>
+      <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px",position:"relative",overflow:"clip"}}>
         <div style={{position:"relative",textAlign:"center"}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:T.sage,margin:"0 auto 24px",animation:`pulse 1400ms ${T.ease} infinite`}}/>
-          <div style={{fontSize:11,fontWeight:500,color:T.sage,letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:14}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:T.ink3,margin:"0 auto 24px",animation:`pulse 1400ms ${T.ease} infinite`}}/>
+          <div style={{fontSize:13,color:T.ink3,marginBottom:14}}>
             Restoring
           </div>
-          <div style={{fontFamily:T.serif,fontSize:28,fontWeight:300,color:T.text1,lineHeight:1.2,marginBottom:10}}>
-            Welcome back, <span style={{fontStyle:"italic",color:T.sage}}>{activeProfile}</span>
+          <div style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:10}}>
+            Welcome back, {activeProfile}
           </div>
-          <div style={{fontSize:13,color:T.text3,lineHeight:1.55}}>
+          <div style={{fontSize:13,color:T.ink3,lineHeight:1.55}}>
             Pulling your training history…
           </div>
         </div>
@@ -1143,8 +1142,8 @@ export default function ForgeApp(){
   }
 
   return (
-    <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={()=>setAbsenceNudgeDismissed(true)}/>}
+    <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased"}}>
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={()=>setAbsenceNudgeDismissed(true)}/>}
       {breatherOpen           && <BreatherModal onConfirm={handleStartBreather} onCancel={()=>setBreatherOpen(false)}/>}
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
@@ -1179,72 +1178,44 @@ export default function ForgeApp(){
 // First-time intro. Sets forge:onboarded on continue so returning visitors
 // skip straight to ProfileScreen or home. BW is collected after name entry.
 function OnboardingScreen({ onContinue }) {
-  const { strength: s } = T;
-
   return (
     <div style={{
       background: "transparent", minHeight: "100vh", maxWidth: 430, margin: "0 auto",
-      fontFamily: T.sans, color: T.text1, WebkitFontSmoothing: "antialiased",
+      fontFamily: T.text, color: T.ink, WebkitFontSmoothing: "antialiased",
       padding: "72px 24px 48px", position: "relative", overflow: "hidden",
       // Centre the editorial column when the viewport is taller than the
-      // content (iPad portrait was the catalyst — the old `flex: 1` spacer
-      // shoved the "Let's go" button hundreds of pixels below the promises
-      // on any screen taller than a phone). On short viewports content just
-      // fills naturally; on tall ones the whole column sits in the middle
-      // with the glow framing it, which is how the editorial intent reads.
+      // content; on short viewports content just fills naturally.
       display: "flex", flexDirection: "column", justifyContent: "center",
     }}>
-      {/* Ambient glow */}
-      <div style={{
-        // top: 100 (was -160): the substrate-edge rule. The shell clips at
-        // its top edge (overflow: clip), which in the PWA sits exactly at
-        // the safe-area line — a glow that is bright at the shell top gets
-        // hard-cut against the flat status-bar strip (seen on device on
-        // every non-home screen). Keeping the first ~100px at substrate
-        // darkness lets strip and content read as one field; same geometry
-        // the HomeScreen glows have used since the "black hole" fix.
-        position: "absolute", top: 100, left: "50%", transform: "translateX(-50%)",
-        width: 500, height: 440,
-        background: `radial-gradient(ellipse, ${s.glow} 0%, transparent 65%)`,
-        pointerEvents: "none",
-      }}/>
-
       <Fade d={0}>
-        <div style={{
-          fontSize: 11, fontWeight: 500, color: T.coral,
-          letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 20,
-        }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: T.ink3, marginBottom: 18 }}>
           Heatwayve
         </div>
-        <div style={{ fontFamily: T.serif, fontSize: 44, fontWeight: 300, lineHeight: 1.1, marginBottom: 16 }}>
-          Train with<br/><span style={{ fontStyle: "italic", color: T.coral }}>intention.</span>
-        </div>
+        <h1 style={{ ...DISPLAY, fontSize: 46, color: T.ink, marginBottom: 16 }}>
+          Train with intention
+        </h1>
       </Fade>
 
       <Fade d={120}>
-        <p style={{ fontSize: 15, color: T.text2, lineHeight: 1.65, marginBottom: 28 }}>
+        <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginBottom: 26 }}>
           Heatwayve notices. Bar speed, effort, the days you show up. Your next session already knows what your body can take.
         </p>
       </Fade>
 
-      {/* The three promises — editorial callouts, not feature bullets. No
-          session-count claims: the schedule is user-shaped (two days or
-          six), so the promises sell the quiet intelligence and whose terms
-          it runs on, never a number the settings can contradict. */}
+      {/* The three promises — editorial callouts on the ground between
+          hairlines. The one place the full ramp shows before any data
+          exists: a promise sketched in the system's own grammar. */}
       <Fade d={200}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 18, marginBottom: 32 }}>
+        <div style={{ display: "flex", flexDirection: "column", marginBottom: 30, borderTop: `1px solid ${T.rule}` }}>
           <PromiseLine
-            accent={T.coral}
             kicker="Intelligence"
             body="Heatwayve reads how the last session felt and loads the next to match. More when you've earned it, less when you need it."
           />
           <PromiseLine
-            accent={T.steel}
             kicker="Rhythm"
             body="Strength, Zone 2, HIIT, rest. Your week, your shape. The programme bends to fit your life, never the reverse."
           />
           <PromiseLine
-            accent={T.sage}
             kicker="Yours"
             body="No accounts, no email, no bullshit. Your name, a passkey, and you're in."
           />
@@ -1252,38 +1223,33 @@ function OnboardingScreen({ onContinue }) {
       </Fade>
 
       <Fade d={320}>
-        <button onClick={() => onContinue()} style={{
-          width: "100%", padding: "18px 24px",
-          background: T.coral, border: "none", borderRadius: T.r.lg, cursor: "pointer",
-          fontFamily: T.serif, fontSize: 20, fontWeight: 400, color: T.bg0,
-          boxShadow: `0 12px 40px ${s.glow}`,
+        <div aria-hidden="true" style={{ display: "flex", height: 4, marginBottom: 18 }}>
+          {[0,1,2,3,4].map(i => <span key={i} style={{ flex: 1, background: T.heat[i] }}/>)}
+        </div>
+        <button className="forge-press" onClick={() => onContinue()} style={{
+          width: "100%", height: 58,
+          background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer",
+          fontFamily: T.text, fontSize: 17, fontWeight: 500, color: T.commitInk,
+          boxShadow: T.elevStrong,
           display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "0 22px",
         }}>
           <span>Unveil the best you</span>
-          <span style={{ fontSize: 18 }}>→</span>
+          <span style={{ fontSize: 17 }}>→</span>
         </button>
       </Fade>
     </div>
   );
 }
 
-function PromiseLine({ accent, kicker, body }) {
+function PromiseLine({ kicker, body }) {
   return (
-    <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-      <div style={{
-        width: 3, alignSelf: "stretch", minHeight: 48,
-        borderRadius: 2, background: accent, flexShrink: 0, marginTop: 2,
-      }}/>
-      <div>
-        <div style={{
-          fontSize: 10, fontWeight: 500, color: accent,
-          letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 5,
-        }}>
-          {kicker}
-        </div>
-        <div style={{ fontSize: 14, color: T.text1, lineHeight: 1.55 }}>
-          {body}
-        </div>
+    <div style={{ padding: "14px 0", borderBottom: `1px solid ${T.rule}` }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: T.ink, marginBottom: 4 }}>
+        {kicker}
+      </div>
+      <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55 }}>
+        {body}
       </div>
     </div>
   );
@@ -1346,31 +1312,33 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
   const titleId = "week-editor-title";
   return (
     <div onKeyDown={onKeyDown} onClick={onCancel} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground" style={{background:T.bg2,padding:"28px 24px 32px",width:"100%",borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
           Weekly schedule
         </div>
-        <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.15,marginBottom:6}}>
-          Shape your week.
+        <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:6}}>
+          Shape your week
         </div>
-        <p style={{fontSize:13,color:T.text3,marginBottom:18,lineHeight:1.5}}>
+        <p style={{fontSize:13,color:T.ink2,marginBottom:16,lineHeight:1.5}}>
           Pick what each day is. Strength days map to sessions A → B → C in order.
         </p>
 
         <div style={{flex:1,overflowY:"auto",marginRight:-8,paddingRight:8}}>
           {draft.map((d, i) => (
-            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:i<6?`1px solid ${T.bg3}`:"none"}}>
-              <div style={{width:42,fontSize:12,fontWeight:500,color:T.text2,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:i<6?`1px solid ${T.ruleFaint}`:"none"}}>
+              <div style={{width:42,fontSize:13,fontWeight:500,color:T.ink2}}>
                 {WEEK_DAY_LABELS[i]}
               </div>
               <div style={{flex:1,display:"flex",flexWrap:"wrap",gap:4}}>
                 {WEEK_DAY_TYPES.map(opt => {
                   const active = d.type === opt.type;
-                  const a = T[opt.type] || T.rest;
+                  const key = T.dayKey[opt.type] || T.dayKey.rest;
                   return (
                     <button key={opt.type} onClick={()=>setDayType(i, opt.type)}
-                      style={{padding:"5px 9px",background:active?a.main:T.bg3,border:`1px solid ${active?a.main:T.bg4}`,borderRadius:T.r.sm,cursor:"pointer",fontSize:11,fontWeight:500,color:active?T.bg0:T.text2,fontFamily:T.sans,transition:`all 160ms ${T.ease}`}}>
+                      aria-pressed={active}
+                      style={{padding:"6px 9px 5px",background:active?T.surface:"transparent",border:"none",boxShadow:active?T.elev:"none",borderRadius:T.r,cursor:"pointer",fontSize:12,fontWeight:active?600:400,color:active?T.ink:T.ink3,fontFamily:T.text,display:"flex",flexDirection:"column",alignItems:"center",gap:4,transition:`background 160ms ${T.ease}`}}>
                       {opt.label}
+                      <span aria-hidden="true" style={{width:14,height:3,background:key,opacity:active?1:0.4}}/>
                     </button>
                   );
                 })}
@@ -1380,21 +1348,21 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
         </div>
 
         {warning && (
-          <div style={{marginTop:14,padding:"10px 12px",background:`${T.gold}14`,border:`1px solid ${T.gold}44`,borderRadius:T.r.sm,fontSize:12,color:T.text2,lineHeight:1.5}}>
+          <div style={{marginTop:14,padding:"10px 12px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,fontSize:13,color:T.ink2,lineHeight:1.5}}>
             {warning}
           </div>
         )}
 
         <div style={{display:"flex",gap:8,marginTop:16}}>
-          <button onClick={onCancel} style={{flex:1,padding:"14px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",fontSize:13,color:T.text2,fontFamily:T.sans}}>
+          <button onClick={onCancel} style={{flex:1,padding:"14px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
             Cancel
           </button>
-          <button onClick={()=>onSave(draft)} style={{flex:2,padding:"14px",background:T.gold,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:16,fontWeight:400,color:T.bg0}}>
+          <button onClick={()=>onSave(draft)} style={{flex:2,padding:"14px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
             Save week
           </button>
         </div>
         {isCustom && (
-          <button onClick={onReset} style={{marginTop:10,padding:"6px",background:"none",border:"none",cursor:"pointer",fontSize:11,color:T.text4,textDecoration:"underline",textUnderlineOffset:3,fontFamily:T.sans,alignSelf:"center"}}>
+          <button onClick={onReset} style={{marginTop:10,padding:"6px",background:"none",border:"none",cursor:"pointer",fontSize:12,color:T.ink3,textDecoration:"underline",textUnderlineOffset:3,fontFamily:T.text,alignSelf:"center"}}>
             Reset to default week (Mon/Wed/Fri strength)
           </button>
         )}
@@ -1415,14 +1383,12 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
 // toward confirming the first reasonable preview (Confirm is primary gold,
 // Roll again is secondary outlined).
 function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
-  const { gold } = T;
   const { changes = [], stimulusDelta = [], report = null } = preview || {};
   const count = changes.length;
   const topDeltas = stimulusDelta.slice(0, 4);
-  // The solver's verdict, surfaced at decision time — the quietly-smarter
-  // contract made visible. outOfBand is [] on virtually every solve (the
-  // band contract is tested); the non-empty branch is the honest fallback
-  // for a history-constrained week where no in-band config exists.
+  // The solver's verdict, surfaced at decision time. outOfBand is [] on
+  // virtually every solve; the non-empty branch is the honest fallback for
+  // a history-constrained week where no in-band config exists.
   const solved = report && report.outOfBand?.length === 0;
   const unsolved = report && report.outOfBand?.length > 0;
   const { containerRef, onKeyDown } = useModalA11y(onCancel);
@@ -1432,61 +1398,40 @@ function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
     <div onKeyDown={onKeyDown} onClick={onCancel}
       className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
-        className="forge-sheet-ground" style={{background:T.bg2,padding:"28px 24px 32px",width:"100%",borderTop:`1px solid ${gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        <div style={{fontSize:10,fontWeight:500,color:gold,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+        className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
           Rotation preview
         </div>
-        <div id={titleId} style={{fontFamily:T.serif,fontSize:30,fontWeight:300,lineHeight:1.15,marginBottom:8,color:T.text1}}>
-          New picks<br/><span style={{color:gold,fontStyle:"italic"}}>for next block.</span>
+        <div id={titleId} style={{...DISPLAY,fontSize:30,color:T.ink,marginBottom:8}}>
+          New picks
         </div>
-        <p style={{fontSize:13,color:T.text2,marginBottom:topDeltas.length?14:20,lineHeight:1.6}}>
+        <p style={{fontSize:13,color:T.ink2,marginBottom:topDeltas.length?14:18,lineHeight:1.6}}>
           {count === 0
             ? "Same picks came up this roll. Roll again or confirm to start the block fresh anyway."
             : `${count} ${count === 1 ? "accessory" : "accessories"} would swap. Nothing's saved until you confirm.`}
         </p>
 
-        {topDeltas.length > 0 && (
-          <div style={{marginBottom:18}}>
-            <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
-              Would shift stimulus toward
-            </div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {topDeltas.map(({ bucket, delta }) => {
-                const positive = delta > 0;
-                const colour = MUSCLE_COLOURS[bucket] || MUSCLE_COLOURS.Other;
-                return (
-                  <div key={bucket} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:T.r.sm,background:T.bg3,border:`1px solid ${colour}66`}}>
-                    <span style={{width:8,height:8,borderRadius:"50%",background:colour,display:"inline-block"}} aria-hidden="true"/>
-                    <span style={{fontSize:11,fontWeight:500,color:positive?colour:T.text3,fontVariantNumeric:"tabular-nums"}}>
-                      {positive?"+":""}{delta.toFixed(1)}
-                    </span>
-                    <span style={{fontSize:11,color:T.text2}}>{bucket}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        {topDeltas.length > 0 && <StimulusShift deltas={topDeltas} label="Would shift stimulus toward" />}
 
         {solved && (
-          <div style={{fontSize:12,color:T.sage,fontStyle:"italic",fontFamily:T.serif,marginBottom:14,lineHeight:1.5}}>
+          <div style={{fontSize:13,color:T.ink2,marginBottom:14,lineHeight:1.5}}>
             Ready for you. Each muscle group tuned to hit just how you like it.
           </div>
         )}
         {unsolved && (
-          <div style={{fontSize:12,color:T.gold,fontStyle:"italic",fontFamily:T.serif,marginBottom:14,lineHeight:1.5}}>
+          <div style={{fontSize:13,color:T.ink2,marginBottom:14,lineHeight:1.5}}>
             This roll couldn&apos;t fully balance {report.outOfBand.join(", ")} — roll again, or confirm knowing that.
           </div>
         )}
 
         <div style={{flex:1,overflowY:"auto",marginBottom:18,marginRight:-8,paddingRight:8}}>
           {changes.map((c, i) => (
-            <div key={c.slot} style={{padding:"12px 0",borderBottom:i<count-1?`1px solid ${T.bg3}`:"none"}}>
-              <div style={{fontSize:10,fontWeight:500,color:T.text4,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4}}>{c.slot}</div>
+            <div key={c.slot} style={{padding:"12px 0",borderBottom:i<count-1?`1px solid ${T.ruleFaint}`:"none"}}>
+              <div style={{fontSize:12,color:T.ink3,marginBottom:4}}>{c.slot}</div>
               <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                <span style={{fontFamily:T.serif,fontSize:14,fontWeight:300,color:T.text3,textDecoration:"line-through",textDecorationColor:T.text4}}>{c.from}</span>
-                <span style={{fontSize:12,color:gold}}>→</span>
-                <span style={{fontFamily:T.serif,fontSize:15,fontWeight:400,color:T.text1}}>{c.to}</span>
+                <span style={{fontSize:14,color:T.ink3,textDecoration:"line-through",textDecorationColor:T.ink3}}>{c.from}</span>
+                <span style={{fontSize:13,color:T.ink2}}>→</span>
+                <span style={{fontSize:15,fontWeight:500,color:T.ink}}>{c.to}</span>
               </div>
             </div>
           ))}
@@ -1494,16 +1439,16 @@ function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
 
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           <button onClick={onConfirm}
-            style={{width:"100%",padding:"16px 24px",background:gold,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:18,fontWeight:400,color:T.bg0,boxShadow:`0 12px 36px ${gold}33`}}>
+            style={{width:"100%",height:54,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
             Confirm rotation
           </button>
           <div style={{display:"flex",gap:10}}>
             <button onClick={onReroll}
-              style={{flex:1,padding:"12px",background:"none",border:`1px solid ${gold}66`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.sans,fontSize:13,fontWeight:500,color:gold}}>
-              ↻ Roll again
+              style={{flex:1,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,fontWeight:500,color:T.ink}}>
+              Roll again
             </button>
             <button onClick={onCancel}
-              style={{flex:1,padding:"12px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.sans,fontSize:13,color:T.text3}}>
+              style={{flex:1,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,color:T.ink3}}>
               Cancel
             </button>
           </div>
@@ -1513,10 +1458,26 @@ function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
   );
 }
 
+// Stimulus deltas as quiet rows — measured values in mono, sentence-case
+// muscle names, sign carried by the number itself (no categorical colour:
+// bucket tints are retired with the pastel palette).
+function StimulusShift({ deltas, label }) {
+  return (
+    <div style={{marginBottom:16}}>
+      <div style={{fontSize:12,color:T.ink3,marginBottom:6}}>{label}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:"6px 18px"}}>
+        {deltas.map(({ bucket, delta }) => (
+          <span key={bucket} style={{fontSize:13,color:T.ink2}}>
+            {bucket} <span style={{fontFamily:T.measured,color:delta>0?T.ink:T.ink3}}>{delta>0?"+":""}{delta.toFixed(1)}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RotationSummaryModal({summary,onContinue}){
-  const {gold}=T;
   const count = summary.changes.length;
-  // Top 4 by magnitude — enough to tell the story, not enough to overwhelm.
   const topDeltas = (summary.stimulusDelta || []).slice(0, 4);
   const solvedLine = summary.report && summary.report.outOfBand?.length === 0;
   // Auto-rotation summary is non-dismissible (user must Continue) — no onClose
@@ -1525,61 +1486,40 @@ function RotationSummaryModal({summary,onContinue}){
   const titleId = "rotation-summary-title";
   return (
     <div onKeyDown={onKeyDown} className="forge-scrim forge-scrim-deep" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="forge-sheet-ground" style={{background:T.bg2,padding:"28px 24px 32px",width:"100%",borderTop:`1px solid ${gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        <div style={{fontSize:10,fontWeight:500,color:gold,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
-          New block · {summary.blockNumber}
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
+          New block · <span style={{fontFamily:T.measured}}>{summary.blockNumber}</span>
         </div>
-        <div id={titleId} style={{fontFamily:T.serif,fontSize:30,fontWeight:300,lineHeight:1.15,marginBottom:8}}>
-          Your programme<br/><span style={{color:gold,fontStyle:"italic"}}>has rotated.</span>
+        <div id={titleId} style={{...DISPLAY,fontSize:30,color:T.ink,marginBottom:8}}>
+          Your programme has rotated
         </div>
-        <p style={{fontSize:13,color:T.text2,marginBottom:topDeltas.length?14:20,lineHeight:1.6}}>
+        <p style={{fontSize:13,color:T.ink2,marginBottom:topDeltas.length?14:18,lineHeight:1.6}}>
           {count} {count===1?"accessory":"accessories"} swapped to keep the stimulus fresh. Main lifts stay the same — progressive overload continues.
         </p>
         {solvedLine && (
-          <div style={{fontSize:12,color:T.sage,fontStyle:"italic",fontFamily:T.serif,marginBottom:14,lineHeight:1.5}}>
+          <div style={{fontSize:13,color:T.ink2,marginBottom:14,lineHeight:1.5}}>
             Ready for you. Each muscle group tuned to hit just how you like it.
           </div>
         )}
-        {topDeltas.length > 0 && (
-          <div style={{marginBottom:20}}>
-            <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
-              This block · muscle stimulus
-            </div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {topDeltas.map(({bucket, delta}) => {
-                const positive = delta > 0;
-                const colour = MUSCLE_COLOURS[bucket] || MUSCLE_COLOURS.Other;
-                return (
-                  <div key={bucket} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:T.r.sm,background:T.bg3,border:`1px solid ${colour}66`}}>
-                    <span style={{width:8,height:8,borderRadius:"50%",background:colour,display:"inline-block"}} aria-hidden="true"/>
-                    <span style={{fontSize:11,fontWeight:500,color:positive?colour:T.text3,fontVariantNumeric:"tabular-nums"}}>
-                      {positive?"+":""}{delta.toFixed(1)}
-                    </span>
-                    <span style={{fontSize:11,color:T.text2}}>{bucket}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        <div style={{flex:1,overflowY:"auto",marginBottom:20,marginRight:-8,paddingRight:8}}>
+        {topDeltas.length > 0 && <StimulusShift deltas={topDeltas} label="This block · muscle stimulus" />}
+        <div style={{flex:1,overflowY:"auto",marginBottom:18,marginRight:-8,paddingRight:8}}>
           {count===0 && (
-            <div style={{padding:"20px 0",fontSize:13,color:T.text3,fontStyle:"italic",fontFamily:T.serif,textAlign:"center"}}>
+            <div style={{padding:"18px 0",fontSize:13,color:T.ink3,textAlign:"center"}}>
               Rotation ran — same picks held. Rare but possible.
             </div>
           )}
           {summary.changes.map((c,i)=>(
-            <div key={i} style={{padding:"12px 0",borderBottom:i<count-1?`1px solid ${T.bg3}`:"none"}}>
-              <div style={{fontSize:10,fontWeight:500,color:T.text4,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4}}>{c.slot}</div>
+            <div key={i} style={{padding:"12px 0",borderBottom:i<count-1?`1px solid ${T.ruleFaint}`:"none"}}>
+              <div style={{fontSize:12,color:T.ink3,marginBottom:4}}>{c.slot}</div>
               <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                <span style={{fontFamily:T.serif,fontSize:14,fontWeight:300,color:T.text3,textDecoration:"line-through",textDecorationColor:T.text4}}>{c.from}</span>
-                <span style={{fontSize:12,color:gold}}>→</span>
-                <span style={{fontFamily:T.serif,fontSize:15,fontWeight:400,color:T.text1}}>{c.to}</span>
+                <span style={{fontSize:14,color:T.ink3,textDecoration:"line-through",textDecorationColor:T.ink3}}>{c.from}</span>
+                <span style={{fontSize:13,color:T.ink2}}>→</span>
+                <span style={{fontSize:15,fontWeight:500,color:T.ink}}>{c.to}</span>
               </div>
             </div>
           ))}
         </div>
-        <button onClick={onContinue} style={{width:"100%",padding:"16px 24px",background:gold,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:19,fontWeight:400,color:T.bg0,boxShadow:`0 12px 36px ${gold}33`}}>
+        <button onClick={onContinue} style={{width:"100%",height:54,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
           Continue to readiness →
         </button>
       </div>
@@ -1616,10 +1556,7 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
   const { containerRef, onKeyDown } = useModalA11y(onClose);
   const titleId = "retro-picker-title";
 
-  // Local view-state: track which rows have been dismissed in-place during
-  // this sheet session. The parent list refreshes on close via the dayDone
-  // state in ForgeApp — for the duration of this open, the in-place fade
-  // is just visual continuity.
+  // Local view-state: rows dismissed in-place during this sheet session.
   const [dismissed, setDismissed] = useState(() => new Set());
   const visible = untickedDays.filter(r => !dismissed.has(r.date));
 
@@ -1631,87 +1568,74 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
 
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground" style={{background:T.bg2,padding:"24px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",borderTop:`1px solid ${T.sage}28`,animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"24px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
 
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
-          <div>
-            <div id={titleId} style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.1}}>Recent days</div>
-            <div style={{fontSize:12,color:T.text3,marginTop:4,lineHeight:1.5,maxWidth:"calc(100% - 8px)"}}>
-              {draftBlocks
-                ? "Finish your live session first"
-                : "Log what you actually trained. Leave the rest."}
-            </div>
+        <div style={{marginBottom:16}}>
+          <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink}}>Recent days</div>
+          <div style={{fontSize:13,color:T.ink3,marginTop:5,lineHeight:1.5}}>
+            {draftBlocks
+              ? "Finish your live session first"
+              : "Log what you actually trained. Leave the rest."}
           </div>
         </div>
 
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{display:"flex",flexDirection:"column"}}>
           {visible.length === 0 && (
-            // Two empty states, deliberately different:
-            //   - dismissed.size > 0: the user just cleared the list by
-            //     hand. A small celebratory beat — sage tick, italic
-            //     "Well kept." Acknowledges the discipline of honest
-            //     logging, not the act of clearing the list. No auto-
-            //     close; the user lingers as long as they want.
-            //   - dismissed.size === 0: opened to an already-empty list.
-            //     Neutral "Nothing pending." No reward for showing up to
-            //     a blank surface.
             dismissed.size > 0 ? (
-              <div style={{padding:"22px 4px 6px",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
-                <span style={{fontSize:18,color:T.sage,lineHeight:1}}>✓</span>
-                <span style={{fontSize:14,color:T.sage,fontStyle:"italic",fontFamily:T.serif,letterSpacing:"0.02em"}}>Well kept.</span>
+              <div style={{padding:"20px 4px 6px",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+                <span style={{fontSize:16,color:T.ink2,lineHeight:1}}>✓</span>
+                <span style={{fontSize:14,color:T.ink2}}>Well kept.</span>
               </div>
             ) : (
-              <div style={{padding:"16px 4px 4px",fontSize:12,color:T.text3,fontStyle:"italic",fontFamily:T.serif,textAlign:"center",lineHeight:1.5}}>
+              <div style={{padding:"14px 4px 4px",fontSize:13,color:T.ink3,textAlign:"center",lineHeight:1.5}}>
                 Nothing pending.
               </div>
             )
           )}
           {visible.map((row) => {
             const isLog = row.action === "log";
-            const colour = isLog ? T.coral : T.sage;
             const onTap = draftBlocks ? undefined : (isLog
               ? () => onPick?.(row.date)
               : () => { onTickDate?.(row.date); dismissRow(row.date); }
             );
             return (
-              <div key={row.date}
+              <button key={row.date}
                 onClick={onTap}
+                disabled={draftBlocks}
                 style={{
-                  padding:"14px 16px",
-                  background: draftBlocks ? T.bg3 : `${colour}0A`,
-                  border: `1px solid ${draftBlocks ? T.bg4 : colour+"33"}`,
-                  borderRadius: T.r.md,
+                  padding:"13px 2px",
+                  background:"none",
+                  border:"none",
+                  borderBottom:`1px solid ${T.ruleFaint}`,
                   cursor: draftBlocks ? "default" : "pointer",
                   display:"flex",alignItems:"center",justifyContent:"space-between",
                   opacity: draftBlocks ? 0.5 : 1,
                   animation: `fadeSlide 220ms ${T.ease}`,
-                  transition: `all 180ms ${T.ease}`,
+                  textAlign:"left",
+                  fontFamily:T.text,
                 }}>
-                <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                  <div style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:T.text1,lineHeight:1.2}}>
+                <span style={{display:"flex",flexDirection:"column",gap:3}}>
+                  <span style={{fontSize:15,fontWeight:500,color:T.ink,lineHeight:1.2}}>
                     {row.dateLabel}
-                  </div>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{display:"inline-block",width:5,height:5,borderRadius:"50%",background:colour}}/>
-                    <span style={{fontSize:11,color:T.text3,letterSpacing:"0.04em"}}>
-                      {row.sessionName}
-                    </span>
-                  </div>
-                </div>
+                  </span>
+                  <span style={{fontSize:12,color:T.ink3}}>
+                    {row.sessionName}
+                  </span>
+                </span>
                 {!draftBlocks && (isLog
-                  ? <span style={{fontSize:13,fontWeight:500,color:T.coral,letterSpacing:"0.04em"}}>Log →</span>
-                  : <span style={{fontSize:13,fontWeight:500,color:T.sage,letterSpacing:"0.04em"}}>Yes, done</span>
+                  ? <span style={{fontSize:13,fontWeight:500,color:T.ink}}>Log →</span>
+                  : <span style={{fontSize:13,fontWeight:500,color:T.ink2}}>Yes, done</span>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
 
-        <div style={{marginTop:16,fontSize:11,color:T.text4,fontStyle:"italic",fontFamily:T.serif,textAlign:"center",lineHeight:1.5}}>
+        <div style={{marginTop:14,fontSize:12,color:T.ink3,textAlign:"center",lineHeight:1.5}}>
           Only the last week. Anything older is archaeology.
         </div>
-        {/* House pattern (2026-07-21): actions live on the bottom row, no corner ✕ */}
-        <button onClick={onClose} style={{marginTop:14,width:"100%",padding:"14px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.lg,cursor:"pointer",fontSize:14,color:T.text2}}>Close</button>
+        {/* House pattern: actions live on the bottom row, no corner ✕ */}
+        <button onClick={onClose} style={{marginTop:12,width:"100%",padding:"14px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:14,color:T.ink2,fontFamily:T.text}}>Close</button>
       </div>
     </div>
   );
@@ -1818,28 +1742,25 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
 
   if (!meta || meta.type !== "strength" || !sessionDef) {
     return (
-      <div style={{padding:"72px 24px",fontFamily:T.sans,color:T.text2,textAlign:"center"}}>
+      <div style={{padding:"72px 24px",fontFamily:T.text,color:T.ink2,textAlign:"center"}}>
         <p>Couldn&apos;t resolve the session for that date.</p>
-        <button onClick={onCancel} style={{marginTop:20,padding:"12px 20px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.md,color:T.text1,cursor:"pointer"}}>← Back</button>
+        <button onClick={onCancel} style={{marginTop:20,padding:"12px 20px",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,color:T.ink,cursor:"pointer",fontFamily:T.text}}>← Back</button>
       </div>
     );
   }
 
   return (
     <div style={{minHeight:"100vh",position:"relative",overflow:"clip",paddingBottom:120}}>
-      {/* Sage ambient — wellness/measurement territory, not training */}
-      <div style={{position:"absolute",top:-100,right:-80,width:340,height:300,background:`radial-gradient(circle,${T.sage}1A 0%,transparent 65%)`,pointerEvents:"none"}}/>
-
       {/* Header */}
       <Fade d={0}>
         <div style={{padding:"20px 20px 0",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
           <button onClick={onCancel} aria-label="Cancel"
-            style={{background:"none",border:"none",padding:"4px 0",cursor:"pointer",fontSize:13,color:T.text3,fontFamily:T.sans,flexShrink:0}}>← Cancel</button>
+            style={{background:"none",border:"none",padding:"4px 0",cursor:"pointer",fontSize:13,color:T.ink3,fontFamily:T.text,flexShrink:0}}>← Cancel</button>
           <div style={{textAlign:"right",flex:1}}>
-            <div style={{fontFamily:T.serif,fontSize:20,fontWeight:300,lineHeight:1.15,color:T.text1}}>
-              {meta.sessionName} <span style={{color:T.text3,fontStyle:"italic"}}>· {meta.dateLabel}</span>
+            <div style={{fontSize:16,fontWeight:500,lineHeight:1.25,color:T.ink}}>
+              {meta.sessionName} <span style={{color:T.ink3,fontWeight:400}}>· {meta.dateLabel}</span>
             </div>
-            <div style={{fontSize:11,color:T.sage,fontStyle:"italic",fontFamily:T.serif,marginTop:4}}>
+            <div style={{fontSize:12,color:T.ink3,marginTop:3}}>
               Logging from memory
             </div>
           </div>
@@ -1849,7 +1770,7 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
       {/* Hint about auto-fill — small, only relevant on first use */}
       <Fade d={60}>
         <div style={{padding:"16px 20px 0"}}>
-          <div style={{fontSize:11,color:T.text3,lineHeight:1.5,fontStyle:"italic",fontFamily:T.serif}}>
+          <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
             Defaults from the prescribed session. Tap any cell to adjust — the rest auto-fill until you override them. Skip what you didn&apos;t do.
           </div>
         </div>
@@ -1868,24 +1789,25 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
             <Fade key={entry.name + idx} d={120 + idx * 30}>
               <div style={{
                 padding:"16px 18px 18px",
-                background: T.bg2,
-                border: `1px solid ${T.bg3}`,
-                borderRadius: T.r.lg,
+                background: T.surface,
+                boxShadow: T.elev,
+                borderRadius: T.r,
                 opacity: entry.skipped ? 0.45 : 1,
                 transition: `opacity 180ms ${T.ease}`,
               }}>
                 {/* Exercise name + skip toggle */}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:10}}>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontFamily:T.serif,fontSize:18,fontWeight:300,lineHeight:1.2,color:T.text1}}>
+                    <div style={{fontSize:16,fontWeight:500,lineHeight:1.25,color:T.ink}}>
                       {entry.name}
                     </div>
-                    <div style={{fontSize:10,color:T.text3,letterSpacing:"0.06em",marginTop:3}}>
-                      {entry.sets} × {entry.prescribed.reps} {entry.muscle ? `· ${entry.muscle}` : ""}
+                    <div style={{fontSize:12,color:T.ink3,marginTop:3}}>
+                      <span style={{fontFamily:T.measured}}>{entry.sets} × {entry.prescribed.reps}</span> {entry.muscle ? `· ${entry.muscle}` : ""}
                     </div>
                   </div>
                   <button onClick={() => toggleSkip(idx)}
-                    style={{flexShrink:0,padding:"6px 12px",background:entry.skipped?T.coral+"22":"transparent",border:`1px solid ${entry.skipped?T.coral+"55":T.bg4}`,borderRadius:T.r.pill,cursor:"pointer",fontFamily:T.sans,fontSize:11,color:entry.skipped?T.coral:T.text3,letterSpacing:"0.04em"}}>
+                    aria-pressed={entry.skipped}
+                    style={{flexShrink:0,padding:"6px 12px",background:entry.skipped?T.well:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:12,fontWeight:500,color:entry.skipped?T.ink:T.ink3}}>
                     {entry.skipped ? "Skipped" : "Skip"}
                   </button>
                 </div>
@@ -1903,21 +1825,21 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
                             style={{
                               flex:1,
                               padding:"10px 4px",
-                              background:T.bg3,
-                              border:`1px solid ${T.bg4}`,
-                              borderRadius:T.r.md,
+                              background:T.well,
+                              border:"none",
+                              borderRadius:T.r,
                               cursor:"pointer",
-                              fontFamily:T.serif,
-                              fontSize:18,
-                              fontWeight:300,
-                              color:T.text1,
+                              fontFamily:T.measured,
+                              fontSize:17,
+                              fontWeight:400,
+                              color:T.ink,
                               textAlign:"center",
                             }}>
                             {display}
                           </button>
                         );
                       })}
-                      <span style={{fontFamily:T.serif,fontSize:11,fontWeight:300,color:T.text3,fontStyle:"italic",marginLeft:6,minWidth:32}}>
+                      <span style={{fontSize:12,color:T.ink3,marginLeft:6,minWidth:32}}>
                         {showWeight ? weightUnit : "reps"}
                       </span>
                     </div>
@@ -1925,26 +1847,28 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
                     {/* RPE selector — 3-point */}
                     <div style={{display:"flex",gap:6}}>
                       {[
-                        {id:"easy",  label:"Easy"},
-                        {id:"normal",label:"Normal"},
-                        {id:"cooked",label:"Cooked"},
+                        {id:"easy",  label:"Easy",  rpe:7},
+                        {id:"normal",label:"Normal",rpe:8},
+                        {id:"cooked",label:"Cooked",rpe:10},
                       ].map(o => {
                         const sel = entry.rpe === o.id;
                         return (
                           <button key={o.id} onClick={() => setRpe(idx, o.id)}
+                            aria-pressed={sel}
                             style={{
                               flex:1,
                               padding:"8px 4px",
-                              background: sel ? `${T.coral}18` : T.bg3,
-                              border: `1px solid ${sel ? T.coral+"55" : T.bg4}`,
-                              borderRadius: T.r.sm,
+                              background: sel ? T.well : "transparent",
+                              border: `1px solid ${sel ? "transparent" : T.rule}`,
+                              borderRadius: T.r,
                               cursor:"pointer",
-                              fontFamily:T.sans,
+                              fontFamily:T.text,
                               fontSize:12,
                               fontWeight:500,
-                              color: sel ? T.coral : T.text3,
-                              letterSpacing:"0.02em",
+                              color: sel ? T.ink : T.ink3,
+                              display:"flex",alignItems:"center",justifyContent:"center",gap:7,
                             }}>
+                            <span aria-hidden="true" style={{width:14,height:heatMarkHeight(o.rpe)-1,background:heatForRpe(o.rpe),opacity:sel?1:0.5}}/>
                             {o.label}
                           </button>
                         );
@@ -1960,24 +1884,27 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
 
       {/* Submit bar — sticky bottom. Sage CTA: this is honest gap-filling,
           not a training action, so semantically aligned with measurement. */}
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,padding:"16px 20px calc(20px + env(safe-area-inset-bottom))",background:`linear-gradient(to top,${T.bg0} 60%,transparent)`,zIndex:50}}>
+      {/* Submit bar — in flow at the foot (a fixed painted bar bordering
+          the bottom edge re-triggers Safari 26's opaque chrome slabs). */}
+      <div style={{padding:"20px 20px calc(20px + env(safe-area-inset-bottom))"}}>
         <button
           onClick={() => onSubmit({ exercises: entries })}
           disabled={allSkipped}
           style={{
             width:"100%",
-            padding:"16px 24px",
-            background: allSkipped ? T.bg3 : T.sage,
+            height:56,
+            background: allSkipped ? T.well : T.commit,
             border:"none",
-            borderRadius:T.r.lg,
+            borderRadius:T.r,
             cursor: allSkipped ? "default" : "pointer",
-            fontFamily:T.serif,
-            fontSize:18,
-            fontWeight:400,
-            color: allSkipped ? T.text4 : T.bg0,
-            boxShadow: allSkipped ? "none" : `0 8px 28px ${T.sage}26`,
+            fontFamily:T.text,
+            fontSize:16,
+            fontWeight:500,
+            color: allSkipped ? T.ink3 : T.commitInk,
+            boxShadow: allSkipped ? "none" : T.elevStrong,
             display:"flex",alignItems:"center",justifyContent:"space-between",
-            transition:`all 200ms ${T.ease}`,
+            padding:"0 22px",
+            transition:`background 200ms ${T.ease}, color 200ms ${T.ease}`,
           }}>
           <span>{allSkipped ? "Skip everything?" : "Log session"}</span>
           {!allSkipped && <span style={{fontSize:16}}>→</span>}
@@ -2003,15 +1930,13 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
 
         return (
           <div onClick={() => setEditor(null)} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-            <div onClick={e=>e.stopPropagation()} className="forge-sheet-ground" style={{background:T.bg2,padding:"24px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",borderTop:`1px solid ${T.bg3}`,animation:`slideUp 260ms ${T.ease}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
-                <div>
-                  <div style={{fontFamily:T.serif,fontSize:20,fontWeight:300,lineHeight:1.1}}>
-                    {entry.name}
-                  </div>
-                  <div style={{fontSize:12,color:T.text3,marginTop:4}}>
-                    Set {editor.cellIdx + 1} of {entry.sets}{editor.cellIdx === 0 ? " · auto-fills the rest" : ""}
-                  </div>
+            <div onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"24px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",animation:`slideUp 260ms ${T.ease}`}}>
+              <div style={{marginBottom:18}}>
+                <div style={{...DISPLAY,fontSize:28,color:T.ink}}>
+                  {entry.name}
+                </div>
+                <div style={{fontSize:13,color:T.ink3,marginTop:5}}>
+                  Set <span style={{fontFamily:T.measured}}>{editor.cellIdx + 1}</span> of <span style={{fontFamily:T.measured}}>{entry.sets}</span>{editor.cellIdx === 0 ? " · auto-fills the rest" : ""}
                 </div>
               </div>
 
@@ -2028,7 +1953,7 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
               </div>
 
               <button onClick={() => setEditor(null)}
-                style={{width:"100%",padding:"14px",background:T.coral,border:"none",borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:16,fontWeight:400,color:T.bg0,boxShadow:`0 8px 28px ${T.strength.glow}`}}>
+                style={{width:"100%",padding:"14px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
                 Done
               </button>
             </div>
@@ -2063,37 +1988,30 @@ function IosInstallOverlay({ onDismiss, migration = false }) {
       onKeyDown={onKeyDown}
       className="forge-scrim forge-scrim-plain" style={{
         zIndex:500,
-        backdropFilter:"blur(7px) saturate(115%)",WebkitBackdropFilter:"blur(7px) saturate(115%)",
         overscrollBehavior:"contain",
         display:"flex",alignItems:"flex-end",justifyContent:"center",
         animation:`fadeIn 220ms ${T.ease}`,
       }}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e => e.stopPropagation()}
+        className="forge-vellum"
         style={{
-          background:T.bg2,
-          borderRadius:`${T.r.lg}px ${T.r.lg}px 0 0`,
+          borderRadius:"12px 12px 0 0",
           outline:"none",
           padding:"24px 24px calc(24px + env(safe-area-inset-bottom))",
           width:"100%",maxWidth:430,
           maxHeight:"92vh",overflowY:"auto",
-          borderTop:`1px solid ${T.coral}33`,
           animation:`slideUp 280ms ${T.ease}`,
           position:"relative",
           boxSizing:"border-box",
         }}>
-        {/* No corner ✕ — house modal doctrine (bottom-row dismiss only). The
-            "Maybe later" button below already covers it, and every other
-            role="dialog" in the app follows the same rule. The eyebrow's
-            paddingRight went with it: it existed only to clear this button. */}
-        <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
+        {/* No corner ✕ — house modal doctrine (bottom-row dismiss only). */}
+        <div style={{fontSize:13,fontWeight:500,color:T.ink3,marginBottom:8}}>
           {migration ? "Same fire, new home" : "Live on your home screen"}
         </div>
-        <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.2,marginBottom:10}}>
-          {migration
-            ? <>Add <span style={{fontStyle:"italic",color:T.coral}}>Heatwayve</span> back</>
-            : <>Install <span style={{fontStyle:"italic",color:T.coral}}>Heatwayve</span></>}
+        <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:10}}>
+          {migration ? "Add Heatwayve back" : "Install Heatwayve"}
         </div>
-        <p style={{fontSize:13,color:T.text2,marginBottom:20,lineHeight:1.6}}>
+        <p style={{fontSize:13,color:T.ink2,marginBottom:20,lineHeight:1.6}}>
           {migration
             ? "We moved — your story came with us. One re-add and the home screen is yours again."
             : "Fullscreen. One tap to open. Works offline between sessions."}
@@ -2107,15 +2025,15 @@ function IosInstallOverlay({ onDismiss, migration = false }) {
             </span>
           </InstallStep>
           <InstallStep n="2">
-            <span>Scroll and pick <span style={{color:T.text1,fontFamily:T.serif,fontStyle:"italic"}}>Add to Home Screen</span></span>
+            <span>Scroll and pick <span style={{color:T.ink,fontWeight:500}}>Add to Home Screen</span></span>
           </InstallStep>
           <InstallStep n="3">
-            <span>Tap <span style={{color:T.text1,fontFamily:T.serif,fontStyle:"italic"}}>Add</span> — done</span>
+            <span>Tap <span style={{color:T.ink,fontWeight:500}}>Add</span> — done</span>
           </InstallStep>
         </div>
 
         <button onClick={onDismiss}
-          style={{width:"100%",padding:"14px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:16,fontWeight:300,color:T.text2}}>
+          style={{width:"100%",padding:"14px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,color:T.ink2}}>
           Maybe later
         </button>
       </div>
@@ -2124,7 +2042,8 @@ function IosInstallOverlay({ onDismiss, migration = false }) {
 }
 
 // SVG glyph approximating the iOS Safari share icon — a square with an
-// up-arrow emerging from the top. Inline with the text, coral stroke.
+// up-arrow emerging from the top. Inline with the text, ink stroke: the
+// glyph grammar is round caps and open strokes, no filled shapes.
 function ShareGlyph() {
   return (
     <svg
@@ -2134,13 +2053,13 @@ function ShareGlyph() {
     >
       {/* Box — lower two thirds */}
       <rect x="2" y="8" width="14" height="12" rx="2" ry="2"
-        fill="none" stroke={T.coral} strokeWidth="1.5"/>
+        fill="none" stroke="var(--ink-2)" strokeWidth="1.5"/>
       {/* Arrow shaft */}
       <line x1="9" y1="2" x2="9" y2="13"
-        stroke={T.coral} strokeWidth="1.5" strokeLinecap="round"/>
+        stroke="var(--ink-2)" strokeWidth="1.5" strokeLinecap="round"/>
       {/* Arrow head */}
       <polyline points="5,6 9,2 13,6"
-        fill="none" stroke={T.coral} strokeWidth="1.5"
+        fill="none" stroke="var(--ink-2)" strokeWidth="1.5"
         strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
@@ -2151,14 +2070,13 @@ function InstallStep({ n, children }) {
     <div style={{display:"flex",alignItems:"center",gap:14}}>
       <div style={{
         flexShrink:0,width:28,height:28,borderRadius:"50%",
-        background:`${T.coral}18`,border:`1px solid ${T.coral}44`,
+        border:`1px solid ${T.rule}`,
         display:"flex",alignItems:"center",justifyContent:"center",
-        fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.coral,
+        fontFamily:T.measured,fontSize:14,color:T.ink2,
       }}>{n}</div>
-      <div style={{flex:1,fontSize:14,color:T.text2,lineHeight:1.5}}>
+      <div style={{flex:1,fontSize:14,color:T.ink2,lineHeight:1.5}}>
         {children}
       </div>
     </div>
   );
 }
-

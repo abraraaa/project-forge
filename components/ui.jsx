@@ -2,11 +2,13 @@
 
 // components/ui.jsx
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared presentational primitives, extracted from ForgeApp.jsx during the
-// PR3 real-routes migration (stage 3b — decomposition prerequisite). These are
-// pure: props + design tokens only, no app state. Lifting them here lets the
-// screens that are about to become their own route files (Profile, Home,
-// Session) import them instead of depending on the monolith's internal scope.
+// Shared presentational primitives — Bone & Ember.
+// Pure: props + design tokens only, no app state.
+//
+// Surface doctrine: measured data gets NO containers — numbers sit on the
+// ground between hairlines. Only documents and commit actions get surfaces.
+// Card is therefore for document-like content (session overviews, notes,
+// photographs), not a default wrapper for everything.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
@@ -29,28 +31,29 @@ export function Fade({ children, d = 0 }) {
   return <div style={s}>{children}</div>;
 }
 
-// boxShadow gives cards a quiet sense of resting ON the backdrop rather than
-// being painted into it: a 1px inset top highlight (light catching the top
-// edge) + two soft ambient drops (a tight contact shadow and a wider, very
-// faint lift). Warm-black tints keep it inside the Portra palette — no cool
-// Material-grey elevation. Callers can override via style.boxShadow.
-export const CARD_SHADOW = "inset 0 1px 0 rgba(237,235,231,0.04), 0 1px 2px rgba(10,9,8,0.28), 0 10px 28px -16px rgba(10,9,8,0.5)";
+// Raised-surface elevation — coated stock on uncoated ground. A bottom-edge
+// inset shadow on light, a top-edge inset highlight on dark (light always
+// comes from above; the token resolves per mode). This is the ENTIRE
+// elevation model: no drop shadows, no bevels, no glass.
+export const CARD_SHADOW = "var(--elev)";
 
-// Card — glass surface over the grain substrate (.forge-glass in globals.css
-// carries the recipe + reduced-transparency/no-backdrop-filter fallbacks).
-// Callers must not set style.background — it would defeat the fallbacks.
+// Card — a raised (coated) surface. One radius, 12px. Callers may layer
+// their own layout styles; background/elevation belong to the material.
 export function Card({ children, style = {} }) {
   return (
-    <div className="forge-glass" style={{ border: `1px solid ${T.bg3}`, borderRadius: T.r.lg, boxShadow: CARD_SHADOW, ...style }}>
+    <div style={{ background: T.surface, borderRadius: T.r, boxShadow: CARD_SHADOW, ...style }}>
       {children}
     </div>
   );
 }
 
-// Tag — small pill label tinted by `color`.
+// Tag — a small identifier: a key mark (short bar in the given colour)
+// beside sentence-case text. Replaces the pill chip — pills are on the
+// never-list; categorical colour reads as a mark, not a costume.
 export function Tag({ children, color, style = {} }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", fontSize: 10, fontWeight: 500, color, background: `${color}12`, border: `1px solid ${color}33`, borderRadius: T.r.pill, padding: "4px 12px", letterSpacing: "0.08em", ...style }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 500, color: T.ink2, ...style }}>
+      <span aria-hidden="true" style={{ width: 16, height: 4, background: color || T.ink3, flexShrink: 0 }} />
       {children}
     </span>
   );

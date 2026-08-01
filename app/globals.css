@@ -1,56 +1,149 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-/* color-scheme: dark tells the UA we render dark-only. Without it iOS
-   Safari falls back to light-mode defaults for chrome it paints itself
-   — toolbar surround, overscroll/rubber-band edges, scrollbars, form
-   controls. That's where Safari's "chin" band comes from on this site
-   when the body bg is near-black: the chrome was mid-grey/light by
-   default and read as a mismatched seam against #131110 content.
-   Declaring dark gets the same UA chrome to paint dark, so the seam
-   disappears. */
-:root { color-scheme: dark; }
+
+/* ─── Bone & Ember — the mode contract ──────────────────────────────────────
+   Light is the identity (ink on uncoated bone); dark is a derived mode.
+   Only four things flip: ground, raised surface, ink, and the thermal
+   ramp's direction (the ramp always runs AWAY from the ground — darker on
+   bone, brighter on ash). Both ramps keep an identical hue sequence and
+   monotonic L*, so the greyscale/CVD guarantees hold either way.
+
+   color-scheme: light dark tells the UA we follow the system appearance.
+   This is what makes iOS Safari paint its own chrome (toolbar surround,
+   overscroll/rubber-band edges, scrollbars, form controls) in the matching
+   scheme — the "chin" band class of bugs. Safari 26 additionally SAMPLES
+   the body background for its chrome tint (see the html/body comment
+   below), which now resolves per-mode through --ground. */
+:root {
+  color-scheme: light dark;
+
+  --ground:  #F2E9E3;
+  --surface: #FBF6F2;
+  --ink:     #241C19;
+  --ink-2:   #6A5B54;
+  --ink-3:   #9C8B83;
+  --rule:       #E0D2C9;
+  --rule-faint: rgba(36, 28, 25, 0.07);
+
+  /* Thermal ramp — ink density is intensity. L* 84→71→58→45→32, hatch 22. */
+  --heat-0: #E3CFC6;
+  --heat-1: #D3A492;
+  --heat-2: #C07B63;
+  --heat-3: #A65340;
+  --heat-4: #82301F;
+  --heat-over: #5A1C12;
+  --hatch-line: rgba(242, 233, 227, 0.4);
+
+  /* The under-dosed outsider (below MEV) — the only non-thermal data colour. */
+  --under: #6F8189;
+
+  /* Day keys — categorical, costume-only. Session identifiers ONLY. */
+  --key-strength: #A65340;
+  --key-cardio:   #4E6674;
+  --key-hiit:     #5F5070;
+
+  /* Commit actions — the one coloured surface. */
+  --commit:     #A65340;
+  --commit-ink: #F6EEE8;
+
+  /* Elevation, the entire model: bottom-edge shadow on light, top-edge
+     highlight on dark — light always comes from above. */
+  --elev:        inset 0 -1px 0 rgba(36, 28, 25, 0.08);
+  --elev-strong: inset 0 -1px 0 rgba(36, 28, 25, 0.18);
+
+  /* Vellum (sheets, toasts, timer pill only) + scrim dim. No
+     backdrop-filter anywhere — never-list. */
+  --vellum: rgba(251, 246, 242, 0.94);
+  --scrim:      rgba(36, 28, 25, 0.38);
+  --scrim-deep: rgba(36, 28, 25, 0.52);
+
+  /* Pressed-surface tint for quiet (non-commit) touchables. */
+  --press: #F1E7DF;
+
+  /* Recessed well — the RPE track's unfilled bed, drum troughs. Slightly
+     below the ground; the one "inset" tone. */
+  --well: #E8DCD4;
+
+  /* Log-button ink at the cold/hot ends of the ramp (the bloomed commit
+     button flips its ink once the fill passes ~8.5). */
+  --log-ink-cold: #241C19;
+  --log-ink-hot:  #F6EEE8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:  #1A1512;
+    --surface: #241D19;
+    --ink:     #F2E9E3;
+    --ink-2:   #B5A79E;
+    --ink-3:   #857870;
+    --rule:       rgba(242, 233, 227, 0.1);
+    --rule-faint: rgba(242, 233, 227, 0.07);
+
+    /* Same hue sequence, lightness inverted — emission is intensity. */
+    --heat-0: #6E625C;
+    --heat-1: #9C6A56;
+    --heat-2: #BE7E62;
+    --heat-3: #D69A7A;
+    --heat-4: #EBBEA0;
+    --heat-over: #F6DCC4;
+    --hatch-line: rgba(26, 21, 18, 0.45);
+
+    --under: #8FA6B5;
+
+    --key-strength: #D69A7A;
+    --key-cardio:   #9FB8C6;
+    --key-hiit:     #B3A3CC;
+
+    --commit:     #BE7E62;
+    --commit-ink: #1A1512;
+
+    --elev:        inset 0 1px 0 rgba(242, 233, 227, 0.07);
+    --elev-strong: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+
+    --vellum: rgba(36, 29, 25, 0.94);
+    --scrim:      rgba(0, 0, 0, 0.5);
+    --scrim-deep: rgba(0, 0, 0, 0.62);
+
+    --press: #2C241F;
+
+    --well: #241D19;
+
+    --log-ink-cold: #F2E9E3;
+    --log-ink-hot:  #1A1512;
+  }
+}
+
 html, body {
   /* 100vh, not 100%. 100% breaks viewport-fit: cover on iOS PWAs (Safari
      silently falls back to default layout); 100dvh reports wrong values
      on PWA cold start until the device rotates. 100vh works correctly
      from launch on iOS 26.2+, the only target our baseline supports. */
   height: 100vh;
-  /* Deep-dark canvas. Without this iOS Safari paints the chrome zones
-     (overscroll, toolbar surround, the bottom "chin") with the system
-     Canvas colour, which surfaces as a mismatched band against our
-     content. Flat at every breakpoint: this is the chrome-sampling /
-     overscroll base only — the visible page substrate (base + desktop
-     ambient gradients + grain) paints on .forge-page below, which spans
-     the full document rather than body's 100vh box. */
-  /* #1D1A19, not the #131110 design base, deliberately: this colour is
-     what Safari 26 SAMPLES for its chrome extension (bottom chin, status
-     zone) and what overscroll rubber-band shows — and the page's visible
-     field is the substrate PLUS the 12% screen-blend grain lift. Sampling
-     the raw base left a visibly darker chin below the grain field at full
-     scroll. The painted substrate itself stays #131110 on .forge-page.
-     (2026-07-23 note: a session-screen band was briefly misattributed to
-     this tone and the value churned to #231F1C then reverted — the band
-     was the session glow being clipped at its container, fixed in
-     SessionScreen. If this tone ever genuinely drifts from the rendered
-     field, re-measure from device screenshots before touching it.) */
-  background: #1D1A19;
+  /* Ground tone on html/body, deliberately: this is what Safari 26 SAMPLES
+     for its chrome extension (bottom chin, status zone) and what overscroll
+     rubber-band shows. The visible page substrate (ground + baked-in paper
+     texture) paints on .forge-page below, which spans the full document
+     rather than body's 100vh box. The substrate noise is ±5%, so the
+     rendered field tone ≈ --ground in both modes — no separate
+     chrome-sampling colour is needed any more (the old grain-lift split
+     existed because a 12% screen-blend grain lifted the dark field). */
+  background: var(--ground);
   /* NO overflow on the root — deliberately. overflow-x: hidden here turned
      html into a managed scroll container, and iOS 26 Safari's chrome
      behaviours key off a NATURAL root scroller: with the root constrained,
      Safari painted opaque colour-extension slabs behind the status bar and
-     URL bar instead of letting content slide under translucent chrome
-     (observed on device even after the fixed-element fix; the iOS 26
-     write-ups' guidance is "let html remain scrollable" and clip on an app
-     shell instead — 1ar.io/updates/safari-26-liquid-glass-web). Horizontal
-     clipping now lives on .forge-page below as overflow-x: clip, which
-     clips WITHOUT creating a scroll container.
+     URL bar instead of letting content slide under translucent chrome.
+     Horizontal clipping lives on .forge-page below as overflow-x: clip,
+     which clips WITHOUT creating a scroll container.
      No overscroll-behavior on the root either — the native iOS rubber-band
-     on the page itself is part of the platform feel and users miss it when
-     it's gone. Sheet scrims keep their own `overscroll-behavior: contain`
-     so scrolling inside a sheet doesn't bleed into the page behind. */
+     on the page itself is part of the platform feel. Sheet scrims keep
+     their own `overscroll-behavior: contain`. */
 }
 body {
   -webkit-tap-highlight-color: transparent;
-  font-family: var(--font-dm-sans), sans-serif;
+  font-family: var(--font-familjen), sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--ink);
 }
 
 /* Installed-PWA status-bar clearance. With viewport-fit: cover +
@@ -58,12 +151,10 @@ body {
    status bar, so the top content needs exactly the safe-area inset of
    padding to clear the clock — no more. Standalone-only so the in-browser
    layout is untouched. On .forge-page, NOT body: body padding would start
-   the .forge-page box (substrate + grain) BELOW the safe area, leaving a
-   strip of bare body background behind the clock — a hard band against
-   the field (found on device after the substrate/tone split). Padding the
-   substrate itself keeps the field continuous under the clock and pushes
-   only the content down. NOTE: an earlier version added a 59px floor
-   here; that stacked a second dark slab on the system bar — removed. */
+   the .forge-page box (substrate) BELOW the safe area, leaving a strip of
+   bare body background behind the clock. Padding the substrate itself
+   keeps the field continuous under the clock and pushes only the content
+   down. */
 @media (display-mode: standalone) {
   .forge-page {
     padding-top: env(safe-area-inset-top, 0px);
@@ -72,18 +163,25 @@ body {
 input, button, textarea, select { font: inherit; }
 
 /* ─── Page substrate wrapper ───────────────────────────────────────────────
-   .forge-page wraps all routed content (app/layout.jsx) and exists so the
-   grain field (GrainOverlay) can cover the FULL scrollable document as an
-   absolute z -1 child that scrolls with content. It must NOT be replaced
-   with a fixed overlay: Safari 26 renders an opaque colour-extension slab
-   behind its chrome whenever any fixed/sticky element borders a viewport
-   edge (WebKit bug 301756), which defeats the translucent scroll-under
-   treatment at both the status bar and the URL bar. position: relative
-   without z-index — it anchors the grain but deliberately does not create
-   a stacking context, so the grain keeps blending against the page base. */
+   .forge-page wraps all routed content (app/layout.jsx). The paper texture
+   is baked into the GROUND'S OWN background — substrate, never overlay:
+   texture belongs IN the ground plane, never over content. Depth then
+   comes from differential material: textured ground, smooth raised
+   surfaces — uncoated against coated. As the ground's own background it
+   composites once; a fixed full-viewport overlay repaints every scroll
+   frame (the old GrainOverlay). One desaturated turbulence asset serves
+   BOTH modes — the same noise darkens bone and scatters light on ash —
+   two octaves: 120px tooth + 640px mottle, ~5% each. Never over type,
+   never over a data mark.
+
+   It must NOT be replaced with a fixed overlay: Safari 26 renders an
+   opaque colour-extension slab behind its chrome whenever any fixed/sticky
+   element borders a viewport edge (WebKit bug 301756), which defeats the
+   translucent scroll-under treatment at both the status bar and the URL
+   bar. */
 .forge-page {
   position: relative;
-  /* ── The shell owns the viewport (Phase 2) ────────────────────────────
+  /* ── The shell owns the viewport ──────────────────────────────────────
      .forge-page is the ONLY element that knows viewport height, safe-area
      insets, and display mode. Screens declare a shape instead: scroll
      (default — a flex item that sizes to content; the root scrolls) or
@@ -102,27 +200,18 @@ input, button, textarea, select { font: inherit; }
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  /* The page substrate paints HERE, not on body. Two reasons, both found
-     on device: (1) body's box is only 100vh tall, so anything painted on
-     body (base colour relative to the grain, the desktop ambient
-     gradients) stops at exactly one viewport height into a taller page —
-     a hard horizontal seam. (2) the grain child uses z-index: -1, and in
-     the ROOT stacking context a negative-z grandchild paints BENEATH
-     body's background — body's own #131110 occluded the grain for the
-     first 100vh of every page. isolation: isolate makes .forge-page its
-     own stacking context: the grain now paints after THIS background and
-     screen-blends against it (same math as before — flat #131110, plus
-     the ambient gradients on desktop below), and nothing can occlude it.
-     body/html carry the grain-lifted #1D1A19 for chrome sampling and
-     the overscroll rubber-band. */
   isolation: isolate;
-  background: #131110;
-  /* Horizontal clipping guard, relocated from html/body. `clip` (not
-     `hidden`) because clip clips paint without creating a scroll
-     container — the root above must stay a natural scroller for Safari
-     26's translucent chrome and for scroll-driven timelines to bind.
-     Fixed-position descendants (modals, toasts) are NOT clipped: a plain
-     position: relative ancestor is not their containing block. */
+  background-color: var(--ground);
+  background-image:
+    url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20baseFrequency='.9'%20numOctaves='3'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='120'%20height='120'%20filter='url%28%23n%29'%20opacity='.055'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20baseFrequency='.9'%20numOctaves='3'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='120'%20height='120'%20filter='url%28%23n%29'%20opacity='.04'/%3E%3C/svg%3E");
+  background-size: 120px, 640px;
+  /* Horizontal clipping guard. `clip` (not `hidden`) because clip clips
+     paint without creating a scroll container — the root above must stay
+     a natural scroller for Safari 26's translucent chrome and for
+     scroll-driven timelines to bind. Fixed-position descendants (modals,
+     toasts) are NOT clipped: a plain position: relative ancestor is not
+     their containing block. */
   overflow-x: clip;
 }
 @media not (display-mode: standalone) {
@@ -134,10 +223,9 @@ input, button, textarea, select { font: inherit; }
 
 /* Flex items do NOT stretch when they carry cross-axis auto margins — and
    every screen root centres with `margin: 0 auto`. Without this rule they
-   shrink-wrap to content width (readiness measured 364px instead of 393
-   during the Phase 2 matrix diff). Full width restores block-era geometry;
+   shrink-wrap to content width. Full width restores block-era geometry;
    each root's own max-width + auto margins still cap and centre on wide
-   viewports. Applies to the grain child too, harmlessly (it was 100%). */
+   viewports. */
 .forge-page > * { width: 100%; }
 
 /* Fill shape: the screen occupies exactly the viewport space the shell
@@ -154,182 +242,61 @@ input, button, textarea, select { font: inherit; }
    viewport edges, and Safari 26 samples a fixed edge element's OWN
    background-color/backdrop-filter for its chrome tint. A semi-transparent
    painted scrim therefore re-tinted the toolbar zone the moment a sheet
-   opened (the "chin appears with the bodyweight/focus modal" report).
-   Remedy per the iOS 26 write-ups: the FIXED element carries no paint at
-   all; a ::before absolute child carries the dim + blur instead (absolute
-   children are not consulted by the sampler — chrome falls back to body).
-   z-index:-1 keeps the paint under the sheet content within the scrim's
-   stacking context (fixed + inline zIndex), and clicks still land on the
-   scrim itself. Scrim JSX keeps layout/interaction props inline and takes
-   these classes for position + paint. */
+   opened. Remedy: the FIXED element carries no paint at all; a ::before
+   absolute child carries the dim instead (absolute children are not
+   consulted by the sampler — chrome falls back to body). z-index:-1 keeps
+   the paint under the sheet content within the scrim's stacking context,
+   and clicks still land on the scrim itself.
+
+   Bone & Ember: the dim is a plain ink-tinted wash. NO backdrop-filter —
+   glass is on the never-list, and vellum (the sheet material) carries its
+   own opacity. */
 .forge-scrim { position: fixed; inset: 0; }
 .forge-scrim::before {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: rgba(10, 9, 8, 0.82);
-  -webkit-backdrop-filter: blur(7px) saturate(115%);
-  backdrop-filter: blur(7px) saturate(115%);
+  background: var(--scrim);
 }
-/* Variants preserve each surface's original recipe exactly. */
-.forge-scrim-video::before {
-  background: rgba(10, 9, 8, 0.78);
-  -webkit-backdrop-filter: blur(8px) saturate(115%);
-  backdrop-filter: blur(8px) saturate(115%);
-}
-.forge-scrim-deep::before {
-  background: rgba(10, 9, 8, 0.86);
-}
-.forge-scrim-plain::before {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+/* Variants kept for call-site stability; all blur-free now. */
+.forge-scrim-video::before { background: var(--scrim); }
+.forge-scrim-deep::before  { background: var(--scrim-deep); }
+.forge-scrim-plain::before { background: var(--scrim); }
+
+/* ─── Vellum — the translucent-sheet material ──────────────────────────────
+   Allowed on sheets, toasts, the timer pill; never on cards, rows, the
+   drum or the icon. An opaque-ish tint of the raised surface plus a soft
+   cast shadow — a translucent sheet laid over the page, with a dark soft
+   edge (which is just a shadow, and shadows we can do perfectly, for
+   free). Free to composite; no backdrop-filter. Bottom-anchored surfaces
+   cast upward; override box-shadow inline for top-anchored toasts. */
+.forge-vellum {
+  background: var(--vellum);
+  box-shadow: 0 -10px 24px -14px rgba(36, 28, 25, 0.35);
 }
 
-/* ─── Scroll-anchored ambient glow ─────────────────────────────────────────
-   The home backdrop's accent glow layers drift DOWN as the user scrolls, at
-   a fraction of scroll speed, so the glass cards visibly slide over the
-   colour field — backdrop-filter picks up the shifting tint underneath and
-   the surfaces gain real depth. Implemented as a scroll-driven animation
-   (Safari 26.0+, compositor-threaded since 26.4 — webkit.org/blog/17333,
-   /17862) and NOT as position: fixed/sticky, which would re-trigger Safari
-   26's opaque chrome slabs (WebKit bug 301756 — see .forge-page above).
-   Animates `translate` rather than `transform` so it composes with the
-   glow elements' inline centering transforms. Progressive: browsers
-   without scroll timelines keep the static glow (the @supports gate also
-   prevents the animation running as a 0s time-based one), and reduced-
-   motion users are exempted. */
-@supports (animation-timeline: scroll()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .forge-glow-anchor {
-      /* Shorthand first — it resets animation-timeline, so the timeline
-         must be declared after it. scroll(root) explicitly, NOT scroll():
-         `nearest` walks up to the first ancestor SCROLL CONTAINER, and an
-         intermediate overflow: hidden shell hijacks that resolution (an
-         overflow: hidden box is a scroll container; overflow: clip is not
-         — screen shells now use clip for exactly this reason). Verified in
-         Chromium: with a hidden shell in the chain, the timeline bound to
-         the shell (whose scroll offset never moves) and every scroll-driven
-         animation on the page sat frozen at progress 0. */
-      animation: forge-glow-drift linear both;
-      animation-timeline: scroll(root);
-      /* Pin the timeline to an absolute length so the drift RATE is
-         constant on every page. Without a range, progress normalises over
-         each page's own scroll span — on a short rest-day page (~150px of
-         scroll) the whole 42vh drift compressed into that span, moving the
-         glow at >2× scroll speed and bouncing with rubber-band overscroll
-         (the "hops" report). 0–200vh ≈ 0.21× drift everywhere; short pages
-         simply use the first slice of the curve. */
-      animation-range: 0 200vh;
-    }
-  }
-}
-@keyframes forge-glow-drift {
-  from { translate: 0 0; }
-  to   { translate: 0 42vh; }
-}
-
-/* No body::before status-bar overlay. We no longer try to paint a custom
-   blur strip in the status-bar zone — with viewport-fit: cover +
-   statusBarStyle: "default" (see app/layout.jsx) and the standalone
+/* No body::before status-bar overlay. With viewport-fit: cover +
+   statusBarStyle black-translucent (app/layout.jsx) and the standalone
    padding-top above, the page background flows into the status-bar zone
-   and the system bar sits cleanly on top of it. The earlier claim that
-   "iOS PWAs can't draw behind the status bar" was wrong; the real fix was
-   restoring viewport-fit: cover, which had been removed. */
-
-/* ─── Glass surface (Liquid Glass-adjacent) ─────────────────────────────────
-   The ONE shared recipe for translucent card/panel surfaces over the grain
-   substrate. A class (not inline styles) because the fallbacks below are
-   media/feature-conditional, which inline styles cannot express. Surfaces
-   using it must NOT also set background inline (inline wins on specificity
-   and would defeat the fallbacks).
-   - Unprefixed backdrop-filter only: shipped unprefixed since Safari 18
-     (baseline here is iOS 26.2+); Chrome 76+.
-   - blur+saturate IS the current web ceiling for glass — Safari 26.5 ships
-     no web-facing material primitives (webkit.org/blog/17938), and true
-     refraction (SVG filter as backdrop) remains Chromium-only.
-   - prefers-reduced-transparency: honoured where supported (Chrome 118+/
-     Firefox today; WebKit bug 175497 still open — the block simply doesn't
-     match on Safari until they ship it, and starts working the day they do).
-   - Perf: small, static surfaces only per WebKit guidance — do NOT apply to
-     large scrolling containers or animated elements. */
-.forge-glass {
-  position: relative; /* containing block for the specular edge below */
-  background: rgba(35, 32, 27, 0.72); /* T.bg2 at 72% over the substrate */
-  backdrop-filter: blur(14px) saturate(120%);
-}
-/* The specular edge (intimacy pass II, 2026-07-27 — DEVICE-VERIFY CANDIDATE).
-   What separates Liquid Glass (iOS 26) from Windows Aero (2007) is NOT more
-   blur — it's WHERE the light sits. Aero painted a gloss gradient across the
-   whole panel; Liquid Glass lets the RIM catch light: a bright top edge that
-   falls to a darker bottom, so the surface reads as a lens with thickness
-   rather than a flat translucent sheet. Our material (28% transparency,
-   14px blur, 120% saturate) was already in the modern range; the flat
-   `1px solid` borders the cards draw inline were the only thing missing.
-   This adds the lit lip as a SEPARATE layer so it never fights those inline
-   borders or the inline box-shadows some cards set. Two inset hairlines: a
-   warm-white top rim (T.text1 @ ~9%) and a faint bottom shade — the whole
-   effect is one-line reversible (delete this block + the position above).
-   Kept deliberately subtle: it should register as quality, not announce
-   itself. Judge on a real OLED — this is the class of thing that looks
-   right in code and wrong to the eye, or the reverse. */
-.forge-glass::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  box-shadow:
-    inset 0 1px 0 0 rgba(237, 235, 231, 0.09),   /* top rim catches light */
-    inset 0 -1px 0 0 rgba(0, 0, 0, 0.18);         /* bottom falls to shade */
-}
-/* Engines without backdrop-filter: clean opaque card, not an invisible one. */
-@supports not (backdrop-filter: blur(1px)) {
-  .forge-glass { background: #23201B; }
-}
-/* User asked the OS to reduce transparency: opaque, no blur. */
-@media (prefers-reduced-transparency: reduce) {
-  .forge-glass { background: #23201B; backdrop-filter: none; }
-}
+   and the system bar sits cleanly on top of it. */
 
 /* ─── /diag-vt diagnostic overrides ─────────────────────────────────────────
-   Body classes toggled by app/diag-vt/page.jsx so the diag route can isolate
-   layers contributing to the persistent Performance Lab cross-fade dim.
-   These only fire when the diag page is active; they have no effect on the
-   rest of the app. See the page-level comment for the test methodology. */
-
-/* Hide the grain overlay entirely when ?grain is NOT set. Targeted by
-   class now that the grain lives inside .forge-page rather than as a
-   direct body child. */
-body.forge-diag-no-grain .forge-grain {
-  display: none !important;
-}
-
-/* Suppress body::before status-bar blur when ?status is NOT set. */
-body.forge-diag-no-statusbar::before {
-  display: none !important;
-}
-
-/* Suppress mix-blend-mode: plus-lighter on root pseudos when ?nopl IS set.
-   Reverting to the default cross-fade reproduces the original midpoint dim
-   we were trying to fix in the first place — useful as a negative control:
-   if /diag-vt?nopl visibly dims and bare /diag-vt does NOT, plus-lighter
-   IS working and the persistent Lab dim is sourced from app content. */
+   Body classes toggled by app/diag-vt/page.jsx. The grain overlay these
+   originally isolated is gone (texture is baked into the ground now); the
+   selectors stay so the diag page's toggles remain inert no-ops rather
+   than JS errors. */
+body.forge-diag-no-grain .forge-grain { display: none !important; }
+body.forge-diag-no-statusbar::before { display: none !important; }
 body.forge-diag-no-pluslighter ::view-transition-old(root),
 body.forge-diag-no-pluslighter ::view-transition-new(root) {
   mix-blend-mode: normal;
 }
 
 /* ─── Keyframe library ─────────────────────────────────────────────────────
-   Animations consolidated here from inline <style> tags in ForgeApp.jsx.
-   Inline injection works (Chrome/Safari handle duplicates gracefully) but
-   creates redundant <style> elements per render. Centralised here so the
-   browser parses each animation once and components reference by name.
-
-   Naming reflects intent rather than mechanics — slideUp is used by all
-   bottom-sheet modals (BW, Drum, Swap, Video, Picker, Drum cell editor),
-   while fadeSlide is the more subtle in-place transition used by the RPE
-   card. Toast animations are sage in spirit; they enter from above. */
+   The motion vocabulary: give / settle / bloom / breathe / surface.
+   transform · opacity · colour only — never box-shadow, never layout.
+   All collapse under prefers-reduced-motion at the end of this file. */
 
 @keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -351,59 +318,72 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   to   { opacity: 1; }
 }
 
+/* settle — logged sets land with a 2px overshoot, 480ms. */
+@keyframes hwSettle {
+  0%   { opacity: 0; transform: translateY(8px); }
+  62%  { opacity: 1; transform: translateY(-2px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* breathe — rest ring ±3.5% scale on a 5.4s cycle. Felt, not seen. */
+@keyframes hwBreathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.035); }
+}
+
+/* wave draw — sparkline/tonnage strokes draw in along their own length.
+   Pair with stroke-dasharray equal to (or exceeding) the path length. */
+@keyframes hwDraw {
+  from { stroke-dashoffset: 400; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Toast slide-in from top — completion + passkey toasts. */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ─── Sheet grammar per edge-ownership (the chin resolution) ───────────────
    iOS only blends chrome zones with surfaces the page permanently owns
    (body tone, the scrim dim) — it punishes a transient, animated sheet
-   parked flush against the bottom edge (opaque black slab on transform
-   entrances; five device passes, Safari 26/27 beta, 2026-07-08→10). Our
-   own top edge proved the rule: it blends perfectly because the SCRIM
-   borders it, not the sheet.
-
-   So the sheet grammar follows who owns the edge:
+   parked flush against the bottom edge. So the sheet grammar follows who
+   owns the edge:
    - BROWSER (default below): sheets are DETACHED floating cards — rounded
      on all four corners, a small margin above the toolbar zone, sitting on
-     the dim. The scrim borders both chrome zones and extends into both,
-     exactly like the top edge already does. No sampler negotiation, and
-     the slideUp rise is safe again (a transform on a non-edge-bordering
-     element is outside the slab trigger).
-   - STANDALONE PWA (media query below): flush, full-bleed, byte-identical
-     to the original design — no toolbar exists; we own every pixel.
+     the dim. The scrim borders both chrome zones and extends into both.
+   - STANDALONE PWA (media query below): flush, full-bleed — no toolbar
+     exists; we own every pixel.
 
-   The gradient "grounding" experiment is deleted — it couldn't recolour
-   Safari's slab and visually broke the buttons sitting in its fade zone.
-
-   Sheet chrome (radius, width cap, edge margin) is owned HERE, not by the
-   17 sheet roots — they carry layout/paint only. The former !important
-   overrides are gone with the inline styles they fought (Phase 2). */
+   Radius is the system's one radius: 12px. Sheet chrome (radius, width
+   cap, edge margin) is owned HERE, not by the sheet roots — they carry
+   layout/paint only. */
 .forge-sheet-ground {
   position: relative;
-  border-radius: 20px;
+  border-radius: 12px;
   max-width: min(430px, calc(100% - 24px));
   margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
 }
 @media (display-mode: standalone) {
   .forge-sheet-ground {
-    border-radius: 20px 20px 0 0;
+    border-radius: 12px 12px 0 0;
     max-width: 430px;
     margin-bottom: 0;
   }
 }
 
 /* Cross-document view transitions — MPA navigations (/library page-to-page,
-   full page loads) get a crossfade instead of a hard cut. Two lines, pure
-   progressive enhancement (webkit.org/blog/16967); same-document App Router
-   transitions are driven separately by the ViewTransition boundary and are
-   unaffected. */
+   full page loads) get a crossfade instead of a hard cut. Pure progressive
+   enhancement; same-document App Router transitions are driven separately
+   by the ViewTransition boundary. */
 @view-transition { navigation: auto; }
 
 /* ─── Lab scroll-cue fade — scroll-driven, compositor-side ─────────────────
-   Replaces the per-frame JS window scroll listener ScrollCue carried.
    Fades the chevron out across the first 120px of root scroll. Shorthand
-   first, timeline after (the shorthand resets animation-timeline — same
-   scar as the glow drift above). scroll(root) explicitly: the cue is
-   position:fixed, so the nearest scroller lookup must not bind elsewhere.
-   Outside @supports the cue simply stays visible at rest — the affordance
-   never disappears, only the fade is progressive. */
+   first, timeline after (the shorthand resets animation-timeline).
+   scroll(root) explicitly: the cue is position:fixed, so the nearest
+   scroller lookup must not bind elsewhere. Outside @supports the cue
+   simply stays visible at rest. */
 @supports (animation-timeline: scroll()) {
   .lab-scroll-cue-wrap {
     animation: labCueFade linear both;
@@ -416,172 +396,38 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   to   { opacity: 0; }
 }
 
-/* Toast slide-in from top — used by retro completion + passkey success */
-@keyframes toastIn {
-  from { opacity: 0; transform: translateY(-12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
+/* ─── Give — every pressable yields ────────────────────────────────────────
+   Press is near-instant (90ms into the pressed state); release relaxes
+   back over 380ms on the house curve, so letting go feels like the
+   surface breathing back rather than snapping. Scale only — no filter,
+   no shadow motion (compositor-clean, and glow/brightness effects are
+   retired with the old system).
 
-/* ─── Tactility — warm press, slow release ─────────────────────────────────
-   Surfaces should give at the moment of touch. Press is near-instant (60ms
-   into the pressed state); release relaxes back over ~340ms, so letting go
-   feels like the surface breathing back rather than snapping.
-
-   One hard rule, learned twice now: bottom-anchored sheets get NO press
-   visuals at all — not on the sheet, not on its children. transform AND
-   filter are both composited properties in WebKit; a `.forge-press-warm`
-   variant (filter-only) on sheet controls reintroduced the safe-area chin
-   in Safari-browser on sheet entry (2026-07-08), the same clipping the
-   drag transform caused on 07-07. Sheet controls keep haptics only.
-
-   .forge-press — scale + warmth for MID-PAGE cards and buttons only.
-   Elements with an inline `transition` keep their own timing (inline wins);
-   the pressed state itself still applies. */
+   One hard rule, learned twice: bottom-anchored sheets get NO press
+   visuals at all — not on the sheet, not on its children. transform is a
+   composited property in WebKit and press transforms on sheet controls
+   reintroduced the safe-area chin in Safari-browser on sheet entry.
+   Sheet controls keep haptics only. */
 .forge-press {
-  transition: transform 340ms cubic-bezier(0.22, 1, 0.36, 1), filter 340ms ease;
+  transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .forge-press:active {
-  transform: scale(0.985);
-  filter: brightness(1.07) saturate(1.04);
-  transition-duration: 60ms;
-}
-
-/* ─── Raised surfaces (tactful neumorphism, device-judged 2026-07-13) ──────
-   Dark-field extrusion is carried by the TOP-EDGE light bevel — a warm
-   hairline where light catches, a soft shade beneath — never by drop
-   shadows (variant C read "jiggly/unstable" on device and is dead; a
-   standing debossed state, variant D, likewise). Deboss exists ONLY as
-   the pressed state: the surface gives under the finger.
-
-   SMOOTHNESS RULE, load-bearing: the shadow state swaps INSTANTLY —
-   there is deliberately no box-shadow transition. Tweening box-shadow
-   repaints per frame on iOS and read as "choppy" on device; the press
-   feel comes from .forge-press's compositor-only scale/filter tween
-   while the shadows seat crisply, like a real button. Do not add a
-   box-shadow transition here.
-
-   Compose as `forge-raised forge-press` on dark interactive cards.
-   NOT for: bottom sheets (settled grammar), the coral primary CTAs
-   (untested surface — bevel hairlines were only judged on dark cards). */
-.forge-raised {
-  background: linear-gradient(150deg, #201d1b, #171514);
-  border: none;
-  box-shadow: inset 1px 1px 0 rgba(242, 231, 215, 0.055),
-              inset -1px -1px 0 rgba(0, 0, 0, 0.35);
-}
-.forge-raised:active {
-  background: #151312;
-  box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.55),
-              inset -1px -1px 2px rgba(242, 231, 215, 0.035);
-}
-
-/* Grain under the finger (tactility batch 3 — Home until device-verified).
-   A localised warm lift at the exact touch point: fast bloom on press
-   (60ms), slow exhale on release (~480ms). Deliberately none of the
-   territory that burned before — no mix-blend-mode, no masking, no
-   transform; just an opacity-animated radial gradient on a pseudo-
-   element, so the grain overlay above it reads as warming locally.
-   --gx/--gy are set from the pointer by useGrainTouch (lib/a11y.js). */
-.forge-grain-touch { position: relative; }
-.forge-grain-touch::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  /* Radius spills well past the fingertip and alpha is set for "clearly
-     there once pointed out" — the first cut (130px @ 0.13) hid entirely
-     under the finger and read as nothing on device. */
-  background: radial-gradient(220px circle at var(--gx, 50%) var(--gy, 50%),
-              rgba(242, 200, 158, 0.22), transparent 72%);
-  opacity: 0;
-  transition: opacity 480ms ease;
-}
-/* Attribute, not class — React re-renders rewrite className mid-tap and
-   wiped a class-based print (see the mechanism notes on useGrainTouch). */
-.forge-grain-touch[data-grain-on]::after {
-  opacity: 1;
-  transition-duration: 60ms;
-}
-
-/* ─── Desktop ambient backdrop (≥768px) ────────────────────────────────────
-   Mobile-first design with maxWidth:430 on screen containers leaves a phone-
-   sized column floating on flat background at desktop sizes — reads as
-   stranded rather than designed. Two soft warm radial gradients give the
-   centered column intentional centerpiece feel. Mobile unaffected. */
-
-/* On .forge-page, not body: body's box is 100vh tall, so gradients painted
-   there cut off with a hard edge one viewport into any taller page. The
-   .forge-page substrate spans the full document. Anchors are viewport
-   lengths (svh) so the ambient light stays framed around the first fold
-   across devices, as originally designed against the 100vh body box. */
-@media (min-width: 768px) {
-  .forge-page {
-    background:
-      radial-gradient(ellipse 720px 520px at 18% 30svh, rgba(224, 149, 106, 0.06) 0%, transparent 60%),
-      radial-gradient(ellipse 640px 480px at 82% 70svh, rgba(139, 176, 154, 0.05) 0%, transparent 60%),
-      #131110;
-  }
-}
-
-@media (min-width: 1280px) {
-  .forge-page {
-    background:
-      radial-gradient(ellipse 800px 580px at 12% 28svh, rgba(224, 149, 106, 0.07) 0%, transparent 62%),
-      radial-gradient(ellipse 720px 540px at 88% 72svh, rgba(139, 176, 154, 0.06) 0%, transparent 62%),
-      #131110;
-  }
+  transform: scale(0.99);
+  transition-duration: 90ms;
 }
 
 /* ─── Native motion polish (Safari 26+ / Chrome 115+) ──────────────────────
-   Four touches that lift the app from "web" to "native" without crossing
-   into skeuomorphism. Each gracefully no-ops on unsupported browsers
-   (rules just don't apply), so older Safari and SSR are unaffected.
+   Each gracefully no-ops on unsupported browsers, so older Safari and SSR
+   are unaffected. prefers-reduced-motion: addressed at the end. */
 
-   1. View Transitions: cross-fade between screens. The JS side wraps
-      setScreen in document.startViewTransition (see ForgeApp.jsx).
-      Tuned to a 280ms Forge-ease curve — same easing as our other
-      motion (T.ease), so this swap reads as part of the same vocabulary.
+/* (1) View transitions — page slide, driven by the React <ViewTransition>
+   boundary in app/layout.jsx which maps transition types to
+   view-transition-CLASSES — "nav-back" → .forge-vt-back, everything else
+   → .forge-vt-forward (lib/nav-transitions.js sets the type).
 
-   2. Drum: each item's magnification is now CSS-driven via view-timeline,
-      not JS measuring scrollTop. The browser composites it smoothly on
-      every frame, no React work involved.
-
-   3. Home header: gentle scale + opacity dim on first 180px of scroll,
-      via the root scroll-timeline. "Moving past" the hero into content.
-
-   4. Performance Lab cards: each animates up + in as it crosses into
-      view (view-timeline per card). Replaces the all-at-once Fade
-      cascade with on-arrival motion that follows the eye.
-
-   prefers-reduced-motion: addressed at the end. All four collapse to
-   instant or none. */
-
-/* (1) View transitions — page slide from bottom to top.
-   Originally a cross-fade with mix-blend-mode: plus-lighter to compensate
-   for the perceived midpoint dim. Plus-lighter held up in CSS theory but
-   in practice produced a 1-3 frame flicker mid-transition on iOS 26.2+/27
-   beta — likely a frame-timing issue where plus-lighter doesn't apply on
-   the first few frames of the compositor pass, so those frames render
-   with default alpha compositing (the 0.75 dim) before snapping to the
-   blend-corrected brightness. Five attempts to engineer around it failed.
-
-   Replaced with a slide: the new page translates UP from below the
-   viewport over the old page (which stays still). No compositing of two
-   snapshots happens — each frame is a single position update, immune to
-   blend-mode timing races. Same visual vocabulary as the day-type
-   transitions inside individual screens, so the swap reads as part of
-   the same motion language rather than its own thing.
-
-   320ms with the same Forge-ease curve (T.ease cubic-bezier) the rest of
-   our motion uses. New page slides in; old stays put underneath (covered
-   as the new page rises into position). animation-fill-mode: both keeps
-   the new pseudo at its final position after the animation ends so there's
-   no snap-back when control returns to the live element.
-
-   Bidirectional navigation note: a single direction (bottom-up) for all
-   screen swaps. Could be split via view-transition-types later if reverse
-   navigation feels semantically wrong, but starting simple. */
+   The root group stays STATIC: the boundary is the only thing that moves.
+   The substrate sits OUTSIDE the boundary, so it's part of this static
+   root — never double-captured. */
 @keyframes forge-page-slide-up {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
@@ -590,42 +436,28 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   from { transform: translateY(0); }
   to   { transform: translateY(100%); }
 }
-/* PR3 3f: transitions are driven by the React <ViewTransition> boundary in
-   app/layout.jsx (Next experimental.viewTransition), which maps transition
-   types to view-transition-CLASSES — "nav-back" → .forge-vt-back, everything
-   else → .forge-vt-forward (lib/nav-transitions.js sets the type). The old
-   hand-rolled document.startViewTransition + typed-root selectors
-   (:active-view-transition-type) are retired with it.
-
-   The root group stays STATIC: the boundary is the only thing that moves.
-   Since the grain substrate sits OUTSIDE the boundary, it's part of this
-   static root — never double-captured, so the plus-lighter/midpoint-dim
-   class of bugs is structurally gone. */
 ::view-transition-new(root) {
   animation: none;
 }
 /* Old root fully suppressed, not just static: with animation: none on
    both pseudos the UA default composites old AND new at full opacity
    with plus-lighter, double-brightening the substrate for the duration
-   of every transition and then snapping back at completion — measured
-   in Chromium as a variance jump mid-flight, and the likely source of
-   the "grain pops in" report on device. One copy only. */
+   of every transition. One copy only. */
 ::view-transition-old(root) {
   animation: none;
   opacity: 0;
 }
 
 /* Forward (default): the new screen slides UP from below over the old —
-   iOS modal-cover idiom. Old stays put at full opacity beneath; explicit
-   background on both pseudos prevents the UA-canvas edge shimmer through
-   sub-pixel gaps (same trap as the old root rules). */
+   iOS modal-cover idiom. Explicit background on both pseudos prevents the
+   UA-canvas edge shimmer through sub-pixel gaps. */
 ::view-transition-old(.forge-vt-forward) {
   animation: none;
-  background: #131110;
+  background: var(--ground);
 }
 ::view-transition-new(.forge-vt-forward) {
   animation: forge-page-slide-up 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  background: #131110;
+  background: var(--ground);
 }
 
 /* Back ("nav-back" type): the OLD screen slides DOWN off the bottom,
@@ -635,51 +467,23 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
 ::view-transition-old(.forge-vt-back) {
   z-index: 2;
   animation: forge-page-slide-down 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  background: #131110;
+  background: var(--ground);
 }
 ::view-transition-new(.forge-vt-back) {
   z-index: 1;
   animation: none;
-  background: #131110;
+  background: var(--ground);
 }
 
-/* Grain layer is named (view-transition-name: forge-grain in GrainOverlay)
-   so it's pulled out of the root snapshot and gets its own capture group.
-   Without this opt-out, the screen-blended grain gets baked into BOTH the
-   old AND new root snapshots; cross-fading them with plus-lighter doubles
-   the grain at midpoint and reads as a dim — exactly the regression that
-   landed when grain went opacity 0.05 overlay → 0.12 screen and made the
-   layer dense enough to matter. The plus-lighter fix never knew about a
-   layer composing on top.
-
-   Within the grain's own group, the SAME doubling can happen if both
-   old + new pseudos render at full opacity simultaneously (which is what
-   `animation: none` on both gives you — that was the "turbo grain" the
-   user caught after the initial fix). The clean treatment is to suppress
-   the old pseudo entirely and pin the new at full opacity: since grain
-   is visually identical between old and new (it's a static decoration),
-   showing only the new throughout produces a layer that looks IDENTICAL
-   to its non-transition state. No turbo, no dim, no flicker. */
-/* (forge-grain no longer has a view-transition-name — the grain lives
-   outside the ViewTransition boundary and the root is single-copy, so
-   the named-group opt-out this block served is structurally obsolete.) */
-
-/* No forge-top-fade rules. The status bar is handled by viewport-fit:cover
-   + black-translucent (app/layout.jsx) + body padding-top:env(safe-area-
-   inset-top). The grain seam at the safe-area edge is handled by a
-   mask-image fade on the GrainOverlay element itself, not by any overlay
-   here. (There is no body::before blur — an earlier comment claimed one.) */
-
-/* (2) Drum item magnification via view-timeline. The drum container is
-   the implicit scrollport (overflow:scroll, height:5×52px), so view(y)
-   runs each item from 0% (just entering at the bottom of the band) →
-   50% (centred) → 100% (just exiting at the top). Magnifies at the
-   middle, dims at the edges. Replaces the visibleIdx state-tracking
-   loop that fired on every onScroll. */
+/* (2) Drum item focus via view-timeline — the scroll drum's depth comes
+   from tonal falloff and type scale, zero blur: values fade and shrink
+   toward the rim, so the drum reads as curved with no glass cylinder.
+   The drum container is the implicit scrollport (overflow:scroll), so
+   view(y) runs each item from entering → centred → exiting. */
 @keyframes drum-item-focus {
-  0%   { transform: scale(0.68); opacity: 0.30; }
+  0%   { transform: scale(0.68); opacity: 0.25; }
   50%  { transform: scale(1.00); opacity: 1.00; }
-  100% { transform: scale(0.68); opacity: 0.30; }
+  100% { transform: scale(0.68); opacity: 0.25; }
 }
 .drum-item {
   animation: drum-item-focus linear both;
@@ -687,10 +491,9 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   will-change: transform, opacity;
 }
 
-/* (3) Home header compression. The "Forge / Squat & Push" headline and
-   its glow gently shrink + dim as the user scrolls into the day's session
-   card. Range capped at 180px so it's done before the user has scrolled
-   meaningfully — no lingering animation tying up frames. */
+/* (3) Home header compression. The day headline gently shrinks + dims as
+   the user scrolls into the session content. Range capped at 180px so
+   it's done before the user has scrolled meaningfully. */
 @keyframes home-header-compress {
   to { transform: scale(0.94) translateY(-6px); opacity: 0.72; }
 }
@@ -701,11 +504,10 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   will-change: transform, opacity;
 }
 
-/* (4) Performance Lab card on-arrival. Each card lifts + fades as it
-   crosses into the viewport. animation-range "entry 0% entry 80%"
-   means the animation runs from the moment the card's leading edge
-   crosses into view, completing before the card is fully visible —
-   so the card is settled by the time the eye lands on it. */
+/* (4) Surface — detail data fades/slides in on engagement. Each Lab
+   section lifts + fades as it crosses into the viewport, completing
+   before the card is fully visible. Progressive disclosure over
+   resizing. */
 @keyframes lab-card-arrive {
   from { transform: translateY(20px); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
@@ -727,9 +529,9 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   animation: lab-scroll-cue 1900ms ease-in-out infinite;
 }
 
-/* Reduced motion — all four collapse. View transitions become instant,
-   scroll-driven animations skip their animation entirely. Honours the
-   user's system setting; Forge's motion vocabulary stays intentional. */
+/* Reduced motion — view transitions become instant, scroll-driven and
+   ambient animations skip entirely. Honours the user's system setting;
+   the motion vocabulary stays intentional. */
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(root),
   ::view-transition-new(root),
@@ -742,7 +544,14 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   .drum-item,
   .home-headline,
   .lab-card,
-  .lab-scroll-cue {
+  .lab-scroll-cue,
+  .hw-breathe {
     animation: none;
   }
+}
+
+/* Breathe hook class — rest ring. Kept as a class so reduced-motion can
+   kill it above. */
+.hw-breathe {
+  animation: hwBreathe 5.4s ease-in-out infinite;
 }

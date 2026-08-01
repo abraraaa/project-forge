@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef } from "react";
-import { T } from "@/lib/tokens";
+import { T, DISPLAY } from "@/lib/tokens";
 import { LS, P, BW, blobDelete, checkProfileExists } from "@/lib/storage";
 import {
   hasPasskey, registerPasskey, authenticatePasskey, isPlatformAuthenticatorAvailable,
@@ -46,7 +46,6 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const [submitError,setSubmitError]=useState(null);
   const checkTimerRef = useRef(null);
   const latestQueryRef = useRef("");
-  const {strength:s}=T;
 
   // Post-claim BW step (only for new users with no existing profiles)
   const [showBwStep, setShowBwStep] = useState(false);
@@ -272,11 +271,11 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
   // Visual state for availability pip
   const availabilityPip = () => {
-    if (availability === "checking")     return { colour: T.text3, icon: "…",  label: "checking" };
-    if (availability === "available")    return { colour: T.sage,  icon: "✓",  label: existing.some(e=>e.toLowerCase()===name.trim().toLowerCase()) ? "on this device" : "available" };
-    if (availability === "taken")        return { colour: T.rose,  icon: "✕",  label: "taken" };
-    if (availability === "invalid")      return { colour: T.rose,  icon: "✕",  label: "invalid" };
-    if (availability === "network-err")  return { colour: T.gold,  icon: "?",  label: "offline · try anyway" };
+    if (availability === "checking")     return { colour: T.ink3,    icon: "…",  label: "checking" };
+    if (availability === "available")    return { colour: T.ink2,    icon: "✓",  label: existing.some(e=>e.toLowerCase()===name.trim().toLowerCase()) ? "on this device" : "available" };
+    if (availability === "taken")        return { colour: T.heat[4], icon: "✕",  label: "taken" };
+    if (availability === "invalid")      return { colour: T.heat[4], icon: "✕",  label: "invalid" };
+    if (availability === "network-err")  return { colour: T.ink2,    icon: "?",  label: "offline · try anyway" };
     return null;
   };
   const pip = availabilityPip();
@@ -323,30 +322,24 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
     return (
       <div style={{
         background: "transparent", minHeight: "100vh", maxWidth: 430, margin: "0 auto",
-        fontFamily: T.sans, color: T.text1, WebkitFontSmoothing: "antialiased",
+        fontFamily: T.text, color: T.ink, WebkitFontSmoothing: "antialiased",
         padding: "72px 24px 48px", position: "relative", overflow: "hidden",
         display: "flex", flexDirection: "column",
       }}>
-        {/* Sage ambient — wellness/security territory */}
-        <div style={{position:"absolute",top:100,left:"50%",transform:"translateX(-50%)",width:500,height:440,background:`radial-gradient(ellipse,${T.sage}26 0%,transparent 65%)`,pointerEvents:"none"}}/>
-
         <Fade d={0}>
-          <div style={{
-            fontSize: 11, fontWeight: 500, color: T.sage,
-            letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 20,
-          }}>
+          <div style={{ fontSize: 13, color: T.ink3, marginBottom: 18 }}>
             Secure across devices
           </div>
-          <div style={{ fontFamily: T.serif, fontSize: 36, fontWeight: 300, lineHeight: 1.15, marginBottom: 16 }}>
-            Add a <span style={{fontStyle:"italic",color:T.sage}}>passkey</span>?
+          <div style={{ ...DISPLAY, fontSize: 38, color: T.ink, marginBottom: 16 }}>
+            Add a passkey?
           </div>
         </Fade>
 
         <Fade d={80}>
-          <p style={{ fontSize: 14, color: T.text2, lineHeight: 1.6, marginBottom: 12 }}>
+          <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, marginBottom: 12 }}>
             Without one, your data lives only on this device — clearing your browser would lose everything.
           </p>
-          <p style={{ fontSize: 14, color: T.text2, lineHeight: 1.6, marginBottom: 32 }}>
+          <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, marginBottom: 32 }}>
             With one, your name is yours across phone, laptop, anywhere. Face ID, Touch ID, or your device PIN.
           </p>
         </Fade>
@@ -354,7 +347,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         <Fade d={140}>
           <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", flexDirection:"column", gap: 12, minHeight: 80 }}>
             {onboardingPasskeyError && (
-              <div style={{padding:"10px 14px",borderRadius:T.r.sm,background:`${T.rose}14`,fontSize:12,color:T.rose,maxWidth:320,textAlign:"center",lineHeight:1.5}}>
+              <div style={{padding:"10px 14px",borderRadius:T.r,background:T.surface,boxShadow:T.elev,fontSize:13,color:T.ink,maxWidth:320,textAlign:"center",lineHeight:1.5}}>
                 {onboardingPasskeyError}
               </div>
             )}
@@ -364,11 +357,11 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         <Fade d={200}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <button onClick={handlePasskeyAccept} disabled={onboardingPasskeyBusy} style={{
-              width: "100%", padding: "18px 24px",
-              background: T.coral, border: "none", borderRadius: T.r.lg,
+              width: "100%", height: 58, padding: "0 22px",
+              background: T.commit, border: "none", borderRadius: T.r,
               cursor: onboardingPasskeyBusy ? "default" : "pointer",
-              fontFamily: T.serif, fontSize: 20, fontWeight: 400, color: T.bg0,
-              boxShadow: `0 12px 40px ${T.sage}33`,
+              fontFamily: T.text, fontSize: 17, fontWeight: 500, color: T.commitInk,
+              boxShadow: T.elevStrong,
               display: "flex", alignItems: "center", justifyContent: "space-between",
               opacity: onboardingPasskeyBusy ? 0.6 : 1,
             }}>
@@ -378,7 +371,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             <button onClick={handlePasskeyLater} disabled={onboardingPasskeyBusy} style={{
               width: "100%", padding: "14px 24px",
               background: "transparent", border: "none", cursor: onboardingPasskeyBusy ? "default" : "pointer",
-              fontFamily: T.sans, fontSize: 14, fontWeight: 400, color: T.text3,
+              fontFamily: T.text, fontSize: 14, fontWeight: 400, color: T.ink3,
             }}>
               Later
             </button>
@@ -403,27 +396,21 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
     return (
       <div style={{
         background: "transparent", minHeight: "100vh", maxWidth: 430, margin: "0 auto",
-        fontFamily: T.sans, color: T.text1, WebkitFontSmoothing: "antialiased",
+        fontFamily: T.text, color: T.ink, WebkitFontSmoothing: "antialiased",
         padding: "72px 24px 48px", position: "relative", overflow: "hidden",
         display: "flex", flexDirection: "column",
       }}>
-        {/* Sage-tinted ambient glow — wellness territory, not training */}
-        <div style={{position:"absolute",top:100,left:"50%",transform:"translateX(-50%)",width:500,height:440,background:`radial-gradient(ellipse,${T.sage}26 0%,transparent 65%)`,pointerEvents:"none"}}/>
-
         <Fade d={0}>
-          <div style={{
-            fontSize: 11, fontWeight: 500, color: T.sage,
-            letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 20,
-          }}>
+          <div style={{ fontSize: 13, color: T.ink3, marginBottom: 18 }}>
             Bodyweight
           </div>
-          <div style={{ fontFamily: T.serif, fontSize: 36, fontWeight: 300, lineHeight: 1.15, marginBottom: 16 }}>
+          <div style={{ ...DISPLAY, fontSize: 38, color: T.ink, marginBottom: 16 }}>
             What do you weigh?
           </div>
         </Fade>
 
         <Fade d={80}>
-          <p style={{ fontSize: 14, color: T.text2, lineHeight: 1.6, marginBottom: 32 }}>
+          <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, marginBottom: 32 }}>
             Optional — but it lets us track bodyweight movements (pull-ups, dips, planks) properly.
           </p>
         </Fade>
@@ -437,10 +424,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         <Fade d={200}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <button className="forge-press" onClick={handleBwSave} style={{
-              width: "100%", padding: "18px 24px",
-              background: T.coral, border: "none", borderRadius: T.r.lg, cursor: "pointer",
-              fontFamily: T.serif, fontSize: 20, fontWeight: 400, color: T.bg0,
-              boxShadow: `0 12px 40px ${T.sage}33`,
+              width: "100%", height: 58, padding: "0 22px",
+              background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer",
+              fontFamily: T.text, fontSize: 17, fontWeight: 500, color: T.commitInk,
+              boxShadow: T.elevStrong,
               display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
               <span>Save & continue</span>
@@ -449,7 +436,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             <button onClick={handleBwSkip} style={{
               width: "100%", padding: "14px 24px",
               background: "transparent", border: "none", cursor: "pointer",
-              fontFamily: T.sans, fontSize: 14, fontWeight: 400, color: T.text3,
+              fontFamily: T.text, fontSize: 14, fontWeight: 400, color: T.ink3,
             }}>
               Skip
             </button>
@@ -460,28 +447,27 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   }
 
   return (
-    <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.sans,color:T.text1,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"clip"}}>
-      <div style={{position:"absolute",top:100,left:"50%",transform:"translateX(-50%)",width:500,height:440,background:`radial-gradient(ellipse,${s.glow} 0%,transparent 65%)`,pointerEvents:"none"}}/>
-      {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:12,color:T.text3,fontFamily:T.sans,marginBottom:32,display:"block"}}>← Back</button>}
+    <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"clip"}}>
+      {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:12,color:T.ink3,fontFamily:T.text,marginBottom:32,display:"block"}}>← Back</button>}
       <Fade d={0}>
-        <div style={{fontFamily:T.serif,fontSize:36,fontWeight:300,lineHeight:1.15,marginBottom:8}}>
+        <div style={{...DISPLAY,fontSize:38,color:T.ink,marginBottom:10}}>
           {current?"Switch profile":"Who's training?"}
         </div>
-        <p style={{fontSize:14,color:T.text2,marginBottom:36,lineHeight:1.6}}>
+        <p style={{fontSize:14,color:T.ink2,marginBottom:36,lineHeight:1.6}}>
           {current?"Pick a profile or add someone new.":"Pick a name. It travels with you across devices."}
         </p>
       </Fade>
       {existing.length>0&&(
         <Fade d={60}>
           <div style={{marginBottom:28}}>
-            <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>On this device</div>
+            <div style={{fontSize:13,color:T.ink3,marginBottom:12}}>On this device</div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {existing.map(n=>(
-                <div key={n} style={{padding:"16px 20px",borderRadius:T.r.lg,background:n===current?`${T.coral}12`:T.bg2,border:`1px solid ${n===current?T.coral+"44":T.bg3}`,display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
-                  <span onClick={()=>onActivate(n)} style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:T.text1,cursor:"pointer",flex:1}}>{n}</span>
+                <div key={n} style={{padding:"15px 18px",borderRadius:T.r,background:T.surface,boxShadow:n===current?T.elevStrong:T.elev,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <span onClick={()=>onActivate(n)} style={{fontSize:17,fontWeight:500,color:T.ink,cursor:"pointer",flex:1}}>{n}</span>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    {n===current&&<span style={{fontSize:11,color:T.coral,fontWeight:500,letterSpacing:"0.08em",textTransform:"uppercase"}}>Active</span>}
-                    <button onClick={()=>setConfirmWipe(n)} style={{background:"none",border:"none",padding:"2px 6px",cursor:"pointer",fontSize:11,color:T.text4,fontFamily:T.sans}} title="Wipe progress">✕</button>
+                    {n===current&&<span style={{fontSize:12,color:T.ink2,fontWeight:500}}>Active</span>}
+                    <button onClick={()=>setConfirmWipe(n)} style={{background:"none",border:"none",padding:"2px 6px",cursor:"pointer",fontSize:12,color:T.ink3,fontFamily:T.text}} title="Wipe progress">✕</button>
                   </div>
                 </div>
               ))}
@@ -490,7 +476,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
       <Fade d={120}>
-        <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>
+        <div style={{fontSize:13,color:T.ink3,marginBottom:12}}>
           {existing.length > 0 ? "Add new" : "Pick your name"}
         </div>
         <div style={{position:"relative"}}>
@@ -500,7 +486,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 onKeyDown={e=>{if(e.key==="Enter"&&canSubmit) handleSubmit();}}
                 placeholder="Your name" maxLength={NAME_MAX_LEN}
                 autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck="false"
-                style={{width:"100%",background:T.bg2,border:`1px solid ${availability==="taken"||availability==="invalid"?T.rose+"55":availability==="available"?T.sage+"55":T.bg3}`,borderRadius:T.r.md,padding:"14px 48px 14px 16px",fontFamily:T.serif,fontSize:18,fontWeight:300,color:T.text1,outline:"none",caretColor:T.coral,transition:`border 180ms ${T.ease}`}}
+                style={{width:"100%",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,padding:"14px 48px 14px 16px",fontFamily:T.text,fontSize:17,fontWeight:500,color:T.ink,outline:"none",caretColor:T.commit,transition:`box-shadow 180ms ${T.ease}`}}
               />
               {pip && (
                 <div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",display:"flex",alignItems:"center",gap:6,pointerEvents:"none"}}>
@@ -509,14 +495,14 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               )}
             </div>
             <button className={canSubmit?"forge-press":undefined} onClick={handleSubmit} disabled={!canSubmit}
-              style={{padding:"14px 20px",background:canSubmit?T.coral:T.bg3,border:"none",borderRadius:T.r.md,cursor:canSubmit?"pointer":"default",fontFamily:T.serif,fontSize:18,fontWeight:400,color:canSubmit?T.bg0:T.text4,transition:`all 200ms ${T.ease}`}}>
+              style={{padding:"14px 20px",background:canSubmit?T.commit:T.well,border:"none",borderRadius:T.r,cursor:canSubmit?"pointer":"default",fontFamily:T.text,fontSize:17,fontWeight:500,color:canSubmit?T.commitInk:T.ink3,boxShadow:canSubmit?T.elevStrong:"none",transition:`background 200ms ${T.ease}`}}>
               {submitting ? "…" : "→"}
             </button>
           </div>
           {/* Subscript — availability status or helper text */}
-          <div style={{marginTop:10,minHeight:16,fontSize:11,fontFamily:T.sans,color:pip?.colour || T.text3,display:"flex",alignItems:"center",gap:6,transition:`color 180ms ${T.ease}`}}>
+          <div style={{marginTop:10,minHeight:16,fontSize:12,fontFamily:T.text,color:pip?.colour || T.ink3,display:"flex",alignItems:"center",gap:6,transition:`color 180ms ${T.ease}`}}>
             {submitError ? (
-              <span style={{color:T.rose}}>{submitError}</span>
+              <span style={{color:T.heat[4]}}>{submitError}</span>
             ) : pip ? (
               <span>{pip.label === "available" && "Available · this will be your username"}
                     {pip.label === "on this device" && "Welcome back"}
@@ -526,7 +512,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                     {pip.label === "offline · try anyway" && "Couldn't check online. You can still proceed"}
               </span>
             ) : (
-              <span style={{color:T.text4}}>2+ characters. Case doesn't matter.</span>
+              <span style={{color:T.ink3}}>2+ characters. Case doesn't matter.</span>
             )}
           </div>
 
@@ -538,8 +524,8 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               onClick={() => setShowTakenHelp(true)}
               style={{
                 marginTop:12,background:"none",border:"none",padding:0,
-                cursor:"pointer",fontFamily:T.sans,fontSize:12,
-                color:T.coral,textAlign:"left",letterSpacing:"0.02em",
+                cursor:"pointer",fontFamily:T.text,fontSize:12,
+                color:T.ink,textDecoration:"underline",textUnderlineOffset:3,textAlign:"left",
               }}>
               That's me →
             </button>
@@ -551,14 +537,14 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           the create moment (no active profile): it's a trust pitch for the
           door, not permanent settings furniture. */}
       {!current && <Fade d={180}>
-        <div className="forge-glass" style={{marginTop:36,padding:"18px 20px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg}}>
-          <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
+        <div style={{marginTop:36,padding:"18px 20px",background:T.surface,boxShadow:T.elev,borderRadius:T.r}}>
+          <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>
             No email. No phone.
           </div>
-          <div style={{fontFamily:T.serif,fontSize:19,fontWeight:300,color:T.text1,lineHeight:1.35,marginBottom:6}}>
-            We don&apos;t want your <span style={{fontStyle:"italic",color:T.coral}}>starsign</span> either.
+          <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.35,marginBottom:6}}>
+            We don&apos;t want your starsign either.
           </div>
-          <p style={{fontSize:13,color:T.text3,lineHeight:1.6}}>
+          <p style={{fontSize:13,color:T.ink2,lineHeight:1.6}}>
             Heatwayve keeps your data yours. A name is all we need — it syncs your streak and weights across your devices. Nothing more.
           </p>
         </div>
@@ -570,15 +556,15 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           declare a pause. Same modal the Home nudge opens. */}
       {current && resting && onEndBreather ? (
         <Fade d={240}>
-          <div className="forge-glass" style={{marginTop:36,padding:"14px 18px",border:`1px solid ${T.sage}33`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          <div style={{marginTop:36,padding:"14px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.sage}}>On a breather</div>
-              <div style={{fontSize:11,color:T.text3,marginTop:2}}>
+              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>On a breather</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
                 {restingReason ? `${reasonLabel(restingReason)} · your rhythm's paused` : "Your rhythm's paused"}
               </div>
             </div>
             <button className="forge-press" onClick={onEndBreather}
-              style={{flexShrink:0,padding:"8px 14px",background:"none",border:`1px solid ${T.sage}66`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.sage}}>
+              style={{flexShrink:0,padding:"8px 14px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,fontWeight:500,color:T.ink}}>
               Back to it
             </button>
           </div>
@@ -586,12 +572,12 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       ) : current && onOpenBreather ? (
         <Fade d={240}>
           <button onClick={onOpenBreather}
-            className="forge-glass forge-press" style={{width:"100%",textAlign:"left",marginTop:36,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit"}}>
+            className="forge-press" style={{width:"100%",textAlign:"left",marginTop:36,padding:"14px 18px",background:T.surface,boxShadow:T.elev,border:"none",borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",fontFamily:T.text}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Need a breather?</div>
-              <div style={{fontSize:11,color:T.text3,marginTop:2}}>Pause your rhythm while life happens</div>
+              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Need a breather?</div>
+              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>Pause your rhythm while life happens</div>
             </div>
-            <span style={{fontSize:14,color:T.text3}}>→</span>
+            <span style={{fontSize:14,color:T.ink3}}>→</span>
           </button>
         </Fade>
       ) : null}
@@ -600,10 +586,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && setBwEditOpen && (
         <Fade d={260}>
           <div onClick={()=>setBwEditOpen(true)}
-            className="forge-glass forge-press" style={{marginTop:16,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
+            className="forge-press" style={{marginTop:16,padding:"14px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Bodyweight</div>
-              <div style={{fontSize:11,color:T.text3,marginTop:2}}>
+              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Bodyweight</div>
+              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>
                 {bodyweight ? (
                   (() => {
                     const bwData = BW.get(current);
@@ -614,7 +600,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 ) : "Not set · add one →"}
               </div>
             </div>
-            <span style={{fontSize:14,color:T.text3}}>→</span>
+            <span style={{fontSize:14,color:T.ink3}}>→</span>
           </div>
         </Fade>
       )}
@@ -624,14 +610,14 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && onEditFocus && (
         <Fade d={270}>
           <div onClick={onEditFocus}
-            className="forge-glass forge-press" style={{marginTop:12,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",transition:`all 180ms ${T.ease}`}}>
+            className="forge-press" style={{marginTop:12,padding:"14px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Training focus</div>
-              <div style={{fontSize:11,color:T.text3,marginTop:2}}>
+              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Training focus</div>
+              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>
                 {userFocus} · {FOCUS_SUMMARIES[userFocus] || FOCUS_SUMMARIES.Forged}
               </div>
             </div>
-            <span style={{fontSize:14,color:T.text3}}>→</span>
+            <span style={{fontSize:14,color:T.ink3}}>→</span>
           </div>
         </Fade>
       )}
@@ -642,16 +628,16 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           check reads as "sync broke". */}
       {current && webAuthnSupported && profileHasPasskey[current] === false && (
         <Fade d={280}>
-          <div className="forge-glass" style={{marginTop:16,padding:"18px 20px",border:`1px solid ${T.sage}33`,borderRadius:T.r.lg}}>
+          <div style={{marginTop:16,padding:"18px 20px",background:T.surface,boxShadow:T.elev,borderRadius:T.r}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:11,fontWeight:500,color:T.sage,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
+                <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>
                   Secure your profile
                 </div>
-                <div style={{fontFamily:T.serif,fontSize:17,fontWeight:300,color:T.text1,lineHeight:1.35,marginBottom:6}}>
+                <div style={{fontSize:16,fontWeight:500,color:T.ink,lineHeight:1.35,marginBottom:6}}>
                   Add a passkey
                 </div>
-                <p style={{fontSize:12,color:T.text3,lineHeight:1.5}}>
+                <p style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>
                   Use Face ID, Touch ID, or your device PIN to protect your data and sign in on other devices.
                 </p>
               </div>
@@ -660,12 +646,14 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 disabled={passkeyBusy}
                 style={{
                   padding:"10px 16px",
-                  background:T.coral,
+                  background:T.commit,
                   border:"none",
-                  borderRadius:T.r.md,
+                  borderRadius:T.r,
                   fontSize:13,
                   fontWeight:500,
-                  color:T.bg0,
+                  fontFamily:T.text,
+                  color:T.commitInk,
+                  boxShadow:T.elevStrong,
                   cursor:passkeyBusy?"default":"pointer",
                   opacity:passkeyBusy?0.6:1,
                   whiteSpace:"nowrap",
@@ -675,7 +663,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               </button>
             </div>
             {passkeyError && (
-              <div style={{marginTop:12,padding:"8px 12px",borderRadius:T.r.sm,background:`${T.rose}14`,fontSize:11,color:T.rose}}>
+              <div style={{marginTop:12,fontSize:12,color:T.heat[4]}}>
                 {passkeyError}
               </div>
             )}
@@ -686,11 +674,11 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {/* Passkey enabled badge */}
       {current && profileHasPasskey[current] && (
         <Fade d={280}>
-          <div className="forge-glass" style={{marginTop:16,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:8,height:8,borderRadius:"50%",background:T.sage}}/>
+          <div style={{marginTop:16,padding:"14px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:T.ink2}}/>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Passkey enabled</div>
-              <div style={{fontSize:11,color:T.text3,marginTop:2}}>Your profile is secured with biometric auth</div>
+              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Passkey enabled</div>
+              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>Your profile is secured with biometric auth</div>
             </div>
           </div>
         </Fade>
@@ -723,7 +711,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           the pages fetch fresh (they read LS directly). */}
       {current && isAdminSession(current) && (
         <Fade d={298}>
-          <div style={{marginTop:24,marginBottom:2,fontSize:10,fontWeight:600,color:T.text4,letterSpacing:"0.14em",textTransform:"uppercase"}}>
+          <div style={{marginTop:24,marginBottom:2,fontSize:13,color:T.ink3}}>
             Your keys, boss
           </div>
         </Fade>
@@ -731,24 +719,24 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && isAdminSession(current) && (
         <Fade d={300}>
           <a href="/diag-bugs"
-            className="forge-glass" style={{marginTop:10,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            style={{marginTop:10,padding:"14px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Bug reports</div>
-              <div style={{fontSize:11,color:T.text3,marginTop:2}}>The list — fill or kill</div>
+              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Bug reports</div>
+              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>The list — fill or kill</div>
             </div>
-            <span style={{fontSize:14,color:T.text3}}>↗︎</span>
+            <span style={{fontSize:14,color:T.ink3}}>↗︎</span>
           </a>
         </Fade>
       )}
       {current && isAdminSession(current) && (
         <Fade d={302}>
           <a href="/diag-sync"
-            className="forge-glass" style={{marginTop:12,padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            style={{marginTop:12,padding:"14px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Sync diagnostics</div>
-              <div style={{fontSize:11,color:T.text3,marginTop:2}}>Local store counts + force pull/push</div>
+              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Sync diagnostics</div>
+              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>Local store counts + force pull/push</div>
             </div>
-            <span style={{fontSize:14,color:T.text3}}>↗︎</span>
+            <span style={{fontSize:14,color:T.ink3}}>↗︎</span>
           </a>
         </Fade>
       )}
@@ -759,12 +747,12 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && (
         <Fade d={305}>
           <button onClick={() => setBugSheetOpen(true)}
-            className="forge-glass" style={{marginTop:12,width:"100%",padding:"14px 18px",border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",textAlign:"left"}}>
+            style={{marginTop:12,width:"100%",padding:"14px 18px",background:T.surface,boxShadow:T.elev,border:"none",borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",textAlign:"left",fontFamily:T.text}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.text1}}>Report a bug</div>
-              <div style={{fontSize:11,color:T.text3,marginTop:2}}>Something off? Tell me where it hurts.</div>
+              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Report a bug</div>
+              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>Something off? Tell me where it hurts.</div>
             </div>
-            <span style={{fontSize:14,color:T.text3}}>→</span>
+            <span style={{fontSize:14,color:T.ink3}}>→</span>
           </button>
         </Fade>
       )}
@@ -778,7 +766,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && (
         <Fade d={310}>
           <a href="https://buymeacoffee.com/heatwayve" target="_blank" rel="noopener noreferrer"
-            style={{marginTop:24,display:"block",textAlign:"center",fontFamily:T.serif,fontSize:13,fontStyle:"italic",fontWeight:300,color:T.text4,textDecoration:"none"}}>
+            style={{marginTop:24,display:"block",textAlign:"center",fontFamily:T.text,fontSize:13,color:T.ink3,textDecoration:"none"}}>
             Buy me a protein shake&nbsp;↗
           </a>
         </Fade>
@@ -787,18 +775,18 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {/* Passkey auth required modal */}
       {needsPasskeyAuth && (
         <div onKeyDown={authKeyDown} onClick={()=>setNeedsPasskeyAuth(null)} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div ref={authRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" tabIndex={-1} onClick={e=>e.stopPropagation()} style={{background:T.bg2,borderRadius:T.r.xl,padding:"32px 28px",width:"90%",maxWidth:340,textAlign:"center",outline:"none"}}>
-            <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>
+          <div ref={authRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-vellum" style={{borderRadius:T.r,padding:"32px 28px",width:"90%",maxWidth:340,textAlign:"center",outline:"none",boxShadow:"0 10px 24px -14px rgba(36,28,25,0.35)"}}>
+            <div style={{fontSize:13,color:T.ink3,marginBottom:10}}>
               Authentication required
             </div>
-            <div id="auth-title" style={{fontFamily:T.serif,fontSize:22,fontWeight:300,lineHeight:1.25,marginBottom:12}}>
+            <div id="auth-title" style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:12}}>
               Verify it&apos;s you
             </div>
-            <p style={{fontSize:13,color:T.text2,marginBottom:24,lineHeight:1.55}}>
+            <p style={{fontSize:13,color:T.ink2,marginBottom:24,lineHeight:1.55}}>
               This profile has a passkey. Use Face ID, Touch ID, or your device PIN to continue.
             </p>
             {passkeyError && (
-              <div style={{marginBottom:16,padding:"10px 14px",borderRadius:T.r.md,background:`${T.rose}14`,fontSize:12,color:T.rose}}>
+              <div style={{marginBottom:16,fontSize:13,color:T.heat[4]}}>
                 {passkeyError}
               </div>
             )}
@@ -808,12 +796,14 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               style={{
                 width:"100%",
                 padding:"16px",
-                background:T.coral,
+                background:T.commit,
                 border:"none",
-                borderRadius:T.r.lg,
-                fontSize:16,
+                borderRadius:T.r,
+                fontSize:15,
                 fontWeight:500,
-                color:T.bg0,
+                fontFamily:T.text,
+                color:T.commitInk,
+                boxShadow:T.elevStrong,
                 cursor:passkeyBusy?"default":"pointer",
                 opacity:passkeyBusy?0.6:1,
                 marginBottom:12,
@@ -823,7 +813,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             </button>
             <button
               onClick={()=>{setNeedsPasskeyAuth(null);setPasskeyError(null);}}
-              style={{background:"none",border:"none",padding:"8px",fontSize:13,color:T.text3,cursor:"pointer"}}
+              style={{background:"none",border:"none",padding:"8px",fontSize:13,color:T.ink3,cursor:"pointer",fontFamily:T.text}}
             >
               Cancel
             </button>
@@ -833,16 +823,16 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
       {confirmWipe&&(
         <div onKeyDown={wipeKeyDown} onClick={()=>!wipeBusy&&setConfirmWipe(null)} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-          <div ref={wipeRef} role="dialog" aria-modal="true" aria-labelledby="wipe-title" tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground" style={{background:T.bg2,padding:"28px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",borderTop:`1px solid ${T.rose}33`,animation:`slideUp 240ms ${T.ease}`,maxHeight:"92vh",overflowY:"auto",boxSizing:"border-box",outline:"none"}}>
-            <div id="wipe-title" style={{fontFamily:T.serif,fontSize:24,fontWeight:300,lineHeight:1.2,marginBottom:8}}>
-              Wipe <span style={{color:T.rose,fontStyle:"italic"}}>{confirmWipe}</span>?
+          <div ref={wipeRef} role="dialog" aria-modal="true" aria-labelledby="wipe-title" tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",animation:`slideUp 240ms ${T.ease}`,maxHeight:"92vh",overflowY:"auto",boxSizing:"border-box",outline:"none"}}>
+            <div id="wipe-title" style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:8}}>
+              Wipe {confirmWipe}?
             </div>
-            <p style={{fontSize:13,color:T.text2,marginBottom:24,lineHeight:1.6}}>
+            <p style={{fontSize:13,color:T.ink2,marginBottom:22,lineHeight:1.6}}>
               Choose how far this goes. Local keeps your data in the cloud — you can reclaim the name by typing it again. Full wipe releases the name and deletes everything.
             </p>
 
             {wipeError && (
-              <div style={{padding:"10px 14px",marginBottom:16,borderRadius:T.r.md,background:`${T.rose}14`,border:`1px solid ${T.rose}44`,fontSize:12,color:T.rose,lineHeight:1.5}}>
+              <div style={{marginBottom:16,fontSize:13,color:T.heat[4],lineHeight:1.5}}>
                 {wipeError}
               </div>
             )}
@@ -851,11 +841,11 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <button
                 disabled={wipeBusy}
                 onClick={()=>wipeProfile(confirmWipe,{cloud:false})}
-                style={{padding:"16px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.lg,cursor:wipeBusy?"default":"pointer",textAlign:"left",opacity:wipeBusy?0.5:1}}>
-                <div style={{fontFamily:T.serif,fontSize:16,fontWeight:400,color:T.text1,lineHeight:1.3,marginBottom:3}}>
+                style={{padding:"16px",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,cursor:wipeBusy?"default":"pointer",textAlign:"left",opacity:wipeBusy?0.5:1,fontFamily:T.text}}>
+                <div style={{fontSize:15,fontWeight:500,color:T.ink,lineHeight:1.3,marginBottom:3}}>
                   Remove from this device
                 </div>
-                <div style={{fontSize:12,color:T.text3,lineHeight:1.5}}>
+                <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
                   Cloud data stays. Reclaim the name any time.
                 </div>
               </button>
@@ -863,11 +853,11 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <button
                 disabled={wipeBusy}
                 onClick={()=>wipeProfile(confirmWipe,{cloud:true})}
-                style={{padding:"16px",background:`${T.rose}18`,border:`1px solid ${T.rose}55`,borderRadius:T.r.lg,cursor:wipeBusy?"default":"pointer",textAlign:"left",opacity:wipeBusy?0.5:1}}>
-                <div style={{fontFamily:T.serif,fontSize:16,fontWeight:400,color:T.rose,lineHeight:1.3,marginBottom:3}}>
+                style={{padding:"16px",background:T.surface,border:"none",boxShadow:`inset 0 0 0 1px ${T.heat[4]}`,borderRadius:T.r,cursor:wipeBusy?"default":"pointer",textAlign:"left",opacity:wipeBusy?0.5:1,fontFamily:T.text}}>
+                <div style={{fontSize:15,fontWeight:500,color:T.heat[4],lineHeight:1.3,marginBottom:3}}>
                   {wipeBusy ? "Wiping…" : "Full wipe · cloud & device"}
                 </div>
-                <div style={{fontSize:12,color:T.text3,lineHeight:1.5}}>
+                <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
                   Deletes all weights, history, and the name claim. Can't be undone.
                 </div>
               </button>
@@ -876,7 +866,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             <button
               disabled={wipeBusy}
               onClick={()=>setConfirmWipe(null)}
-              style={{width:"100%",padding:"12px",background:"none",border:"none",cursor:wipeBusy?"default":"pointer",fontFamily:T.sans,fontSize:13,color:T.text3}}>
+              style={{width:"100%",padding:"12px",background:"none",border:"none",cursor:wipeBusy?"default":"pointer",fontFamily:T.text,fontSize:13,color:T.ink3}}>
               Cancel
             </button>
           </div>

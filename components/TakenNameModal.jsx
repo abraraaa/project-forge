@@ -12,7 +12,7 @@
 import { useState, useEffect } from "react";
 import { useModalA11y } from "@/lib/a11y";
 import { isHeatwayveOrigin, migrationWindowOpen } from "@/lib/origin";
-import { T } from "@/lib/tokens";
+import { T, DISPLAY } from "@/lib/tokens";
 import { P } from "@/lib/storage";
 import { hasPasskey, authenticatePasskey } from "@/lib/webauthn";
 import { cacheAuthToken } from "@/lib/auth-session";
@@ -78,12 +78,12 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
   if (authSuccess) {
     return (
       <div className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{background:T.bg2,borderRadius:T.r.xl,padding:"40px 32px",textAlign:"center"}}>
-          <div style={{fontSize:48,marginBottom:16}}>✓</div>
-          <div style={{fontFamily:T.serif,fontSize:22,fontWeight:300,color:T.text1}}>
+        <div className="forge-vellum" style={{borderRadius:T.r,padding:"40px 32px",textAlign:"center",boxShadow:"0 10px 24px -14px rgba(36,28,25,0.35)"}}>
+          <div style={{fontSize:40,marginBottom:16,color:T.ink2}}>✓</div>
+          <div style={{...DISPLAY,fontSize:28,color:T.ink}}>
             Welcome back, {name}
           </div>
-          <p style={{fontSize:13,color:T.text3,marginTop:8}}>
+          <p style={{fontSize:13,color:T.ink3,marginTop:10}}>
             {/* Migration greeting — new origin AND inside the 60-day
                 window, so it self-retires (boss catch, 2026-07-27: a
                 move nobody narrates forever). Known accepted edge: a
@@ -103,23 +103,23 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
 
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground" style={{background:T.bg2,padding:"28px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",borderTop:`1px solid ${T.coral}33`,animation:`slideUp 260ms ${T.ease}`,maxHeight:"92vh",overflowY:"auto",boxSizing:"border-box",position:"relative",outline:"none"}}>
-        <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",animation:`slideUp 260ms ${T.ease}`,maxHeight:"92vh",overflowY:"auto",boxSizing:"border-box",position:"relative",outline:"none"}}>
+        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
           Is this you?
         </div>
-        <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.2,marginBottom:12}}>
+        <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:12}}>
           {hasProfilePasskey === null ? "Checking…" : hasProfilePasskey ? "Sign in with passkey" : "Signing in on a new device"}
         </div>
 
         {/* If profile has passkey and WebAuthn is supported, show sign-in option */}
         {webAuthnSupported && hasProfilePasskey && (
           <>
-            <p style={{fontSize:13,color:T.text2,marginBottom:22,lineHeight:1.6}}>
-              <span style={{color:T.text1}}>{name}</span> is secured with a passkey. Use Face ID, Touch ID, or your device PIN to sign in.
+            <p style={{fontSize:13,color:T.ink2,marginBottom:22,lineHeight:1.6}}>
+              <span style={{color:T.ink,fontWeight:500}}>{name}</span> is secured with a passkey. Use Face ID, Touch ID, or your device PIN to sign in.
             </p>
 
             {passkeyError && (
-              <div style={{marginBottom:16,padding:"10px 14px",borderRadius:T.r.md,background:`${T.rose}14`,fontSize:12,color:T.rose}}>
+              <div style={{marginBottom:16,padding:"10px 14px",borderRadius:T.r,background:T.surface,boxShadow:T.elev,fontSize:13,color:T.ink}}>
                 {passkeyError}
               </div>
             )}
@@ -130,12 +130,14 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
               style={{
                 width:"100%",
                 padding:"16px",
-                background:T.coral,
+                background:T.commit,
                 border:"none",
-                borderRadius:T.r.lg,
-                fontSize:16,
+                borderRadius:T.r,
+                fontSize:15,
                 fontWeight:500,
-                color:T.bg0,
+                fontFamily:T.text,
+                color:T.commitInk,
+                boxShadow:T.elevStrong,
                 cursor:passkeyBusy?"default":"pointer",
                 opacity:passkeyBusy?0.6:1,
                 marginBottom:16,
@@ -144,31 +146,31 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
               {passkeyBusy ? "Verifying…" : "Sign in with passkey"}
             </button>
 
-            <p style={{fontSize:11,color:T.text4,textAlign:"center",lineHeight:1.5}}>
+            <p style={{fontSize:12,color:T.ink3,textAlign:"center",lineHeight:1.5}}>
               Lost access to your passkey? Contact support to recover your account.
             </p>
             {/* House pattern (2026-07-21): bottom-row cancel, no corner ✕ */}
-            <button onClick={onClose} style={{width:"100%",padding:"12px",background:"none",border:"none",cursor:"pointer",fontSize:13,color:T.text3,marginTop:4}}>Cancel</button>
+            <button onClick={onClose} style={{width:"100%",padding:"12px",background:"none",border:"none",cursor:"pointer",fontSize:13,color:T.ink3,fontFamily:T.text,marginTop:4}}>Cancel</button>
           </>
         )}
 
         {/* Fallback: no passkey or WebAuthn not supported */}
         {(!webAuthnSupported || hasProfilePasskey === false) && hasProfilePasskey !== null && (
           <>
-            <p style={{fontSize:13,color:T.text2,marginBottom:22,lineHeight:1.6}}>
-              <span style={{color:T.text1}}>{name}</span> is claimed but doesn&apos;t have a passkey set up. You&apos;ll need to wipe it from the original device to reclaim it here.
+            <p style={{fontSize:13,color:T.ink2,marginBottom:22,lineHeight:1.6}}>
+              <span style={{color:T.ink,fontWeight:500}}>{name}</span> is claimed but doesn&apos;t have a passkey set up. You&apos;ll need to wipe it from the original device to reclaim it here.
             </p>
 
-            <div style={{padding:"14px 16px",borderRadius:T.r.md,background:`${T.gold}0E`,border:`1px solid ${T.gold}33`,marginBottom:22}}>
-              <div style={{fontSize:10,fontWeight:500,color:T.gold,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>
+            <div style={{padding:"14px 16px",borderRadius:T.r,background:T.surface,boxShadow:T.elev,marginBottom:22}}>
+              <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>
                 What to do
               </div>
-              <p style={{fontSize:13,color:T.text1,lineHeight:1.55}}>
-                On your old device: tap your name → <span style={{fontStyle:"italic",fontFamily:T.serif}}>Full wipe</span>. That releases the name so you can claim it here.
+              <p style={{fontSize:13,color:T.ink,lineHeight:1.55}}>
+                On your old device: tap your name → <span style={{fontWeight:500}}>Full wipe</span>. That releases the name so you can claim it here.
               </p>
             </div>
 
-            <button onClick={onClose} style={{width:"100%",padding:"14px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.lg,cursor:"pointer",fontFamily:T.serif,fontSize:16,fontWeight:300,color:T.text2}}>
+            <button onClick={onClose} style={{width:"100%",padding:"14px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,color:T.ink2}}>
               Got it
             </button>
           </>

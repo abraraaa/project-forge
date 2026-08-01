@@ -1,25 +1,64 @@
 "use client";
 
+// components/PerformanceLab.jsx — Bone & Ember.
+// The Lab is dense but loosened: muscles grouped by training day rather
+// than ruled into a spreadsheet; every row carries sparkline + band bar +
+// number (the redundancy law — colour, form, and the printed figure all
+// agree); the recommendation rides a vellum sheet at the foot of the
+// volume section. Measured data sits on the ground between hairlines —
+// no cards, no glass.
+
 import { useMemo, useState, useEffect } from "react";
 import {
   mainLiftTrend, weeklyVolumeByMuscle, weeklyRhythm,
-  readinessBreakdown, sessionCount, detectPlateaus,
+  readinessBreakdown, sessionCount, detectPlateaus, weeklyTonnage, formatTonnage,
 } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
 import { W } from "@/lib/storage";
 import { WEEK } from "@/lib/programme";
-import { DISPLAY_BUCKET } from "@/lib/exercise-anatomy";
-import { T } from "@/lib/tokens";
+import { T, DISPLAY, HATCH } from "@/lib/tokens";
 import { haptic } from "@/lib/a11y";
 import GlossarySheet, { GlossaryTrigger } from "@/components/GlossarySheet";
 import { renderShareCard, shareCanvas } from "@/lib/share-card";
+
+// Training-day grouping for the volume list — the Lab reads like the week
+// trains: push, pull, legs, trunk. (Display grouping only; the audit
+// engine stays granular and judges every muscle alone.)
+const DAY_GROUPS = [
+  { label: "Push", muscles: ["Chest", "Front Delts", "Side Delts", "Triceps"] },
+  { label: "Pull", muscles: ["Lats", "Upper Back", "Rear Delts", "Traps", "Biceps", "Forearms", "Erectors"] },
+  { label: "Legs", muscles: ["Quads", "Glutes", "Hamstrings", "Calves"] },
+  { label: "Trunk", muscles: ["Core"] },
+];
+
+// Band status → colour. Under-MEV is the one non-thermal data colour
+// (steel — the under-dosed outsider); everything trained maps onto the
+// ramp; beyond-MRV is hatched, never just hotter.
+const BAND_COLOUR = {
+  under_mev:  T.under,
+  low:        T.heat[1],
+  optimal:    T.heat[2],
+  over_mrv:   T.heat[4],
+  untargeted: T.ink3,
+};
+const BAND_LABEL = {
+  under_mev:  "under MEV",
+  low:        "in productive band",
+  optimal:    "in sweet spot",
+  over_mrv:   "over MRV",
+  untargeted: "untargeted",
+};
+
+const linkBtn = {
+  background: "none", border: "none", padding: 0, cursor: "pointer",
+  fontFamily: T.text, fontSize: 13, color: T.ink3,
+};
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 export default function PerformanceLab({ history, onBack, resting = false }) {
   const trends  = useMemo(() => mainLiftTrend(history),   [history]);
   const rhythmWeeks = useMemo(() => weeklyRhythm(history, 12), [history]);
-  // The strip reads against the user's OWN weekly quota (schedule-aware,
-  // same doctrine as computeRhythm) — a 2-day plan fills its cells at 2.
+  // The strip reads against the user's OWN weekly quota (schedule-aware).
   const weeklyQuota = useMemo(() => {
     const week = W.get() || WEEK;
     return Math.max(1, week.filter((d) => d?.type === "strength").length);
@@ -29,70 +68,89 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
   const plateaus  = useMemo(() => detectPlateaus(history),     [history]);
   const volumeAudit  = useMemo(() => auditHistoryVolume(history, { weeks: 2 }), [history]);
   const volumeTrend  = useMemo(() => weeklyVolumeByMuscle(history, { weeks: 8 }), [history]);
+  const tonnageWeeks = useMemo(() => weeklyTonnage(history, 2), [history]);
 
   const mainLifts = Object.keys(trends);
   const [selectedLift, setSelectedLift] = useState(null);
-  // Default to first lift once data arrives
   const activeLift = selectedLift || mainLifts[0] || null;
 
-  // Glossary sheet — opened by ⓘ triggers throughout the lab. `glossaryAnchor`
-  // = null  → sheet closed; "" → open, no scroll anchor; term-id → scroll to it.
-  // openGlossary normalises null/undefined to "" so a trigger with no
-  // anchorTerm (e.g. the header ⓘ) still opens the sheet. Without that
-  // coercion the default `= ""` only handled `undefined` and a `null`
-  // anchorTerm from GlossaryTrigger silently no-op'd.
+  // Glossary sheet — opened by ⓘ triggers throughout the lab.
   const [glossaryAnchor, setGlossaryAnchor] = useState(null);
   const openGlossary = (anchor) => setGlossaryAnchor(anchor ?? "");
   const closeGlossary = () => setGlossaryAnchor(null);
 
   const isEmpty = counts.total === 0;
 
+  // Headline stats + the guidance line, derived from the audit. Honest:
+  // states what is, promises nothing the engine won't do.
+  const underMuscles = volumeAudit && !volumeAudit.away
+    ? AUDIT_MUSCLE_ORDER.filter(m => volumeAudit.perMuscle[m]?.status === "under_mev")
+    : [];
+  const setsPerWk = volumeAudit
+    ? Math.round(Object.values(volumeAudit.perMuscle || {}).reduce((s, m) => s + (m.sets || 0), 0))
+    : 0;
+  const lastFullWeekKg = tonnageWeeks.length > 1 ? tonnageWeeks[tonnageWeeks.length - 2].kg : 0;
+  const guidance = isEmpty
+    ? "Go train. The numbers follow."
+    : volumeAudit?.away
+    ? "A lighter stretch — the lines hold your last eight weeks."
+    : underMuscles.length === 0
+    ? "Every muscle is in its productive band. Keep going."
+    : underMuscles.length === 1
+    ? `${underMuscles[0]} is under minimum. A set or two next week moves it.`
+    : `${underMuscles.length} muscles are under minimum. ${underMuscles.slice(0,2).join(" and ")} first.`;
+
   return (
     <div style={{minHeight:"100vh", maxWidth:430, margin:"0 auto", paddingBottom:48, position:"relative", overflow:"clip"}}>
-      {/* Header — ambient glow. top:80 (was 0): the substrate-edge rule.
-          The shell clips at its top edge (overflow: clip), which in the
-          PWA sits exactly at the safe-area line — any glow luminance at
-          the shell top hard-cuts against the flat status-bar strip
-          (reported on device). With the ellipse centre at y≈330 the
-          gradient is fully transparent for the shell's first ~100px, so
-          strip and content read as one field. */}
-      <div style={{position:"absolute", top:80, left:"50%", transform:"translateX(-50%)", width:600, height:500, background:`radial-gradient(ellipse, rgba(196,168,130,0.10) 0%, transparent 65%)`, pointerEvents:"none"}}/>
 
       {/* Top clearance is self-sufficient: max() guarantees the back nav
-          clears the translucent status bar in the installed PWA even if
-          the body-level standalone padding doesn't apply on this route
-          (observed on device: nav rendered under the clock). In-browser
-          env() is 0, so this resolves to exactly the old 52px. */}
+          clears the translucent status bar in the installed PWA. */}
       <div style={{padding:"max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
-        <button onClick={onBack} style={{background:"none", border:"none", padding:0, cursor:"pointer", fontSize:12, color:T.text3, fontFamily:T.sans}}>
-          ← Home
-        </button>
+        <button onClick={onBack} style={linkBtn}>← Home</button>
+        {!isEmpty && (
+          <span style={{fontSize:12,color:T.ink3}}>
+            <span style={{fontFamily:T.measured}}>{counts.last7}</span> this week · <span style={{fontFamily:T.measured}}>{counts.total}</span> logged
+          </span>
+        )}
       </div>
 
-      <div style={{padding:"32px 24px 0"}}>
-        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-          <div style={{fontSize:11, fontWeight:500, color:T.text3, letterSpacing:"0.12em", textTransform:"uppercase"}}>
-            Performance lab
-          </div>
+      <div style={{padding:"28px 24px 0"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+          <span style={{fontSize:13, color:T.ink3}}>Performance lab</span>
           <GlossaryTrigger onOpen={openGlossary} label="Open glossary"/>
         </div>
-        <div className="home-headline" style={{fontFamily:T.serif, fontSize:42, fontWeight:300, lineHeight:1.1, transformOrigin:"left top"}}>
-          Your<br/><span style={{color:T.gold, fontStyle:"italic"}}>progress.</span>
-        </div>
-        <div style={{fontSize:14, color:T.text2, marginTop:10, lineHeight:1.5}}>
-          {isEmpty
-            ? "Go train. The numbers follow."
-            : `${counts.total} session${counts.total===1?"":"s"} · ${counts.last7} this week · ${counts.last30} this month`
-          }
+        <h1 className="home-headline" style={{...DISPLAY, fontSize:45, color:T.ink, margin:0, transformOrigin:"left top"}}>
+          Volume
+        </h1>
+        <div style={{fontSize:15, color:T.ink2, marginTop:10, lineHeight:1.45, maxWidth:"32ch"}}>
+          {guidance}
         </div>
       </div>
 
-      {/* Breather banner — only when a break is DECLARED (resting). Calm,
-          reaffirming: the numbers below aren't slipping, they're held. */}
+      {/* Headline numbers — on the ground between hairlines. Steel carries
+          the under count: the one non-thermal data colour. */}
+      {!isEmpty && (
+        <div style={{margin:"16px 0 0",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex"}}>
+          <div style={{flex:1,padding:"12px 0 12px 24px"}}>
+            <div style={{fontFamily:T.measured,fontSize:21,color:T.ink,letterSpacing:"-0.03em"}}>{setsPerWk}</div>
+            <div style={{fontSize:11,color:T.ink3,marginTop:2}}>sets /wk</div>
+          </div>
+          <div style={{flex:1,padding:"12px 0 12px 14px",borderLeft:`1px solid ${T.rule}`}}>
+            <div style={{fontFamily:T.measured,fontSize:21,color:T.ink,letterSpacing:"-0.03em"}}>{formatTonnage(lastFullWeekKg)}</div>
+            <div style={{fontSize:11,color:T.ink3,marginTop:2}}>last week</div>
+          </div>
+          <div style={{flex:1,padding:"12px 24px 12px 14px",borderLeft:`1px solid ${T.rule}`}}>
+            <div style={{fontFamily:T.measured,fontSize:21,color:underMuscles.length?T.under:T.ink,letterSpacing:"-0.03em"}}>{underMuscles.length}</div>
+            <div style={{fontSize:11,color:T.ink3,marginTop:2}}>under</div>
+          </div>
+        </div>
+      )}
+
+      {/* Breather banner — only when a break is DECLARED (resting). */}
       {resting && !isEmpty && (
-        <div style={{margin:"20px 24px 0", padding:"14px 18px", borderRadius:T.r.lg, background:`${T.sage}0E`, border:`1px solid ${T.sage}33`}}>
-          <div style={{fontSize:10, fontWeight:500, color:T.sage, letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:6}}>On a breather</div>
-          <div style={{fontSize:13, color:T.text2, fontFamily:T.serif, fontStyle:"italic", lineHeight:1.5}}>
+        <div style={{margin:"18px 24px 0"}}>
+          <div style={{fontSize:13,color:T.ink3,marginBottom:4}}>On a breather</div>
+          <div style={{fontSize:14,color:T.ink2,lineHeight:1.5}}>
             Your numbers are holding. Come back when it feels right.
           </div>
         </div>
@@ -102,71 +160,70 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
 
       {!isEmpty && (
         <>
-          {/* Plateau callout (only if we detect one) */}
-          {plateaus.length > 0 && (
-            <div style={{margin:"24px 24px 0", padding:"14px 18px", borderRadius:T.r.md, background:`${T.rose}12`, border:`1px solid ${T.rose}33`}}>
-              <div style={{fontSize:10, fontWeight:500, color:T.rose, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:6}}>Stall detected</div>
-              <div style={{fontSize:13, color:T.text1, lineHeight:1.5}}>
-                Your <span style={{fontFamily:T.serif, fontStyle:"italic"}}>{plateaus[0].lift}</span> has held at {plateaus[0].weight}kg for {plateaus[0].sessions} sessions. Consider a deload week or a rep-range shift.
-              </div>
+          {/* Volume per muscle, grouped by training day. */}
+          <div className="lab-card">
+            <VolumeLandscape trend={volumeTrend} audit={volumeAudit} totalSessions={counts.total} openGlossary={openGlossary} />
+          </div>
+
+          {/* Recommendation — the vellum sheet at the foot of the volume
+              story. In flow, not fixed: a fixed painted bar at the bottom
+              edge re-triggers Safari 26's opaque chrome slabs. */}
+          {!volumeAudit?.away && counts.total >= 4 && (
+            <div className="forge-vellum lab-card" style={{margin:"14px 24px 0",borderRadius:T.r,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:14}}>
+              <span style={{fontSize:13,color:T.ink2,lineHeight:1.4}}>
+                {plateaus.length > 0
+                  ? <>Your {plateaus[0].lift} has held at <span style={{fontFamily:T.measured}}>{plateaus[0].weight}</span> kg for <span style={{fontFamily:T.measured}}>{plateaus[0].sessions}</span> sessions. A deload or a rep-range shift breaks the pattern.</>
+                  : underMuscles.length > 0
+                  ? <>{underMuscles[0]} responds fastest to what it isn&rsquo;t getting — one set at a time.</>
+                  : <>Volume is landing where it grows. The programme holds.</>}
+              </span>
             </div>
           )}
 
           {/* 1RM trend */}
           {activeLift && (
-            <Card
-              title="Estimated 1RM"
-              subtitle={activeLift}
-              action={
-                /* Share metrics — one-way export of this trend as a branded
-                   PNG via the Web Share API (download fallback). Deliberately
-                   not-social: generated on-device, pushed wherever the USER
-                   chooses. Lives in the card header (not below the chart) so
-                   it doesn't push the fold down. See lib/share-card.js. */
+            <div className="lab-card" style={{margin:"28px 24px 0"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",paddingBottom:8,borderBottom:`1px solid ${T.rule}`}}>
+                <span style={{fontSize:13,color:T.ink3}}>Estimated 1RM</span>
                 <button
                   onClick={async ()=>{
                     const canvas = await renderShareCard({ lift: activeLift, series: trends[activeLift] || [] });
                     await shareCanvas(canvas, `heatwayve-${activeLift.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-1rm.png`);
                   }}
-                  style={{background:"none", border:"none", padding:"6px 0", cursor:"pointer", fontSize:12, color:T.text3, fontFamily:T.sans, letterSpacing:"0.04em", flexShrink:0}}
+                  style={{...linkBtn,fontSize:12}}
                   aria-label={`Share ${activeLift} trend`}
                 >
-                  Share ↗︎
+                  Share →
                 </button>
-              }
-            >
+              </div>
               {mainLifts.length > 1 && (
                 <LiftSelector lifts={mainLifts} active={activeLift} onSelect={setSelectedLift}/>
               )}
-              <LineChart series={trends[activeLift]} />
-            </Card>
+              <div style={{paddingTop:mainLifts.length > 1 ? 4 : 14}}>
+                <LineChart series={trends[activeLift]} />
+              </div>
+            </div>
           )}
 
-          {/* Per-muscle volume landscape — merges the old "Weekly volume"
-              stacked-bar chart and "Volume vs landmarks" status card into one
-              row-per-muscle view. Each row shows the 8-week sparkline + the
-              recent (trailing 2 complete weeks) sets/wk classified against
-              MEV/MAV/MRV bands. Sorted by deviation severity so the actionable
-              muscles surface first (under MEV, then over MRV, then in-band). */}
-          <Card
-            title="Volume per muscle"
-            subtitle={<>Last 8 weeks · sets/wk vs MEV/MAV/MRV<GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/></>}
-          >
-            <VolumeLandscape trend={volumeTrend} audit={volumeAudit} totalSessions={counts.total} />
-          </Card>
+          {/* Rhythm strip — weeks, not days (rhythm doctrine). */}
+          <div className="lab-card" style={{margin:"28px 24px 0"}}>
+            <div style={{paddingBottom:8,borderBottom:`1px solid ${T.rule}`,fontSize:13,color:T.ink3}}>
+              Rhythm · last <span style={{fontFamily:T.measured}}>12</span> weeks vs <span style={{fontFamily:T.measured}}>{weeklyQuota}</span> strength day{weeklyQuota === 1 ? "" : "s"}/wk
+            </div>
+            <div style={{paddingTop:14}}>
+              <RhythmStrip weeks={rhythmWeeks} quota={weeklyQuota} muted={volumeAudit.away} />
+            </div>
+          </div>
 
-          {/* Rhythm strip — weeks, not days (rhythm doctrine; the per-day
-              heatmap invited exactly the day-level guilt the register
-              refuses). Muted when the recent window is empty, matching the
-              volume card's away treatment. */}
-          <Card title="Rhythm" subtitle={`Last 12 weeks · vs ${weeklyQuota} strength day${weeklyQuota === 1 ? "" : "s"}/wk`}>
-            <RhythmStrip weeks={rhythmWeeks} quota={weeklyQuota} muted={volumeAudit.away} />
-          </Card>
-
-          {/* Readiness breakdown */}
-          <Card title="How you've shown up" subtitle="Readiness across all sessions">
-            <ReadinessBar readiness={readiness} />
-          </Card>
+          {/* Readiness breakdown — the one other place the ramp speaks. */}
+          <div className="lab-card" style={{margin:"28px 24px 0"}}>
+            <div style={{paddingBottom:8,borderBottom:`1px solid ${T.rule}`,fontSize:13,color:T.ink3}}>
+              How you&rsquo;ve shown up · readiness across all sessions
+            </div>
+            <div style={{paddingTop:14}}>
+              <ReadinessBar readiness={readiness} />
+            </div>
+          </div>
         </>
       )}
 
@@ -180,22 +237,10 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
 }
 
 // ─── Scroll cue ───────────────────────────────────────────────────────────────
-// The accessibility fallback for below-fold content: in bright light our
-// low-contrast surfaces can wash out, so a chevron acts as the explicit
-// "there's more" signal we've otherwise left to intuition. Points DOWN — a
-// hint points at its referent (the content waiting below), not at the
-// gesture. Fixed at the fold, fades the instant you scroll, and only appears
-// when the page actually overflows. Inset from the bottom edge (no
-// background) so it stays clear of the chrome/chin rules; gentle bob under
-// motion-ok, static under reduced-motion. Legible-not-ambient on purpose —
-// a whisper-faint fallback fails the sunlight case it exists for.
+// The explicit "there's more" signal. Fixed at the fold but PAINT-FREE
+// (no background), so the Safari chrome sampler ignores it. Fades on
+// scroll via the CSS scroll() timeline.
 function ScrollCue() {
-  // Overflow gating stays in JS (it's a layout question, checked on mount +
-  // resize only). The scroll-position FADE moved to a CSS scroll() timeline
-  // (.lab-scroll-cue-wrap in globals.css) — WebKit runs it compositor-side,
-  // so the per-frame window scroll listener this component used to carry is
-  // gone. Browsers without scroll timelines keep the cue visible at rest
-  // (the @supports gate only removes the fade, never the affordance).
   const [overflows, setOverflows] = useState(false);
   useEffect(() => {
     const update = () => setOverflows(document.documentElement.scrollHeight > window.innerHeight + 24);
@@ -211,91 +256,79 @@ function ScrollCue() {
       opacity: 0.72,
     }}>
       <svg className="lab-scroll-cue" width="26" height="15" viewBox="0 0 26 15" fill="none">
-        <path d="M2 2.5 L13 12 L24 2.5" stroke={T.coral} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M2 2.5 L13 12 L24 2.5" stroke={T.ink3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     </div>
   );
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
+// ─── Empty state — the first-run promise, in the system's own grammar ────────
+// Solid ink for real work, hatched continuation for the shape of what
+// accumulates. Never simulated data: the hatch says "this is a sketch".
 function EmptyState() {
   return (
-    <div style={{margin:"40px 24px 0", padding:"40px 24px", background:T.bg2, border:`1px solid ${T.bg3}`, borderRadius:T.r.lg, textAlign:"center"}}>
-      <div style={{fontFamily:T.serif, fontSize:22, fontWeight:300, fontStyle:"italic", color:T.text2, marginBottom:12, lineHeight:1.3}}>
-        Nothing to show<br/>yet.
+    <div style={{margin:"36px 24px 0"}}>
+      <div style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:10}}>
+        Nothing to show yet
       </div>
-      <p style={{fontSize:13, color:T.text3, lineHeight:1.6, maxWidth:280, margin:"0 auto"}}>
-        Your first session plots your estimated 1RM. After a few weeks we'll surface trends, volume, and stalls worth knowing about.
+      <p style={{fontSize:13, color:T.ink2, lineHeight:1.6, maxWidth:"36ch"}}>
+        Your first session plots your estimated 1RM. After a few weeks the
+        Lab holds every muscle against its MEV/MAV/MRV bands and flags
+        what&rsquo;s worth knowing.
       </p>
-    </div>
-  );
-}
-
-// ─── Card wrapper ─────────────────────────────────────────────────────────────
-// Cards rest *on* the backdrop — inset 1px top highlight (light catching
-// the upper edge), a tight contact shadow, and a wider very-faint lift.
-// Warm-black tints stay inside the Portra palette; no cool Material-grey
-// elevation. Same shape as the ForgeApp Card lift.
-const LAB_CARD_SHADOW = "inset 0 1px 0 rgba(237,235,231,0.04), 0 1px 2px rgba(10,9,8,0.28), 0 10px 28px -16px rgba(10,9,8,0.5)";
-function Card({ title, subtitle, action = null, children }) {
-  return (
-    <div className="lab-card forge-glass" style={{margin:"24px 24px 0", border:`1px solid ${T.bg3}`, borderRadius:T.r.lg, overflow:"hidden", boxShadow:LAB_CARD_SHADOW}}>
-      <div style={{padding:"18px 20px 14px", borderBottom:`1px solid ${T.bg3}`, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12}}>
-        <div style={{minWidth:0}}>
-          <div style={{fontSize:10, fontWeight:500, color:T.text3, letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:4}}>{title}</div>
-          {subtitle && <div style={{fontFamily:T.serif, fontSize:15, fontWeight:300, color:T.text2, fontStyle:"italic"}}>{subtitle}</div>}
-        </div>
-        {action}
+      <div style={{marginTop:18,display:"flex",alignItems:"center",gap:10}}>
+        <span style={{width:60,height:8,background:T.ink}}/>
+        {/* Ink hatch, not the over-MRV hatch: this is a sketch of what
+            accumulates, drawn in pencil rather than heat. */}
+        <span style={{flex:1,height:8,backgroundImage:"repeating-linear-gradient(45deg, var(--ink-3) 0 2px, transparent 2px 6px)"}}/>
       </div>
-      <div style={{padding:"18px 20px 20px"}}>
-        {children}
+      <div style={{marginTop:8,fontSize:12,color:T.ink3}}>
+        Solid is what you&rsquo;ve done. The hatch is where it&rsquo;s going.
       </div>
     </div>
   );
 }
 
-// ─── Lift selector (pill row) ────────────────────────────────────────────────
+// ─── Lift selector — text, not pills ─────────────────────────────────────────
 function LiftSelector({ lifts, active, onSelect }) {
   return (
-    <div style={{display:"flex", gap:6, overflowX:"auto", marginBottom:16, paddingBottom:4, scrollbarWidth:"none"}}>
-      <style>{`div[data-lift-selector]::-webkit-scrollbar{display:none}`}</style>
-      <div data-lift-selector style={{display:"flex", gap:6}}>
-        {lifts.map(lift => {
-          const on = lift === active;
-          return (
-            <button key={lift} className="forge-press" onClick={() => { haptic.toggle(); onSelect(lift); }}
-              style={{padding:"6px 12px", background: on ? T.coral : T.bg3, border:`1px solid ${on ? T.coral : T.bg4}`, borderRadius:T.r.pill, cursor:"pointer", fontSize:11, fontWeight:500, color: on ? T.bg0 : T.text2, whiteSpace:"nowrap", fontFamily:T.sans, transition:`all 180ms ${T.ease}`}}>
-              {lift}
-            </button>
-          );
-        })}
-      </div>
+    <div style={{display:"flex", gap:18, overflowX:"auto", paddingTop:12, scrollbarWidth:"none"}}>
+      {lifts.map(lift => {
+        const on = lift === active;
+        return (
+          <button key={lift} onClick={() => { haptic.toggle(); onSelect(lift); }}
+            style={{...linkBtn, fontSize:13, fontWeight:on?500:400, color:on?T.ink:T.ink3, whiteSpace:"nowrap",
+              paddingBottom:5, borderBottom:`2px solid ${on?T.ink:"transparent"}`, transition:`color 180ms ${T.ease}`}}>
+            {lift}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 // ─── Line chart (1RM trend) ──────────────────────────────────────────────────
-// Hand-rolled SVG. No tooltips — tap a point to see the value (future).
+// Hand-rolled SVG. The stroke is a heat gradient along its own length —
+// the line heats as it climbs. Cooked sessions print hollow points.
 function LineChart({ series }) {
   const W = 320, H = 108, PAD_X = 12, PAD_Y = 18;
   if (!series || series.length === 0) {
-    return <div style={{padding:"28px 0", fontSize:13, color:T.text3, fontFamily:T.serif, fontStyle:"italic", textAlign:"center"}}>No data yet</div>;
+    return <div style={{padding:"24px 0", fontSize:13, color:T.ink3, textAlign:"center"}}>No data yet</div>;
   }
-  // Single data point: show a dot + number, no line
+  // Single data point: show the number, no line.
   if (series.length === 1) {
     const p = series[0];
     return (
-      <div style={{textAlign:"center", padding:"20px 0"}}>
-        <div style={{fontFamily:T.serif, fontSize:48, fontWeight:300, color:T.coral, lineHeight:1}}>{p.est1RM}<span style={{fontSize:20, color:T.text3, marginLeft:4}}>kg</span></div>
-        <div style={{fontSize:11, color:T.text3, marginTop:6, fontStyle:"italic", fontFamily:T.serif}}>{p.date} · top set {p.topSet.weight}kg × {p.topSet.reps}</div>
-        <div style={{fontSize:11, color:T.text4, marginTop:8}}>Log another session to see the trend</div>
+      <div style={{textAlign:"center", padding:"18px 0"}}>
+        <div style={{fontFamily:T.measured, fontSize:48, fontWeight:300, letterSpacing:"-0.04em", color:T.ink, lineHeight:1}}>{p.est1RM}<span style={{fontSize:18, color:T.ink3, marginLeft:4}}>kg</span></div>
+        <div style={{fontSize:12, color:T.ink3, marginTop:8}}>{p.date} · top set <span style={{fontFamily:T.measured}}>{p.topSet.weight}</span> kg × <span style={{fontFamily:T.measured}}>{p.topSet.reps}</span></div>
+        <div style={{fontSize:12, color:T.ink3, marginTop:6}}>Log another session to see the trend</div>
       </div>
     );
   }
 
   const values = series.map(p => p.est1RM);
   const minV = Math.min(...values), maxV = Math.max(...values);
-  // Give the chart some vertical breathing room
   const rangeV = maxV - minV || 1;
   const yMin = minV - rangeV * 0.2;
   const yMax = maxV + rangeV * 0.2;
@@ -304,7 +337,6 @@ function LineChart({ series }) {
   const yAt = (v) => PAD_Y + (H - 2*PAD_Y) * (1 - (v - yMin) / (yMax - yMin));
 
   const pathD = series.map((p, i) => `${i===0 ? "M" : "L"} ${xAt(i)} ${yAt(p.est1RM)}`).join(" ");
-  // Area fill under the line for premium feel
   const areaD = `${pathD} L ${xAt(series.length-1)} ${H-PAD_Y} L ${xAt(0)} ${H-PAD_Y} Z`;
 
   const latest  = series[series.length-1];
@@ -316,29 +348,34 @@ function LineChart({ series }) {
     <div>
       <div style={{display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:10}}>
         <div>
-          <span style={{fontFamily:T.serif, fontSize:32, fontWeight:300, color:T.text1}}>{latest.est1RM}</span>
-          <span style={{fontSize:13, color:T.text3, marginLeft:4}}>kg</span>
+          <span style={{fontFamily:T.measured, fontSize:30, fontWeight:300, letterSpacing:"-0.03em", color:T.ink}}>{latest.est1RM}</span>
+          <span style={{fontSize:13, color:T.ink3, marginLeft:4}}>kg</span>
         </div>
-        <div style={{fontSize:11, color: delta >= 0 ? T.sage : T.rose, fontFamily:T.serif, fontStyle:"italic"}}>
-          {delta >= 0 ? "+" : ""}{delta.toFixed(1)}kg  ·  {pctDelta >= 0 ? "+" : ""}{pctDelta.toFixed(1)}%
+        <div style={{fontFamily:T.measured, fontSize:12, color:T.ink2}}>
+          {delta >= 0 ? "+" : ""}{delta.toFixed(1)} kg · {pctDelta >= 0 ? "+" : ""}{pctDelta.toFixed(1)}%
         </div>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:"auto", display:"block"}}>
         <defs>
-          <linearGradient id="fillCoral" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor={T.coral} stopOpacity="0.24"/>
-            <stop offset="100%" stopColor={T.coral} stopOpacity="0"/>
+          <linearGradient id="hwLabTrend" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="var(--heat-1)"/>
+            <stop offset="0.6" stopColor="var(--heat-2)"/>
+            <stop offset="1" stopColor="var(--heat-3)"/>
+          </linearGradient>
+          <linearGradient id="hwLabArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="var(--heat-3)" stopOpacity="0.12"/>
+            <stop offset="1" stopColor="var(--heat-3)" stopOpacity="0"/>
           </linearGradient>
         </defs>
-        <path d={areaD} fill="url(#fillCoral)" />
-        <path d={pathD} stroke={T.coral} strokeWidth="1.5" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
+        <path d={areaD} fill="url(#hwLabArea)" />
+        <path d={pathD} stroke="url(#hwLabTrend)" strokeWidth="1.6" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
         {series.map((p, i) => (
-          <circle key={i} cx={xAt(i)} cy={yAt(p.est1RM)} r={i === series.length-1 ? 4 : 2.5}
-            fill={p.cooked ? T.rose : T.coral}
-            stroke={T.bg2} strokeWidth="1.5"/>
+          <circle key={i} cx={xAt(i)} cy={yAt(p.est1RM)} r={i === series.length-1 ? 3.6 : 2.4}
+            fill={p.cooked ? "var(--heat-4)" : "var(--heat-2)"}
+            stroke="var(--ground)" strokeWidth="1.4"/>
         ))}
       </svg>
-      <div style={{display:"flex", justifyContent:"space-between", marginTop:6, fontSize:10, color:T.text4, fontFamily:T.sans}}>
+      <div style={{display:"flex", justifyContent:"space-between", marginTop:6, fontFamily:T.measured, fontSize:10, color:T.ink3}}>
         <span>{first.date.slice(5).replace("-","/")}</span>
         <span>{latest.date.slice(5).replace("-","/")}</span>
       </div>
@@ -346,263 +383,140 @@ function LineChart({ series }) {
   );
 }
 
-// ─── Volume landscape (per-muscle row with sparkline + MEV/MAV/MRV band) ───
-// Replaces the stacked-bar Weekly Volume chart and the Volume vs Landmarks
-// status card. The old stacked bars rendered four leg muscles in the same
-// warm-earth palette — unreadable at small heights — and didn't tell you the
-// only thing you actually want to know: am I training each muscle in its
-// productive band, and is the trend up or down.
-//
-// Each row = one muscle. Left: name + current sets/wk + band label. Right:
-// 8-week sparkline with MEV/MAV/MRV bands rendered behind the line. Sorted
-// by deviation severity so under-MEV muscles surface first.
-//
-// Vocabulary: granular (13 muscles via lib/volume-audit.js#AUDIT_MUSCLE_ORDER)
-// — Front/Side/Rear delts split, Biceps/Triceps split. The audit landmarks
-// only make sense at that resolution.
-const BAND_COLOUR = {
-  under_mev:  T.rose,   // alarm: not driving growth, raise it
-  low:        T.gold,   // productive but room to add (MEV..MAV)
-  optimal:    T.sage,   // sweet spot (MAV..MRV)
-  over_mrv:   T.coral,  // recovery cost (above MRV)
-  untargeted: T.text4,  // tracked, no landmark (e.g. Forearms)
-};
-const BAND_LABEL = {
-  under_mev:  "under MEV",
-  low:        "in productive band",
-  optimal:    "in sweet spot",
-  over_mrv:   "over MRV",
-  untargeted: "untargeted",
-};
-// Sort order for muscle rows — actionable first, then sweet spot, then
-// background (untargeted). Within each tier, AUDIT_MUSCLE_ORDER preserves
-// the editorial muscle ordering (legs → torso → arms → core).
-const SEVERITY = { under_mev: 0, over_mrv: 1, low: 2, optimal: 3, untargeted: 4 };
-
-// The Lab list groups by the CHART'S OWN 9 buckets — one vocabulary across
-// both surfaces, and the list stays a constant length no matter how granular
-// the engine gets underneath (16 muscles as of the Back split). Any bucket
-// with more than one granular member collapses into an expandable group row:
-// aggregate sets, the WORST member's band (most actionable — SEVERITY
-// order), summed sparkline without bands (judgement lives at member level).
-// The ENGINE stays granular — the audit still judges every muscle alone;
-// this is display aggregation only. Groups today: Back (Lats / Upper Back /
-// Erectors), Shoulders (three delt heads + Traps), Arms (Biceps / Triceps /
-// Forearms).
-function collapseBucketGroups(rows) {
-  const byBucket = {};
-  for (const r of rows) {
-    const bucket = DISPLAY_BUCKET[r.muscle] || r.muscle;
-    (byBucket[bucket] ||= []).push(r);
-  }
-  const out = [];
-  for (const [bucket, members] of Object.entries(byBucket)) {
-    if (members.length === 1) { out.push(members[0]); continue; }
-    const len = Math.max(0, ...members.map((r) => r.series.length));
-    const series = Array.from({ length: len }, (_, i) =>
-      members.reduce((s, r) => s + (r.series[i] || 0), 0));
-    const worst = members.reduce((w, r) =>
-      (SEVERITY[r.status] ?? 99) < (SEVERITY[w.status] ?? 99) ? r : w, members[0]);
-    out.push({
-      muscle: bucket,
-      sets: Math.round(members.reduce((s, r) => s + r.sets, 0) * 10) / 10,
-      target: null,          // no bands on a sum — judgement lives at member level
-      status: worst.status,  // the most actionable member speaks for the group
-      series,
-      members,
-      worstMember: worst.muscle,
-    });
-  }
-  return out;
-}
-
-function GroupRow({ row, muted = false }) {
-  const [open, setOpen] = useState(false);
-  const bandLabel = muted ? "resting" : (BAND_LABEL[row.status] || "");
-  return (
-    <div>
-      <button onClick={() => setOpen((o) => !o)} className="forge-press"
-        aria-expanded={open}
-        style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", font: "inherit" }}>
-        <MuscleRow muscle={row.muscle} caret={open ? "▾" : "▸"} sets={row.sets}
-          target={null} status={row.status} series={row.series} muted={muted}
-          subtitle={muted ? "resting" : `${bandLabel} · ${row.worstMember.toLowerCase()}`} />
-      </button>
-      {open && (
-        <div style={{ paddingLeft: 16 }}>
-          {row.members.map((h) => <MuscleRow key={h.muscle} {...h} muted={muted} />)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function VolumeLandscape({ trend, audit, totalSessions = 0 }) {
-  // New user — not enough logged history anywhere yet. Gate on TOTAL sessions
-  // (not the window count, which is now recency-scoped). Encourage logging
-  // rather than render a wall of "under MEV" alarms for someone just starting.
+// ─── Volume landscape — rows grouped by training day ─────────────────────────
+function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
+  // New user — not enough logged history anywhere yet. Encourage logging
+  // rather than render a wall of "under MEV" alarms for someone starting.
   if (!audit || totalSessions < 4) {
     return (
-      <div style={{padding:"14px 0 2px", fontSize:13, color:T.text3, fontStyle:"italic", fontFamily:T.serif, lineHeight:1.5}}>
-        A few more logged sessions and this card will start flagging the muscles below MEV or above MRV.
+      <div style={{margin:"20px 24px 0",fontSize:13, color:T.ink2, lineHeight:1.5}}>
+        A few more logged sessions and this list will hold each muscle
+        against its MEV/MAV/MRV bands.
       </div>
     );
   }
 
-  // Build the union of muscles to render: anything in AUDIT_MUSCLE_ORDER
-  // (so missed muscles surface as under-MEV) plus anything trained that
-  // doesn't have a landmark (e.g. Forearms).
-  const muscles = [
-    ...AUDIT_MUSCLE_ORDER,
-    ...Object.keys(trend?.byMuscle || {}).filter(m => !AUDIT_MUSCLE_ORDER.includes(m)),
-  ];
-
-  const rows = collapseBucketGroups(muscles.map(muscle => {
+  const rowFor = (muscle) => {
     const a = audit.perMuscle[muscle] || { sets: 0, target: null, status: "untargeted" };
     const series = trend?.byMuscle?.[muscle] || [];
     return { muscle, sets: a.sets, target: a.target, status: a.status, series };
-  }));
+  };
 
-  // "Away" — the user HAS a training history, but the recent window is empty.
-  // The sparklines STAY: eight weeks of history (including the fade-out) is
-  // context and motivation, not something to hide. What changes is the
-  // judgement: band colouring mutes to neutral (no wall of red), and the
-  // philosophy header reframes the gap — consistency over time is what
-  // builds; a lighter stretch is part of training, not failure.
+  // "Away" — the user HAS history but the recent window is empty. The
+  // sparklines stay (eight weeks of story is context, not shame); the
+  // judgement is suspended.
   if (audit.away) {
-    const historical = rows
-      .filter(r => r.series.some(v => v > 0)) // only muscles actually trained — flat-zero rows are noise here
+    const historical = AUDIT_MUSCLE_ORDER.map(rowFor)
+      .filter(r => r.series.some(v => v > 0))
       .sort((a, b) => b.series.reduce((s, v) => s + v, 0) - a.series.reduce((s, v) => s + v, 0));
     return (
-      <div style={{padding:"2px 0 0"}}>
-        <div style={{padding:"12px 0 14px"}}>
-          <div style={{fontSize:15, color:T.text1, fontFamily:T.serif, fontWeight:300, lineHeight:1.4, marginBottom:8}}>
+      <div style={{margin:"18px 24px 0"}}>
+        <div style={{padding:"0 0 12px"}}>
+          <div style={{fontSize:15, color:T.ink, lineHeight:1.4, marginBottom:6}}>
             A lighter stretch — that&apos;s part of training.
           </div>
-          <div style={{fontSize:13, color:T.text3, lineHeight:1.6}}>
+          <div style={{fontSize:13, color:T.ink2, lineHeight:1.55}}>
             What builds muscle is showing up over time, not any single week.
-            The lines below hold your last eight weeks — they&apos;ll fill back
-            in as you train. Pick it up when you&apos;re ready.
+            The lines hold your last eight weeks — they&apos;ll fill back in as
+            you train.
           </div>
         </div>
-        {historical.map(row => row.members
-          ? <GroupRow key={row.muscle} row={row} muted />
-          : <MuscleRow key={row.muscle} {...row} muted />)}
+        {historical.map(row => <MuscleRow key={row.muscle} {...row} muted />)}
       </div>
     );
   }
 
-  // Drop rows that have neither a landmark nor any trained sets — nothing
-  // useful to say about them.
-  const visible = rows.filter(r => r.target || r.sets > 0 || r.series.some(v => v > 0));
-  visible.sort((a, b) => {
-    const sa = SEVERITY[a.status] ?? 99;
-    const sb = SEVERITY[b.status] ?? 99;
-    return sa - sb;
-  });
+  // Union: everything with a landmark (missed muscles surface as
+  // under-MEV) plus anything trained without one.
+  const extra = Object.keys(trend?.byMuscle || {}).filter(m => !AUDIT_MUSCLE_ORDER.includes(m));
+  const placed = new Set();
+  const groups = DAY_GROUPS.map(g => ({
+    label: g.label,
+    rows: g.muscles.filter(m => AUDIT_MUSCLE_ORDER.includes(m) || extra.includes(m))
+      .map(m => { placed.add(m); return rowFor(m); })
+      .filter(r => r.target || r.sets > 0 || r.series.some(v => v > 0)),
+  })).filter(g => g.rows.length > 0);
+  const leftovers = [...AUDIT_MUSCLE_ORDER, ...extra]
+    .filter(m => !placed.has(m)).map(rowFor)
+    .filter(r => r.target || r.sets > 0 || r.series.some(v => v > 0));
+  if (leftovers.length) groups.push({ label: "Other", rows: leftovers });
 
   return (
-    <div style={{padding:"2px 0 0"}}>
-      {visible.map(row => row.members
-        ? <GroupRow key={row.muscle} row={row} />
-        : <MuscleRow key={row.muscle} {...row} />)}
-      <div style={{marginTop:14,fontSize:11,color:T.text4,lineHeight:1.5}}>
-        Sparklines = last 8 weeks · band &amp; sets/wk = last {audit.weeksAnalysed} complete weeks · {audit.sessionsAnalysed} session{audit.sessionsAnalysed===1?"":"s"}
+    <div style={{margin:"6px 0 0"}}>
+      <div style={{padding:"14px 24px 0",display:"flex",alignItems:"center",gap:6}}>
+        <span style={{fontSize:13,color:T.ink3}}>
+          Sets per week vs MEV/MAV/MRV · last <span style={{fontFamily:T.measured}}>{audit.weeksAnalysed}</span> complete weeks
+        </span>
+        <GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/>
       </div>
-      <div style={{marginTop:8,fontSize:11,color:T.text3,fontStyle:"italic",fontFamily:T.serif,lineHeight:1.55}}>
-        Read from your recent weeks, not your lifetime average. Your body answers to the training in front of it.
-      </div>
-    </div>
-  );
-}
-
-function MuscleRow({ muscle, sets, target, status, series, muted = false, subtitle = null, caret = null }) {
-  // Muted = the "away" presentation: the sparkline keeps telling the 8-week
-  // story, but the band judgement is suspended (neutral colour, "resting"
-  // label) — no alarm styling while the user is deliberately/otherwise off.
-  // subtitle overrides the label line (the collapsed Shoulders row names its
-  // worst head instead of a landmark pair); caret is its expand affordance.
-  const colour = muted ? T.text4 : (BAND_COLOUR[status] || T.text4);
-  const bandLabel = muted ? "resting" : (BAND_LABEL[status] || "");
-  // Right side: sparkline. Reference bands (MEV/MAV/MRV) drawn behind the
-  // line in low-opacity tints so eye picks up "you're below the floor" or
-  // "you're over the ceiling" without needing tick labels.
-  return (
-    <div style={{
-      display:"grid",
-      gridTemplateColumns:"minmax(0, 1fr) 140px",
-      alignItems:"center",
-      gap:14,
-      padding:"12px 0",
-      borderTop:`1px solid ${T.bg3}`,
-    }}>
-      <div style={{minWidth:0}}>
-        <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:3}}>
-          <span style={{width:8,height:8,borderRadius:"50%",background:colour,display:"inline-block",flexShrink:0}} aria-hidden="true"/>
-          <span style={{fontSize:13,fontWeight:500,color:T.text1,letterSpacing:"0.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{muscle}</span>
-          {caret && <span aria-hidden="true" style={{fontSize:10,color:T.text3,flexShrink:0}}>{caret}</span>}
-          <span style={{fontSize:12,color:T.text3,fontVariantNumeric:"tabular-nums",marginLeft:"auto",flexShrink:0}}>
-            {sets}<span style={{color:T.text4}}> /wk</span>
-          </span>
+      {groups.map(g => (
+        <div key={g.label}>
+          <div style={{padding:"12px 24px 5px",fontSize:12,color:T.ink3}}>{g.label}</div>
+          <div style={{padding:"0 24px"}}>
+            {g.rows.map(row => <MuscleRow key={row.muscle} {...row} />)}
+          </div>
         </div>
-        <div style={{fontSize:10,color:colour,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:500}}>
-          {subtitle ?? (target
-            ? `${bandLabel} · MEV ${target.mev} · MRV ${target.mrv}`
-            : bandLabel)}
-        </div>
-      </div>
-      <Sparkline series={series} target={target} colour={colour} />
-    </div>
-  );
-}
-
-function Sparkline({ series, target, colour }) {
-  const W = 140, H = 40, PAD_X = 2, PAD_Y = 4;
-  if (!series || series.length === 0) {
-    return <div style={{width:W,height:H,opacity:0.3,fontSize:10,color:T.text4,display:"flex",alignItems:"center",justifyContent:"flex-end",fontStyle:"italic",fontFamily:T.serif}}>—</div>;
-  }
-  // Y scale = max of (series max, MRV * 1.1). Pinning to MRV ensures the
-  // bands render at consistent heights across the card (so a muscle near
-  // MEV looks "near the floor", not "near the top of its own chart").
-  const maxVal = Math.max(...series, target ? target.mrv * 1.1 : 1, 1);
-  const xAt = (i) => PAD_X + (W - 2*PAD_X) * (i / Math.max(series.length - 1, 1));
-  const yAt = (v) => PAD_Y + (H - 2*PAD_Y) * (1 - v / maxVal);
-
-  // Band rectangles (rendered behind the line)
-  const bands = [];
-  if (target) {
-    // Under-MEV zone (alarm) — from 0 to MEV
-    bands.push({ y0: yAt(0), y1: yAt(target.mev), fill: T.rose, opacity: 0.06 });
-    // Optimal MAV..MRV zone — the sweet spot
-    bands.push({ y0: yAt(target.mav), y1: yAt(target.mrv), fill: T.sage, opacity: 0.07 });
-    // Over-MRV zone
-    bands.push({ y0: yAt(maxVal), y1: yAt(target.mrv), fill: T.coral, opacity: 0.05 });
-  }
-
-  const pathD = series.map((v, i) => `${i===0 ? "M" : "L"} ${xAt(i).toFixed(2)} ${yAt(v).toFixed(2)}`).join(" ");
-  const areaD = `${pathD} L ${xAt(series.length-1).toFixed(2)} ${H-PAD_Y} L ${xAt(0).toFixed(2)} ${H-PAD_Y} Z`;
-  const last = series[series.length - 1];
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:H,display:"block"}} aria-hidden="true">
-      {bands.map((b, i) => (
-        <rect key={i} x={0} y={Math.min(b.y0, b.y1)} width={W} height={Math.abs(b.y1 - b.y0)} fill={b.fill} fillOpacity={b.opacity}/>
       ))}
-      <path d={areaD} fill={colour} fillOpacity="0.10"/>
-      <path d={pathD} stroke={colour} strokeWidth="1.25" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
-      <circle cx={xAt(series.length - 1)} cy={yAt(last)} r={2.4} fill={colour} stroke={T.bg2} strokeWidth="1.2"/>
-    </svg>
+      <div style={{margin:"14px 24px 0",fontSize:12,color:T.ink3,lineHeight:1.5}}>
+        Sparklines are the last <span style={{fontFamily:T.measured}}>8</span> weeks · ticks mark MEV and MRV · beyond-MRV work is hatched. Read from your recent weeks, not your lifetime average.
+      </div>
+    </div>
+  );
+}
+
+// One muscle: name · 6-week micro-wave · band bar (with MEV/MRV ticks and
+// hatched overflow) · the number. Colour never carries alone — height,
+// position and the printed figure agree with it.
+function MuscleRow({ muscle, sets, target, status, series, muted = false }) {
+  const colour = muted ? T.ink3 : (BAND_COLOUR[status] || T.ink3);
+  const label = muted ? "resting" : (BAND_LABEL[status] || "");
+  const displayName = muscle.replace(" Delts", " delt").replace("Upper Back", "Upper back");
+
+  // Band bar scale: 0 → ~1.28×MRV so the MRV tick sits ~78% along and a
+  // just-over ramp still fits. No landmark → plain proportional bar.
+  const barMax = target ? Math.max(target.mrv * 1.28, sets * 1.05, 1) : Math.max(sets * 1.3, 1);
+  const fillPct = Math.min(100, (sets / barMax) * 100);
+  const mrvPct = target ? (target.mrv / barMax) * 100 : null;
+  const mevPct = target ? (target.mev / barMax) * 100 : null;
+  const over = target && sets > target.mrv;
+  const solidPct = over ? mrvPct : fillPct;
+
+  // 6-week micro-wave from the 8-week series.
+  const wave = (series || []).slice(-6);
+  const wMax = Math.max(...wave, 1);
+  const waveD = wave.length > 1
+    ? wave.map((v, i) => `${i===0?"M":"L"} ${(i * (38 / (wave.length - 1))).toFixed(1)} ${(11 - 9 * (v / wMax)).toFixed(1)}`).join(" ")
+    : null;
+
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:`1px solid ${T.ruleFaint}`}}
+      aria-label={`${displayName}: ${sets} sets per week${target ? `, ${label}, MEV ${target.mev}, MRV ${target.mrv}` : ""}`}>
+      <span style={{width:82,fontSize:15,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayName}</span>
+      <svg width="38" height="13" viewBox="0 0 38 13" style={{overflow:"visible",flexShrink:0}} aria-hidden="true">
+        {waveD && <path d={waveD} fill="none" stroke={colour} strokeWidth="1.4" strokeLinejoin="round"/>}
+        {wave.length > 0 && <circle cx="38" cy={(11 - 9 * (wave[wave.length-1] / wMax)).toFixed(1)} r="1.9" fill={colour}/>}
+      </svg>
+      <div style={{flex:1,position:"relative",height:8,background:T.well}} aria-hidden="true">
+        {mevPct != null && <div style={{position:"absolute",left:`${mevPct}%`,top:-3,width:1,height:14,background:T.ink,opacity:0.3}}/>}
+        {mrvPct != null && <div style={{position:"absolute",left:`${mrvPct}%`,top:-3,width:1,height:14,background:T.ink,opacity:0.3}}/>}
+        <div style={{position:"absolute",left:0,top:0,height:8,width:`${solidPct}%`,background:colour}}/>
+        {over && (
+          <div style={{position:"absolute",left:`${mrvPct}%`,top:0,height:8,width:`${fillPct - mrvPct}%`,backgroundColor:T.heatOver,backgroundImage:HATCH.auto}}/>
+        )}
+      </div>
+      <span style={{width:26,textAlign:"right",fontFamily:T.measured,fontSize:13,color:T.ink,flexShrink:0}}>{sets}</span>
+    </div>
   );
 }
 
 // ─── Rhythm strip (12-week adherence) ────────────────────────────────────────
 // One cell per week, filled by distinct training days vs the user's weekly
-// quota. Current week gets the ring (it's still being written). No per-day
-// cells by design — see weeklyRhythm in lib/analytics.js.
+// quota. Adherence is ink density, not heat — effort owns the ramp, showing
+// up owns the ink. Current week gets the hairline ring (still being
+// written). Cells stay square: data marks carry no radius.
 function RhythmStrip({ weeks, quota, muted = false }) {
   if (!weeks || weeks.length === 0) return null;
   const CELL_H = 34, GAP = 5;
-  const colour = muted ? T.text4 : T.gold;
   return (
     <div>
       <div style={{ display: "flex", gap: GAP, alignItems: "flex-end" }}>
@@ -612,25 +526,25 @@ function RhythmStrip({ weeks, quota, muted = false }) {
           return (
             <div key={w.weekStart} title={`${w.weekStart} · ${w.days} day${w.days === 1 ? "" : "s"}`}
               style={{
-                flex: 1, height: CELL_H, borderRadius: 6, position: "relative",
-                background: T.bg3, overflow: "hidden",
-                boxShadow: current ? `inset 0 0 0 1px ${colour}88` : "none",
+                flex: 1, height: CELL_H, position: "relative",
+                background: T.well, overflow: "hidden",
+                boxShadow: current ? `inset 0 0 0 1px ${T.ink3}` : "none",
               }}>
               <div style={{
                 position: "absolute", left: 0, right: 0, bottom: 0,
                 height: `${Math.round(frac * 100)}%`,
-                background: colour,
-                opacity: muted ? 0.35 : 0.28 + 0.62 * frac,
+                background: T.ink,
+                opacity: muted ? 0.2 : 0.25 + 0.55 * frac,
               }}/>
             </div>
           );
         })}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 10, color: T.text4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 11, color: T.ink3 }}>
         <span>12 weeks ago</span>
         <span>this week</span>
       </div>
-      <div style={{ marginTop: 10, fontSize: 12, color: T.text3, fontStyle: "italic", fontFamily: T.serif, lineHeight: 1.5 }}>
+      <div style={{ marginTop: 10, fontSize: 13, color: T.ink2, lineHeight: 1.5 }}>
         Weeks build it. No single day decides.
       </div>
     </div>
@@ -638,21 +552,23 @@ function RhythmStrip({ weeks, quota, muted = false }) {
 }
 
 // ─── Readiness bar ────────────────────────────────────────────────────────────
+// fresh / normal / cooked on the one intensity scale — the ramp's cool,
+// middle and hot steps. Numbers always printed.
 function ReadinessBar({ readiness }) {
   const { fresh, normal, cooked, total } = readiness;
-  if (!total) return <div style={{fontSize:13, color:T.text3, fontFamily:T.serif, fontStyle:"italic"}}>No data yet</div>;
+  if (!total) return <div style={{fontSize:13, color:T.ink3}}>No data yet</div>;
   const p = (n) => (n / total) * 100;
   return (
     <div>
-      <div style={{display:"flex", height:10, borderRadius:T.r.pill, overflow:"hidden", marginBottom:12}}>
-        <div style={{width:`${p(fresh)}%`,  background:T.sage}}/>
-        <div style={{width:`${p(normal)}%`, background:T.gold}}/>
-        <div style={{width:`${p(cooked)}%`, background:T.rose}}/>
+      <div style={{display:"flex", height:10, overflow:"hidden", marginBottom:12}}>
+        <div style={{width:`${p(fresh)}%`,  background:T.heat[0]}}/>
+        <div style={{width:`${p(normal)}%`, background:T.heat[2]}}/>
+        <div style={{width:`${p(cooked)}%`, background:T.heat[4]}}/>
       </div>
-      <div style={{display:"flex", justifyContent:"space-between", fontSize:11, fontFamily:T.sans}}>
-        <div style={{color:T.sage}}>Fresh · {fresh} ({Math.round(p(fresh))}%)</div>
-        <div style={{color:T.gold}}>Normal · {normal} ({Math.round(p(normal))}%)</div>
-        <div style={{color:T.rose}}>Cooked · {cooked} ({Math.round(p(cooked))}%)</div>
+      <div style={{display:"flex", justifyContent:"space-between", fontSize:12, color:T.ink2}}>
+        <span>Fresh · <span style={{fontFamily:T.measured}}>{fresh}</span> (<span style={{fontFamily:T.measured}}>{Math.round(p(fresh))}</span>%)</span>
+        <span>Normal · <span style={{fontFamily:T.measured}}>{normal}</span> (<span style={{fontFamily:T.measured}}>{Math.round(p(normal))}</span>%)</span>
+        <span>Cooked · <span style={{fontFamily:T.measured}}>{cooked}</span> (<span style={{fontFamily:T.measured}}>{Math.round(p(cooked))}</span>%)</span>
       </div>
     </div>
   );

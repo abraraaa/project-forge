@@ -8,7 +8,7 @@
 
 import Link from "next/link";
 import { libraryByMuscle, LIBRARY } from "@/lib/library";
-import { T } from "@/lib/tokens";
+import { T, DISPLAY } from "@/lib/tokens";
 
 export const metadata = {
   title: "Exercise Library",
@@ -21,19 +21,18 @@ export default function LibraryIndexPage() {
   const groups = libraryByMuscle();
   return (
     <div style={{ minHeight: "100vh", padding: "max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 64px", maxWidth: 640, margin: "0 auto" }}>
-      <Link href="/" style={{ fontSize: 12, color: T.text3, fontFamily: T.sans, textDecoration: "none" }}>
+      <Link href="/" style={{ fontSize: 13, color: T.ink3, fontFamily: T.text, textDecoration: "none" }}>
         ← Heatwayve
       </Link>
 
       <div style={{ marginTop: 32 }}>
-        <div style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 10 }}>
+        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
           Exercise library
         </div>
-        <h1 style={{ fontFamily: T.serif, fontSize: 42, fontWeight: 300, lineHeight: 1.1, margin: 0 }}>
-          What each lift<br />
-          <span style={{ color: T.gold, fontStyle: "italic" }}>actually trains.</span>
+        <h1 style={{ ...DISPLAY, fontSize: 42, color: T.ink, margin: 0 }}>
+          What each lift actually trains
         </h1>
-        <p style={{ fontSize: 14, color: T.text2, marginTop: 14, lineHeight: 1.6 }}>
+        <p style={{ fontSize: 15, color: T.ink2, marginTop: 14, lineHeight: 1.6 }}>
           {`${LIBRARY.length} movements`}, each with the weighted muscle contributions
           Heatwayve uses to audit your training volume — a squat isn&apos;t &quot;legs&quot;,
           it&apos;s quads first, glutes and hamstrings meaningfully, core along for
@@ -43,18 +42,18 @@ export default function LibraryIndexPage() {
 
       {groups.map(({ muscle, exercises }) => (
         <section key={muscle} style={{ marginTop: 40 }}>
-          <h2 style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 4px" }}>
+          <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 4px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
             {muscle} · {exercises.length}
           </h2>
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {exercises.map((e) => (
-              <li key={e.slug} style={{ borderBottom: `1px solid ${T.bg3}` }}>
+              <li key={e.slug} style={{ borderBottom: `1px solid ${T.ruleFaint}` }}>
                 <Link
                   href={`/library/${e.slug}`}
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "13px 0", textDecoration: "none" }}
                 >
-                  <span style={{ fontFamily: T.serif, fontSize: 17, fontWeight: 300, color: T.text1 }}>{e.name}</span>
-                  <span style={{ fontSize: 11, color: T.text4, fontFamily: T.sans, flexShrink: 0 }}>{e.categoryLabel}</span>
+                  <span style={{ fontSize: 16, fontWeight: 500, color: T.ink, fontFamily: T.text }}>{e.name}</span>
+                  <span style={{ fontSize: 12, color: T.ink3, fontFamily: T.text, flexShrink: 0 }}>{e.categoryLabel}</span>
                 </Link>
               </li>
             ))}
@@ -62,8 +61,8 @@ export default function LibraryIndexPage() {
         </section>
       ))}
 
-      <p style={{ marginTop: 48, fontSize: 13, color: T.text3, fontFamily: T.serif, fontStyle: "italic", lineHeight: 1.6 }}>
-        Train with intention. <Link href="/" style={{ color: T.gold }}>Open Heatwayve</Link> — it programmes,
+      <p style={{ marginTop: 48, fontSize: 13, color: T.ink3, fontFamily: T.text, lineHeight: 1.6 }}>
+        Train with intention. <Link href="/" style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>Open Heatwayve</Link> — it programmes,
         progresses, and audits all of this for you.
       </p>
     </div>

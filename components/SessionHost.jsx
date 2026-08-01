@@ -503,6 +503,22 @@ export default function SessionHost() {
     setFlow("done");
   };
 
+  // Logged sets for the CURRENT block — the draft is an external mutable
+  // store (logSet mutates the ref'd object), so it's mirrored into render
+  // state by an effect keyed on every advance (set logged / block change /
+  // resume). Powers the logged-set rows with their heat marks on the
+  // session screen; for supersets the active exercise's side is shown.
+  const [loggedSets, setLoggedSets] = useState([]);
+  useEffect(() => {
+    // Mirrors the mutable draft (external store) into render state after
+    // each advance; keyed deps make it converge in one pass, no cascade.
+    const saved = draftLogRef.current?.blocks?.[block?.id];
+    if (!saved?.exercises) { setLoggedSets([]); return; }
+    const ex = saved.exercises[activeEx?.name]
+      ?? Object.values(saved.exercises)[0];
+    setLoggedSets((ex?.sets || []).map(s => ({ weight: s.weight ?? null, reps: s.reps ?? null, rpe: s.rpe ?? null })));
+  }, [flow, blockIdx, setNum, phase, block?.id, activeEx?.name]);
+
   // ─── Render ────────────────────────────────────────────────────────────────
   if (!flow) return null; // resolving entry (or bouncing)
 
@@ -513,7 +529,7 @@ export default function SessionHost() {
     swapKey, onSwap,
     showVid, setShowVid, getW, getR, editTarget, setEditTarget,
     workingWeights, setWW, workingReps, setWR,
-    history,
+    history, loggedSets,
     awaitRpe, ssRoundDone,
     restActive, restRemain, setRestActive, setRestRemain,
     onCommit: commitLog, onLog: handleLog, onQuit: handleQuit,
@@ -563,7 +579,9 @@ export default function SessionHost() {
           Log button) now the session layout anchors actions at the fold. */}
       {setFlash && (
         <div style={{ position: "fixed", left: 0, right: 0, margin: "0 auto", width: "calc(100% - 64px)", maxWidth: 366, bottom: "calc(env(safe-area-inset-bottom,0px) + 190px)", pointerEvents: "none", zIndex: 60, textAlign: "center", opacity: flashLeaving ? 0 : 1, transition: "opacity 600ms ease" }}>
-          <span style={{ display: "inline-block", animation: `fadeSlide 400ms ${T.ease}`, fontFamily: T.serif, fontStyle: "italic", fontSize: 16, fontWeight: 300, color: T.gold, lineHeight: 1.45, textShadow: "0 2px 12px rgba(10,9,8,0.8)" }}>{setFlash}</span>
+          {/* Vellum chip — the toast material. Sensation lives in the copy
+              and the timing, not a third type voice. */}
+          <span className="forge-vellum" style={{ display: "inline-block", animation: `fadeSlide 400ms ${T.ease}`, fontFamily: T.text, fontSize: 14, fontWeight: 500, color: T.ink, lineHeight: 1.45, borderRadius: 12, padding: "10px 16px", boxShadow: "0 10px 24px -14px rgba(36,28,25,0.35)" }}>{setFlash}</span>
         </div>
       )}
     </ErrorBoundary>

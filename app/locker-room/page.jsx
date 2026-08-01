@@ -26,7 +26,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { T } from "@/lib/tokens";
+import { T, DISPLAY } from "@/lib/tokens";
 import { P, BW, getLocalProfile, pushNow } from "@/lib/storage";
 import { haptic } from "@/lib/a11y";
 import { ensurePhotoAccess } from "@/lib/auth-session";
@@ -226,10 +226,10 @@ export default function LockerRoom() {
   // Shell-compliant (Phase 2 contract, .forge-page owns the viewport): no
   // vh/dvh, no safe-area math, no local background — the substrate runs
   // continuous under the status bar; this page only adds design spacing.
-  const page = { color: T.text1, fontFamily: T.sans, padding: "20px 20px 24px" };
-  const serif = { fontFamily: T.serif, fontWeight: 300 };
-  const coralBtn = { padding: "14px 20px", background: T.coral, border: "none", borderRadius: T.r.lg, ...serif, fontSize: 16, color: T.bg0, cursor: "pointer" };
-  const quietBtn = { padding: "10px 14px", background: "none", border: "none", fontSize: 12, color: T.text3, cursor: "pointer" };
+  const page = { color: T.ink, fontFamily: T.text, padding: "20px 20px 24px" };
+  const mono = { fontFamily: T.measured };
+  const commitBtn = { padding: "14px 20px", background: T.commit, border: "none", borderRadius: T.r, fontFamily: T.text, fontWeight: 500, fontSize: 15, color: T.commitInk, boxShadow: T.elevStrong, cursor: "pointer" };
+  const quietBtn = { padding: "10px 14px", background: "none", border: "none", fontSize: 13, color: T.ink3, cursor: "pointer", fontFamily: T.text };
   const PICK_ID = "scrub-photo-input";
   const picker = <input id={PICK_ID} type="file" accept="image/*" onChange={onPick} style={{ display: "none" }} />;
 
@@ -253,7 +253,7 @@ export default function LockerRoom() {
   })();
 
   const bwChart = (h = 120) => {
-    if (bwSeries.length === 0) return <p style={{ fontSize: 12, color: T.text4 }}>Log a weight. The line needs two points; the truth needs a few more.</p>;
+    if (bwSeries.length === 0) return <p style={{ fontSize: 13, color: T.ink3 }}>Log a weight. The line needs two points; the truth needs a few more.</p>;
     if (bwSeries.length === 1) {
       // The very first log must visibly LAND (boss, 2026-07-24) — one point
       // renders as a marked reading, not placeholder copy.
@@ -261,11 +261,11 @@ export default function LockerRoom() {
       return (
         <div style={{ height: h, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: T.sage, alignSelf: "center" }} />
-            <span style={{ ...serif, fontSize: 28 }}>{only.kg} kg</span>
-            <span style={{ fontSize: 11, color: T.text4, letterSpacing: "0.08em" }}>{only.date}</span>
+            <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: T.ink2, alignSelf: "center" }} />
+            <span style={{ ...mono, fontSize: 28, letterSpacing: "-0.03em" }}>{only.kg} kg</span>
+            <span style={{ fontSize: 12, color: T.ink3 }}>{only.date}</span>
           </div>
-          <p style={{ fontSize: 12, color: T.text4, marginTop: 8 }}>First point on the curve — the next one draws the line.</p>
+          <p style={{ fontSize: 13, color: T.ink3, marginTop: 8 }}>First point on the curve — the next one draws the line.</p>
         </div>
       );
     }
@@ -291,35 +291,35 @@ export default function LockerRoom() {
     return (
       <div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "2px 0 6px" }}>
-          <span style={{ ...serif, fontSize: 26 }}>{last.kg} kg</span>
+          <span style={{ ...mono, fontSize: 26, letterSpacing: "-0.03em" }}>{last.kg} kg</span>
           {delta !== 0 && (
-            <span style={{ fontFamily: T.serif, fontSize: 12, fontStyle: "italic", color: delta < 0 ? T.sage : T.text3 }}>
+            <span style={{ ...mono, fontSize: 12, color: T.ink2 }}>
               {delta > 0 ? "+" : "−"}{Math.abs(delta)} kg since {fmtD(first.date)}
             </span>
           )}
         </div>
         <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: h, display: "block" }}>
-          <polyline points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={T.sage} strokeWidth="1.5" opacity="0.8" />
+          <polyline points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="var(--ink-2)" strokeWidth="1.5" opacity="0.8" />
           {pts.map((p, i) => (
-            <circle key={p.date} cx={p.x} cy={p.y} r={i === n - 1 ? 3 : 2.5} fill={i === n - 1 ? T.coral : T.sage} />
+            <circle key={p.date} cx={p.x} cy={p.y} r={i === n - 1 ? 3 : 2.5} fill={i === n - 1 ? "var(--ink)" : "var(--ink-2)"} />
           ))}
           {labelled.map((p) => (
             <text key={`t${p.date}`} x={p.x} y={p.y < PAD_TOP + 10 ? p.y + 16 : p.y - 8}
               textAnchor={p.x < 30 ? "start" : p.x > w - 30 ? "end" : "middle"}
-              style={{ fontSize: 10, fontFamily: T.sans, fill: p.date === last.date ? T.text2 : T.text3 }}>
+              style={{ fontSize: 10, fontFamily: T.measured, fill: p.date === last.date ? "var(--ink)" : "var(--ink-3)" }}>
               {p.kg}
             </text>
           ))}
         </svg>
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-          <span style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: T.text4 }}>{fmtD(first.date)}</span>
-          <span style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: T.text4 }}>{fmtD(last.date)}</span>
+          <span style={{ fontSize: 11, color: T.ink3 }}>{fmtD(first.date)}</span>
+          <span style={{ fontSize: 11, color: T.ink3 }}>{fmtD(last.date)}</span>
         </div>
       </div>
     );
   };
 
-  if (!profile) return <main style={page}><p style={{ color: T.text3 }}>No active profile — sign in first, then come back to the Locker Room.</p></main>;
+  if (!profile) return <main style={page}><p style={{ color: T.ink3 }}>No active profile — sign in first, then come back to the Locker Room.</p></main>;
 
   // ── Chart-first layout: ungated bodyweight on top, photos behind the toggle ──
   const photosVisible = shown && photos !== null;
@@ -348,33 +348,33 @@ export default function LockerRoom() {
           contract — the ratchet rejects new safe-area-inset padding here,
           unlike the Lab's grandfathered header). Design spacing only. */}
       <div style={{ padding: "32px 0 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <button onClick={() => router.push("/")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12, color: T.text3, fontFamily: T.sans }}>
+        <button onClick={() => router.push("/")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, color: T.ink3, fontFamily: T.text }}>
           ← Home
         </button>
         {photosVisible ? (
-          <button onClick={() => setShown(false)} style={{ padding: "8px 14px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.md, fontSize: 12, color: T.text2, cursor: "pointer" }}>Hide photos</button>
+          <button onClick={() => setShown(false)} style={{ padding: "8px 14px", background: T.surface, border: "none", boxShadow: T.elev, borderRadius: T.r, fontSize: 12, fontWeight: 500, color: T.ink2, cursor: "pointer", fontFamily: T.text }}>Hide photos</button>
         ) : (
-          <button onClick={reveal} disabled={busy} style={{ padding: "8px 14px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.md, fontSize: 12, color: T.text2, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>{busy ? "One sec…" : "Show photos"}</button>
+          <button onClick={reveal} disabled={busy} style={{ padding: "8px 14px", background: T.surface, border: "none", boxShadow: T.elev, borderRadius: T.r, fontSize: 12, fontWeight: 500, color: T.ink2, cursor: "pointer", fontFamily: T.text, opacity: busy ? 0.6 : 1 }}>{busy ? "One sec…" : "Show photos"}</button>
         )}
       </div>
       <div style={{ padding: "24px 0 0" }}>
-        <div style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 10 }}>
-          Locker Room
+        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
+          Locker room
         </div>
-        <div className="home-headline" style={{ fontFamily: T.serif, fontSize: 42, fontWeight: 300, lineHeight: 1.1, transformOrigin: "left top" }}>
-          Where<br/><span style={{ color: T.sage, fontStyle: "italic" }}>it shows.</span>
-        </div>
-        <p style={{ fontSize: 14, color: T.text2, margin: "10px 0 16px", lineHeight: 1.5 }}>The chart is always here; photos stay behind the door until you ask.</p>
+        <h1 className="home-headline" style={{ ...DISPLAY, fontSize: 45, color: T.ink, margin: 0, transformOrigin: "left top" }}>
+          Where it shows
+        </h1>
+        <p style={{ fontSize: 15, color: T.ink2, margin: "10px 0 16px", lineHeight: 1.5 }}>The chart is always here; photos stay behind the door until you ask.</p>
       </div>
 
       {/* The always-on bodyweight chart */}
       {bwChart(photosVisible ? 90 : 150)}
-      {err && <p style={{ fontSize: 12, color: T.rose, marginTop: 10 }}>{err}</p>}
+      {err && <p style={{ fontSize: 13, color: T.ink2, marginTop: 10 }}>{err}</p>}
 
       {photosVisible && photos.length === 0 && (
         <div style={{ marginTop: 18 }}>
-          <p style={{ fontSize: 13, color: T.text3, marginBottom: 12 }}>No photos yet. The first one's the hardest.</p>
-          <label htmlFor={PICK_ID} role="button" style={{ ...coralBtn, display: "inline-block" }}>Add your first photo</label>
+          <p style={{ fontSize: 13, color: T.ink3, marginBottom: 12 }}>No photos yet. The first one's the hardest.</p>
+          <label htmlFor={PICK_ID} role="button" style={{ ...commitBtn, display: "inline-block" }}>Add your first photo</label>
         </div>
       )}
 
@@ -383,18 +383,18 @@ export default function LockerRoom() {
             date anchors (2026-07-26) — saying it twice was the opposite of
             elegant. */}
         <div style={{ display: "flex", justifyContent: "flex-end", margin: "14px 0 10px" }}>
-          <label htmlFor={PICK_ID} role="button" style={{ padding: "8px 14px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.md, fontSize: 12, color: T.text2, cursor: "pointer" }}>+ Add photo</label>
+          <label htmlFor={PICK_ID} role="button" style={{ padding: "8px 14px", background: T.surface, boxShadow: T.elev, borderRadius: T.r, fontSize: 12, fontWeight: 500, color: T.ink2, cursor: "pointer" }}>+ Add photo</label>
         </div>
 
         {askBw && (
-          <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: T.r.md, background: `${T.sage}12`, border: `1px solid ${T.sage}33` }}>
+          <div style={{ marginBottom: 14, padding: "12px 14px", borderRadius: T.r, background: T.surface, boxShadow: T.elev }}>
             {showDrum ? (<>
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><BodyweightDrum value={bwDraft} onChange={setBwDraft} /></div>
-              <button onClick={saveBwAndTag} disabled={busy} style={{ ...coralBtn, width: "100%" }}>{busy ? "Saving…" : "Save weight"}</button>
+              <button onClick={saveBwAndTag} disabled={busy} style={{ ...commitBtn, width: "100%" }}>{busy ? "Saving…" : "Save weight"}</button>
             </>) : (<>
-              <span style={{ fontSize: 13, color: T.text1 }}>Photo saved. What did the scale say?</span>
+              <span style={{ fontSize: 13, color: T.ink }}>Photo saved. What did the scale say?</span>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button onClick={() => setShowDrum(true)} style={{ ...coralBtn, padding: "10px 16px", fontSize: 14 }}>Update it</button>
+                <button onClick={() => setShowDrum(true)} style={{ ...commitBtn, padding: "10px 16px", fontSize: 14 }}>Update it</button>
                 <button onClick={() => setAskBw(null)} style={quietBtn}>Keep {photos.find((p) => p.date === askBw)?.bodyweightAt ?? "latest"} kg</button>
               </div>
             </>)}
@@ -402,7 +402,7 @@ export default function LockerRoom() {
         )}
 
         <div ref={trackRef} onPointerDown={onDrag} onPointerMove={onDrag}
-          style={{ position: "relative", width: "100%", aspectRatio: "3/4", maxHeight: "46dvh", borderRadius: T.r.xl, overflow: "hidden", background: T.bg2, touchAction: "pan-y", marginBottom: 12 }}>
+          style={{ position: "relative", width: "100%", aspectRatio: "3/4", maxHeight: "46dvh", borderRadius: T.r, overflow: "hidden", background: T.surface, boxShadow: T.elev, touchAction: "pan-y", marginBottom: 12 }}>
           {urls[photos[i0].date] && (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img src={urls[photos[i0].date]} alt={photos[i0].date} draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 1 - frac }} />
@@ -411,25 +411,25 @@ export default function LockerRoom() {
             /* eslint-disable-next-line @next/next/no-img-element */
             <img src={urls[photos[i1].date]} alt={photos[i1].date} draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: frac }} />
           )}
-          <div style={{ position: "absolute", left: 12, bottom: 12, padding: "8px 12px", borderRadius: T.r.md, background: `${T.bg0}CC`, backdropFilter: "blur(8px)" }}>
-            <div style={{ ...serif, fontSize: 18 }}>{cur?.bodyweightAt != null ? `${cur.bodyweightAt} kg` : "—"}</div>
-            <div style={{ fontSize: 10, color: T.text3, letterSpacing: "0.08em" }}>{cur?.date}</div>
+          <div className="forge-vellum" style={{ position: "absolute", left: 12, bottom: 12, padding: "8px 12px", borderRadius: T.r, boxShadow: "0 4px 14px -8px rgba(36,28,25,0.4)" }}>
+            <div style={{ ...mono, fontSize: 17, color: T.ink }}>{cur?.bodyweightAt != null ? `${cur.bodyweightAt} kg` : "—"}</div>
+            <div style={{ fontSize: 11, color: T.ink3 }}>{cur?.date}</div>
           </div>
         </div>
 
         <div onPointerDown={onDrag} onPointerMove={onDrag} style={{ touchAction: "pan-y" }}>
           <svg viewBox={`0 0 ${curveW} ${curveH}`} style={{ width: "100%", height: curveH, display: "block" }}>
-            <polyline points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={T.sage} strokeWidth="1.5" opacity="0.7" />
-            {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill={Math.round(pos) === i ? T.coral : T.bg4} />)}
-            <line x1={markerX} y1="0" x2={markerX} y2={curveH} stroke={T.coral} strokeWidth="1" opacity="0.8" />
+            <polyline points={pts.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="var(--ink-2)" strokeWidth="1.5" opacity="0.7" />
+            {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill={Math.round(pos) === i ? "var(--ink)" : "var(--rule)"} />)}
+            <line x1={markerX} y1="0" x2={markerX} y2={curveH} stroke="var(--ink)" strokeWidth="1" opacity="0.8" />
           </svg>
         </div>
 
         <div style={{ marginTop: 10 }}>
           {confirmDelete ? (
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: T.rose }}>Remove {cur?.date} for good?</span>
-              <button onClick={doDelete} disabled={busy} style={{ padding: "8px 14px", background: `${T.rose}18`, border: `1px solid ${T.rose}55`, borderRadius: T.r.md, fontSize: 12, color: T.rose, cursor: "pointer" }}>{busy ? "Removing…" : "Remove"}</button>
+              <span style={{ fontSize: 13, color: T.ink2 }}>Remove {cur?.date} for good?</span>
+              <button onClick={doDelete} disabled={busy} style={{ padding: "8px 14px", background: T.surface, boxShadow: `inset 0 0 0 1px ${T.heat[4]}`, border: "none", borderRadius: T.r, fontSize: 12, fontWeight: 500, color: T.heat[4], cursor: "pointer" }}>{busy ? "Removing…" : "Remove"}</button>
               <button onClick={() => setConfirmDelete(false)} style={quietBtn}>Keep it</button>
             </div>
           ) : (

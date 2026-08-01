@@ -41,10 +41,10 @@ function Row({ label, value, dim = false }) {
   return (
     <div style={{
       display: "flex", justifyContent: "space-between", gap: 16,
-      padding: "8px 0", borderBottom: "1px solid #2D2924",
-      fontSize: 13, color: dim ? "#6B6560" : "#EDEBE7",
+      padding: "8px 0", borderBottom: "1px solid var(--rule)",
+      fontSize: 13, color: dim ? "var(--ink-3)" : "var(--ink)",
     }}>
-      <span style={{ color: "#A09890" }}>{label}</span>
+      <span style={{ color: "var(--ink-2)" }}>{label}</span>
       <span style={{ fontFamily: "ui-monospace, monospace", textAlign: "right" }}>
         {value}
       </span>
@@ -56,7 +56,7 @@ function Section({ title, children }) {
   return (
     <div style={{ marginBottom: 24 }}>
       <div style={{
-        fontSize: 10, fontWeight: 600, color: "#6B6560",
+        fontSize: 10, fontWeight: 600, color: "var(--ink-3)",
         letterSpacing: "0.14em", textTransform: "uppercase",
         marginBottom: 8,
       }}>{title}</div>
@@ -66,12 +66,12 @@ function Section({ title, children }) {
 }
 
 function Button({ children, onClick, variant = "default", busy = false }) {
-  const bg = busy ? "#2D2924" :
-             variant === "danger" ? "#3a1f1c" : "#1A1714";
-  const border = busy ? "#403C38" :
-                 variant === "danger" ? "#C9A0B833" : "#403C38";
-  const color = busy ? "#6B6560" :
-                variant === "danger" ? "#C9A0B8" : "#E0956A";
+  const bg = busy ? "var(--rule)" :
+             variant === "danger" ? "var(--surface)" : "var(--surface)";
+  const border = busy ? "var(--rule)" :
+                 variant === "danger" ? "var(--rule)" : "var(--rule)";
+  const color = busy ? "var(--ink-3)" :
+                variant === "danger" ? "var(--heat-4)" : "var(--ink)";
   return (
     <button onClick={onClick} disabled={busy} style={{
       flex: 1, padding: "12px 14px", background: bg,
@@ -302,9 +302,9 @@ export default function DiagSync() {
 
   if (!profile) {
     return (
-      <div style={{ padding: 24, maxWidth: 430, margin: "0 auto", color: "#EDEBE7", fontFamily: "system-ui" }}>
+      <div style={{ padding: 24, maxWidth: 430, margin: "0 auto", color: "var(--ink)", fontFamily: "system-ui" }}>
         <div style={{ fontSize: 22, marginBottom: 8 }}>Sync diagnostic</div>
-        <div style={{ color: "#A09890" }}>
+        <div style={{ color: "var(--ink-2)" }}>
           No active profile. Sign in via the main app first, then return here.
         </div>
       </div>
@@ -321,19 +321,19 @@ export default function DiagSync() {
       // opaque #131110 here covered the grain and mismatched both the
       // status-bar strip and Safari's chrome tone (#1D1A19, the grain-
       // lifted field), seen on device as bands at both ends.
-      color: "#EDEBE7",
+      color: "var(--ink)",
       fontFamily: "system-ui, -apple-system, sans-serif",
     }}>
-      <Link href="/" style={{ display: "inline-block", marginBottom: 18, fontSize: 12, color: "#857D75", textDecoration: "none" }}>
+      <Link href="/" style={{ display: "inline-block", marginBottom: 18, fontSize: 12, color: "var(--ink-3)", textDecoration: "none" }}>
         ← Home
       </Link>
-      <div style={{ fontSize: 11, color: "#6B6560", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
+      <div style={{ fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>
         Sync diagnostic
       </div>
       <div style={{ fontSize: 26, fontWeight: 300, marginBottom: 4 }}>
         {profile}
       </div>
-      <div style={{ fontSize: 12, color: "#A09890", marginBottom: 24 }}>
+      <div style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 24 }}>
         {`Sync state: ${status.state} · Last sync: ${fmtTs(status.lastSync)}${status.error ? " · ERR: " + status.error : ""}`}
       </div>
 
@@ -439,12 +439,12 @@ export default function DiagSync() {
 
       <Section title="Day entries (latest 20)">
         <div style={{
-          background: "#1A1714", border: "1px solid #2D2924", borderRadius: 8,
+          background: "var(--surface)", border: "1px solid var(--rule)", borderRadius: 8,
           padding: "10px 12px", fontSize: 11, fontFamily: "ui-monospace, monospace",
           maxHeight: 280, overflowY: "auto",
         }}>
           {dayEntries.length === 0 ? (
-            <div style={{ color: "#6B6560" }}>no entries</div>
+            <div style={{ color: "var(--ink-3)" }}>no entries</div>
           ) : (
             dayEntries.map((e) => {
               const sched = e.scheduledType || "—";
@@ -456,19 +456,19 @@ export default function DiagSync() {
               return (
                 <div key={e.date} style={{
                   display: "flex", justifyContent: "space-between",
-                  padding: "4px 0", color: broken ? "#C9A0B8" : "#EDEBE7",
+                  padding: "4px 0", color: broken ? "var(--heat-4)" : "var(--ink)",
                 }}>
                   <span>{e.date}</span>
-                  <span style={{ color: "#A09890" }}>{`sched:${sched}`}</span>
-                  <span style={{ color: "#A09890" }}>{`done:${done}`}</span>
-                  <span style={{ color: "#A09890" }}>{`sid:${sid}`}</span>
-                  <span style={{ color: "#A09890" }}>{`m:${marks}`}</span>
+                  <span style={{ color: "var(--ink-2)" }}>{`sched:${sched}`}</span>
+                  <span style={{ color: "var(--ink-2)" }}>{`done:${done}`}</span>
+                  <span style={{ color: "var(--ink-2)" }}>{`sid:${sid}`}</span>
+                  <span style={{ color: "var(--ink-2)" }}>{`m:${marks}`}</span>
                 </div>
               );
             })
           )}
         </div>
-        <div style={{ fontSize: 11, color: "#6B6560", marginTop: 8, lineHeight: 1.55 }}>
+        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 8, lineHeight: 1.55 }}>
           Rose = broken (no completedType, no sessionId). Force-repair re-runs
           the migration; rose lines should disappear or move to white.
         </div>
@@ -479,7 +479,7 @@ export default function DiagSync() {
           <Row label={lastAction.type} value={fmtTs(lastAction.at)} dim />
           <div style={{
             padding: "12px 14px", marginTop: 8,
-            background: "#1A1714", border: "1px solid #2D2924", borderRadius: 8,
+            background: "var(--surface)", border: "1px solid var(--rule)", borderRadius: 8,
             fontSize: 12, fontFamily: "ui-monospace, monospace",
             wordBreak: "break-word",
           }}>{lastAction.result}</div>
@@ -487,7 +487,7 @@ export default function DiagSync() {
       )}
 
       <Section title="What each action does">
-        <div style={{ fontSize: 12, color: "#A09890", lineHeight: 1.6 }}>
+        <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.6 }}>
           <div><strong>Force pull</strong> — fetches the blob via blobPull, shows what's actually there. Does NOT merge or persist; pure read of remote state.</div>
           <div style={{ marginTop: 6 }}><strong>Force push</strong> — calls blobPush with current local snapshot. Use to confirm the push reaches the blob successfully.</div>
           <div style={{ marginTop: 6 }}><strong>Full sync</strong> — same backgroundSync the app runs on profile change / visibility return. Pulls, merges with local per the merge rules, persists, returns {`{source, changed}`}.</div>
@@ -504,9 +504,9 @@ export default function DiagSync() {
         display: "flex", justifyContent: "space-between",
         padding: "8px 0", marginTop: 8, fontSize: 13,
       }}>
-        <span style={{ color: "#6B6560" }}>exercise index</span>
+        <span style={{ color: "var(--ink-3)" }}>exercise index</span>
         <Link href="/library" style={{
-          fontFamily: "ui-monospace, monospace", color: "#6B6560",
+          fontFamily: "ui-monospace, monospace", color: "var(--ink-3)",
           textDecoration: "none",
         }}>
           {LIBRARY.length} entries mapped →

@@ -55,23 +55,27 @@ export default class ErrorBoundary extends Component {
         <div
           style={{
             minHeight: "100vh",
-            background: T.bg0,
-            color: T.text1,
+            background: T.ground,
+            color: T.ink,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
             padding: 32,
-            fontFamily: T.sans,
+            fontFamily: T.text,
           }}
         >
           <div
             style={{
-              fontFamily: T.serif,
+              fontFamily: T.display,
+              fontOpticalSizing: "none",
+              fontVariationSettings: "'opsz' 11",
+              fontKerning: "normal",
+              letterSpacing: "0.004em",
               fontSize: 32,
-              fontWeight: 300,
+              fontWeight: 400,
               marginBottom: 16,
-              color: T.coral,
+              color: T.ink,
             }}
           >
             Something broke
@@ -79,7 +83,7 @@ export default class ErrorBoundary extends Component {
           <p
             style={{
               fontSize: 14,
-              color: T.text2,
+              color: T.ink2,
               textAlign: "center",
               maxWidth: 320,
               lineHeight: 1.6,
@@ -93,10 +97,10 @@ export default class ErrorBoundary extends Component {
             <button
               onClick={this.handleReset}
               style={{
-                background: T.coral,
-                color: T.bg0,
+                background: T.commit,
+                color: T.commitInk,
                 border: "none",
-                borderRadius: T.r.md,
+                borderRadius: T.r,
                 padding: "14px 28px",
                 fontSize: 14,
                 fontWeight: 500,
@@ -108,10 +112,11 @@ export default class ErrorBoundary extends Component {
             <button
               onClick={this.handleClearAndReload}
               style={{
-                background: T.bg2,
-                color: T.text2,
-                border: `1px solid ${T.bg3}`,
-                borderRadius: T.r.md,
+                background: T.surface,
+                color: T.ink2,
+                border: "none",
+                boxShadow: T.elev,
+                borderRadius: T.r,
                 padding: "14px 28px",
                 fontSize: 14,
                 fontWeight: 500,
@@ -127,10 +132,10 @@ export default class ErrorBoundary extends Component {
               style={{
                 marginTop: 32,
                 padding: 16,
-                background: T.bg1,
-                borderRadius: T.r.sm,
+                background: T.well,
+                borderRadius: T.r,
                 fontSize: 11,
-                color: T.text3,
+                color: T.ink2,
                 maxWidth: "90vw",
                 overflow: "auto",
                 whiteSpace: "pre-wrap",

@@ -4,8 +4,8 @@
   "description": "Unveil the best you. Train with intention.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1D1A19",
-  "theme_color": "#1D1A19",
+  "background_color": "#F2E9E3",
+  "theme_color": "#F2E9E3",
   "orientation": "portrait",
   "categories": [
     "fitness",
@@ -78,14 +78,14 @@
       "sizes": "1206x2622",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Today's training at a glance — week rhythm, session overview, and the Performance Lab"
+      "label": "Today's training at a glance \u2014 week rhythm, session overview, and the Performance Lab"
     },
     {
       "src": "/screenshots/lab.png",
       "sizes": "1206x2622",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Your volume held against evidence-based landmarks — what is productive, and what is short"
+      "label": "Your volume held against evidence-based landmarks \u2014 what is productive, and what is short"
     }
   ]
 }

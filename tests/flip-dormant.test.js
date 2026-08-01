@@ -63,8 +63,8 @@ describe("dormant surfaces (code shape)", () => {
     expect(prop).toMatch(/hasPreFlipStory\(/);
     // Both voices are present: the migration line and the default.
     expect(s).toContain("Same fire, new home");
-    expect(s).toMatch(/\bAdd\b\s*<span/);
-    expect(s).toMatch(/\bInstall\b\s*<span/);
+    expect(s).toContain("Add Heatwayve back");
+    expect(s).toContain("Install Heatwayve");
   });
   it("the welcome-back beat greets the move only on the new origin", () => {
     const s = readFileSync(resolve(root, "components/TakenNameModal.jsx"), "utf8");

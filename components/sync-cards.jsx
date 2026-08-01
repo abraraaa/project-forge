@@ -62,14 +62,15 @@ export function SyncStatusCard({ profile }) {
     needsAuth: "On this device only",
   };
 
+  // Steel for every state that just means "in motion" or "local only" —
+  // nothing has gone wrong, so nothing gets a heat colour. Error is
+  // acknowledgement, not alarm: warm mid-ramp, never red-alert.
   const stateColour = {
-    idle: T.sage,
-    pulling: T.steel,
-    pushing: T.steel,
-    error: T.coral,
-    // Steel, not coral: nothing has gone wrong. Coral would teach the user to
-    // read a normal resting state as an alarm.
-    needsAuth: T.steel,
+    idle: T.ink2,
+    pulling: T.under,
+    pushing: T.under,
+    error: T.heat[2],
+    needsAuth: T.under,
   };
 
   // Deliberately CLEAR — a status readout, not an interactive card (per the
@@ -92,21 +93,21 @@ export function SyncStatusCard({ profile }) {
           animation: status.state === "pulling" || status.state === "pushing" ? "pulse 1s ease-in-out infinite" : "none",
         }} />
         <div>
-          <div style={{ fontSize: 13, fontWeight: 500, color: T.text1 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: T.ink }}>
             {stateLabel[status.state]}
           </div>
           {status.lastSync && status.state === "idle" && (
-            <div style={{ fontSize: 11, color: T.text3, marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
               Last sync: {formatTime(status.lastSync)}
             </div>
           )}
           {status.error && (
-            <div style={{ fontSize: 11, color: T.text3, marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
               Will retry when online
             </div>
           )}
           {status.state === "needsAuth" && (
-            <div style={{ fontSize: 11, color: T.text3, marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
               Add a passkey to carry it across devices
             </div>
           )}
@@ -118,12 +119,13 @@ export function SyncStatusCard({ profile }) {
           disabled={retrying}
           style={{
             padding: "8px 14px",
-            background: T.bg3,
-            border: `1px solid ${T.bg4}`,
-            borderRadius: T.r.md,
+            background: T.surface,
+            border: "none",
+            boxShadow: T.elev,
+            borderRadius: T.r,
             fontSize: 12,
             fontWeight: 500,
-            color: T.text2,
+            color: T.ink2,
             cursor: retrying ? "default" : "pointer",
             opacity: retrying ? 0.6 : 1,
           }}
@@ -175,13 +177,13 @@ export function SyncNowRow({ profile }) {
       : "Never synced";
 
   return (
-    <div onClick={handleClick} role="button" aria-label="Sync now" className="forge-glass"
-      style={{ marginTop: 12, padding: "14px 18px", border: `1px solid ${T.bg3}`, borderRadius: T.r.lg, cursor: busy ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", transition: `all 180ms ${T.ease}`, opacity: busy ? 0.7 : 1 }}>
+    <div onClick={handleClick} role="button" aria-label="Sync now" className="forge-press"
+      style={{ marginTop: 12, padding: "14px 18px", background: T.surface, boxShadow: T.elev, borderRadius: T.r, cursor: busy ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", opacity: busy ? 0.7 : 1 }}>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 500, color: T.text1 }}>Sync now</div>
-        <div style={{ fontSize: 11, color: T.text3, marginTop: 2 }}>{subtitle}</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: T.ink }}>Sync now</div>
+        <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>{subtitle}</div>
       </div>
-      <span style={{ fontSize: 14, color: T.text3 }}>{busy ? "…" : "↻"}</span>
+      <span style={{ fontSize: 14, color: T.ink3 }}>{busy ? "…" : "↻"}</span>
     </div>
   );
 }

@@ -14,8 +14,8 @@ import { getAuthTokenWithCeremony } from "@/lib/auth-session";
 import { fetchWithTimeout } from "@/lib/net";
 
 const C = {
-  bg: "#151312", card: "#1A1714", border: "#2D2924", text: "#EDEBE7",
-  dim: "#A09890", faint: "#6B6560", coral: "#E0956A", sage: "#8BB09A", rose: "#C9A0B8",
+  bg: "var(--well)", card: "var(--surface)", border: "var(--rule)", text: "var(--ink)",
+  dim: "var(--ink-2)", faint: "var(--ink-3)", coral: "var(--ink)", sage: "var(--ink-2)", rose: "var(--heat-4)",
 };
 const STATUS_TONE = { new: C.coral, in_scope: C.sage, filled: C.faint, killed: C.faint };
 const TRANSITIONS = ["in_scope", "filled", "killed"];

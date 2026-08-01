@@ -38,8 +38,8 @@ describe("PerformanceLab — empty state", () => {
   it("renders the lab header even when empty (the page isn't blank)", () => {
     render(<PerformanceLab history={[]} onBack={() => {}} />);
     expect(screen.getByText(/Performance lab/i)).toBeTruthy();
-    // The italic flourish — visible regardless of data state
-    expect(screen.getByText(/progress\./i)).toBeTruthy();
+    // The display headline — visible regardless of data state
+    expect(screen.getByText(/^Volume$/)).toBeTruthy();
   });
 
   it("Back link fires onBack", () => {

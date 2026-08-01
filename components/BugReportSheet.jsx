@@ -1,20 +1,18 @@
 "use client";
 
-// Bug report sheet — the intake half of the boss's fill-or-kill flow.
-// One sheet, one scrim, bottom-row Cancel/primary (house modal doctrine,
-// 2026-07-21 — no corner ✕). Submitting is open (no ceremony): friction
-// kills bug reports, and the API bounds abuse with a hard rate limit +
-// length cap. COPY: drafts, flagged for the intimacy pass.
+// Bug report sheet — the intake half of the fill-or-kill flow. One sheet,
+// one scrim, bottom-row Cancel/primary (house modal doctrine — no corner
+// ✕). Submitting is open (no ceremony): friction kills bug reports, and
+// the API bounds abuse with a hard rate limit + length cap.
 
 import { useState } from "react";
-import { T } from "@/lib/tokens";
+import { T, DISPLAY } from "@/lib/tokens";
 import { fetchWithTimeout } from "@/lib/net";
 import { useModalA11y } from "@/lib/a11y";
 
 const COPY = {
-  // — intimacy pass candidates (boss pass pending) —
   eyebrow: "Something off?",
-  title: "Tell me where it hurts.",
+  title: "Tell me where it hurts",
   placeholder: "What happened, and where were you in the app when it did?",
   send: "Send it",
   sending: "Sending…",
@@ -48,16 +46,16 @@ export default function BugReportSheet({ profileName = null, onClose }) {
 
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{ overscrollBehavior: "contain", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="bug-title" tabIndex={-1} onClick={(e) => e.stopPropagation()} className="forge-sheet-ground" style={{ background: T.bg2, padding: "24px 24px 36px", width: "100%", borderTop: `1px solid ${T.bg3}`, animation: `slideUp 260ms ${T.ease}`, outline: "none" }}>
-        <div style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 10 }}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="bug-title" tabIndex={-1} onClick={(e) => e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{ padding: "24px 24px 36px", width: "100%", animation: `slideUp 260ms ${T.ease}`, outline: "none" }}>
+        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
           {COPY.eyebrow}
         </div>
-        <div id="bug-title" style={{ fontFamily: T.serif, fontSize: 24, fontWeight: 300, lineHeight: 1.2, marginBottom: 16 }}>
+        <div id="bug-title" style={{ ...DISPLAY, fontSize: 28, color: T.ink, marginBottom: 16 }}>
           {COPY.title}
         </div>
 
         {state === "sent" ? (
-          <div style={{ fontFamily: T.serif, fontSize: 15, fontStyle: "italic", fontWeight: 300, color: T.sage, marginBottom: 20 }}>
+          <div style={{ fontSize: 14, color: T.ink2, marginBottom: 20 }}>
             {COPY.sent}
           </div>
         ) : (
@@ -67,19 +65,19 @@ export default function BugReportSheet({ profileName = null, onClose }) {
             maxLength={2000}
             rows={5}
             placeholder={COPY.placeholder}
-            style={{ width: "100%", background: T.bg1, border: `1px solid ${T.bg3}`, borderRadius: T.r.md, padding: "14px 16px", fontSize: 14, lineHeight: 1.5, color: T.text1, fontFamily: T.sans, resize: "none", outline: "none", marginBottom: 8 }}
+            style={{ width: "100%", background: T.well, border: "none", borderRadius: T.r, padding: "14px 16px", fontSize: 14, lineHeight: 1.5, color: T.ink, fontFamily: T.text, resize: "none", outline: "none", marginBottom: 8 }}
           />
         )}
         {state === "failed" && (
-          <div style={{ fontSize: 12, color: T.rose, marginBottom: 8 }}>{COPY.failed}</div>
+          <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>{COPY.failed}</div>
         )}
 
         <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: "16px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.lg, cursor: "pointer", fontSize: 14, color: T.text2 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: "16px", background: "none", border: `1px solid ${T.rule}`, borderRadius: T.r, cursor: "pointer", fontSize: 14, color: T.ink2, fontFamily: T.text }}>
             {state === "sent" ? "Done" : "Cancel"}
           </button>
           {state !== "sent" && (
-            <button onClick={send} disabled={!message.trim() || state === "sending"} style={{ flex: 2, padding: "16px", background: message.trim() ? T.coral : T.bg3, border: "none", borderRadius: T.r.lg, cursor: message.trim() ? "pointer" : "default", fontFamily: T.serif, fontSize: 17, fontWeight: 400, color: message.trim() ? T.bg0 : T.text4 }}>
+            <button onClick={send} disabled={!message.trim() || state === "sending"} style={{ flex: 2, padding: "16px", background: message.trim() ? T.commit : T.well, border: "none", borderRadius: T.r, cursor: message.trim() ? "pointer" : "default", fontFamily: T.text, fontSize: 15, fontWeight: 500, color: message.trim() ? T.commitInk : T.ink3, boxShadow: message.trim() ? T.elevStrong : "none" }}>
               {state === "sending" ? COPY.sending : COPY.send}
             </button>
           )}
