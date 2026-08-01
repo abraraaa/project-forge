@@ -26,6 +26,40 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
 
 ### Open — codeable
 
+- **Traveller-correct dates (Temporal) — RAISED 2026-08-01.** Boss: we have
+  frequent travellers, so the trigger recorded against this is already met.
+  **Two separable pieces, and only one has a deadline.**
+
+  **(a) Capture, urgent-ish, cheap.** Records store a local calendar date and
+  nothing about WHERE the user was. That makes every session logged from now
+  until we implement traveller logic permanently ambiguous — history cannot be
+  repaired after the fact, because the information was never taken. Stamping
+  `Intl.DateTimeFormat().resolvedOptions().timeZone` onto new records is one
+  additive field, no behaviour change, and rides the existing merge (records
+  are whole-object JSONB; unknown fields pass through). Do this well before
+  the rest, because delay is the only irreversible part.
+
+  **(b) Semantics, a product call — not a library question.** What IS a
+  training day for someone who crosses timezones? Westward crossings repeat a
+  calendar date, so `days` (keyed by date) can collide — history keeps both
+  records but the Day entry points at one; `bodyweightLog` has the same shape.
+  Eastward crossings skip a date, which can read as a rhythm gap that did not
+  behaviourally happen. `weekKey()` can move near a boundary. None of this is
+  data loss today, and none of it needs Temporal to decide.
+
+  **Temporal is the implementation, not the enabler.** `Temporal.ZonedDateTime`
+  makes (b) clean rather than possible. Blocked on availability regardless:
+  it is STP-249 only (not stable Safari), absent from Node 22 and not default
+  in 24, and `lib/dates.js` is imported by eight modules across both runtimes —
+  so adopting today means shipping the polyfill (~50KB+ min+gz) into a
+  precached PWA shell, or forking the implementation, which is the exact thing
+  that module exists to prevent.
+
+  **Sequence when it fires:** stamp the timezone (a) → decide semantics (b) →
+  implement with Temporal once Safari 27 is the floor. The doctrine and
+  `tests/date-doctrine.test.js` survive all three; they are the value, not the
+  arithmetic.
+
 - **Unbounded work on a request path** (`app/api/sync/route.js` lazy backfill →
   `lib/db.js`). Reframed 2026-07-29; the earlier "batch the DB writes" framing
   undersold it as performance and it was rightly dismissed as such.

@@ -1,27 +1,17 @@
-// Forge service worker — PR-B: app-shell precache + runtime caching.
+// Service worker — app-shell precache + runtime caching.
 //
-// What this PR adds on top of PR-A's scaffold:
-//   - Precache the tiny set of always-needed static assets at install
-//     (manifest.json + the two icons).
-//   - Cache-first for /_next/static/* (content-hashed, immutable).
-//   - Cache-first for binary static assets at the root (.png, .ico, fonts).
-//   - Network-first with cache fallback for HTML / navigation requests, so
-//     the app shell still loads on a flaky gym wifi.
-//   - Network-only for /api/* — auth/sync must never see stale responses.
-//   - Cache versioning + cleanup of stale forge-* caches on activate.
+// NOTE: this file is served to clients verbatim. Keep comments to the
+// invariants a maintainer needs; rationale and history live in the internal
+// notes, not here.
 //
-// What this PR DOES NOT do (future PRs):
-//   - IndexedDB queue for offline session logs (PR-D).
-//   - Background-sync flush on reconnect (PR-E).
-//   - Update-prompt UI when a new SW activates (PR-F).
+// Routing:
+//   - /api/*  network-only. Auth and sync must never see a stale response.
+//   - hashed build assets, root binaries  cache-first (immutable).
+//   - HTML / navigations  network-first with cache fallback.
 //
-// Bump SW_VERSION on every meaningful change so the activate handler cleans
-// up older caches. Old caches are deleted by prefix match on every activate.
-
-// SW_VERSION is a log marker only — cache lifetime is governed by the build
-// manifest (pruned on activate), NOT by renaming caches. The old scheme
-// embedded the version in the cache names, so every bump wiped the shell and
-// broke offline until each route was re-visited online (audit #37).
+// INVARIANT: cache lifetime is governed by the build manifest, pruned on
+// activate — NEVER by renaming caches. Version-suffixed cache names wipe the
+// shell on every bump and break offline until each route is re-visited.
 const SW_VERSION  = "0.6.0-offline-shell";
 const STATIC_CACHE = "forge-static-v1";
 const HTML_CACHE   = "forge-shell-v1";
@@ -52,7 +42,7 @@ const PRECACHE_URLS = [
   "/apple-touch-icon.png",
 ];
 
-// Update UX (audit #39): NO unconditional skipWaiting. Activating a new
+// Update UX. INVARIANT: no unconditional skipWaiting. Activating a new
 // build under a live tab prunes the old build's hashed bundles (see
 // activate) — a page that then lazy-loads an old chunk 404s and strands.
 // Instead the new worker WAITS; the registrar tells it to take over only
@@ -77,16 +67,12 @@ self.addEventListener("install", (event) => {
   //     spec). These are install-time cached, so hits are guaranteed in
   //     steady state; on the rare miss the only delta vs cacheFirst is no
   //     re-population, acceptable for four stable files.
-  //   - THIS build's manifest assets → cache, as EXACT paths (the parked
-  //     "/_next/static via addRoutes" follow-up, completed now that the
-  //     precache manifest exists). Exact paths — never the wholesale
-  //     /_next/static/* pattern — because a "cache" route never runs the
-  //     fetch handler and so never populates: mid-rollout (new HTML under
-  //     an old SW) the NEW build's hashes don't match these routes, fall
-  //     through to the fetch router, and cacheFirst populates them, so
-  //     going offline in that window still works. Current-build assets are
-  //     guaranteed cached by activation (routes only apply once active,
-  //     after install's waitUntil precache completes).
+  //   - THIS build's manifest assets → cache, as EXACT paths. NEVER the
+  //     wholesale /_next/static/* pattern: a "cache" route never runs the
+  //     fetch handler and so never populates, so mid-rollout the new build's
+  //     hashes would resolve against a cache that has never seen them and
+  //     offline would break. Exact paths fall through to the fetch router
+  //     instead, where cacheFirst populates them.
   // Feature-guarded: browsers without addRoutes just use the fetch router
   // for everything, as today.
   if ("addRoutes" in event) {
@@ -119,7 +105,7 @@ self.addEventListener("install", (event) => {
 
     if (!PRECACHE) return; // dev / no manifest — runtime-only behaviour
 
-    // App-shell precache (audit #36): this build's hashed bundles + the
+    // App-shell precache: this build's hashed bundles + the
     // shell routes' HTML, so offline cold-start works on routes the user
     // never visited. Per-entry tolerance — one 404 must not kill install.
     await Promise.all(PRECACHE.assets.map(async (path) => {
@@ -149,7 +135,7 @@ self.addEventListener("activate", (event) => {
     const stale = keys.filter((k) => k.startsWith("forge-") && k !== STATIC_CACHE && k !== HTML_CACHE);
     await Promise.all(stale.map((k) => caches.delete(k)));
 
-    // Prune, don't wipe (audit #37/#43): remove /_next/static entries that
+    // Prune, don't wipe: remove /_next/static entries that
     // aren't in the CURRENT build's manifest (old hashed bundles), leaving
     // icons/fonts and everything still referenced. Offline keeps working
     // across deploys because the new build was precached at install, before
@@ -238,7 +224,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // RSC payloads (client-side navigations, audit #38): network-first; when
+  // RSC payloads (client-side navigations): network-first; when
   // offline, match ignoring the `_rsc` search param — its value varies per
   // build but the pathname identifies the route. No cached payload → the
   // fetch rejects and Next falls back to a hard navigation, which lands in
@@ -260,7 +246,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   // HTML / navigation: network-first, with a deeper offline fallback chain
-  // (audit #36): exact URL → same-pathname ignoring search → precached "/"
+  // Exact URL → same-pathname ignoring search → precached "/"
   // as a best-effort last resort (the client router recovers the route).
   if (req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html")) {
     event.respondWith((async () => {

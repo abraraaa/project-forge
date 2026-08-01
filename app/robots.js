@@ -5,12 +5,16 @@ export default function robots() {
       {
         userAgent: "*",
         allow: "/",
-        // Diagnostic surfaces and the sync API are operational, not content.
-        // /locker-room joins them: it bounces without an active profile and
-        // gates photos behind a ceremony, exactly like /session — but it is a
-        // client component, so it cannot export `robots: { index: false }`
-        // the way /session does. Disallowing here is the equivalent.
-        disallow: ["/diag-sync", "/diag-vt", "/diag-bugs", "/api/", "/session", "/locker-room"],
+        // The sync API and the two state-dependent routes are operational,
+        // not content. /locker-room joins /session here because it is a
+        // client component and cannot export `robots: { index: false }`.
+        //
+        // /diag-* is deliberately ABSENT. This file is world-readable, so a
+        // Disallow line publishes the very paths it asks crawlers to skip.
+        // Those routes are kept out of the index by an X-Robots-Tag response
+        // header (next.config.mjs) instead — which does the job without
+        // handing anyone a list.
+        disallow: ["/api/", "/session", "/locker-room"],
       },
     ],
     sitemap: "https://heatwayve.app/sitemap.xml",
