@@ -34,7 +34,7 @@ export default function LibraryIndexPage() {
           The library
         </h1>
         <p style={{ fontSize: 15, color: T.ink2, marginTop: 14, lineHeight: 1.6 }}>
-          What each lift actually trains: <span style={{ fontFamily: T.measured }}>{LIBRARY.length}</span> movements, each with the weighted muscle contributions
+          What each lift actually trains: <span style={{ fontFamily: T.measured }}>{LIBRARY.length}</span>{" "}movements, each with the weighted muscle contributions
           Heatwayve uses to audit your training volume — a squat isn&apos;t &quot;legs&quot;,
           it&apos;s quads first, glutes and hamstrings meaningfully, core along for
           the ride. The same numbers the app computes with, published.
