@@ -72,4 +72,44 @@ describe("dates — timezone independence (subprocess)", () => {
       expect(results[i], `timezone ${TZS[i]}`).toEqual(expected);
     }
   });
+
+  it("captureZone reports the RUNTIME's zone and offset, not a constant", () => {
+    // The whole point of the stamp is that it varies with where the user is.
+    // A capture that returned the same thing everywhere would look correct in
+    // CI (UTC) and be worthless in the field, so assert it actually moves.
+    const zoneProbe = (tz) => {
+      const src = `
+        import { captureZone } from ${JSON.stringify(DATES_PATH)};
+        process.stdout.write(JSON.stringify(captureZone()));
+      `;
+      return JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", src], {
+        env: { ...process.env, TZ: tz }, encoding: "utf8",
+      }));
+    };
+    expect(zoneProbe("UTC")).toMatchObject({ zone: "UTC", offset: 0 });
+    expect(zoneProbe("Pacific/Auckland").zone).toBe("Pacific/Auckland");
+    expect(zoneProbe("America/New_York").zone).toBe("America/New_York");
+    // Offsets are signed the way offsets are WRITTEN (+13:00), not the way
+    // getTimezoneOffset returns them. Auckland is ahead of UTC, New York behind.
+    expect(zoneProbe("Pacific/Auckland").offset).toBeGreaterThan(0);
+    expect(zoneProbe("America/New_York").offset).toBeLessThan(0);
+  });
+});
+
+describe("captureZone — degrades, never throws", () => {
+  it("returns nulls rather than throwing when Intl is unavailable", async () => {
+    // A locked-down or exotic runtime must never cost someone a logged
+    // session. Null is a usable answer; an exception mid-finalise is not.
+    const realIntl = globalThis.Intl;
+    // @ts-expect-error — deliberately removing a global for the test
+    delete globalThis.Intl;
+    try {
+      const { captureZone } = await import("../lib/dates.js");
+      const out = captureZone();
+      expect(out.zone).toBeNull();
+      expect(typeof out.offset).toBe("number"); // offset survives without Intl
+    } finally {
+      globalThis.Intl = realIntl;
+    }
+  });
 });

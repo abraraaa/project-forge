@@ -486,11 +486,19 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <input value={name} onChange={e=>{setName(e.target.value); setSubmitError(null);}}
                 onKeyDown={e=>{if(e.key==="Enter"&&canSubmit) handleSubmit();}}
                 placeholder="Your name" maxLength={NAME_MAX_LEN}
+                aria-label="Your name"
+                // The status line below carries the rules AND the live result
+                // (available / taken / invalid). Pointing at it means a screen
+                // reader gets the constraints on focus, not just after failing.
+                aria-describedby="name-status"
+                aria-invalid={availability === "taken" || availability === "invalid" || !!submitError}
                 autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck="false"
                 style={{width:"100%",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,padding:"14px 48px 14px 16px",fontFamily:T.text,fontSize:17,fontWeight:500,color:T.ink,outline:"none",caretColor:T.commit,transition:`box-shadow 180ms ${T.ease}`}}
               />
               {pip && (
-                <div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",display:"flex",alignItems:"center",gap:6,pointerEvents:"none"}}>
+                // Decorative: the same state is announced in the status line
+                // below, so exposing the glyph too would read it twice.
+                <div aria-hidden="true" style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",display:"flex",alignItems:"center",gap:6,pointerEvents:"none"}}>
                   {pip.icon === "✓" ? <Glyph name="check" size={12} color={pip.colour}/>
                     : pip.icon === "✕" ? <Glyph name="cross" size={12} color={pip.colour}/>
                     : <span style={{fontSize:14,color:pip.colour,fontWeight:500}}>{pip.icon}</span>}
@@ -503,19 +511,28 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             </button>
           </div>
           {/* Subscript — availability status or helper text */}
-          <div style={{marginTop:10,minHeight:16,fontSize:12,fontFamily:T.text,color:pip?.colour || T.ink3,display:"flex",alignItems:"center",gap:6,transition:`color 180ms ${T.ease}`}}>
+          {/* Status line. role=status + aria-live announces availability and
+              errors as they change — previously the only signal was a coloured
+              glyph and a disabled button, which told a screen-reader user
+              nothing about WHY they were stuck. */}
+          <div id="name-status" role="status" aria-live="polite"
+            style={{marginTop:10,minHeight:16,fontSize:12,fontFamily:T.text,color:pip?.colour || T.ink3,display:"flex",alignItems:"center",gap:6,transition:`color 180ms ${T.ease}`}}>
             {submitError ? (
               <span style={{color:T.heat[4]}}>{submitError}</span>
             ) : pip ? (
               <span>{pip.label === "available" && "Available · this will be your username"}
                     {pip.label === "on this device" && "Welcome back"}
                     {pip.label === "taken" && "Already taken on Heatwayve"}
-                    {pip.label === "invalid" && "That name won't travel: no slashes (/ or \\)"}
+                    {pip.label === "invalid" && "No slashes, dots-only names, or control characters — they don't survive syncing"}
                     {pip.label === "checking" && "Checking…"}
                     {pip.label === "offline · try anyway" && "Couldn't check online. You can still proceed"}
               </span>
+            ) : name.trim().length === 1 ? (
+              // Previously silent: one character left the button disabled with
+              // no stated reason.
+              <span style={{color:T.ink3}}>A bit more — names need 2 characters or more.</span>
             ) : (
-              <span style={{color:T.ink3}}>2+ characters. Case doesn't matter.</span>
+              <span style={{color:T.ink3}}>2 characters or more, no slashes. Case doesn&apos;t matter.</span>
             )}
           </div>
 
