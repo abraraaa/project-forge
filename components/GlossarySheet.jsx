@@ -151,32 +151,25 @@ export default function GlossarySheet({ anchorTerm = null, onCancel }) {
   );
 }
 
-// Small inline trigger — renders the ⓘ glyph styled to feel ambient. Use
-// inside text where a term first appears (or in card subtitles), passing the
-// term id to anchor the sheet on open.
+// Small inline trigger — the word "About", never an enclosed glyph (drawn
+// glyphs are open strokes; a circled ⓘ is the retired app-store idiom).
+// Use inside text where a term first appears (or beside a kicker), passing
+// the term id to anchor the sheet on open.
 export function GlossaryTrigger({ anchorTerm = null, onOpen, label = "Open glossary" }) {
   return (
-    // 18px RING, 32px TARGET. The ring is what the eye sees and must not
-    // change; the button around it is a transparent 32x32 hit area so the
-    // control clears the WCAG 2.5.8 minimum (24x24). Negative margins absorb
-    // the extra box in both axes, so inline text rhythm and the 6px gap from
-    // the preceding word are exactly as before — this is a touch fix, not a
-    // visual one.
+    // The visible word is small; padding + negative margins keep a ≥32px
+    // hit area (WCAG 2.5.8) without disturbing inline text rhythm.
     <button onClick={(e) => { e.stopPropagation(); onOpen(anchorTerm); }} aria-label={label}
       style={{
-        display:"inline-flex",alignItems:"center",justifyContent:"center",
-        width:32,height:32,margin:"-7px -7px -7px -1px",padding:0,
-        boxSizing:"border-box",
+        display:"inline-flex",alignItems:"center",
+        padding:"10px 8px",margin:"-10px -8px",
         background:"none",border:"none",
         cursor:"pointer",
-        lineHeight:1,verticalAlign:"middle",
+        fontFamily:T.text,fontSize:12,fontWeight:500,color:T.ink3,
+        textDecoration:"underline",textUnderlineOffset:3,textDecorationColor:T.rule,
+        lineHeight:1,verticalAlign:"baseline",
       }}>
-      <span aria-hidden="true" style={{
-        display:"inline-flex",alignItems:"center",justifyContent:"center",
-        width:18,height:18,boxSizing:"border-box",
-        border:`1px solid ${T.rule}`,borderRadius:"50%",
-        lineHeight:1,
-      }}><Glyph name="info" size={10} color={T.ink3}/></span>
+      About
     </button>
   );
 }

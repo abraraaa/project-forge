@@ -548,6 +548,7 @@ export default function SessionHost() {
           readiness={readiness} setReadiness={setReadiness}
           reason={readinessReason} setReason={setReadinessReason}
           onStart={handleReadinessStart}
+          planDay={focusedSession?.name} onHome={handleQuit}
         />
       )}
       {flow === "session" && <SessionScreen {...sProps} />}

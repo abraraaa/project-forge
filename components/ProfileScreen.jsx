@@ -449,8 +449,12 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
   return (
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"clip"}}>
-      {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:13,color:T.ink3,fontFamily:T.text,marginBottom:32,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12}/> Back</button>}
+      {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:13,color:T.ink3,fontFamily:T.text,marginBottom:32,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12}/> Home</button>}
       <Fade d={0}>
+        {/* Kicker — the room's scope. Never absent (§11.3). */}
+        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
+          {current?"This device":"First run"}
+        </div>
         <div style={{...DISPLAY,fontSize:38,color:T.ink,marginBottom:10}}>
           {current?"Profiles":"Your name"}
         </div>
@@ -460,19 +464,18 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       </Fade>
       {existing.length>0&&(
         <Fade d={60}>
-          <div style={{marginBottom:28}}>
-            <div style={{fontSize:13,color:T.ink3,marginBottom:12}}>On this device</div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {existing.map(n=>(
-                <div key={n} style={{padding:"15px 18px",borderRadius:T.r,background:T.surface,boxShadow:n===current?T.elevStrong:T.elev,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <span onClick={()=>onActivate(n)} style={{fontSize:17,fontWeight:500,color:T.ink,cursor:"pointer",flex:1}}>{n}</span>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    {n===current&&<span style={{fontSize:12,color:T.ink2,fontWeight:500}}>Active</span>}
-                    <button onClick={()=>setConfirmWipe(n)} style={{background:"none",border:"none",padding:"2px 6px",cursor:"pointer"}} title="Wipe progress" aria-label={`Wipe ${n}`}><Glyph name="cross" size={11} color={T.ink3}/></button>
-                  </div>
+          {/* Rows between hairlines on the ground — settings are a list,
+              not a stack of documents (§11.2). */}
+          <div style={{marginBottom:28,borderTop:`1px solid ${T.rule}`}}>
+            {existing.map(n=>(
+              <div key={n} style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span onClick={()=>onActivate(n)} style={{fontSize:17,fontWeight:n===current?500:400,color:T.ink,cursor:"pointer",flex:1}}>{n}</span>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  {n===current&&<span style={{fontSize:12,color:T.ink2,fontWeight:500}}>Active</span>}
+                  <button onClick={()=>setConfirmWipe(n)} style={{background:"none",border:"none",padding:"2px 6px",cursor:"pointer"}} title="Wipe progress" aria-label={`Wipe ${n}`}><Glyph name="cross" size={11} color={T.ink3}/></button>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </Fade>
       )}
@@ -575,17 +578,20 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           resume affordance (assurance: undo a pause any time, no need to
           train to clear it — Bk.end). Otherwise it's the manual entry to
           declare a pause. Same modal the Home nudge opens. */}
+      {/* §11.2 — settings are ROWS between hairlines on the ground, not a
+          stack of surface cards. Each row: title + state left, drawn arrow
+          right, hairline under. */}
       {current && resting && onEndBreather ? (
         <Fade d={240}>
-          <div style={{marginTop:36,padding:"14px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          <div style={{marginTop:36,padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>On a breather</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>On a breather</div>
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
                 {restingReason ? `${reasonLabel(restingReason)} · your rhythm's paused` : "Your rhythm's paused"}
               </div>
             </div>
             <button className="forge-press" onClick={onEndBreather}
-              style={{flexShrink:0,padding:"8px 14px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,fontWeight:500,color:T.ink}}>
+              style={{flexShrink:0,padding:"10px 16px",background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,fontWeight:500,color:T.ink}}>
               Back to it
             </button>
           </div>
@@ -593,10 +599,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       ) : current && onOpenBreather ? (
         <Fade d={240}>
           <button onClick={onOpenBreather}
-            className="forge-press" style={{width:"100%",textAlign:"left",marginTop:36,padding:"14px 18px",background:T.surface,boxShadow:T.elev,border:"none",borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",fontFamily:T.text}}>
+            className="forge-press" style={{width:"100%",textAlign:"left",marginTop:36,padding:"15px 2px",background:"none",border:"none",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",fontFamily:T.text}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Need a breather?</div>
-              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>Pause your rhythm while life happens</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Need a breather?</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Pause your rhythm while life happens</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </button>
@@ -607,10 +613,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && setBwEditOpen && (
         <Fade d={260}>
           <div onClick={()=>setBwEditOpen(true)}
-            className="forge-press" style={{marginTop:16,padding:"14px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            className="forge-press" style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Bodyweight</div>
-              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Bodyweight</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
                 {bodyweight ? (
                   (() => {
                     const bwData = BW.get(current);
@@ -631,10 +637,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && onEditFocus && (
         <Fade d={270}>
           <div onClick={onEditFocus}
-            className="forge-press" style={{marginTop:12,padding:"14px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            className="forge-press" style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Training focus</div>
-              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Training focus</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
                 {userFocus} · {FOCUS_SUMMARIES[userFocus] || FOCUS_SUMMARIES.Forged}
               </div>
             </div>
@@ -692,15 +698,15 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
-      {/* Passkey enabled badge */}
+      {/* Passkey enabled row */}
       {current && profileHasPasskey[current] && (
         <Fade d={280}>
-          <div style={{marginTop:16,padding:"14px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:8,height:8,borderRadius:"50%",background:T.ink2}}/>
+          <div style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Passkey enabled</div>
-              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>Your profile is secured with biometric auth</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Passkey enabled</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Your profile is secured with biometric auth</div>
             </div>
+            <Glyph name="check" size={13} color={T.ink3}/>
           </div>
         </Fade>
       )}
@@ -740,10 +746,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && isAdminSession(current) && (
         <Fade d={300}>
           <a href="/diag-bugs"
-            style={{marginTop:10,padding:"14px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            style={{marginTop:4,padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Bug reports</div>
-              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>The list — fill or kill</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Bug reports</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>The list — fill or kill</div>
             </div>
             <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
           </a>
@@ -752,10 +758,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && isAdminSession(current) && (
         <Fade d={302}>
           <a href="/diag-sync"
-            style={{marginTop:12,padding:"14px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Sync diagnostics</div>
-              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>Local store counts + force pull/push</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Sync diagnostics</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Local store counts + force pull/push</div>
             </div>
             <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
           </a>
@@ -768,10 +774,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && (
         <Fade d={305}>
           <button onClick={() => setBugSheetOpen(true)}
-            style={{marginTop:12,width:"100%",padding:"14px 18px",background:T.surface,boxShadow:T.elev,border:"none",borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",textAlign:"left",fontFamily:T.text}}>
+            style={{width:"100%",padding:"15px 2px",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",textAlign:"left",fontFamily:T.text}}>
             <div>
-              <div style={{fontSize:13,fontWeight:500,color:T.ink}}>Report a bug</div>
-              <div style={{fontSize:11,color:T.ink3,marginTop:2}}>Something off? Tell me where it hurts.</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Report a bug</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Something off? Tell me where it hurts.</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </button>

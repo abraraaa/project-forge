@@ -117,12 +117,12 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
       </div>
 
       <div style={{padding:"28px 24px 0"}}>
-        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-          <span style={{fontSize:13, color:T.ink3}}>Performance lab</span>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+          <span style={{fontSize:13, color:T.ink2}}>Volume · past <span style={{fontFamily:T.measured,fontSize:12}}>28</span> days</span>
           <GlossaryTrigger onOpen={openGlossary} label="Open glossary"/>
         </div>
         <h1 className="home-headline" style={{...DISPLAY, fontSize:45, color:T.ink, margin:0, transformOrigin:"left top"}}>
-          Volume
+          The lab
         </h1>
         <div style={{fontSize:15, color:T.ink2, marginTop:10, lineHeight:1.45, maxWidth:"32ch"}}>
           {guidance}
@@ -279,7 +279,9 @@ function EmptyState() {
   return (
     <div style={{margin:"32px 0 0"}}>
       <div style={{padding:"0 24px"}}>
-        <div style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:10}}>
+        {/* Section header within the page — never the page title (§11.3);
+            "The lab" above stays the room. */}
+        <div style={{fontSize:13,color:T.ink3,paddingBottom:6,borderBottom:`1px solid ${T.rule}`,marginBottom:10}}>
           Week one
         </div>
         <p style={{fontSize:13, color:T.ink2, lineHeight:1.6, maxWidth:"36ch"}}>

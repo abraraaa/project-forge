@@ -263,7 +263,7 @@ export default function LockerRoom() {
         <div style={{ height: h, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: T.ink2, alignSelf: "center" }} />
-            <span style={{ ...mono, fontSize: 28, letterSpacing: "-0.03em" }}>{only.kg} kg</span>
+            <span style={{ fontSize: 28 }}><span style={{ ...mono, letterSpacing: "-0.03em" }}>{only.kg}</span> <span style={{ fontSize: 15, color: T.ink2 }}>kg</span></span>
             <span style={{ fontSize: 12, color: T.ink3 }}>{only.date}</span>
           </div>
           <p style={{ fontSize: 13, color: T.ink3, marginTop: 8 }}>First point on the curve — the next one draws the line.</p>
@@ -292,10 +292,11 @@ export default function LockerRoom() {
     return (
       <div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "2px 0 6px" }}>
-          <span style={{ ...mono, fontSize: 26, letterSpacing: "-0.03em" }}>{last.kg} kg</span>
+          <span style={{ ...mono, fontSize: 26, letterSpacing: "-0.03em" }}>{last.kg}</span>
+          <span style={{ fontSize: 14, color: T.ink2, marginLeft: -4 }}>kg</span>
           {delta !== 0 && (
-            <span style={{ ...mono, fontSize: 12, color: T.ink2 }}>
-              {delta > 0 ? "+" : "−"}{Math.abs(delta)} kg since {fmtD(first.date)}
+            <span style={{ fontSize: 12, color: T.ink2 }}>
+              <span style={mono}>{delta > 0 ? "+" : "−"}{Math.abs(delta)}</span> kg since {fmtD(first.date)}
             </span>
           )}
         </div>
@@ -355,12 +356,12 @@ export default function LockerRoom() {
         {photosVisible ? (
           <button onClick={() => setShown(false)} style={{ padding: "8px 14px", background: T.surface, border: "none", boxShadow: T.elev, borderRadius: T.r, fontSize: 12, fontWeight: 500, color: T.ink2, cursor: "pointer", fontFamily: T.text }}>Hide photos</button>
         ) : (
-          <button onClick={reveal} disabled={busy} style={{ padding: "8px 14px", background: T.surface, border: "none", boxShadow: T.elev, borderRadius: T.r, fontSize: 12, fontWeight: 500, color: T.ink2, cursor: "pointer", fontFamily: T.text, opacity: busy ? 0.6 : 1 }}>{busy ? "One sec…" : "Show photos"}</button>
+          <button onClick={reveal} disabled={busy} style={{ padding: "12px 18px", background: "transparent", border: `1px solid ${T.rule}`, borderRadius: T.r, fontSize: 13, fontWeight: 500, color: T.ink2, cursor: "pointer", fontFamily: T.text, opacity: busy ? 0.6 : 1 }}>{busy ? "One sec…" : "Show photos"}</button>
         )}
       </div>
       <div style={{ padding: "24px 0 0" }}>
         <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
-          Where it shows
+          Bodyweight &amp; photos
         </div>
         <h1 className="home-headline" style={{ ...DISPLAY, fontSize: 45, color: T.ink, margin: 0, transformOrigin: "left top" }}>
           Locker room

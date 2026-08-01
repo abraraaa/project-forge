@@ -1314,14 +1314,14 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
   return (
     <div onKeyDown={onKeyDown} onClick={onCancel} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
-          Weekly schedule
+        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
+          Programme
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:6}}>
-          The week
+          Your week
         </div>
         <p style={{fontSize:13,color:T.ink2,marginBottom:16,lineHeight:1.5}}>
-          Shape it: pick what each day is. Strength days map to sessions A → B → C in order.
+          Move days, swap modalities. The programme adapts.
         </p>
 
         <div style={{flex:1,overflowY:"auto",marginRight:-8,paddingRight:8}}>
@@ -2066,15 +2066,12 @@ function ShareGlyph() {
   );
 }
 
+// Enclosure is not in the drawn-glyph grammar — the step number stands as
+// a bare mono numeral against a hairline, same language as the data marks.
 function InstallStep({ n, children }) {
   return (
-    <div style={{display:"flex",alignItems:"center",gap:14}}>
-      <div style={{
-        flexShrink:0,width:28,height:28,borderRadius:"50%",
-        border:`1px solid ${T.rule}`,
-        display:"flex",alignItems:"center",justifyContent:"center",
-        fontFamily:T.measured,fontSize:14,color:T.ink2,
-      }}>{n}</div>
+    <div style={{display:"flex",alignItems:"baseline",gap:14,paddingBottom:10,borderBottom:`1px solid ${T.ruleFaint}`}}>
+      <div style={{flexShrink:0,width:16,fontFamily:T.measured,fontSize:14,color:T.ink3}}>{n}</div>
       <div style={{flex:1,fontSize:14,color:T.ink2,lineHeight:1.5}}>
         {children}
       </div>

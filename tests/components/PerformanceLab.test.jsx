@@ -37,9 +37,10 @@ describe("PerformanceLab — empty state", () => {
 
   it("renders the lab header even when empty (the page isn't blank)", () => {
     render(<PerformanceLab history={[]} onBack={() => {}} />);
-    expect(screen.getByText(/Performance lab/i)).toBeTruthy();
+    // §11.3 masthead: kicker = scope ("Volume · past 28 days"), title = room
+    expect(screen.getByText(/Volume · past/i)).toBeTruthy();
     // The display headline — visible regardless of data state
-    expect(screen.getByText(/^Volume$/)).toBeTruthy();
+    expect(screen.getByText(/^The lab$/)).toBeTruthy();
   });
 
   it("Back link fires onBack", () => {

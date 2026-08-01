@@ -58,11 +58,11 @@ const linkBtn = {
 };
 
 // ─── RPE track ───────────────────────────────────────────────────────────────
-// Drag, not chips. Continuous 6–10 in 0.5 steps; heat fills under the
-// thumb; RIR text always printed; the commit button inherits the bloomed
-// colour (ink flips light past 8.5). The fill is a REVEAL of a full-width
-// gradient (a well-coloured cover shrinks from the right), so the ramp
-// never compresses with the fill width — heat arrives, never stretches.
+// Drag, not chips. Continuous 6–10 in 0.5 steps. The channel is a bare
+// 10px bed (square ends, heat-0 ground, hairline ticks at 7/8/9) inside a
+// 44px touch zone; the fill is SOLID in the current bloom stop and stops
+// at the thumb — no full-track gradient, no border. Thumb is a 2px ink
+// bar; the value prints in mono above (EffortPanel owns that row).
 function RpeTrack({ rpe, onChange }) {
   const trackRef = useRef(null);
   const pct = ((rpe - 6) / 4) * 100;
@@ -98,30 +98,31 @@ function RpeTrack({ rpe, onChange }) {
           if (e.key === "ArrowRight") { e.preventDefault(); onChange((p) => Math.min(10, p + 0.5)); }
         }}
         style={{
-          position: "relative", height: 58, borderRadius: T.r, overflow: "hidden",
-          background: HEAT_GRADIENT,
+          position: "relative", height: 44, display: "flex", alignItems: "center",
           touchAction: "none", cursor: "ew-resize",
         }}
       >
-        {/* Cover — the unfilled bed. Shrinks from the right as heat fills. */}
-        <div style={{
-          position: "absolute", top: 0, right: 0, bottom: 0,
-          width: `${100 - pct}%`,
-          background: T.well,
-          transition: `width 380ms ${T.ease}`,
-        }}/>
-        {/* Integer gridlines at 7 / 8 / 9. */}
-        {[25, 50, 75].map(x => (
-          <div key={x} style={{position:"absolute",left:`${x}%`,top:19,bottom:19,width:1,background:T.ruleFaint}}/>
-        ))}
-        {/* Thumb line. */}
-        <div style={{
-          position: "absolute", top: 6, bottom: 6, width: 2, borderRadius: 2,
-          background: T.ink, left: `${pct}%`, transform: "translateX(-50%)",
-          transition: `left 380ms ${T.ease}`,
-        }}/>
+        {/* The 10px visual channel inside the 44px touch zone. */}
+        <div style={{ position: "relative", width: "100%", height: 10, background: T.heat[0] }}>
+          {/* Hairline ticks at 7 / 8 / 9, standing proud of the channel. */}
+          {[25, 50, 75].map(x => (
+            <div key={x} style={{position:"absolute",left:`${x}%`,top:-2,height:14,width:1,background:T.rule}}/>
+          ))}
+          {/* Solid fill in the current bloom stop, stopping at the thumb. */}
+          <div style={{
+            position: "absolute", left: 0, top: 0, bottom: 0,
+            width: `${pct}%`, background: heatForRpe(rpe),
+            transition: `width 380ms ${T.ease}, background 900ms ease`,
+          }}/>
+          {/* Thumb — a 2px ink bar. */}
+          <div style={{
+            position: "absolute", top: -4, height: 18, width: 2,
+            background: T.ink, left: `${pct}%`, transform: "translateX(-50%)",
+            transition: `left 380ms ${T.ease}`,
+          }}/>
+        </div>
       </div>
-      <div style={{display:"flex",justifyContent:"space-between",marginTop:9,fontFamily:T.measured,fontSize:11,color:T.ink3}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontFamily:T.measured,fontSize:11,color:T.ink3}}>
         <span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
       </div>
     </div>
@@ -137,13 +138,11 @@ function EffortPanel({ label = "How hard was that?", onCommit }) {
   const pct = ((rpe - 6) / 4) * 100;
   return (
     <div style={{margin:"14px 20px 0",animation:`fadeSlide 240ms ${T.ease}`}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:12}}>
-        <div>
-          <div style={{fontSize:13,color:T.ink3,marginBottom:5}}>{label}</div>
-          <div style={{fontSize:16,color:T.ink,fontWeight:500}}><MonoNums>{rirText(rpe)}</MonoNums></div>
-        </div>
+      <div style={{fontSize:13,color:T.ink3,marginBottom:10}}>{label}</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:2}}>
+        <div style={{fontSize:14,color:T.ink}}><MonoNums>{rirText(rpe)}</MonoNums></div>
         <div style={{
-          fontFamily:T.measured,fontSize:40,lineHeight:0.9,letterSpacing:"-0.04em",
+          fontFamily:T.measured,fontSize:24,lineHeight:1,
           color:heatForRpe(rpe),transition:`color 900ms ease`,
         }}>{rpe % 1 === 0 ? rpe : rpe.toFixed(1)}</div>
       </div>
@@ -152,7 +151,7 @@ function EffortPanel({ label = "How hard was that?", onCommit }) {
         className="forge-press"
         onClick={() => { haptic.commit(); onCommit(effortForRpe(rpe)); }}
         style={{
-          marginTop:14,width:"100%",height:58,border:"none",borderRadius:T.r,cursor:"pointer",
+          marginTop:14,width:"100%",height:56,border:"none",borderRadius:T.r,cursor:"pointer",
           display:"flex",alignItems:"center",justifyContent:"center",gap:8,
           fontFamily:T.text,fontSize:17,fontWeight:500,
           background:HEAT_GRADIENT,
@@ -328,7 +327,7 @@ function RecentHistorySheet({ exerciseName, recent, onCancel }) {
   );
 }
 
-export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart}){
+export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart,planDay=null,onHome=null}){
   // Readiness rides the same one-dimensional intensity scale as everything
   // else — fresh sits at the cool end, cooked at the hot end. Colour +
   // mark height + the word: the redundancy law, again.
@@ -347,8 +346,14 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
     {id:"other",       label:"Something else"},
   ];
   return (
-    <div style={{maxWidth:430,margin:"0 auto",padding:"72px 24px 48px"}}>
+    <div style={{maxWidth:430,margin:"0 auto",padding:"52px 24px 48px"}}>
       <Fade d={0}>
+        {onHome && (
+          <button onClick={onHome} style={{...linkBtn,fontSize:13,marginBottom:22,display:"inline-flex",alignItems:"center",gap:6}}>
+            <Glyph name="arrowLeft" size={12}/> Home
+          </button>
+        )}
+        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>Session{planDay ? <> · {planDay}</> : null}</div>
         <h1 style={{...DISPLAY,fontSize:38,color:T.ink,marginBottom:10}}>
           Readiness
         </h1>
@@ -408,15 +413,18 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
       )}
 
       <Fade d={280}>
+        {/* Disabled keeps its shape: ground + hairline + tertiary ink. Heat
+            ARRIVES (900ms bloom) when a readiness is chosen — the colour
+            arriving is the affordance, not a grey lock lifting. */}
         <button className={readiness?"forge-press":undefined} onClick={readiness?onStart:undefined}
-          style={{marginTop:28,width:"100%",height:58,
-            background:readiness?T.commit:T.well,
-            border:"none",borderRadius:T.r,
+          style={{marginTop:28,width:"100%",height:56,
+            background:readiness?T.commit:"transparent",
+            border:`1px solid ${readiness?"transparent":T.rule}`,borderRadius:T.r,
             cursor:readiness?"pointer":"default",
             fontFamily:T.text,fontSize:17,fontWeight:500,
             color:readiness?T.commitInk:T.ink3,
             boxShadow:readiness?T.elevStrong:"none",
-            transition:`background 220ms ${T.ease}, color 220ms ${T.ease}`,
+            transition:`background 900ms ease, color 900ms ease, border-color 300ms ${T.ease}`,
             display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
           Start session <Glyph name="arrowRight" size={13}/>
         </button>
@@ -514,11 +522,14 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             {session.name}
             <Glyph name="chevronDown" size={10} style={{opacity:0.7}}/>
           </div>
-          <div style={{fontSize:12,color:T.ink3,marginTop:1}}>{block.label} · {typeLabel}{isSS?` · ${phase}`:""}</div>
         </button>
       </div>
 
-      <div style={{padding:"22px 20px 0"}}>
+      <div style={{padding:"18px 20px 0"}}>
+        {/* Kicker — the room's live state: set count + slot. Never a sentence. */}
+        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
+          Set <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{block.sets}</span> · {block.label}{isSS?` ${phase}`:""}
+        </div>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
           <div onClick={activeEx?.vid ? ()=>setShowVid(true) : undefined}
             style={{cursor:activeEx?.vid?"pointer":"default",flex:1,userSelect:"none"}}>
@@ -548,11 +559,13 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             <span style={{fontSize:11,fontWeight:500,color:T.ink3}}>Swap</span>
           </button>
         </div>
-        <div style={{fontSize:13,color:T.ink3,marginTop:10}}>
-          Set <span style={{fontFamily:T.measured,color:T.ink2}}>{setNum}</span> of <span style={{fontFamily:T.measured,color:T.ink2}}>{block.sets}</span>
-          {loadTypeSubtitle && <> · {loadTypeSubtitle}</>}
-          {deloadDayTag && <> · <MonoNums>{deloadDayTag}</MonoNums></>}
-        </div>
+        {(loadTypeSubtitle || deloadDayTag) && (
+          <div style={{fontSize:13,color:T.ink3,marginTop:10}}>
+            {loadTypeSubtitle}
+            {loadTypeSubtitle && deloadDayTag && " · "}
+            {deloadDayTag && <MonoNums>{deloadDayTag}</MonoNums>}
+          </div>
+        )}
         {tempoEntry?.tempo && tempoOpen && (
           <Fade>
             <div style={{marginTop:12,padding:"10px 0",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`}}>
@@ -622,6 +635,15 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         </div>
       </div>
 
+      {/* Per-set progress ticks — pulled up under the weight block so the
+          middle carries the session's state, not empty ground. Day-key
+          coloured: a session identifier, not measured data. */}
+      <div style={{padding:"14px 20px 0",display:"flex",gap:6}}>
+        {Array.from({length:block.sets}).map((_,i)=>(
+          <div key={i} style={{flex:1,height:3,background:i<setNum-1?T.dayKey.strength:T.rule,transition:`background 300ms ${T.ease}`}}/>
+        ))}
+      </div>
+
       {/* Logged sets this block — each lands with the settle animation and
           carries its heat mark: colour + height + the printed number. */}
       {loggedSets.length > 0 && (
@@ -642,13 +664,6 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           })}
         </div>
       )}
-
-      {/* Per-set progress ticks — session identifier, day-key coloured. */}
-      <div style={{padding:"14px 20px 0",display:"flex",gap:6}}>
-        {Array.from({length:block.sets}).map((_,i)=>(
-          <div key={i} style={{flex:1,height:3,background:i<setNum-1?T.dayKey.strength:T.rule,transition:`background 300ms ${T.ease}`}}/>
-        ))}
-      </div>
 
       <div style={{flex:1,minHeight:12}}/>
 
@@ -702,7 +717,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               </button>
             )}
             <button className="forge-press" onClick={()=>{haptic.tap();onLog();}}
-              style={{flex:1,height:58,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",
+              style={{flex:1,height:56,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
               {isSS?(phase==="A"?"Log A — into B":"Log B — round done"):"Log set"}
@@ -1017,7 +1032,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
         </Fade>
       )}
       <Fade d={260}>
-        <button className="forge-press" onClick={onHome} style={{marginTop:24,width:"100%",height:58,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+        <button className="forge-press" onClick={onHome} style={{marginTop:24,width:"100%",height:56,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
           Home <Glyph name="arrowRight" size={13}/>
         </button>
       </Fade>

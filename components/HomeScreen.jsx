@@ -127,9 +127,9 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const blockTenureCopy = weeksOnBlock >= 1
     ? `${weeksOnBlock} week${weeksOnBlock === 1 ? "" : "s"} in`
     : "fresh block";
-  const subText = viewSession
-    ? `${viewSession.subtitle}. ${userFocus}, ${blockTenureCopy}.`
-    : cfg.sub;
+  // Masthead support is exactly ONE sentence (§11.3); focus + block tenure
+  // live in the rotation footer, not the masthead.
+  const subText = viewSession ? `${viewSession.subtitle}.` : cfg.sub;
 
   // Negative diff = earlier this week, positive = later this week
   const diffDays = viewIdx - todayIdx;
@@ -302,7 +302,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             ) : isViewingToday ? (
               <button className="forge-press" onClick={onBegin} style={{
                 margin:"16px 24px 0",width:"calc(100% - 48px)",
-                height:58,background:T.commit,border:"none",
+                height:56,background:T.commit,border:"none",
                 borderRadius:T.r,cursor:"pointer",
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,
@@ -351,7 +351,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           ) : (
             <button className="forge-press" onClick={()=>onMarkDayDone(viewDateStr)} style={{
               margin:"16px 24px 0",width:"calc(100% - 48px)",
-              height:58,background:T.commit,border:"none",
+              height:56,background:T.commit,border:"none",
               borderRadius:T.r,cursor:"pointer",
               display:"flex",alignItems:"center",justifyContent:"space-between",
               padding:"0 20px",boxShadow:T.elevStrong,

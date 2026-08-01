@@ -75,12 +75,12 @@ export function SyncStatusCard({ profile }) {
   };
 
   // Deliberately CLEAR — a status readout, not an interactive card (per the
-  // 2026-07-08 unification: only actionable rows get the glass treatment).
-  // Padding keeps the text aligned with card interiors.
+  // 2026-07-08 unification: only actionable rows get containers; §11.2
+  // then retired containers for rows entirely).
   return (
     <div style={{
       marginTop: 16,
-      padding: "14px 18px",
+      padding: "14px 2px",
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
@@ -119,12 +119,11 @@ export function SyncStatusCard({ profile }) {
           onClick={handleRetry}
           disabled={retrying}
           style={{
-            padding: "8px 14px",
-            background: T.surface,
-            border: "none",
-            boxShadow: T.elev,
+            padding: "10px 16px",
+            background: "transparent",
+            border: `1px solid ${T.rule}`,
             borderRadius: T.r,
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: 500,
             color: T.ink2,
             cursor: retrying ? "default" : "pointer",
@@ -179,10 +178,10 @@ export function SyncNowRow({ profile }) {
 
   return (
     <div onClick={handleClick} role="button" aria-label="Sync now" className="forge-press"
-      style={{ marginTop: 12, padding: "14px 18px", background: T.surface, boxShadow: T.elev, borderRadius: T.r, cursor: busy ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", opacity: busy ? 0.7 : 1 }}>
+      style={{ padding: "15px 2px", borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}`, cursor: busy ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", opacity: busy ? 0.7 : 1 }}>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 500, color: T.ink }}>Sync now</div>
-        <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>{subtitle}</div>
+        <div style={{ fontSize: 15, fontWeight: 500, color: T.ink }}>Sync now</div>
+        <div style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}>{subtitle}</div>
       </div>
       {busy ? <span style={{ fontSize: 14, color: T.ink3 }}>…</span> : <Glyph name="refresh" size={14} color={T.ink3}/>}
     </div>

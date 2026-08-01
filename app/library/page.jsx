@@ -23,22 +23,33 @@ export default function LibraryIndexPage() {
   return (
     <div style={{ minHeight: "100vh", padding: "max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 64px", maxWidth: 640, margin: "0 auto" }}>
       <Link href="/" style={{ fontSize: 13, color: T.ink3, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
-        <Glyph name="arrowLeft" size={12}/> Heatwayve
+        <Glyph name="arrowLeft" size={12}/> Home
       </Link>
 
       <div style={{ marginTop: 32 }}>
-        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
-          Exercise library
+        {/* Kicker — the room's scope: the catalogue count. */}
+        <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>
+          <span style={{ fontFamily: T.measured, fontSize: 12 }}>{LIBRARY.length}</span> movements
         </div>
         <h1 style={{ ...DISPLAY, fontSize: 42, color: T.ink, margin: 0 }}>
           The library
         </h1>
         <p style={{ fontSize: 15, color: T.ink2, marginTop: 14, lineHeight: 1.6 }}>
-          What each lift actually trains: <span style={{ fontFamily: T.measured }}>{LIBRARY.length}</span>{" "}movements, each with the weighted muscle contributions
-          Heatwayve uses to audit your training volume — a squat isn&apos;t &quot;legs&quot;,
-          it&apos;s quads first, glutes and hamstrings meaningfully, core along for
-          the ride. The same numbers the app computes with, published.
+          What each lift actually trains.
         </p>
+        {/* The full rationale lives behind About — native details keeps this
+            a server component. */}
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ fontSize: 12, fontWeight: 500, color: T.ink3, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3, textDecorationColor: T.rule, listStyle: "none", display: "inline-block", padding: "6px 0" }}>
+            About
+          </summary>
+          <p style={{ fontSize: 14, color: T.ink2, marginTop: 8, lineHeight: 1.6 }}>
+            Each movement carries the weighted muscle contributions Heatwayve
+            uses to audit your training volume — a squat isn&apos;t &quot;legs&quot;,
+            it&apos;s quads first, glutes and hamstrings meaningfully, core along
+            for the ride. The same numbers the app computes with, published.
+          </p>
+        </details>
       </div>
 
       {groups.map(({ muscle, exercises }) => (
