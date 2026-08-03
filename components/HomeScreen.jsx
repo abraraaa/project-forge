@@ -286,7 +286,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                         {w != null && <> from <span style={{fontFamily:T.measured}}>{w}</span> kg</>}
                       </div>
                     </div>
-                    <span aria-hidden="true" style={{width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe),flexShrink:0,alignSelf:"center"}}/>
+                    <span aria-hidden="true" style={{width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe),borderRadius:T.rMark,flexShrink:0,alignSelf:"center"}}/>
                     <span style={{width:42,textAlign:"right",fontSize:13,color:T.ink2,flexShrink:0}}>rpe <span style={{fontFamily:T.measured}}>{rpe}</span></span>
                   </div>
                 );
@@ -296,7 +296,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <Fade d={220}>
             {isViewingToday && weekDone[todayIdx] ? (
               <div style={{margin:"14px 24px 0",padding:"14px 0",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",gap:12}}>
-                <span aria-hidden="true" style={{width:24,height:heatMarkHeight(8),background:heatForRpe(8),flexShrink:0}}/>
+                <span aria-hidden="true" style={{width:24,height:heatMarkHeight(8),background:heatForRpe(8),borderRadius:T.rMark,flexShrink:0}}/>
                 <span style={{fontSize:15,color:T.ink2}}>Session complete. You&rsquo;ll feel that tomorrow.</span>
               </div>
             ) : isViewingToday ? (

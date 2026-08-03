@@ -27,9 +27,22 @@ export default function LibraryIndexPage() {
       </Link>
 
       <div style={{ marginTop: 32 }}>
-        {/* Kicker — the room's scope: the catalogue count. */}
-        <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>
-          <span style={{ fontFamily: T.measured, fontSize: 12 }}>{LIBRARY.length}</span> movements
+        {/* Kicker — the room's scope, with About at the end of the line
+            (§12.2: About has one home). Native details keeps this a server
+            component; .forge-about[open] drops the panel to its own row. */}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 10, fontSize: 13, color: T.ink2, marginBottom: 8 }}>
+          <span><span style={{ fontFamily: T.measured, fontSize: 12 }}>{LIBRARY.length}</span> movements</span>
+          <details className="forge-about">
+            <summary style={{ fontSize: 12, fontWeight: 500, color: T.ink3, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3, textDecorationColor: T.rule, listStyle: "none", display: "inline-block", padding: "4px 0" }}>
+              About
+            </summary>
+            <p style={{ fontSize: 14, color: T.ink2, margin: "6px 0 4px", lineHeight: 1.6 }}>
+              Each movement carries the weighted muscle contributions Heatwayve
+              uses to audit your training volume — a squat isn&apos;t &quot;legs&quot;,
+              it&apos;s quads first, glutes and hamstrings meaningfully, core along
+              for the ride. The same numbers the app computes with, published.
+            </p>
+          </details>
         </div>
         <h1 style={{ ...DISPLAY, fontSize: 42, color: T.ink, margin: 0 }}>
           The library
@@ -37,19 +50,6 @@ export default function LibraryIndexPage() {
         <p style={{ fontSize: 15, color: T.ink2, marginTop: 14, lineHeight: 1.6 }}>
           What each lift actually trains.
         </p>
-        {/* The full rationale lives behind About — native details keeps this
-            a server component. */}
-        <details style={{ marginTop: 8 }}>
-          <summary style={{ fontSize: 12, fontWeight: 500, color: T.ink3, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3, textDecorationColor: T.rule, listStyle: "none", display: "inline-block", padding: "6px 0" }}>
-            About
-          </summary>
-          <p style={{ fontSize: 14, color: T.ink2, marginTop: 8, lineHeight: 1.6 }}>
-            Each movement carries the weighted muscle contributions Heatwayve
-            uses to audit your training volume — a squat isn&apos;t &quot;legs&quot;,
-            it&apos;s quads first, glutes and hamstrings meaningfully, core along
-            for the ride. The same numbers the app computes with, published.
-          </p>
-        </details>
       </div>
 
       {groups.map(({ muscle, exercises }) => (

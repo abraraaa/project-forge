@@ -310,7 +310,7 @@ function RecentHistorySheet({ exerciseName, recent, onCancel }) {
                 {r.effort && rpe != null && (
                   <span aria-label={`Effort: ${r.effort}`} style={{display:"inline-flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:12,color:T.ink2}}>{r.effort}</span>
-                    <span aria-hidden="true" style={{width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe),display:"inline-block"}}/>
+                    <span aria-hidden="true" style={{width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe),borderRadius:T.rMark,display:"inline-block"}}/>
                   </span>
                 )}
               </div>
@@ -359,28 +359,39 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
         </h1>
         <p style={{fontSize:14,color:T.ink2,marginBottom:36,lineHeight:1.6}}>How are you feeling? We&rsquo;ll shape the session around you.</p>
       </Fade>
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {opts.map((o,i)=>(
-          <Fade key={o.id} d={80+i*50}>
-            <button className="forge-press" onClick={()=>{ haptic.toggle(); setReadiness(o.id); if (o.id !== "cooked") setReason(null); }}
-              aria-pressed={readiness===o.id}
-              style={{width:"100%",textAlign:"left",padding:"17px 18px",borderRadius:T.r,cursor:"pointer",
-                background:readiness===o.id?T.surface:"transparent",
-                border:`1px solid ${readiness===o.id?"transparent":T.rule}`,
-                boxShadow:readiness===o.id?T.elev:"none",
-                display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,
-                fontFamily:T.text,transition:`background 200ms ${T.ease}, box-shadow 0s`}}>
-              <div style={{display:"flex",alignItems:"center",gap:14}}>
-                <span aria-hidden="true" style={{width:24,height:heatMarkHeight(o.rpe),background:heatForRpe(o.rpe),flexShrink:0}}/>
-                <div>
-                  <div style={{fontSize:17,fontWeight:500,color:T.ink}}>{o.label}</div>
-                  <div style={{fontSize:13,color:T.ink3,marginTop:2}}><MonoNums>{o.sub}</MonoNums></div>
+      {/* §12.3 — selection IS the card. Options are rows between hairlines
+          on the ground; only the chosen row lifts to surface (12px, whisper
+          shadow, swatch at full strength). One card per screen, and the
+          card is the choice you made. */}
+      <div style={{display:"flex",flexDirection:"column",borderTop:`1px solid ${T.rule}`}}>
+        {opts.map((o,i)=>{
+          const sel = readiness===o.id;
+          return (
+            <Fade key={o.id} d={80+i*50}>
+              <button className="forge-press" onClick={()=>{ haptic.toggle(); setReadiness(o.id); if (o.id !== "cooked") setReason(null); }}
+                aria-pressed={sel}
+                style={{textAlign:"left",
+                  padding:sel?"17px 16px":"17px 2px",
+                  margin:sel?"0 -14px":0,width:sel?"calc(100% + 28px)":"100%",
+                  borderRadius:sel?T.r:0,cursor:"pointer",
+                  background:sel?T.surface:"transparent",
+                  border:"none",
+                  borderBottom:sel?"1px solid transparent":`1px solid ${T.rule}`,
+                  boxShadow:sel?T.elev:"none",
+                  display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,
+                  fontFamily:T.text,transition:`background 200ms ${T.ease}, box-shadow 0s`}}>
+                <div style={{display:"flex",alignItems:"center",gap:14}}>
+                  <span aria-hidden="true" style={{width:24,height:heatMarkHeight(o.rpe),background:heatForRpe(o.rpe),borderRadius:T.rMark,opacity:sel?1:0.5,transition:`opacity 200ms ${T.ease}`,flexShrink:0}}/>
+                  <div>
+                    <div style={{fontSize:17,fontWeight:500,color:T.ink}}>{o.label}</div>
+                    <div style={{fontSize:13,color:T.ink3,marginTop:2}}><MonoNums>{o.sub}</MonoNums></div>
+                  </div>
                 </div>
-              </div>
-              <Glyph name="check" size={13} color={readiness===o.id?T.ink:T.rule}/>
-            </button>
-          </Fade>
-        ))}
+                <Glyph name="check" size={13} color={sel?T.ink:T.rule}/>
+              </button>
+            </Fade>
+          );
+        })}
       </div>
 
       {/* Optional "why?" — only surfaces when the user picked Cooked. */}
@@ -397,7 +408,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
                 return (
                   <button key={r.id} className="forge-press" onClick={()=>{haptic.toggle();setReason(sel ? null : r.id);}}
                     aria-pressed={sel}
-                    style={{padding:"9px 14px",borderRadius:T.r,cursor:"pointer",
+                    style={{padding:"9px 14px",borderRadius:T.rSm,cursor:"pointer",
                       background:sel?T.surface:"transparent",
                       border:`1px solid ${sel?"transparent":T.rule}`,
                       boxShadow:sel?T.elev:"none",
@@ -644,24 +655,28 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         ))}
       </div>
 
-      {/* Logged sets this block — each lands with the settle animation and
-          carries its heat mark: colour + height + the printed number. */}
+      {/* The session ledger (§12.4) — the middle belongs to logged sets
+          accruing as hairline rows, newest on top: 40 kg × 3 at 8.5, digits
+          mono, words in the text face, heat mark riding each row. Set one
+          simply shows empty ground. */}
       {loggedSets.length > 0 && (
         <div style={{margin:"0 20px"}}>
           {loggedSets.map((s, i) => {
             const rpe = s.rpe != null ? rpeForEffort(s.rpe) : null;
-            return (
-              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 0",borderBottom:`1px solid ${T.ruleFaint}`,animation:i===loggedSets.length-1?`hwSettle 480ms ${T.ease} both`:undefined}}>
-                <span style={{fontSize:13,color:T.ink3}}>Set <span style={{fontFamily:T.measured}}>{i+1}</span></span>
-                <span style={{display:"flex",alignItems:"center",gap:12}}>
-                  <span style={{fontFamily:T.measured,fontSize:14,color:T.ink}}>
-                    {s.weight!=null?`${s.weight} × `:""}{s.reps ?? "—"}{rpe!=null?` · ${rpe%1===0?rpe:rpe.toFixed(1)}`:""}
-                  </span>
-                  {rpe!=null && <span aria-hidden="true" style={{width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe)}}/>}
+            return { s, rpe, n: i + 1 };
+          }).reverse().map(({ s, rpe, n }, idx) => (
+            <div key={n} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 0",borderBottom:`1px solid ${T.ruleFaint}`,animation:idx===0?`hwSettle 480ms ${T.ease} both`:undefined}}>
+              <span style={{fontSize:13,color:T.ink3}}>Set <span style={{fontFamily:T.measured}}>{n}</span></span>
+              <span style={{display:"flex",alignItems:"center",gap:12}}>
+                <span style={{fontSize:13,color:T.ink}}>
+                  {s.weight!=null && <><span style={{fontFamily:T.measured,fontSize:14}}>{s.weight}</span> kg <span style={{fontFamily:T.measured,fontSize:14}}>×</span> </>}
+                  <span style={{fontFamily:T.measured,fontSize:14}}>{s.reps ?? "—"}</span>
+                  {rpe!=null && <> at <span style={{fontFamily:T.measured,fontSize:14}}>{rpe%1===0?rpe:rpe.toFixed(1)}</span></>}
                 </span>
-              </div>
-            );
-          })}
+                {rpe!=null && <span aria-hidden="true" style={{width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe),borderRadius:T.rMark}}/>}
+              </span>
+            </div>
+          ))}
         </div>
       )}
 
@@ -740,7 +755,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 <div style={{...DISPLAY,fontSize:28,color:T.ink}}>{vidEx.name}</div>
                 <div style={{fontSize:13,color:T.ink3,marginTop:5}}>{vidEx.muscle}</div>
               </div>
-              <button onClick={()=>setShowVid(false)} aria-label="Close video" style={{background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,padding:"8px 10px",cursor:"pointer"}}><Glyph name="cross" size={12} color={T.ink2}/></button>
+              <button onClick={()=>setShowVid(false)} aria-label="Close video" style={{background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.rSm,padding:"8px 10px",cursor:"pointer"}}><Glyph name="cross" size={12} color={T.ink2}/></button>
             </div>
             <VideoEmbed vid={vidEx.vid} name={vidEx.name}/>
           </div>

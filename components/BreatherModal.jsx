@@ -47,7 +47,7 @@ export default function BreatherModal({ onConfirm, onCancel }) {
             return (
               <button key={r.id} onClick={() => { haptic.toggle(); setReason(on ? null : r.id); }}
                 aria-pressed={on}
-                style={{ padding: "9px 14px", background: on ? T.surface : "transparent", border: `1px solid ${on ? "transparent" : T.rule}`, boxShadow: on ? T.elev : "none", borderRadius: T.r, cursor: "pointer", fontSize: 13, fontWeight: on ? 500 : 400, color: on ? T.ink : T.ink2, fontFamily: T.text, transition: `background 160ms ${T.ease}` }}>
+                style={{ padding: "9px 14px", background: on ? T.surface : "transparent", border: `1px solid ${on ? "transparent" : T.rule}`, boxShadow: on ? T.elev : "none", borderRadius: T.rSm, cursor: "pointer", fontSize: 13, fontWeight: on ? 500 : 400, color: on ? T.ink : T.ink2, fontFamily: T.text, transition: `background 160ms ${T.ease}` }}>
                 {r.label}
               </button>
             );

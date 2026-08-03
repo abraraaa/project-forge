@@ -1337,7 +1337,7 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
                   return (
                     <button key={opt.type} onClick={()=>setDayType(i, opt.type)}
                       aria-pressed={active}
-                      style={{padding:"6px 9px 5px",background:active?T.surface:"transparent",border:"none",boxShadow:active?T.elev:"none",borderRadius:T.r,cursor:"pointer",fontSize:12,fontWeight:active?600:400,color:active?T.ink:T.ink3,fontFamily:T.text,display:"flex",flexDirection:"column",alignItems:"center",gap:4,transition:`background 160ms ${T.ease}`}}>
+                      style={{padding:"6px 9px 5px",background:active?T.surface:"transparent",border:"none",boxShadow:active?T.elev:"none",borderRadius:T.rSm,cursor:"pointer",fontSize:12,fontWeight:active?600:400,color:active?T.ink:T.ink3,fontFamily:T.text,display:"flex",flexDirection:"column",alignItems:"center",gap:4,transition:`background 160ms ${T.ease}`}}>
                       {opt.label}
                       <span aria-hidden="true" style={{width:14,height:3,background:key,opacity:active?1:0.4}}/>
                     </button>
@@ -1808,7 +1808,7 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
                   </div>
                   <button onClick={() => toggleSkip(idx)}
                     aria-pressed={entry.skipped}
-                    style={{flexShrink:0,padding:"6px 12px",background:entry.skipped?T.well:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:12,fontWeight:500,color:entry.skipped?T.ink:T.ink3}}>
+                    style={{flexShrink:0,padding:"6px 12px",background:entry.skipped?T.well:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.rSm,cursor:"pointer",fontFamily:T.text,fontSize:12,fontWeight:500,color:entry.skipped?T.ink:T.ink3}}>
                     {entry.skipped ? "Skipped" : "Skip"}
                   </button>
                 </div>
@@ -1869,7 +1869,7 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
                               color: sel ? T.ink : T.ink3,
                               display:"flex",alignItems:"center",justifyContent:"center",gap:7,
                             }}>
-                            <span aria-hidden="true" style={{width:14,height:heatMarkHeight(o.rpe)-1,background:heatForRpe(o.rpe),opacity:sel?1:0.5}}/>
+                            <span aria-hidden="true" style={{width:14,height:heatMarkHeight(o.rpe)-1,background:heatForRpe(o.rpe),borderRadius:T.rMark,opacity:sel?1:0.5}}/>
                             {o.label}
                           </button>
                         );
