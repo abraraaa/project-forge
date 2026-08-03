@@ -17,7 +17,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { T, DISPLAY, heatForRpe, heatMarkHeight, rpeForEffort } from "@/lib/tokens";
+import { T, DISPLAY, heatForRpe, onHeatForRpe, heatMarkHeight, rpeForEffort, rpeValue } from "@/lib/tokens";
 import { Fade, Card, MonoNums } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import { useModalA11y, haptic } from "@/lib/a11y";
@@ -28,18 +28,6 @@ import { recentForExercise } from "@/lib/analytics";
 import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 
-// The heat gradient used by the track fill and the bloomed commit button —
-// ramp stops pinned at the RPE integers (6 → 10). Mode-resolved via vars.
-const HEAT_GRADIENT = "linear-gradient(90deg, var(--heat-0), var(--heat-1), var(--heat-2), var(--heat-3), var(--heat-4))";
-
-// Effort enum the engine speaks (easy / normal / cooked) from the track's
-// continuous RPE. 6–7 = plenty in reserve; 7.5–8.5 = the work as written;
-// 9+ = nothing meaningful left.
-function effortForRpe(rpe) {
-  if (rpe <= 7.25) return "easy";
-  if (rpe <= 8.75) return "normal";
-  return "cooked";
-}
 
 // RIR, in plain words — always printed beside the track (redundancy law:
 // the words carry the meaning; the heat is the pleasure layer).
@@ -132,10 +120,9 @@ function RpeTrack({ rpe, onChange }) {
 // ─── Effort panel — the commit moment ────────────────────────────────────────
 // Appears when a set needs rating. The big value blooms along the ramp
 // (900ms colour travel, never a switch); the commit button warms to match,
-// its ink flipping once the fill passes 8.5.
+// its ink reading the per-stop alias for its bloom stop (§13).
 function EffortPanel({ label = "How hard was that?", onCommit }) {
   const [rpe, setRpe] = useState(8);
-  const pct = ((rpe - 6) / 4) * 100;
   return (
     <div style={{margin:"14px 20px 0",animation:`fadeSlide 240ms ${T.ease}`}}>
       <div style={{fontSize:13,color:T.ink3,marginBottom:10}}>{label}</div>
@@ -149,17 +136,18 @@ function EffortPanel({ label = "How hard was that?", onCommit }) {
       <RpeTrack rpe={rpe} onChange={setRpe}/>
       <button
         className="forge-press"
-        onClick={() => { haptic.commit(); onCommit(effortForRpe(rpe)); }}
+        onClick={() => { haptic.commit(); onCommit(rpe); }}
         style={{
           marginTop:14,width:"100%",height:56,border:"none",borderRadius:T.r,cursor:"pointer",
           display:"flex",alignItems:"center",justifyContent:"center",gap:8,
           fontFamily:T.text,fontSize:17,fontWeight:500,
-          background:HEAT_GRADIENT,
-          backgroundSize:"1200% 100%",
-          backgroundPosition:`${pct}% 0`,
-          color:rpe >= 8.75 ? "var(--log-ink-hot)" : "var(--log-ink-cold)",
+          // Quantized to the bloom stop (§13) — a continuous gradient
+          // crosses the ink flip mid-slide and loses the label. The 900ms
+          // colour transition IS the bloom between stops.
+          background:heatForRpe(rpe),
+          color:onHeatForRpe(rpe),
           boxShadow:T.elevStrong,
-          transition:`background-position 900ms ease, color 900ms ease, transform 380ms ${T.ease}`,
+          transition:`background 900ms ease, color 900ms ease, transform 380ms ${T.ease}`,
         }}>
         Log at <span style={{fontFamily:T.measured}}>{rpe % 1 === 0 ? rpe : rpe.toFixed(1)}</span>
       </button>
@@ -299,7 +287,7 @@ function RecentHistorySheet({ exerciseName, recent, onCancel }) {
             const summary = r.allEqual
               ? `${r.sets.length}×${reps ?? "?"}${w == null ? "" : ` @ ${w} kg`}`
               : `top: ${w ?? "?"}${w == null ? "" : " kg"} × ${reps ?? "?"}`;
-            const rpe = r.effort ? rpeForEffort(r.effort) : null;
+            const rpe = rpeValue(r.effort);
             return (
               <div key={r.date + "_" + i}
                 style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:i<recent.length-1?`1px solid ${T.ruleFaint}`:"none"}}>
@@ -307,9 +295,9 @@ function RecentHistorySheet({ exerciseName, recent, onCancel }) {
                   <span style={{fontSize:12,color:T.ink3}}>{fmt(r.date)}</span>
                   <span style={{fontFamily:T.measured,fontSize:15,color:T.ink}}>{summary}</span>
                 </div>
-                {r.effort && rpe != null && (
-                  <span aria-label={`Effort: ${r.effort}`} style={{display:"inline-flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:12,color:T.ink2}}>{r.effort}</span>
+                {r.effort != null && rpe != null && (
+                  <span aria-label={`Effort: ${typeof r.effort === "number" ? `RPE ${rpe}` : r.effort}`} style={{display:"inline-flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:12,color:T.ink2,fontFamily:typeof r.effort === "number"?T.measured:T.text}}>{typeof r.effort === "number" ? (rpe % 1 === 0 ? rpe : rpe.toFixed(1)) : r.effort}</span>
                     <span aria-hidden="true" style={{width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe),borderRadius:T.rMark,display:"inline-block"}}/>
                   </span>
                 )}
@@ -349,8 +337,8 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
     <div style={{maxWidth:430,margin:"0 auto",padding:"52px 24px 48px"}}>
       <Fade d={0}>
         {onHome && (
-          <button onClick={onHome} style={{...linkBtn,fontSize:13,marginBottom:22,display:"inline-flex",alignItems:"center",gap:6}}>
-            <Glyph name="arrowLeft" size={12}/> Home
+          <button onClick={onHome} style={{...linkBtn,fontSize:13,color:T.ink2,marginBottom:22,display:"inline-flex",alignItems:"center",gap:6}}>
+            <Glyph name="arrowLeft" size={12} color={T.ink3}/> Home
           </button>
         )}
         <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>Session{planDay ? <> · {planDay}</> : null}</div>
@@ -515,7 +503,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const last = recent[0] || null;
   const lastW = last?.topSet?.weight ?? null;
   const delta = (lastW != null && currentW != null) ? Math.round((currentW - lastW) * 100) / 100 : null;
-  const lastRpe = last?.effort ? rpeForEffort(last.effort) : null;
+  const lastRpe = rpeValue(last?.topSet?.rpe) ?? (last?.effort ? rpeForEffort(last.effort) : null);
 
   return (
     /* Three-zone column: identity (top) — numbers (upper-middle) — actions
@@ -528,7 +516,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         <div style={{height:"100%",width:`${progress}%`,background:T.dayKey.strength,transition:`width 600ms ${T.ease}`}}/>
       </div>
       <div style={{padding:"14px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <button onClick={onQuit} style={{...linkBtn,fontSize:13}}><Glyph name="arrowLeft" size={12}/> Quit</button>
+        <button onClick={onQuit} style={{...linkBtn,fontSize:13,color:T.ink2}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Quit</button>
         <button onClick={onShowOverview} aria-label="Open session overview"
           style={{background:"none",border:"none",padding:0,cursor:"pointer",textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",fontFamily:T.text}}>
           <div style={{fontSize:13,fontWeight:500,color:T.ink2,display:"flex",alignItems:"center",gap:6}}>
@@ -664,7 +652,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
       {loggedSets.length > 0 && (
         <div style={{margin:"0 20px"}}>
           {loggedSets.map((s, i) => {
-            const rpe = s.rpe != null ? rpeForEffort(s.rpe) : null;
+            const rpe = rpeValue(s.rpe);
             return { s, rpe, n: i + 1 };
           }).reverse().map(({ s, rpe, n }, idx) => (
             <div key={n} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 0",borderBottom:`1px solid ${T.ruleFaint}`,animation:idx===0?`hwSettle 480ms ${T.ease} both`:undefined}}>

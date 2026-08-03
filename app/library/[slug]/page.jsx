@@ -106,8 +106,8 @@ export default async function ExercisePage({ params }) {
     <div style={{ minHeight: "100vh", padding: "max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 64px", maxWidth: 640, margin: "0 auto" }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
 
-      <Link href="/library" style={{ fontSize: 13, color: T.ink3, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
-        <Glyph name="arrowLeft" size={12}/> The library
+      <Link href="/library" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+        <Glyph name="arrowLeft" size={12} color={T.ink3}/> The library
       </Link>
 
       <div style={{ marginTop: 32 }}>

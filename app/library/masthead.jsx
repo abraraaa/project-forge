@@ -20,7 +20,7 @@ export default function LibraryMasthead({ count }) {
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, fontSize: 13, color: T.ink2, marginBottom: 8 }}>
         <span><span style={{ fontFamily: T.measured, fontSize: 12 }}>{count}</span> movements</span>
         <button onClick={() => setOpen(o => !o)} aria-expanded={open}
-          style={{ background: "none", border: "none", padding: "4px 0", cursor: "pointer", fontFamily: T.text, fontSize: 12, fontWeight: 500, color: open ? T.ink : T.ink3, textDecoration: "underline", textUnderlineOffset: 3, textDecorationColor: T.rule, lineHeight: 1 }}>
+          style={{ background: "none", border: "none", padding: "4px 0", cursor: "pointer", fontFamily: T.text, fontSize: 12, fontWeight: 500, color: open ? T.ink : T.ink2, textDecoration: "underline", textUnderlineOffset: 3, textDecorationColor: T.rule, lineHeight: 1 }}>
           About
         </button>
       </div>

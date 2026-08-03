@@ -20,7 +20,10 @@
   --surface: #FBF6F2;
   --ink:     #241C19;
   --ink-2:   #6A5B54;
-  --ink-3:   #9C8B83;
+  /* Non-text in BOTH modes (§13): glyphs, hairlines, scale numerals,
+     disabled labels — never sentences. Light value clears the 3:1 glyph
+     floor; body/support copy floors at --ink-2. */
+  --ink-3:   #8F7D74;
   --rule:       #E0D2C9;
   --rule-faint: rgba(36, 28, 25, 0.07);
 
@@ -45,6 +48,21 @@
   --commit:     #A65340;
   --commit-ink: #F6EEE8;
 
+  /* Ink-on-heat (§13) — mechanical, never a component judgement. The flip
+     point is stop 3 on bone (dark ink while the ramp is still pale, cream
+     once it deepens). Components read the per-stop alias for their bloom
+     stop; heat-carrying fills QUANTIZE to that stop — a continuous
+     gradient crosses the flip mid-slide and drives its label below the
+     text floor. */
+  --on-heat-lo: #241C19;
+  --on-heat-hi: #F6EEE8;
+  --on-heat-0: var(--on-heat-lo);
+  --on-heat-1: var(--on-heat-lo);
+  --on-heat-2: var(--on-heat-lo);
+  --on-heat-3: var(--on-heat-hi);
+  --on-heat-4: var(--on-heat-hi);
+  --on-heat-over: var(--on-heat-hi);
+
   /* Elevation, the entire model: bottom-edge shadow on light, top-edge
      highlight on dark — light always comes from above. */
   --elev:        inset 0 -1px 0 rgba(36, 28, 25, 0.08);
@@ -63,10 +81,6 @@
      below the ground; the one "inset" tone. */
   --well: #E8DCD4;
 
-  /* Log-button ink at the cold/hot ends of the ramp (the bloomed commit
-     button flips its ink once the fill passes ~8.5). */
-  --log-ink-cold: #241C19;
-  --log-ink-hot:  #F6EEE8;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -97,6 +111,18 @@
     --commit:     #BE7E62;
     --commit-ink: #1A1512;
 
+    /* Inverted ramp inverts the ink rule — flip moves to stop 2 (§13).
+       Stops 0–1 sit at the licensed 3:1 mark floor with light ink; the
+       number and RIR words always print beside them. */
+    --on-heat-lo: #F2E9E3;
+    --on-heat-hi: #241C19;
+    --on-heat-0: var(--on-heat-lo);
+    --on-heat-1: var(--on-heat-lo);
+    --on-heat-2: var(--on-heat-hi);
+    --on-heat-3: var(--on-heat-hi);
+    --on-heat-4: var(--on-heat-hi);
+    --on-heat-over: var(--on-heat-hi);
+
     --elev:        inset 0 1px 0 rgba(242, 233, 227, 0.07);
     --elev-strong: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 
@@ -108,8 +134,6 @@
 
     --well: #241D19;
 
-    --log-ink-cold: #F2E9E3;
-    --log-ink-hot:  #1A1512;
   }
 }
 

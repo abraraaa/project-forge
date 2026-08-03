@@ -449,7 +449,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
   return (
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"clip"}}>
-      {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:13,color:T.ink3,fontFamily:T.text,marginBottom:32,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12}/> Home</button>}
+      {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text,marginBottom:32,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Home</button>}
       <Fade d={0}>
         {/* Kicker — the room's scope. Never absent (§11.3). */}
         <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>

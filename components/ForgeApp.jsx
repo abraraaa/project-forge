@@ -1756,7 +1756,7 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
       <Fade d={0}>
         <div style={{padding:"20px 20px 0",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
           <button onClick={onCancel} aria-label="Cancel"
-            style={{background:"none",border:"none",padding:"4px 0",cursor:"pointer",fontSize:13,color:T.ink3,fontFamily:T.text,flexShrink:0,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12}/> Cancel</button>
+            style={{background:"none",border:"none",padding:"4px 0",cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text,flexShrink:0,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Cancel</button>
           <div style={{textAlign:"right",flex:1}}>
             <div style={{fontSize:16,fontWeight:500,lineHeight:1.25,color:T.ink}}>
               {meta.sessionName} <span style={{color:T.ink3,fontWeight:400}}>· {meta.dateLabel}</span>

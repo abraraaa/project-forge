@@ -108,7 +108,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
       {/* Top clearance is self-sufficient: max() guarantees the back nav
           clears the translucent status bar in the installed PWA. */}
       <div style={{padding:"max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
-        <button onClick={onBack} style={linkBtn}><Glyph name="arrowLeft" size={12}/> Home</button>
+        <button onClick={onBack} style={{...linkBtn,color:T.ink2}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Home</button>
         {!isEmpty && (
           <span style={{fontSize:12,color:T.ink3}}>
             <span style={{fontFamily:T.measured}}>{counts.last7}</span> this week · <span style={{fontFamily:T.measured}}>{counts.total}</span> logged

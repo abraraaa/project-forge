@@ -62,11 +62,12 @@ describe("rpeToRir — unknown inputs (null + console.warn for dev visibility)",
     expect(String(warn.mock.calls[0][0])).toContain("unrecognised");
   });
 
-  it("numeric input → null AND warn (RPE is a string scale, not a number)", () => {
-    // A loose caller passing numeric RPE (common bug across teams who confuse
-    // RPE-the-1-to-10-scale with our 3-point label scale) should be flagged.
-    expect(rpeToRir(7)).toBe(null);
-    expect(warn).toHaveBeenCalled();
+  it("numeric input is the primary scale — mapped, never warned", () => {
+    // The continuous track logs numbers; RIR = 10 − RPE, clamped to 0–3.
+    // Full mapping is pinned in tests/rpe-numeric.test.js.
+    expect(rpeToRir(7)).toBe(3);
+    expect(rpeToRir(8.5)).toBe(1.5);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 

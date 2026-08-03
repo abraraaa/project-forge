@@ -23,8 +23,8 @@ export default function LibraryIndexPage() {
   const groups = libraryByMuscle();
   return (
     <div style={{ minHeight: "100vh", padding: "max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 64px", maxWidth: 640, margin: "0 auto" }}>
-      <Link href="/" style={{ fontSize: 13, color: T.ink3, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
-        <Glyph name="arrowLeft" size={12}/> Home
+      <Link href="/" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+        <Glyph name="arrowLeft" size={12} color={T.ink3}/> Home
       </Link>
 
       {/* Masthead — client island so About's word rides the kicker line
