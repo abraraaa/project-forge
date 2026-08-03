@@ -50,6 +50,26 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
   on what the minimum actually is (likely: passkey IS the account), before
   any code.
 
+- **Bring-your-own-AI coaching — RAISED 2026-08-03, user-requested.** Users
+  want to connect their AI of choice and get coaching off their own training
+  data. The economics are the point: the user bears the cost and complexity
+  of their AI connection; we present the data. Two stages, strictly ordered:
+  1. *Read.* Present session history and programme state in a
+     tool-readable shape (an MCP server is the natural fit — this absorbs
+     the earlier "Heatwayve MCP server" note). Nothing changes in the app;
+     the coach can only see.
+  2. *Write, bounded.* "If the AI recommends altering my programme, it can
+     push the changes to my profile" — accepted ONLY within engine-defined
+     parameters (the same rotation/progression envelope the app itself
+     moves in), and applied through an in-app confirmation so the user
+     keeps agency: the AI proposes, the engine validates, the human
+     accepts. Free-form writes are out by construction, not by review.
+  Dependencies, in order: lightweight accounts land first (third-party
+  access needs the token story), then read, then write. Not started;
+  revisit after the accounts stream. First step when it fires: define the
+  read schema — what a session looks like to a tool is a contract we'll
+  keep forever.
+
 - **Traveller-correct dates (Temporal) — RAISED 2026-08-01.** Boss: we have
   frequent travellers, so the trigger recorded against this is already met.
   **Two separable pieces, and only one has a deadline.**
