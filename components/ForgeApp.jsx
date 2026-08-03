@@ -259,7 +259,16 @@ export default function ForgeApp(){
   // whenever the active profile changes; sign-out reverts to auto. The
   // stamp is idempotent, so the mount-time re-stamp of what the pre-paint
   // script already applied is a no-op.
-  useEffect(() => { stampTheme(getThemePreference(activeProfile)); }, [activeProfile]);
+  useEffect(() => {
+    stampTheme(getThemePreference(activeProfile));
+    // Auto mode: a live OS flip (sunset) re-resolves colours by itself via
+    // light-dark(), but data-mode (the substrate's image key) needs the
+    // re-stamp. Manual prefs ignore the event by construction.
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onFlip = () => stampTheme(getThemePreference(activeProfile));
+    mq.addEventListener("change", onFlip);
+    return () => mq.removeEventListener("change", onFlip);
+  }, [activeProfile]);
 
   // Lifetime-tonnage milestone. Recomputes on every history change (cheap — O(n)
   // over sessions). When the user crosses a new milestone, a small card surfaces
@@ -1195,13 +1204,18 @@ function OnboardingScreen({ onContinue }) {
       // content; on short viewports content just fills naturally.
       display: "flex", flexDirection: "column", justifyContent: "center",
     }}>
+      {/* Masthead per the grammar (§14): kicker Heatwayve · title a noun ·
+          the sentence lives in the support line. */}
       <Fade d={0}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: T.ink3, marginBottom: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: T.ink2, marginBottom: 18 }}>
           Heatwayve
         </div>
-        <h1 style={{ ...DISPLAY, fontSize: 46, color: T.ink, marginBottom: 16 }}>
-          Train with intention
+        <h1 style={{ ...DISPLAY, fontSize: 46, color: T.ink, marginBottom: 14 }}>
+          The programme
         </h1>
+        <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.6, marginBottom: 16 }}>
+          Train with intention.
+        </p>
       </Fade>
 
       <Fade d={120}>
@@ -1230,20 +1244,18 @@ function OnboardingScreen({ onContinue }) {
         </div>
       </Fade>
 
+      {/* §14: no ramp strip — heat is never garnish; the hairline above
+          already closes the rows. Commit is the standard commit: 56px,
+          12px radius, a plain verb of work. */}
       <Fade d={320}>
-        <div aria-hidden="true" style={{ display: "flex", height: 4, marginBottom: 18 }}>
-          {[0,1,2,3,4].map(i => <span key={i} style={{ flex: 1, background: T.heat[i] }}/>)}
-        </div>
         <button className="forge-press" onClick={() => onContinue()} style={{
-          width: "100%", height: 58,
+          width: "100%", height: 56,
           background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer",
           fontFamily: T.text, fontSize: 17, fontWeight: 500, color: T.commitInk,
           boxShadow: T.elevStrong,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "0 22px",
+          display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <span>Unveil the best you</span>
-          <Glyph name="arrowRight" size={15}/>
+          Begin
         </button>
       </Fade>
     </div>

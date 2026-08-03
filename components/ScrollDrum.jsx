@@ -58,7 +58,14 @@ function Wheel({ values, value, onChange, fmt = (v) => String(v), eq = (a, b) =>
       {/* overflowAnchor none: Safari 27 ships scroll anchoring, and the
           drum positions its scroller programmatically — the browser's
           anchoring must not fight the snap maths. */}
-      <div ref={ref} onScroll={onScroll} style={{ position: "relative", zIndex: 1, height: "100%", overflowY: "scroll", overflowAnchor: "none", scrollSnapType: "y mandatory", scrollbarWidth: "none", paddingTop: ITEM_H * HALF, paddingBottom: ITEM_H * HALF, boxSizing: "content-box" }}>
+      <div ref={ref} onScroll={onScroll} style={{ position: "relative", zIndex: 1, height: "100%", overflowY: "scroll", overflowAnchor: "none", scrollSnapType: "y mandatory", scrollbarWidth: "none", paddingTop: ITEM_H * HALF, paddingBottom: ITEM_H * HALF,
+        /* border-box, load-bearing: with content-box the padding grew the
+           scroller PAST its clipping window, so a short list (the decimal
+           wheel: four detents) never overflowed and could not scroll at
+           all. Long wheels masked it — thousands of px overflow either
+           way. Centre maths (scrollTop = idx·ITEM_H) is identical in both
+           models; only the short-list overflow differs. */
+        boxSizing: "border-box" }}>
         <style>{`*::-webkit-scrollbar{display:none}`}</style>
         {values.map((v, i) => (
           <div key={i} onClick={() => onChange(v)} style={{ height: ITEM_H, scrollSnapAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>

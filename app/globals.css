@@ -14,14 +14,27 @@
    the body background for its chrome tint (see the html/body comment
    below), which now resolves per-mode through --ground. */
 :root {
-  /* The whole mode contract in one axis: every flipped token declares its
-     bone and ash values ONCE via light-dark(), resolved by the element's
-     used color-scheme. Auto follows the system through `light dark`; the
-     Profile toggle (lib/theme.js) overrides by setting an inline
-     color-scheme on <html> — inline beats stylesheet, descendants
-     inherit, every light-dark() below re-resolves. No duplicated blocks,
-     no attribute selectors, nothing to drift. */
   color-scheme: light dark;
+}
+
+/* ─── The mode contract, one axis ──────────────────────────────────────────
+   Every flipped token declares its bone and ash values ONCE via
+   light-dark(), resolved by the element's used color-scheme. Auto follows
+   the system through `light dark` above; the Profile toggle (lib/theme.js)
+   overrides by setting an inline color-scheme on <html> — inline beats
+   stylesheet, descendants inherit, every light-dark() re-resolves at the
+   element consuming the var(). No duplicated blocks, no attribute
+   selectors, nothing to drift.
+
+   Declared on BODY, not :root — load-bearing, verified in a live repro
+   (2026-08-03): a custom property declared on the ROOT gets its
+   light-dark() eagerly resolved against the PAGE preference and never
+   re-resolves when the override flips, so the manual toggle changed
+   nothing except html's own background. Declared on body, the function
+   survives in the custom property's computed value and resolves per
+   consuming element, override included. html itself therefore can't
+   consume these vars — its ground is the direct declaration below. */
+body {
 
   --ground:  light-dark(#F2E9E3, #1A1512);
   --surface: light-dark(#FBF6F2, #241D19);
@@ -112,6 +125,15 @@ html, body {
      on PWA cold start until the device rotates. 100vh works correctly
      from launch on iOS 26.2+, the only target our baseline supports. */
   height: 100vh;
+}
+html {
+  /* DIRECT light-dark, not var(--ground): the tokens are declared on body
+     (see the mode-contract note above), so html can't see them — and a
+     direct declaration is exactly what resolves correctly on the root.
+     Keep in sync with --ground and the parse-time <style> in layout.jsx. */
+  background: light-dark(#F2E9E3, #1A1512);
+}
+body {
   /* Ground tone on html/body, deliberately: this is what Safari 26 SAMPLES
      for its chrome extension (bottom chin, status zone) and what overscroll
      rubber-band shows. The visible page substrate (ground + baked-in paper
@@ -207,6 +229,21 @@ input, button, textarea, select { font: inherit; }
      their containing block. */
   overflow-x: clip;
 }
+
+/* §14.3 — substrate drops at night. The tooth is tuned for bone (~5%);
+   OLED blacks amplify the same asset into visible noise on ash, so dark
+   runs its own cut at 2.5% + 1.5%. Keyed off data-mode, NOT a media query
+   — the manual toggle must retune the substrate too, and background-image
+   URLs are the one thing that cannot ride light-dark() (it is a <color>
+   function). data-mode is stamped by lib/theme.js and the pre-paint
+   script for exactly this images-only case; every COLOUR stays on the
+   light-dark() axis. */
+html[data-mode="dark"] .forge-page {
+  background-image:
+    url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20baseFrequency='.9'%20numOctaves='3'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='120'%20height='120'%20filter='url%28%23n%29'%20opacity='.025'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20baseFrequency='.9'%20numOctaves='3'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='120'%20height='120'%20filter='url%28%23n%29'%20opacity='.015'/%3E%3C/svg%3E");
+}
+
 @media not (display-mode: standalone) {
   .forge-page { min-height: 100dvh; }
   @supports (min-height: stretch) {

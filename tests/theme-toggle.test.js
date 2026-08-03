@@ -19,7 +19,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { getThemePreference, applyThemePreference, stampTheme } from "../lib/theme.js";
+import { getThemePreference, applyThemePreference, stampTheme, resolveMode } from "../lib/theme.js";
 import { PROFILE_SUFFIXES } from "../lib/store-health.js";
 import { GLYPH_NAMES } from "../components/Glyph.jsx";
 
@@ -45,6 +45,22 @@ describe("the mode contract is one axis — light-dark(), no twins", () => {
     expect(css).not.toMatch(/@media \(prefers-color-scheme: dark\)[\s\S]*--ground/);
   });
 
+  it("tokens live on BODY, never :root — the eager-resolution trap", () => {
+    // Verified in a live repro (2026-08-03): a light-dark() inside a
+    // custom property declared on the ROOT is resolved once against the
+    // page preference and ignores the color-scheme override — the manual
+    // toggle silently does nothing. Declared on body, it resolves at each
+    // consuming element and follows the override. Moving these back to
+    // :root re-breaks the toggle while every automated colour check
+    // stays green — hence this lock.
+    const rootBlock = css.match(/:root \{[^}]*\}/)?.[0] ?? "";
+    expect(rootBlock).toContain("color-scheme: light dark");
+    expect(rootBlock).not.toContain("--ground");
+    expect(css).toMatch(/body \{[^}]*--ground:/s);
+    // html can't consume body-scoped vars — its ground is the direct form.
+    expect(css).toMatch(/html \{[^}]*background: light-dark\(#F2E9E3, #1A1512\)/s);
+  });
+
   it("the elevation pair stacks both edges (offsets can't ride light-dark)", () => {
     // Bottom-edge shadow on light, top-edge highlight on dark: one token,
     // two shadows, the wrong edge faded to transparent per mode.
@@ -61,6 +77,10 @@ describe("parse-time application (layout.jsx)", () => {
     // (inline beats stylesheet) and touches nothing else.
     expect(layout).toMatch(/style\.colorScheme\s*=\s*t/);
     expect(layout).not.toContain("dataset.theme");
+    // data-mode (the substrate's image key) is stamped for every state,
+    // auto included — otherwise dark-auto launches paint the bone-tuned
+    // tooth for a frame.
+    expect(layout).toContain("dataset.mode");
     // Fail-safe: a throwing localStorage (private mode) must not take the
     // shell down with it.
     expect(layout).toMatch(/try\{.*:theme.*\}catch/);
@@ -113,8 +133,30 @@ describe("lib/theme.js — three states, per profile", () => {
     expect(PROFILE_SUFFIXES.has("theme")).toBe(true);
   });
 
-  it("stamping never touches the DOM beyond colorScheme", () => {
-    expect(themeSrc).not.toContain("dataset");
+  it("data-mode exists for images only — colours never key off it", () => {
+    // The dark-tuned substrate is the ONE consumer: background-image URLs
+    // cannot ride light-dark(). Any colour behind [data-mode] is the
+    // retired twin-block pattern coming back.
+    expect(resolveMode("dark")).toBe("dark");
+    expect(resolveMode("light")).toBe("light");
+    expect(["light", "dark"]).toContain(resolveMode("auto"));
+    stampTheme("dark");
+    expect(document.documentElement.dataset.mode).toBe("dark");
+    stampTheme("auto");
+    const modeRules = css.match(/\[data-mode[^{]*\{[^}]*\}/gs) || [];
+    expect(modeRules.length).toBeGreaterThan(0);
+    for (const r of modeRules) {
+      expect(r).toContain("background-image");
+      expect(r).not.toMatch(/(?<!-)color:|--ground|--ink|--heat/);
+    }
+  });
+
+  it("the dark substrate runs its own quieter cut (§14.3)", () => {
+    const dark = css.match(/\[data-mode="dark"\] \.forge-page \{[^}]*\}/s)?.[0] ?? "";
+    expect(dark).toContain("opacity='.025'");
+    expect(dark).toContain("opacity='.015'");
+    // …and the bone cut stays at its tuned strength.
+    expect(css).toContain("opacity='.055'");
   });
 
   it("the stamp crossfades through startViewTransition when the platform offers it", () => {
