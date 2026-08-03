@@ -8,8 +8,9 @@
 
 import Link from "next/link";
 import { libraryByMuscle, LIBRARY } from "@/lib/library";
-import { T, DISPLAY } from "@/lib/tokens";
+import { T } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
+import LibraryMasthead from "./masthead";
 
 export const metadata = {
   title: "Exercise Library",
@@ -26,31 +27,10 @@ export default function LibraryIndexPage() {
         <Glyph name="arrowLeft" size={12}/> Home
       </Link>
 
-      <div style={{ marginTop: 32 }}>
-        {/* Kicker — the room's scope, with About at the end of the line
-            (§12.2: About has one home). Native details keeps this a server
-            component; .forge-about[open] drops the panel to its own row. */}
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 10, fontSize: 13, color: T.ink2, marginBottom: 8 }}>
-          <span><span style={{ fontFamily: T.measured, fontSize: 12 }}>{LIBRARY.length}</span> movements</span>
-          <details className="forge-about">
-            <summary style={{ fontSize: 12, fontWeight: 500, color: T.ink3, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3, textDecorationColor: T.rule, listStyle: "none", display: "inline-block", padding: "4px 0" }}>
-              About
-            </summary>
-            <p style={{ fontSize: 14, color: T.ink2, margin: "6px 0 4px", lineHeight: 1.6 }}>
-              Each movement carries the weighted muscle contributions Heatwayve
-              uses to audit your training volume — a squat isn&apos;t &quot;legs&quot;,
-              it&apos;s quads first, glutes and hamstrings meaningfully, core along
-              for the ride. The same numbers the app computes with, published.
-            </p>
-          </details>
-        </div>
-        <h1 style={{ ...DISPLAY, fontSize: 42, color: T.ink, margin: 0 }}>
-          The library
-        </h1>
-        <p style={{ fontSize: 15, color: T.ink2, marginTop: 14, lineHeight: 1.6 }}>
-          What each lift actually trains.
-        </p>
-      </div>
+      {/* Masthead — client island so About's word rides the kicker line
+          while its open panel drops in AFTER the support line (§12.2 + the
+          v4-review nit: the masthead never displaces). */}
+      <LibraryMasthead count={LIBRARY.length} />
 
       {groups.map(({ muscle, exercises }) => (
         <section key={muscle} style={{ marginTop: 40 }}>

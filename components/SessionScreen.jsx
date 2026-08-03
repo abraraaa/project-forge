@@ -387,7 +387,9 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
                     <div style={{fontSize:13,color:T.ink3,marginTop:2}}><MonoNums>{o.sub}</MonoNums></div>
                   </div>
                 </div>
-                <Glyph name="check" size={13} color={sel?T.ink:T.rule}/>
+                {/* The check exists only on the chosen row — absence is the
+                    affordance, same logic as the disabled commit. */}
+                {sel && <Glyph name="check" size={13} color={T.ink}/>}
               </button>
             </Fade>
           );

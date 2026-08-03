@@ -408,16 +408,6 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
    composited property in WebKit and press transforms on sheet controls
    reintroduced the safe-area chin in Safari-browser on sheet entry.
    Sheet controls keep haptics only. */
-/* About disclosure in a kicker line (§12.2): closed, the summary sits at
-   the end of the kicker; open, the details panel takes its own full-width
-   row below the line. Chevron markers suppressed — the word is the affordance. */
-.forge-about[open] {
-  flex-basis: 100%;
-}
-.forge-about summary::-webkit-details-marker {
-  display: none;
-}
-
 .forge-press {
   transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
 }
