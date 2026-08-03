@@ -39,6 +39,23 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
   session, RPE and commit states holds — this amends the Lab only.
   Pick up immediately after the current UI fixes settle.
 
+- **Unverified name claims lapse — AGREED 2026-08-03, design settled.**
+  A profile claim lands server-side at creation (deliberately, before any
+  passkey), but a local-only profile can never release it — orphaned names
+  accumulate by construction. The fix: pristine claims (claim envelope
+  only — no credential, no synced data, matched by exact shape) lapse
+  after **90 days** measured against `lastSeenAt`, refreshed by a
+  heartbeat piggybacked on the resting-state pull a local-only device
+  already makes — an active phone keeps its name indefinitely; only
+  genuinely abandoned claims recycle. Lapse = the claim path overwrites
+  in place; no delete command, and anything that ever held a credential
+  or a byte of data never matches the shape. Build note: move the claim
+  registry Blob→Neon as part of this work (the availability check is
+  currently blob-authoritative; a table row makes the heartbeat a
+  transactional UPDATE and the TTL a WHERE clause). Verify first that
+  passkey-less devices re-attempt a pull on launch — if not, the
+  heartbeat needs an app-open nudge instead.
+
 - **Travel mode (via swap) — RAISED 2026-08-03, boss verdict: "does fuck
   all."** Needs a diagnosis pass before any fix: what it currently changes,
   what a traveller actually needs (equipment-constrained swaps? hotel-gym
