@@ -93,14 +93,18 @@ export const metadata = {
   },
   icons: {
     apple: "/apple-touch-icon.png",
+    // Tab favicons are their own cut: browsers render favicons square, so
+    // the mark's plate radius (18.75%) is baked into the alpha. The glass
+    // set stays full-bleed for surfaces that mask for us (iOS, Android
+    // maskable). Fresh filenames double as a favicon-cache bust.
     icon: [
       {
-        url: "/heatwayve/heatwayve-glass-192.png",
+        url: "/heatwayve/heatwayve-tab-192.png",
         sizes: "192x192",
         type: "image/png",
       },
       {
-        url: "/heatwayve/heatwayve-glass-512.png",
+        url: "/heatwayve/heatwayve-tab-512.png",
         sizes: "512x512",
         type: "image/png",
       },
@@ -171,7 +175,7 @@ export default function RootLayout({ children }) {
         <script
           dangerouslySetInnerHTML={{
             __html:
-              'try{var p=JSON.parse(localStorage.getItem("forge:active")||"null");var t=p?JSON.parse(localStorage.getItem("forge:"+p+":theme")||"null"):null;if(t==="light"||t==="dark"){document.documentElement.style.colorScheme=t}}catch(e){}',
+              'try{var d=document.documentElement,p=JSON.parse(localStorage.getItem("forge:active")||"null"),t=p?JSON.parse(localStorage.getItem("forge:"+p+":theme")||"null"):null;if(t==="light"||t==="dark"){d.style.colorScheme=t}d.dataset.mode=(t==="light"||t==="dark")?t:(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light")}catch(e){}',
           }}
         />
         {/* Parse-time ground tone — see the <html> style note. One rule:

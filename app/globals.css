@@ -229,6 +229,21 @@ input, button, textarea, select { font: inherit; }
      their containing block. */
   overflow-x: clip;
 }
+
+/* §14.3 — substrate drops at night. The tooth is tuned for bone (~5%);
+   OLED blacks amplify the same asset into visible noise on ash, so dark
+   runs its own cut at 2.5% + 1.5%. Keyed off data-mode, NOT a media query
+   — the manual toggle must retune the substrate too, and background-image
+   URLs are the one thing that cannot ride light-dark() (it is a <color>
+   function). data-mode is stamped by lib/theme.js and the pre-paint
+   script for exactly this images-only case; every COLOUR stays on the
+   light-dark() axis. */
+html[data-mode="dark"] .forge-page {
+  background-image:
+    url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20baseFrequency='.9'%20numOctaves='3'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='120'%20height='120'%20filter='url%28%23n%29'%20opacity='.025'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20baseFrequency='.9'%20numOctaves='3'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='120'%20height='120'%20filter='url%28%23n%29'%20opacity='.015'/%3E%3C/svg%3E");
+}
+
 @media not (display-mode: standalone) {
   .forge-page { min-height: 100dvh; }
   @supports (min-height: stretch) {
