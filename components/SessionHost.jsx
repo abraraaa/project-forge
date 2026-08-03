@@ -278,7 +278,14 @@ export default function SessionHost() {
     });
     D.save(profile, draftLogRef.current);
     // Bodyweight prompt — once per session, timed to the RPE card fade.
-    if (loadType !== "external" && bodyweight === null && !bwPromptedThisSession) {
+    // ONLY the bodyweight family: these are the load types whose effective
+    // load is uncomputable without a weigh-in (computeEffectiveLoad).
+    // `!== "external"` also caught per_db/cable/total — a dumbbell curl
+    // interrupting the session to ask your weight (boss report,
+    // 2026-08-03). Other surfaces (Home card, Locker Room) carry the
+    // general nudge.
+    const needsBw = loadType === "bodyweight" || loadType === "loaded_bodyweight" || loadType === "assisted_bodyweight";
+    if (needsBw && bodyweight === null && !bwPromptedThisSession) {
       setBwPromptedThisSession(true);
       setTimeout(() => setBwEditOpen(true), 280);
     }

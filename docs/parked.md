@@ -26,6 +26,25 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
 
 ### Open — codeable
 
+- **Performance Lab re-densify — PRIORITY, boss-directed 2026-08-03.** The
+  refresh traded density for calm on the one surface whose job is density,
+  and dropped modules the old Lab held. The design pack's §13 ("re-nutrify
+  the lab") is the build contract: two-tier rows (name · 28-day sparkline ·
+  mono sets count / band rail · trend column), Push/Pull/Legs group headers
+  carrying their aggregates as data, a one-line glance strip under the
+  masthead, teaching copy on week one only, and the restored sections in
+  order — glance strip → strength (e1RM rows) → consistency (8-week day
+  cells + streak) → volume ledger. Outcome first; empty rows show the
+  programmed target (0 of 12), not silence. §12's freeze on Library,
+  session, RPE and commit states holds — this amends the Lab only.
+  Pick up immediately after the current UI fixes settle.
+
+- **Travel mode (via swap) — RAISED 2026-08-03, boss verdict: "does fuck
+  all."** Needs a diagnosis pass before any fix: what it currently changes,
+  what a traveller actually needs (equipment-constrained swaps? hotel-gym
+  pools?), and whether the feature earns its place or folds into swap
+  presets. Diagnosis first, no patches.
+
 - **Queued behind the visual refresh — PARKED 2026-08-03.** Held so the
   rebrand lands on a quiet base; pick up in this order once we're confident
   in the refresh.

@@ -41,5 +41,12 @@
   },
   "engines": {
     "node": "24.x"
-  }
+  },
+  "browserslist": [
+    "iOS >= 18",
+    "Safari >= 18",
+    "Chrome >= 123",
+    "Edge >= 123",
+    "Firefox >= 121"
+  ]
 }

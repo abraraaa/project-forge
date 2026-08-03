@@ -45,6 +45,22 @@ describe("the mode contract is one axis — light-dark(), no twins", () => {
     expect(css).not.toMatch(/@media \(prefers-color-scheme: dark\)[\s\S]*--ground/);
   });
 
+  it("tokens live on BODY, never :root — the eager-resolution trap", () => {
+    // Verified in a live repro (2026-08-03): a light-dark() inside a
+    // custom property declared on the ROOT is resolved once against the
+    // page preference and ignores the color-scheme override — the manual
+    // toggle silently does nothing. Declared on body, it resolves at each
+    // consuming element and follows the override. Moving these back to
+    // :root re-breaks the toggle while every automated colour check
+    // stays green — hence this lock.
+    const rootBlock = css.match(/:root \{[^}]*\}/)?.[0] ?? "";
+    expect(rootBlock).toContain("color-scheme: light dark");
+    expect(rootBlock).not.toContain("--ground");
+    expect(css).toMatch(/body \{[^}]*--ground:/s);
+    // html can't consume body-scoped vars — its ground is the direct form.
+    expect(css).toMatch(/html \{[^}]*background: light-dark\(#F2E9E3, #1A1512\)/s);
+  });
+
   it("the elevation pair stacks both edges (offsets can't ride light-dark)", () => {
     // Bottom-edge shadow on light, top-edge highlight on dark: one token,
     // two shadows, the wrong edge faded to transparent per mode.

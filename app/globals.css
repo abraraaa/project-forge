@@ -14,14 +14,27 @@
    the body background for its chrome tint (see the html/body comment
    below), which now resolves per-mode through --ground. */
 :root {
-  /* The whole mode contract in one axis: every flipped token declares its
-     bone and ash values ONCE via light-dark(), resolved by the element's
-     used color-scheme. Auto follows the system through `light dark`; the
-     Profile toggle (lib/theme.js) overrides by setting an inline
-     color-scheme on <html> — inline beats stylesheet, descendants
-     inherit, every light-dark() below re-resolves. No duplicated blocks,
-     no attribute selectors, nothing to drift. */
   color-scheme: light dark;
+}
+
+/* ─── The mode contract, one axis ──────────────────────────────────────────
+   Every flipped token declares its bone and ash values ONCE via
+   light-dark(), resolved by the element's used color-scheme. Auto follows
+   the system through `light dark` above; the Profile toggle (lib/theme.js)
+   overrides by setting an inline color-scheme on <html> — inline beats
+   stylesheet, descendants inherit, every light-dark() re-resolves at the
+   element consuming the var(). No duplicated blocks, no attribute
+   selectors, nothing to drift.
+
+   Declared on BODY, not :root — load-bearing, verified in a live repro
+   (2026-08-03): a custom property declared on the ROOT gets its
+   light-dark() eagerly resolved against the PAGE preference and never
+   re-resolves when the override flips, so the manual toggle changed
+   nothing except html's own background. Declared on body, the function
+   survives in the custom property's computed value and resolves per
+   consuming element, override included. html itself therefore can't
+   consume these vars — its ground is the direct declaration below. */
+body {
 
   --ground:  light-dark(#F2E9E3, #1A1512);
   --surface: light-dark(#FBF6F2, #241D19);
@@ -112,6 +125,15 @@ html, body {
      on PWA cold start until the device rotates. 100vh works correctly
      from launch on iOS 26.2+, the only target our baseline supports. */
   height: 100vh;
+}
+html {
+  /* DIRECT light-dark, not var(--ground): the tokens are declared on body
+     (see the mode-contract note above), so html can't see them — and a
+     direct declaration is exactly what resolves correctly on the root.
+     Keep in sync with --ground and the parse-time <style> in layout.jsx. */
+  background: light-dark(#F2E9E3, #1A1512);
+}
+body {
   /* Ground tone on html/body, deliberately: this is what Safari 26 SAMPLES
      for its chrome extension (bottom chin, status zone) and what overscroll
      rubber-band shows. The visible page substrate (ground + baked-in paper
