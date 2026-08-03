@@ -154,7 +154,7 @@ describe("client: a 401 is a resting state, not a failure", () => {
   it("the UI names it honestly and does not paint it as an alarm", () => {
     const cards = readFileSync(resolve(root, "components/sync-cards.jsx"), "utf8");
     expect(cards).toContain("On this device only");
-    expect(cards).toMatch(/needsAuth: T\.steel/);   // never T.coral
+    expect(cards).toMatch(/needsAuth: T\.under/);   // steel — never a heat colour
   });
 });
 

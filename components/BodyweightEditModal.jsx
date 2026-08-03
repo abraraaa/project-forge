@@ -27,7 +27,8 @@
 
 import { useRef, useState } from "react";
 import { useModalA11y, haptic } from "@/lib/a11y";
-import { T } from "@/lib/tokens";
+import { T, DISPLAY } from "@/lib/tokens";
+import Glyph from "@/components/Glyph";
 import BodyweightDrum from "@/components/BodyweightDrum";
 import { hasPasskey, registerPasskey, isWebAuthnSupported } from "@/lib/webauthn";
 import { getAuthTokenWithCeremony } from "@/lib/auth-session";
@@ -166,28 +167,28 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
   };
 
   const sub = (text) => (
-    <div style={{ fontSize: 12, color: T.text3, marginTop: 4, lineHeight: 1.5, maxWidth: 280 }}>{text}</div>
+    <div style={{ fontSize: 13, color: T.ink3, marginTop: 5, lineHeight: 1.5, maxWidth: 280 }}>{text}</div>
   );
   const cta = (label, onClick, { disabled = false } = {}) => (
-    <button onClick={onClick} disabled={disabled || busy} style={{ width: "100%", padding: "16px", background: T.coral, border: "none", borderRadius: T.r.lg, cursor: busy ? "default" : "pointer", fontFamily: T.serif, fontSize: 18, fontWeight: 400, color: T.bg0, boxShadow: `0 8px 28px ${T.coral}26`, display: "flex", alignItems: "center", justifyContent: "space-between", opacity: busy ? 0.6 : 1 }}>
+    <button onClick={onClick} disabled={disabled || busy} style={{ width: "100%", padding: "16px", background: T.commit, border: "none", borderRadius: T.r, cursor: busy ? "default" : "pointer", fontFamily: T.text, fontSize: 16, fontWeight: 500, color: T.commitInk, boxShadow: T.elevStrong, display: "flex", alignItems: "center", justifyContent: "space-between", opacity: busy ? 0.6 : 1 }}>
       <span>{busy ? "One sec…" : label}</span>
-      <span style={{ fontSize: 16 }}>→</span>
+      <Glyph name="arrowRight" size={13}/>
     </button>
   );
   const quiet = (label, onClick) => (
-    <button onClick={onClick} disabled={busy} style={{ width: "100%", padding: "12px", background: "none", border: "none", cursor: "pointer", fontSize: 13, color: T.text3 }}>{label}</button>
+    <button onClick={onClick} disabled={busy} style={{ width: "100%", padding: "12px", background: "none", border: "none", cursor: "pointer", fontSize: 13, color: T.ink3, fontFamily: T.text }}>{label}</button>
   );
   // Picker triggers are <label htmlFor> — native association opens the hidden
   // file input with no ref access (react-hooks/refs stays quiet, and it's
   // less code than a click() forward anyway).
   const PICKER_ID = "bw-photo-input";
   const ctaLabel = (label) => (
-    <label htmlFor={PICKER_ID} role="button" style={{ width: "100%", padding: "16px", background: T.coral, border: "none", borderRadius: T.r.lg, cursor: "pointer", fontFamily: T.serif, fontSize: 18, fontWeight: 400, color: T.bg0, boxShadow: `0 8px 28px ${T.coral}26`, display: "flex", alignItems: "center", justifyContent: "space-between", boxSizing: "border-box" }}>
-      <span>{label}</span><span style={{ fontSize: 16 }}>→</span>
+    <label htmlFor={PICKER_ID} role="button" style={{ width: "100%", padding: "16px", background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer", fontFamily: T.text, fontSize: 16, fontWeight: 500, color: T.commitInk, boxShadow: T.elevStrong, display: "flex", alignItems: "center", justifyContent: "space-between", boxSizing: "border-box" }}>
+      <span>{label}</span><Glyph name="arrowRight" size={13}/>
     </label>
   );
   const quietLabel = (label) => (
-    <label htmlFor={PICKER_ID} role="button" style={{ display: "block", width: "100%", padding: "12px", textAlign: "center", cursor: "pointer", fontSize: 13, color: T.text3, boxSizing: "border-box" }}>{label}</label>
+    <label htmlFor={PICKER_ID} role="button" style={{ display: "block", width: "100%", padding: "12px", textAlign: "center", cursor: "pointer", fontSize: 13, color: T.ink3, boxSizing: "border-box", fontFamily: T.text }}>{label}</label>
   );
 
   const titles = { weight: "Bodyweight", offer: COPY.offerTitle, secure: COPY.secureTitle, camera: COPY.cameraTitle, done: COPY.doneTitle };
@@ -198,17 +199,23 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
 
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{ overscrollBehavior: "contain", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={(e) => e.stopPropagation()} className="forge-sheet-ground" style={{ background: T.bg2, padding: "24px 24px calc(32px + env(safe-area-inset-bottom))", width: "100%", borderTop: `1px solid ${T.sage}28`, animation: `slideUp 260ms ${T.ease}`, outline: "none" }}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={(e) => e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{ padding: "24px 24px calc(32px + env(safe-area-inset-bottom))", width: "100%", animation: `slideUp 260ms ${T.ease}`, outline: "none" }}>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
-            <div id={titleId} style={{ fontFamily: T.serif, fontSize: 22, fontWeight: 300, lineHeight: 1.1 }}>{titles[step]}</div>
+            <div id={titleId} style={
+              // Serif fence: only the noun titles (Bodyweight, Today's
+              // photo) wear the display face; imperative steps stay text.
+              step === "weight" || step === "camera"
+                ? { ...DISPLAY, fontSize: 28, color: T.ink }
+                : { fontSize: 18, fontWeight: 500, fontFamily: T.text, color: T.ink, lineHeight: 1.3 }
+            }>{titles[step]}</div>
             {sub(subs[step])}
           </div>
         </div>
 
         {note && (
-          <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: T.r.md, background: `${T.gold}0E`, border: `1px solid ${T.gold}33`, fontSize: 12, color: T.text1, lineHeight: 1.5 }}>{note}</div>
+          <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: T.r, background: T.surface, boxShadow: T.elev, fontSize: 13, color: T.ink, lineHeight: 1.5 }}>{note}</div>
         )}
 
         {step === "weight" && (<>
@@ -218,7 +225,7 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
           {/* House pattern (boss, 2026-07-21): clear Cancel/primary on the
               bottom row — no corner ✕. Escape still closes via useModalA11y. */}
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={onClose} disabled={busy} style={{ flex: 1, padding: "16px", background: T.bg3, border: `1px solid ${T.bg4}`, borderRadius: T.r.lg, cursor: "pointer", fontSize: 14, color: T.text2 }}>Cancel</button>
+            <button onClick={onClose} disabled={busy} style={{ flex: 1, padding: "16px", background: "none", border: `1px solid ${T.rule}`, borderRadius: T.r, cursor: "pointer", fontSize: 14, color: T.ink2, fontFamily: T.text }}>Cancel</button>
             <div style={{ flex: 2 }}>{cta("Confirm", confirmWeight)}</div>
           </div>
         </>)}
@@ -238,7 +245,7 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
           {safePreviewUrl ? (<>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={safePreviewUrl} alt="Today's progress photo preview" style={{ maxWidth: "100%", maxHeight: "44vh", borderRadius: T.r.lg, objectFit: "contain" }} />
+              <img src={safePreviewUrl} alt="Today's progress photo preview" style={{ maxWidth: "100%", maxHeight: "44vh", borderRadius: T.r, objectFit: "contain" }} />
             </div>
             {cta(COPY.cameraConfirm, confirmPhoto)}
             {quietLabel(COPY.cameraRetake)}
@@ -249,7 +256,7 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
         </>)}
 
         {step === "done" && (
-          <div style={{ textAlign: "center", padding: "8px 0 16px", fontSize: 40 }}>✓</div>
+          <div style={{ textAlign: "center", padding: "8px 0 16px" }}><Glyph name="check" size={32} color={T.ink2}/></div>
         )}
       </div>
     </div>

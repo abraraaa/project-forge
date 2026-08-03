@@ -74,8 +74,8 @@ describe("PerformanceLab — populated history", () => {
     render(<PerformanceLab history={buildHistory()} onBack={() => {}} />);
     // Empty-state copy must NOT be present.
     expect(screen.queryByText(/Nothing to show/i)).toBeNull();
-    // Volume card title is the contract surface.
-    expect(screen.getByText("Volume per muscle")).toBeTruthy();
+    // The volume list header is the contract surface.
+    expect(screen.getByText(/Sets per week vs MEV\/MAV\/MRV/i)).toBeTruthy();
     // At least one of the muscles squats credit must surface as a row —
     // anatomy distributes Back Squat across Quads/Glutes/Hams/Core/Calves.
     // We pick Quads as the primary; if it doesn't render, the contract
@@ -85,10 +85,10 @@ describe("PerformanceLab — populated history", () => {
 
   it("renders the session-counts subtitle on the lab header", () => {
     render(<PerformanceLab history={buildHistory()} onBack={() => {}} />);
-    // Two surfaces reference the session count: the header subtitle ("5
-    // sessions · 2 this week · ...") and the volume landscape footer
-    // ("Audited over 4 weeks · 5 sessions"). Both should render — assert
-    // we see at least the count appearing somewhere, not exactly once.
-    expect(screen.getAllByText(/5 sessions?/i).length).toBeGreaterThan(0);
+    // The header strip prints the logged-session count ("… · 5 logged").
+    // Assert the count surfaces — the number and the word live in one
+    // strip split across spans, so match on the container's text.
+    expect(screen.getAllByText(/logged/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("5").length).toBeGreaterThan(0);
   });
 });

@@ -14,7 +14,8 @@
 // focus-trap, slideUp animation.
 
 import { useEffect, useRef } from "react";
-import { T } from "@/lib/tokens";
+import { T, DISPLAY } from "@/lib/tokens";
+import Glyph from "@/components/Glyph";
 import { useModalA11y } from "@/lib/a11y";
 
 // Entries grouped so related terms cluster (MEV/MAV/MRV → one block,
@@ -122,27 +123,27 @@ export default function GlossarySheet({ anchorTerm = null, onCancel }) {
     <div onKeyDown={onKeyDown} onClick={onCancel}
       className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
-        className="forge-sheet-ground" style={{background:T.bg2,padding:"28px 24px 32px",width:"100%",borderTop:`1px solid ${T.bg3}`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        <div style={{fontSize:10,fontWeight:500,color:T.text3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+        className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
           Glossary
         </div>
-        <div id={titleId} style={{fontFamily:T.serif,fontSize:24,fontWeight:300,lineHeight:1.2,marginBottom:14,color:T.text1}}>
-          The terms <span style={{fontStyle:"italic",color:T.gold}}>Heatwayve uses</span>
+        <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:14}}>
+          The terms Heatwayve uses
         </div>
 
         <div ref={scrollRef} style={{flex:1,overflowY:"auto",marginRight:-8,paddingRight:8}}>
           {TERMS.map((t, i) => (
             <div key={t.id} data-term-id={t.id}
-              style={{padding:"14px 0",borderBottom:i<TERMS.length-1?`1px solid ${T.bg3}`:"none"}}>
-              <div style={{fontFamily:T.serif,fontSize:18,fontWeight:400,color:T.text1,marginBottom:2}}>{t.title}</div>
-              <div style={{fontSize:11,color:T.text3,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:500,marginBottom:8}}>{t.subtitle}</div>
-              <div style={{fontSize:13,color:T.text2,lineHeight:1.55,fontFamily:T.sans}}>{t.body}</div>
+              style={{padding:"14px 0",borderBottom:i<TERMS.length-1?`1px solid ${T.ruleFaint}`:"none"}}>
+              <div style={{fontSize:16,fontWeight:600,color:T.ink,marginBottom:2}}>{t.title}</div>
+              <div style={{fontSize:12,color:T.ink3,marginBottom:8}}>{t.subtitle}</div>
+              <div style={{fontSize:13,color:T.ink2,lineHeight:1.55,fontFamily:T.text}}>{t.body}</div>
             </div>
           ))}
         </div>
 
         <button onClick={onCancel}
-          style={{marginTop:14,padding:"12px",background:"none",border:`1px solid ${T.bg3}`,borderRadius:T.r.md,cursor:"pointer",fontSize:13,color:T.text2,fontFamily:T.sans}}>
+          style={{marginTop:14,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
           Close
         </button>
       </div>
@@ -150,33 +151,25 @@ export default function GlossarySheet({ anchorTerm = null, onCancel }) {
   );
 }
 
-// Small inline trigger — renders the ⓘ glyph styled to feel ambient. Use
-// inside text where a term first appears (or in card subtitles), passing the
-// term id to anchor the sheet on open.
+// Small inline trigger — the word "About", never an enclosed glyph (drawn
+// glyphs are open strokes; a circled ⓘ is the retired app-store idiom).
+// Use inside text where a term first appears (or beside a kicker), passing
+// the term id to anchor the sheet on open.
 export function GlossaryTrigger({ anchorTerm = null, onOpen, label = "Open glossary" }) {
   return (
-    // 18px RING, 32px TARGET. The ring is what the eye sees and must not
-    // change; the button around it is a transparent 32x32 hit area so the
-    // control clears the WCAG 2.5.8 minimum (24x24). Negative margins absorb
-    // the extra box in both axes, so inline text rhythm and the 6px gap from
-    // the preceding word are exactly as before — this is a touch fix, not a
-    // visual one.
+    // The visible word is small; padding + negative margins keep a ≥32px
+    // hit area (WCAG 2.5.8) without disturbing inline text rhythm.
     <button onClick={(e) => { e.stopPropagation(); onOpen(anchorTerm); }} aria-label={label}
       style={{
-        display:"inline-flex",alignItems:"center",justifyContent:"center",
-        width:32,height:32,margin:"-7px -7px -7px -1px",padding:0,
-        boxSizing:"border-box",
+        display:"inline-flex",alignItems:"center",
+        padding:"10px 8px",margin:"-10px -8px",
         background:"none",border:"none",
         cursor:"pointer",
-        lineHeight:1,verticalAlign:"middle",
+        fontFamily:T.text,fontSize:12,fontWeight:500,color:T.ink3,
+        textDecoration:"underline",textUnderlineOffset:3,textDecorationColor:T.rule,
+        lineHeight:1,verticalAlign:"baseline",
       }}>
-      <span aria-hidden="true" style={{
-        display:"inline-flex",alignItems:"center",justifyContent:"center",
-        width:18,height:18,boxSizing:"border-box",
-        border:`1px solid ${T.text4}66`,borderRadius:"50%",
-        fontFamily:T.serif,fontSize:11,fontStyle:"italic",fontWeight:400,color:T.text3,
-        lineHeight:1,
-      }}>i</span>
+      About
     </button>
   );
 }

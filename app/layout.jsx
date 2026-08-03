@@ -1,10 +1,9 @@
 import "./globals.css";
-import { Fraunces, DM_Sans } from "next/font/google";
+import { Bodoni_Moda, Familjen_Grotesk, Spline_Sans_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
-import GrainOverlay from "@/components/GrainOverlay";
 // ViewTransition ships in the React canary Next vendors for App Router
 // bundles (verified: next/dist/compiled/react exports it). Server components
 // compile against that copy — the `any` cast is only for the build's
@@ -12,20 +11,39 @@ import GrainOverlay from "@/components/GrainOverlay";
 import * as React from "react";
 const ViewTransition = /** @type {any} */ (React).ViewTransition;
 
-const fraunces = Fraunces({
+// Bone & Ember type system — two families and an instrument.
+// Display: Bodoni Moda, corrected cut. The face is ALWAYS set with
+// font-optical-sizing none + 'opsz' 11 + kern normal + +0.004em tracking
+// (the DISPLAY object in lib/tokens.js) — never the free optical axis,
+// which is what dropped the t's hairlines below a pixel. 400 default,
+// 500 ceremony-only. Roman only — no italic cut ships (italic-serif mood
+// fragments are on the never-list).
+const bodoni = Bodoni_Moda({
   subsets: ["latin"],
-  weight: ["300", "400"],
-  style: ["normal", "italic"],
+  weight: ["400", "500"],
+  style: ["normal"],
   display: "swap",
-  variable: "--font-fraunces",
+  variable: "--font-bodoni",
   preload: true,
 });
 
-const dmSans = DM_Sans({
+// Text: Familjen Grotesk — every word of interface. Sentence case, never
+// all-caps.
+const familjen = Familjen_Grotesk({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600"],
+  weight: ["400", "500", "600"],
   display: "swap",
-  variable: "--font-dm-sans",
+  variable: "--font-familjen",
+  preload: true,
+});
+
+// Measured: Spline Sans Mono — measured values only. If it isn't a
+// number, it isn't mono.
+const spline = Spline_Sans_Mono({
+  subsets: ["latin"],
+  weight: ["300", "400", "500"],
+  display: "swap",
+  variable: "--font-spline",
   preload: true,
 });
 
@@ -95,18 +113,21 @@ export const viewport = {
   // IMPORTANT (Safari 26): Safari STOPPED honouring theme-color for the
   // toolbar tint. It now samples the background-color of a fixed/sticky edge
   // element, falling back to <body>, at FIRST PAINT (JS bg changes don't
-  // update it). Our status bar reads correctly only because body bg is also
-  // #131110 — the two happen to match. DO NOT remove `background: #131110`
-  // from html/body in globals.css thinking themeColor covers it; on Safari
-  // 26 the body bg IS what tints the toolbar. (This exact trap already
-  // caused a regression once.) See docs/frontend-audit.md F5.
-  themeColor: "#1D1A19",
+  // update it). Our chrome reads correctly because html/body carry
+  // var(--ground) in globals.css — that ground tone IS what tints the
+  // toolbar. DO NOT remove the html/body background thinking themeColor
+  // covers it. (This exact trap already caused a regression once.)
+  // Bone & Ember: a media pair so browsers that DO honour theme-color
+  // follow the mode contract.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F2E9E3" },
+    { media: "(prefers-color-scheme: dark)", color: "#1A1512" },
+  ],
   // colorScheme via the viewport API rather than a manual <meta> in <head>
   // — Next dedupes/manages it and warns on hand-written viewport meta.
-  // Controls UA form controls, scrollbars, and the default canvas colour.
-  // (NB: does NOT fix the PWA back-swipe shimmer — that's a platform-level
-  // system backdrop with no CSS hook; see docs/frontend-audit.md F7.)
-  colorScheme: "dark",
+  // `light dark`: the mode contract. Controls UA form controls, scrollbars,
+  // and the default canvas colour per system appearance.
+  colorScheme: "light dark",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -119,9 +140,6 @@ export const viewport = {
   // bottom-sheet home-indicator padding); cover is what makes them work.
   // With cover, the page background extends edge-to-edge so the status
   // bar reads as part of the app instead of a detached black band.
-  // iOS 26 note: without cover, the floating Liquid Glass toolbar makes the
-  // layout viewport end ABOVE the bottom safe area — cover is now doubly
-  // load-bearing. See docs/frontend-audit.md F6.
   viewportFit: "cover",
 };
 
@@ -129,21 +147,43 @@ export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${dmSans.variable}`}
-      // Inline colorScheme + background on <html> so the dark surface exists at
-      // HTML-PARSE time, before globals.css (an external stylesheet) loads. The
-      // gap between first paint and stylesheet application is when the browser
-      // paints the UA-default canvas — WHITE in light-mode — which is the
-      // white flash on load/navigation AND, on iOS standalone, the swipe-back
-      // "shimmer" (it tracks device appearance precisely because it's the UA
-      // canvas). color-scheme:dark darkens the UA canvas; backgroundColor pins
-      // the chrome-sampling tone. Must stay in sync with html/body bg in
-      // globals.css — #1D1A19, the grain-lifted field tone, NOT T.bg0 (see
-      // the globals.css comment). This is the parse-time layer the meta tag + CSS couldn't
-      // cover. See docs/frontend-audit.md F5/F7.
-      style={{ colorScheme: "dark", backgroundColor: "#1D1A19" }}
+      className={`${bodoni.variable} ${familjen.variable} ${spline.variable}`}
+      // Parse-time colour scheme on <html> so the right canvas exists
+      // before globals.css (an external stylesheet) loads. The gap between
+      // first paint and stylesheet application is when the browser paints
+      // the UA-default canvas — the load-flash / iOS standalone swipe-back
+      // "shimmer". color-scheme here makes the UA canvas follow the system
+      // appearance; the inline <style> in <head> below pins the actual
+      // ground tone per mode (an inline style attribute can't express a
+      // media query, so the background lives in that tag instead — same
+      // parse-time guarantee).
+      style={{ colorScheme: "light dark" }}
     >
       <head>
+        {/* Appearance override, applied at PARSE time. The Profile toggle
+            (lib/theme.js) stores a PER-PROFILE preference; profile
+            resolution is itself just a localStorage read (forge:active),
+            so the active profile's mode lands before first paint. Without
+            this blocking script every launch would paint the system mode
+            and then snap — the same flash class the inline background
+            below exists to prevent. Auto stores nothing, so the default
+            path does no work. Must stay in sync with lib/theme.js. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'try{var p=JSON.parse(localStorage.getItem("forge:active")||"null");var t=p?JSON.parse(localStorage.getItem("forge:"+p+":theme")||"null"):null;if(t==="light"||t==="dark"){document.documentElement.style.colorScheme=t}}catch(e){}',
+          }}
+        />
+        {/* Parse-time ground tone — see the <html> style note. One rule:
+            light-dark() re-resolves against whatever color-scheme the
+            script above just set, so the manual override wins the same
+            parse-time race for free. Must stay in sync with --ground in
+            globals.css. */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: "html{background:light-dark(#F2E9E3,#1A1512)}",
+          }}
+        />
         {/* Build-output-verified manual tags. Next 16's Metadata API
             emits apple-mobile-web-app-status-bar-style (from
             appleWebApp.statusBarStyle), apple-mobile-web-app-title
@@ -182,28 +222,24 @@ export default function RootLayout({ children }) {
       <body>
         <ServiceWorkerRegistrar />
         <ErrorBoundary>
-          {/* .forge-page (globals.css): document-height positioned wrapper
-              that hosts the Portra grain field as an absolute z -1 child, so
-              the texture scrolls WITH the page. Deliberately NOT a fixed
-              overlay: Safari 26 paints opaque colour-extension slabs behind
-              its chrome whenever a fixed/sticky element borders a viewport
-              edge (WebKit bug 301756), which was suppressing the translucent
-              scroll-under treatment at both the status bar and the URL bar.
-              With no fixed element at the edges, chrome tint falls back to
-              body's solid #131110 and content slides under the bars
-              natively. See GrainOverlay.jsx for the full rationale. */}
+          {/* .forge-page (globals.css): document-height wrapper that paints
+              the ground substrate (bone/ash + the baked-in paper texture)
+              across the FULL scrollable document. Texture lives in the
+              ground's own background — substrate, never overlay — so it
+              composites once and never sits over type or data marks.
+              Deliberately no fixed layers at the viewport edges: Safari 26
+              paints opaque colour-extension slabs behind its chrome
+              whenever a fixed/sticky element borders a viewport edge
+              (WebKit bug 301756), which suppresses the translucent
+              scroll-under treatment at both the status bar and URL bar. */}
           <div className="forge-page">
-            <GrainOverlay />
-            {/* The ONE transition boundary (PR3 3f): route navigations and
-                in-shell screen swaps both update this subtree inside a React
+            {/* The ONE transition boundary: route navigations and in-shell
+                screen swaps both update this subtree inside a React
                 transition, so both animate through the same class-mapped
                 slide vocabulary (globals.css ::view-transition-*(.forge-vt-*)).
                 Typed "nav-back" transitions (lib/nav-transitions.js) slide
-                down; everything else slides up. Deliberately INSIDE
-                .forge-page and AFTER the grain: the substrate is outside the
-                boundary, so it is never double-captured — the entire
-                plus-lighter/midpoint-dim class of bugs is now structurally
-                impossible rather than patched. */}
+                down; everything else slides up. The substrate is outside
+                the boundary, so it is never double-captured. */}
             <ViewTransition
               default={{
                 "nav-back": "forge-vt-back",
@@ -214,12 +250,11 @@ export default function RootLayout({ children }) {
             </ViewTransition>
           </div>
         </ErrorBoundary>
-        {/* Status-bar handling lives entirely in CSS now: viewport-fit:
-            cover + statusBarStyle: black-translucent let the page background
-            (#131110) flow under a transparent system bar, and a standalone-
-            only env(safe-area-inset-top) padding on body keeps content clear
-            of the clock. There is NO body::before overlay element (an earlier
-            comment here claimed there was — it was stale). */}
+        {/* Status-bar handling lives entirely in CSS: viewport-fit: cover +
+            statusBarStyle: black-translucent let the page background flow
+            under a transparent system bar, and a standalone-only
+            env(safe-area-inset-top) padding on .forge-page keeps content
+            clear of the clock. */}
         <Analytics />
         <SpeedInsights />
       </body>

@@ -2,23 +2,28 @@
 
 // components/HomeScreen.jsx
 // ─────────────────────────────────────────────────────────────────────────────
-// The home screen, extracted verbatim from ForgeApp.jsx (PR3 3e-prep —
-// decomposition before the Home/Session route split). Pure presentation +
-// local UI state: every mutation and navigation goes through props (onBegin,
-// onMarkDayDone, onProfile, …) — the block contains no storage primitives,
-// so ForgeApp keeps sole ownership of app-state writes.
+// The home screen — Bone & Ember. Pure presentation + local UI state: every
+// mutation and navigation goes through props (onBegin, onMarkDayDone,
+// onProfile, …) — the block contains no storage primitives, so ForgeApp
+// keeps sole ownership of app-state writes.
+//
+// Surface grammar on this screen: the day is the noun that matters (Bodoni,
+// 46px), its identity carries the day key as a hairline under the name and
+// as ticks on the week strip. Numbers sit on the ground between hairlines
+// (readiness/stats row, tonnage wave, session list). Only documents (the
+// prompt cards) and commit actions (Begin) get surfaces.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useRef } from "react";
-import { T } from "@/lib/tokens";
-import { Fade, Card, Tag } from "@/components/ui";
-import { useModalA11y, useGrainTouch } from "@/lib/a11y";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
+import { Fade, Card, Tag, MonoNums } from "@/components/ui";
+import Glyph from "@/components/Glyph";
+import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession } from "@/lib/programme";
 import { deloadCardCopy } from "@/lib/progression";
-import { formatTonnage } from "@/lib/analytics";
+import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
 
 // Human-readable "X ago" — tuned for < 12h windows (draft expiry cutoff).
-// Moved with HomeScreen (its only caller) from ForgeApp module scope.
 function formatAgo(ms) {
   if (!ms || ms < 0) return "just now";
   const s = Math.floor(ms / 1000);
@@ -30,13 +35,21 @@ function formatAgo(ms) {
   return "a while ago";
 }
 
+// The planned proximity-to-failure per block type — main lifts and
+// accessories are prescribed around rpe 8, finishers run closer to the
+// ceiling. Drives the heat mark on the session preview rows (colour +
+// height + the printed number: the redundancy law).
+const BLOCK_RPE = { main: 8, superset: 8, finisher: 9 };
+
+// Shared quiet text-button style (links, dismissals).
+const linkBtn = {
+  background: "none", border: "none", padding: 0, cursor: "pointer",
+  fontFamily: T.text, fontSize: 13, color: T.ink3,
+  display: "inline-flex", alignItems: "center", gap: 5,
+};
+
 export default
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,onLockerRoom,historyCount=0,recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge}){
-  // Grain-under-finger (tactility batch 3) — Home until device-verified.
-  // One hook instance; handlers read e.currentTarget so the same spread
-  // works on every card. The print survives the tap-triggered re-render
-  // because it's a data attribute + commit-on-tap (see useGrainTouch).
-  const grain = useGrainTouch();
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -69,10 +82,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 
   // Anchor "now" once at mount so render stays pure (no clock read mid-render)
   // and the day-of-week / viewed-date maths derive from a single consistent point.
-  // Midnight straddle (audit #55): the header used to read the LIVE clock at
-  // render while the strip used this anchor — cross midnight with the app
-  // open and they disagreed. Now everything derives from nowMs, and the
-  // anchor re-arms only when the CALENDAR DAY changes (foreground/focus/
+  // The anchor re-arms only when the CALENDAR DAY changes (foreground/focus/
   // minute tick) — same-day events keep the anchor, so renders stay stable.
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -93,12 +103,12 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 
   const viewDay        = userWeek[viewIdx];
   const cfg            = DAY_CONFIG[viewDay.type] || DAY_CONFIG.rest;
-  const accent         = T[viewDay.type] || T.rest;
+  const dayKey         = T.dayKey[viewDay.type] || T.dayKey.rest;
   const isViewingToday = viewIdx === todayIdx;
 
   // Optional cardio-day bonus for the VIEWED day. bonusForDay returns null for
-  // ineligible day types (everything except cardio/hiit), so this is the only
-  // guard needed. Local date string (not toISOString — avoids the UTC day-shift).
+  // ineligible day types, so this is the only guard needed. Local date string
+  // (not toISOString — avoids the UTC day-shift).
   const _vd = new Date(nowMs);
   _vd.setDate(_vd.getDate() + (viewIdx - todayIdx));
   const viewDateStr = `${_vd.getFullYear()}-${String(_vd.getMonth()+1).padStart(2,"0")}-${String(_vd.getDate()).padStart(2,"0")}`;
@@ -106,33 +116,20 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
 
   // Resolve which session to preview for the viewed day (null for non-strength days)
   const viewSessionIdx = strengthDaySessions[viewIdx];
-  // Apply training-focus programming so the upcoming-session preview shows
-  // the user's real plan: Strong's dropped superset doesn't appear, Sculpt's
-  // bumped sets surface here, etc.
   const rawViewSession = viewSessionIdx !== undefined ? SESSIONS[viewSessionIdx] : null;
   // Chain rotation → focus so the home preview shows the user's actual
-  // accessories (not the template defaults). Was the source of "rotation
-  // happened but home still shows Skullcrusher" — preview was reading
-  // straight from SESSIONS without consulting programmeBlock.config.
+  // accessories (not the template defaults).
   const rotatedViewSession = rawViewSession ? applyRotationToSession(rawViewSession, programmeBlock?.config) : null;
   const viewSession    = rotatedViewSession ? applyFocusToSession(rotatedViewSession, userFocus, programmeBlock?.config) : null;
 
-  // Dynamic headline/sub. On strength days, headline2 IS viewSession.subtitle
-  // (e.g. "Squat & Push"), and surfacing it AGAIN as the small descriptor
-  // below was visible-on-screen duplication. Instead, fill that slot with
-  // useful state — the user's focus + how long they've been on this block.
-  // "Block N" was internal jargon ("what's a block?"); time-since-rotation
-  // is the intuitive read. Editorial copy:
-  //   week 0 (fresh rotation):  "Forged · fresh block"
-  //   week 1+:                  "Forged · N week(s) in"
-  // Non-strength days keep their existing cfg.sub modality detail.
-  const headline2 = viewSession ? viewSession.subtitle : cfg.headline[1];
+  // Guidance line under the display name. Strength days lead with the
+  // session's own noun; non-strength days keep their modality detail.
   const blockTenureCopy = weeksOnBlock >= 1
     ? `${weeksOnBlock} week${weeksOnBlock === 1 ? "" : "s"} in`
     : "fresh block";
-  const subText   = viewSession
-    ? `${userFocus} · ${blockTenureCopy}`
-    : cfg.sub;
+  // Masthead support is exactly ONE sentence (§11.3); focus + block tenure
+  // live in the rotation footer, not the masthead.
+  const subText = viewSession ? `${viewSession.subtitle}.` : cfg.sub;
 
   // Negative diff = earlier this week, positive = later this week
   const diffDays = viewIdx - todayIdx;
@@ -148,739 +145,568 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // Actual date of the viewed day (from the mount-time anchor above)
   const viewDate = new Date(nowMs + diffDays * 86400000);
 
-  // Focus accent (per-user identity). Forms a secondary rim glow + colours
-  // the italic flourish on the headline. Quiet by design — never competes
-  // with the day-type accent, just layers a "you-are-here" hint underneath.
-  const focusAccent = T.focusAccent[userFocus] || T.focusAccent.Forged;
-
-  // Per-day rim position for the secondary glow. Each day type's secondary
-  // sits in a different corner to give the backdrop a sense of movement and
-  // depth as the user scrubs through the week — strength leads from top-right
-  // (intense), Z2 drifts from bottom-left (settled), HIIT counterbalances top-
-  // left (sharp), cardio sits mid-right (sustained), rest near-invisible.
-  //
-  // strength + hiit `top` moved from -120 → 0 so the rim's gradient is fully
-  // transparent at content y=0 (status bar adjacency). Without that, the rim
-  // painted warm tint right at the top edge while the system status bar
-  // rendered neutral dark, creating the seam we'd been masking with overlays.
-  // Fixing the source instead.
-  const dayRim = ({
-    strength: { top: 0,     right: -80,    width: 360, height: 320 },
-    zone2:    { bottom: 24, left: -80,  width: 420, height: 360 },
-    hiit:     { top: 0,     left: -80,     width: 320, height: 280 },
-    cardio:   { top: "30%", right: -120,  width: 360, height: 320 },
-    rest:     { top: "40%", left: "20%",  width: 280, height: 240 },
-  })[viewDay.type] || { top: -120, right: -80, width: 360, height: 320 };
+  // Six-week tonnage wave — the week's work as a line that heats as it
+  // climbs. Hidden until any week has logged work (first-run: no fake data).
+  const wave = useMemo(() => weeklyTonnage(history, 6), [history]);
+  const waveMax = Math.max(...wave.map(w => w.kg), 1);
+  const hasWave = wave.some(w => w.kg > 0);
 
   return (
     <div style={{minHeight:"100vh",paddingBottom:48,position:"relative",overflow:"clip"}}>
-      {/* Primary ambient glow — top-centre, day-typed. The dominant signal.
-          top:0 (was -180) keeps the gradient's bright centre at content
-          y≈250 instead of y≈70, which leaves the topmost ~80px of content
-          at native body bg #131110. That's what the system status bar
-          renders, so there's no longer a perceived seam between the
-          status-bar zone and content's top edge — the original "black
-          hole" complaint, resolved at the source rather than via overlay.
-          forge-glow-anchor (globals.css) drifts this layer down at a
-          fraction of scroll speed via a scroll-driven animation, so the
-          glass cards slide THROUGH the colour field as the page scrolls —
-          the backdrop-filter tint shifts and the surfaces read as depth.
-          Only this dominant layer drifts: the rim glows below are tied to
-          page geometry (zone2/focus rims are bottom-anchored, where a
-          downward drift would push them out of view at page end). */}
-      <div className="forge-glow-anchor" style={{
-        position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",
-        width:600,height:500,
-        background:`radial-gradient(ellipse,${accent.glow} 0%,transparent 65%)`,
-        pointerEvents:"none",
-        transition:`background 400ms ${T.ease}`,
-      }}/>
-      {/* Per-day rim glow — gives the backdrop dimensional depth without
-          adding chrome. Position varies by day; colour matches the day's
-          accent at lower intensity so it reads as "second light source"
-          not "second voice". */}
-      <div style={{
-        position:"absolute",...dayRim,
-        background:`radial-gradient(circle,${accent.glow} 0%,transparent 70%)`,
-        opacity:0.55,
-        pointerEvents:"none",
-        transition:`all 500ms ${T.ease}`,
-      }}/>
-      {/* Focus-accent rim glow — quiet "you-are-here" layer in the user's
-          chosen identity colour. Bottom-right by convention; opacity low so
-          it never competes with the day-type signal above. bottom:24 (was
-          -100), deliberately: a bottom-anchored glow box that crosses the
-          document end gets cut mid-gradient at the page edge and reads as a
-          hard warm "chin" against the chrome zone below (found on device —
-          gold on every screen, since this is focus- not day-accent). Same
-          constraint applies to the zone2 dayRim above. */}
-      <div style={{
-        position:"absolute",bottom:24,right:-60,
-        width:340,height:280,
-        background:`radial-gradient(ellipse,${focusAccent.glow} 0%,transparent 70%)`,
-        opacity:0.7,
-        pointerEvents:"none",
-        transition:`background 400ms ${T.ease}`,
-      }}/>
 
-      {/* Header */}
+      {/* Header — date on the left, identity on the right. Quiet. */}
       <Fade d={0}>
-        <div style={{padding:"52px 24px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <div style={{padding:"52px 24px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16}}>
           <div>
-            <div style={{fontFamily:T.serif,fontSize:13,fontWeight:300,color:T.text2,fontStyle:"italic"}}>
-              {new Date(nowMs).toLocaleDateString("en-GB",{weekday:"long"})}
-            </div>
-            <div style={{fontFamily:T.serif,fontSize:28,fontWeight:400,lineHeight:1.15,marginTop:2}}>
+            <div style={{fontSize:13,color:T.ink3}}>
               {new Date(nowMs).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}
             </div>
+            <StreakLine rhythm={rhythm} resting={resting}/>
           </div>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
-            <StreakBadge rhythm={rhythm} resting={resting}/>
-            <button onClick={onProfile} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:11,color:T.text3,fontFamily:T.sans,fontWeight:500,display:"flex",alignItems:"center",gap:6}}>
-              {profileName}
-              {syncState === "pulling" || syncState === "pushing" ? (
-                <span style={{
-                  width:6,height:6,borderRadius:"50%",
-                  background:T.sage,
-                  animation:"pulse 1s ease-in-out infinite",
-                }}/>
-              ) : syncState === "error" ? (
-                <span style={{width:6,height:6,borderRadius:"50%",background:T.coral,opacity:0.6}}/>
-              ) : null}
-              <span style={{marginLeft:2}}>→</span>
-            </button>
-          </div>
+          <button onClick={onProfile} style={{...linkBtn,fontWeight:500,display:"flex",alignItems:"center",gap:6,paddingTop:1}}>
+            {profileName}
+            {syncState === "pulling" || syncState === "pushing" ? (
+              <span style={{width:6,height:6,borderRadius:"50%",background:T.ink3,animation:"pulse 1s ease-in-out infinite"}}/>
+            ) : syncState === "error" ? (
+              <span style={{width:6,height:6,borderRadius:"50%",background:T.heat[3],opacity:0.7}}/>
+            ) : null}
+            <Glyph name="arrowRight" size={12}/>
+          </button>
         </div>
       </Fade>
 
-      {/* Week strip — tappable */}
+      {/* Week strip — tappable. Day-type keys colour the tick under each
+          day (keys on session identifiers only — this is exactly that).
+          Done days fill their tick solid with a printed ✓; the viewed day
+          carries an ink underline; today's label is full ink. */}
       <Fade d={60}>
-        <div style={{padding:"28px 24px 0",display:"flex",gap:8}}>
+        <div style={{padding:"26px 24px 0",display:"flex",gap:6}}>
           {userWeek.map((d,i)=>{
-            const a       = T[d.type];
+            const key     = T.dayKey[d.type] || T.dayKey.rest;
             const isToday = i === todayIdx;
             const isView  = i === viewIdx;
-            // Done = any completion on that date — strength session or
-            // manual non-strength tick. Sourced from the Day entity via
-            // Days.projectCurrentWeek; isn't affected by schedule edits.
             const isDone  = !!weekDone[i];
             return (
-              <div key={i} onClick={()=>setViewIdx(i)}
-                style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,cursor:"pointer"}}>
-                <div style={{
-                  width:34,height:34,borderRadius:"50%",
-                  background: isToday ? a.main : isDone ? `${a.main}28` : isView ? `${a.main}20` : T.bg2,
-                  border:`${isView && !isToday ? "2px" : "1px"} solid ${isToday || isView || isDone ? a.main : T.bg3}`,
-                  display:"flex",alignItems:"center",justifyContent:"center",
-                  boxShadow: isToday ? `0 0 20px ${a.glow}` : isView ? `0 0 10px ${a.glow}` : "none",
-                  transition:`all 200ms ${T.ease}`,
-                }}>
-                  {isDone && !isToday
-                    ? <span style={{fontSize:14,color:a.main,lineHeight:1}}>✓</span>
-                    : <span style={{fontSize:12,fontWeight:500,color:isToday?T.bg0:isView?a.main:T.text3,transition:`color 200ms ${T.ease}`}}>{d.s}</span>
-                  }
-                </div>
+              <button key={i} onClick={()=>setViewIdx(i)} className="forge-press"
+                aria-label={`${DAY_NAMES[i]}${isToday ? " (today)" : ""}${isDone ? ", done" : ""}`}
+                aria-current={isView ? "date" : undefined}
+                style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:7,cursor:"pointer",background:"none",border:"none",padding:"6px 0 4px"}}>
+                {/* Weekday glyph carries the day; the key tick below
+                    carries the type — no room for two words per cell. */}
                 <span style={{
-                  fontSize:8,fontWeight:500,
-                  color: isToday ? a.main : isDone ? a.main : isView ? a.main : T.text4,
-                  letterSpacing:"0.06em",textTransform:"uppercase",
-                  transition:`color 200ms ${T.ease}`,
-                }}>{d.label}</span>
-              </div>
+                  fontSize:12,fontWeight:isToday||isView?600:400,
+                  color:isToday?T.ink:isView?T.ink2:T.ink3,
+                  transition:`color 200ms ${T.ease}`,lineHeight:1,
+                }}>{DAY_NAMES[i].slice(0,3).toLowerCase()}</span>
+                <span style={{position:"relative",width:18,height:9,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+                  <span style={{
+                    width:18,height:isDone?5:3,
+                    background:key,
+                    opacity:isDone?1:isToday||isView?0.9:0.45,
+                    transition:`all 200ms ${T.ease}`,
+                  }}/>
+                  {isDone && (
+                    <span style={{position:"absolute",top:-11,lineHeight:1}}><Glyph name="check" size={9} color={key}/></span>
+                  )}
+                </span>
+                <span style={{width:18,height:1,background:isView?T.ink:"transparent",transition:`background 200ms ${T.ease}`}}/>
+              </button>
             );
           })}
         </div>
         {onEditWeek && (
-          <div style={{display:"flex",justifyContent:"center",marginTop:8}}>
-            <button onClick={onEditWeek} style={{padding:"4px 8px",background:"none",border:"none",cursor:"pointer",fontSize:10,color:T.sage,fontFamily:T.sans,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-              Edit week →
+          <div style={{display:"flex",justifyContent:"center",marginTop:6}}>
+            <button onClick={onEditWeek} style={{...linkBtn,fontSize:12,padding:"4px 8px"}}>
+              Edit week <Glyph name="arrowRight" size={11}/>
             </button>
           </div>
         )}
       </Fade>
 
-      {/* Day headline — driven by viewIdx. className="home-headline" hooks
-          the scroll-timeline compression in globals.css: gentle scale +
-          opacity dim over the first 180px of scroll, so the hero feels
-          like something you're moving past, not stranded above content. */}
+      {/* Day headline — the noun that matters, in the display voice.
+          className="home-headline" hooks the scroll-timeline compression in
+          globals.css. The day key runs as a hairline under the name. */}
       <Fade d={100}>
-        <div className="home-headline" style={{padding:"28px 24px 0"}}>
-          {/* "Today" / "Tomorrow" / day-name label row */}
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-            <div style={{
-              fontSize:11,fontWeight:500,letterSpacing:"0.12em",textTransform:"uppercase",
-              color: isViewingToday ? T.text3 : accent.main,
-              transition:`color 300ms ${T.ease}`,
-            }}>
-              {dayLabel}
-            </div>
+        <div className="home-headline" style={{padding:"26px 24px 0",transformOrigin:"left top"}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:8}}>
+            <span style={{fontSize:13,color:T.ink3}}>{dayLabel}</span>
             {!isViewingToday && (
-              <span style={{fontSize:10,color:T.text4,fontFamily:T.serif,fontStyle:"italic"}}>
+              <span style={{fontSize:12,color:T.ink3}}>
                 {viewDate.toLocaleDateString("en-GB",{day:"numeric",month:"short"})}
               </span>
             )}
           </div>
-          <div style={{fontFamily:T.serif,fontSize:42,fontWeight:300,lineHeight:1.1}}>
-            {cfg.headline[0]}<br/>
-            {headline2 && (
-              // Italic flourish takes the user's focus-accent colour, giving
-              // a quiet identity signal in the editorial typography itself —
-              // Sculpt's mauve, Strong's deeper coral, Forged's gold. The day-
-              // type accent remains the dominant visual via the rim glows.
-              <span style={{color:focusAccent.main,fontStyle:"italic",transition:`color 300ms ${T.ease}`}}>
-                {headline2}
-              </span>
-            )}
-          </div>
-          {/* Render the smaller descriptor only when it adds info beyond
-              the headline. On strength days, headline2 IS viewSession.subtitle
-              (e.g. "Squat & Push"), so showing it again here is duplicative
-              clutter — the small line is intentionally suppressed. On non-
-              strength days, cfg.sub carries the modality detail
-              ("60 min at conversational pace…") which is distinct. */}
-          {subText && subText !== headline2 && (
-            <div style={{fontSize:14,color:T.text2,marginTop:10,lineHeight:1.5}}>
-              {subText}
+          <h1 style={{...DISPLAY,fontSize:46,color:T.ink,margin:0}}>
+            {DAY_NAMES[viewIdx]}
+          </h1>
+          <div aria-hidden="true" style={{width:40,height:3,background:dayKey,marginTop:10,transition:`background 300ms ${T.ease}`}}/>
+          {subText && (
+            <div style={{fontSize:16,color:T.ink2,marginTop:11,lineHeight:1.45,maxWidth:"32ch"}}>
+              <MonoNums>{subText}</MonoNums>
             </div>
           )}
         </div>
       </Fade>
 
-      {/* Strength day — session card + CTA */}
+      {/* Strength day — session stats + list, on the ground between
+          hairlines. No card: measured data gets no containers. */}
       {cfg.canBegin && viewSession && (
         <>
           <Fade d={160}>
-            <Card style={{margin:"24px 24px 0",padding:0,overflow:"hidden"}}>
-              <div style={{height:2,background:`linear-gradient(90deg,${accent.main},${accent.main}00)`,transition:`background 400ms ${T.ease}`}}/>
-              <div style={{padding:"20px 22px 24px"}}>
-                <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:16}}>Session overview</div>
-                {/* Stats row — derived from session */}
-                {(()=>{
-                  const supersets = viewSession.blocks.filter(b=>b.type==="superset").length;
-                  return (
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",paddingBottom:18,marginBottom:18,borderBottom:`1px solid ${T.bg3}`}}>
-                      {[[String(viewSession.blocks.length),"Blocks"],["~65 min","Duration"],[String(supersets),"Supersets"]].map(([v,l])=>(
-                        <div key={l}>
-                          <div style={{fontFamily:T.serif,fontSize:24,fontWeight:400,lineHeight:1}}>{v}</div>
-                          <div style={{fontSize:11,color:T.text3,marginTop:4}}>{l}</div>
-                        </div>
-                      ))}
+            {(()=>{
+              const supersets = viewSession.blocks.filter(b=>b.type==="superset").length;
+              return (
+                <div style={{margin:"20px 0 0",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex"}}>
+                  {[[String(viewSession.blocks.length),"blocks"],["~65","minutes"],[String(supersets),"supersets"]].map(([v,l],i)=>(
+                    <div key={l} style={{flex:1,padding:i===0?"13px 0 13px 24px":i===2?"13px 24px 13px 18px":"13px 0 13px 18px",borderLeft:i>0?`1px solid ${T.rule}`:"none"}}>
+                      <div style={{fontFamily:T.measured,fontSize:26,color:T.ink,letterSpacing:"-0.04em",lineHeight:1}}>{v}</div>
+                      <div style={{fontSize:12,color:T.ink3,marginTop:3}}>{l}</div>
                     </div>
-                  );
-                })()}
-                {/* Exercise list — derived from session blocks */}
-                {viewSession.blocks.map((b,i,arr)=>{
-                  const tag   = b.type==="main" ? "Main" : b.type==="superset" ? "Superset" : "Finisher";
-                  const color = tag==="Main" ? T.coral : tag==="Superset" ? T.sage : T.gold;
-                  const name  = b.type==="main"
-                    ? b.ex.name
-                    : `${(b.exA||b.ex).name} ↔ ${(b.exB||b.ex).name}`;
-                  const sets  = b.type==="main"
-                    ? `${b.sets}×${b.ex.reps}`
-                    : `${b.sets}×${b.exA?.reps||b.exB?.reps}`;
-                  return (
-                    <div key={b.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:i<arr.length-1?`1px solid ${T.bg3}`:"none"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
-                        <div style={{width:6,height:6,borderRadius:"50%",background:color,flexShrink:0}}/>
-                        <span style={{fontSize:13,color:T.text1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</span>
+                  ))}
+                </div>
+              );
+            })()}
+            {/* Session list — every row prints the prescription, the heat
+                mark encodes the planned proximity to failure in colour AND
+                height, and the number is always printed. */}
+            <div style={{padding:"2px 24px 0"}}>
+              {viewSession.blocks.map((b)=>{
+                const rpe   = BLOCK_RPE[b.type] ?? 8;
+                const name  = b.type==="main"
+                  ? b.ex.name
+                  : `${(b.exA||b.ex).name} ↔ ${(b.exB||b.ex).name}`;
+                const reps  = b.type==="main" ? b.ex.reps : (b.exA?.reps||b.exB?.reps);
+                const w     = b.type==="main" ? b.ex.weight : (b.exA?.weight ?? b.exB?.weight);
+                return (
+                  <div key={b.id} style={{display:"flex",alignItems:"center",gap:13,padding:"11px 0",borderBottom:`1px solid ${T.ruleFaint}`}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:16,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
+                      <div style={{fontSize:13,color:T.ink3,marginTop:2}}>
+                        <span style={{fontFamily:T.measured}}>{b.sets} × {reps}</span>
+                        {w != null && <> from <span style={{fontFamily:T.measured}}>{w}</span> kg</>}
                       </div>
-                      <span style={{fontFamily:T.serif,fontSize:13,color:T.text3,fontStyle:"italic",flexShrink:0,marginLeft:12}}>{sets}</span>
                     </div>
-                  );
-                })}
-              </div>
-            </Card>
+                    <span aria-hidden="true" style={{width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe),borderRadius:T.rMark,flexShrink:0,alignSelf:"center"}}/>
+                    <span style={{width:42,textAlign:"right",fontSize:13,color:T.ink2,flexShrink:0}}>rpe <span style={{fontFamily:T.measured}}>{rpe}</span></span>
+                  </div>
+                );
+              })}
+            </div>
           </Fade>
           <Fade d={220}>
             {isViewingToday && weekDone[todayIdx] ? (
-              <div style={{margin:"16px 24px 0",padding:"16px 20px",background:`${accent.main}10`,border:`1px solid ${accent.main}40`,borderRadius:T.r.lg,display:"flex",alignItems:"center",gap:12}}>
-                <span style={{fontSize:18,color:accent.main}}>✓</span>
-                <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Session complete. You&apos;ll feel that tomorrow.</span>
+              <div style={{margin:"14px 24px 0",padding:"14px 0",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",gap:12}}>
+                <span aria-hidden="true" style={{width:24,height:heatMarkHeight(8),background:heatForRpe(8),borderRadius:T.rMark,flexShrink:0}}/>
+                <span style={{fontSize:15,color:T.ink2}}>Session complete. You&rsquo;ll feel that tomorrow.</span>
               </div>
             ) : isViewingToday ? (
-              <button {...grain} className={`${grain.className} forge-press`} onClick={onBegin} style={{
+              <button className="forge-press" onClick={onBegin} style={{
                 margin:"16px 24px 0",width:"calc(100% - 48px)",
-                padding:"18px 24px",background:accent.main,border:"none",
-                borderRadius:T.r.lg,cursor:"pointer",
-                display:"flex",alignItems:"center",justifyContent:"space-between",
-                boxShadow:`0 12px 40px ${accent.glow}`,
+                height:56,background:T.commit,border:"none",
+                borderRadius:T.r,cursor:"pointer",
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,
+                boxShadow:T.elevStrong,
               }}>
-                <span style={{fontFamily:T.serif,fontSize:20,fontWeight:400,color:T.bg0}}>Begin session</span>
-                <span style={{fontSize:18,color:T.bg0}}>→</span>
+                Begin
               </button>
             ) : (
               <div style={{
-                margin:"16px 24px 0",padding:"16px 20px",
-                background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.lg,
-                display:"flex",alignItems:"center",justifyContent:"space-between",
-                gap:12,
+                margin:"14px 24px 0",padding:"13px 0",
+                borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,
+                display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,
               }}>
-                <span style={{fontFamily:T.serif,fontSize:15,fontWeight:300,color:T.text3,fontStyle:"italic"}}>
+                <span style={{fontSize:14,color:T.ink3}}>
                   {diffDays > 0 ? "Upcoming" : "Past session"}
                 </span>
-                <Tag color={accent.main}>{viewDate.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})}</Tag>
+                <Tag color={dayKey}>{viewDate.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})}</Tag>
               </div>
             )}
           </Fade>
         </>
       )}
 
-      {/* Non-strength day — tips card + mark complete */}
+      {/* Non-strength day — notes on the ground, mark complete as commit */}
       {!cfg.canBegin && cfg.tips && (
         <Fade d={160}>
-          {/* Same accent top-rim as the strength session card — every day
-              type's card leads with its own colour, not just strength. */}
-          <Card style={{margin:"24px 24px 0",padding:0,overflow:"hidden"}}>
-            <div style={{height:2,background:`linear-gradient(90deg,${accent.main},${accent.main}00)`,transition:`background 400ms ${T.ease}`}}/>
-            <div style={{padding:"20px 22px 24px"}}>
-              <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:16}}>
-                {viewDay.type==="rest" ? "Recovery notes" : "Session notes"}
-              </div>
-              {cfg.tips.map((tip,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"flex-start",gap:12,padding:"8px 0",borderBottom:i<cfg.tips.length-1?`1px solid ${T.bg3}`:"none"}}>
-                  <div style={{width:6,height:6,borderRadius:"50%",background:accent.main,flexShrink:0,marginTop:5,transition:`background 300ms ${T.ease}`}}/>
-                  <span style={{fontSize:13,color:T.text2,lineHeight:1.5}}>{tip}</span>
-                </div>
-              ))}
+          <div style={{margin:"20px 24px 0"}}>
+            <div style={{fontSize:13,color:T.ink3,paddingBottom:8,borderBottom:`1px solid ${T.rule}`}}>
+              {viewDay.type==="rest" ? "Recovery notes" : "Session notes"}
             </div>
-          </Card>
+            {cfg.tips.map((tip,i)=>(
+              <div key={i} style={{padding:"10px 0",borderBottom:i<cfg.tips.length-1?`1px solid ${T.ruleFaint}`:`1px solid ${T.rule}`,fontSize:14,color:T.ink2,lineHeight:1.5}}>
+                <MonoNums>{tip}</MonoNums>
+              </div>
+            ))}
+          </div>
         </Fade>
       )}
       {!cfg.canBegin && isViewingToday && (
         <Fade d={220}>
           {weekDone[todayIdx] ? (
-            <div style={{margin:"12px 24px 0",padding:"16px 20px",background:`${accent.main}10`,border:`1px solid ${accent.main}40`,borderRadius:T.r.lg,display:"flex",alignItems:"center",gap:12}}>
-              <span style={{fontSize:18,color:accent.main}}>✓</span>
-              <span style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Done. Rhythm kept.</span>
+            <div style={{margin:"14px 24px 0",padding:"14px 0",display:"flex",alignItems:"center",gap:10}}>
+              <Glyph name="check" size={14} color={dayKey}/>
+              <span style={{fontSize:15,color:T.ink2}}>Done. Rhythm kept.</span>
             </div>
           ) : (
             <button className="forge-press" onClick={()=>onMarkDayDone(viewDateStr)} style={{
-              margin:"12px 24px 0",width:"calc(100% - 48px)",
-              padding:"16px 20px",background:"transparent",
-              border:`1px solid ${accent.main}`,borderRadius:T.r.lg,cursor:"pointer",
+              margin:"16px 24px 0",width:"calc(100% - 48px)",
+              height:56,background:T.commit,border:"none",
+              borderRadius:T.r,cursor:"pointer",
               display:"flex",alignItems:"center",justifyContent:"space-between",
+              padding:"0 20px",boxShadow:T.elevStrong,
+              fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,
             }}>
-              <span style={{fontFamily:T.serif,fontSize:18,fontWeight:300,color:accent.main}}>Mark complete</span>
-              <span style={{fontSize:16,color:accent.main}}>✓</span>
+              Mark complete
+              <Glyph name="check" size={15}/>
             </button>
           )}
         </Fade>
       )}
 
-      {/* Today's bonus — optional capacity finisher on cardio/HIIT days only.
-          Clearly framed as a bonus, never homework. Completion is tracked in a
-          separate store with zero streak impact. */}
+      {/* Today's bonus — optional capacity finisher on cardio/HIIT days only. */}
       {dayBonus && isViewingToday && (
         <Fade d={260}>
-          {/* Accent top-rim, matching the day cards above. */}
-          <Card style={{margin:"16px 24px 0",padding:0,overflow:"hidden"}}>
-            <div style={{height:2,background:`linear-gradient(90deg,${accent.main},${accent.main}00)`,transition:`background 400ms ${T.ease}`}}/>
-            <div style={{padding:"18px 20px 20px"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                <div style={{fontSize:11,fontWeight:500,color:accent.main,letterSpacing:"0.12em",textTransform:"uppercase"}}>
-                  Today&apos;s bonus · optional
-                </div>
-                <div style={{fontSize:10,color:T.text4,letterSpacing:"0.06em",textTransform:"uppercase"}}>~5 min</div>
-              </div>
-              <div style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:T.text1,lineHeight:1.2,marginBottom:4}}>
-                {dayBonus.name}
-              </div>
-              <div style={{fontSize:13,color:T.text2,lineHeight:1.5,marginBottom:dayBonus.vid?8:16}}>
-                {dayBonus.detail}
-              </div>
-              {/* External open, deliberately: the in-app video sheet is
-                  session-tree machinery; a 5-minute bonus earns a link, not
-                  an extraction (same ▶ voice as the session's Watch demo). */}
-              {dayBonus.vid && (
-                <a href={`https://www.youtube.com/watch?v=${dayBonus.vid}`} target="_blank" rel="noopener noreferrer"
-                  style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:T.text3,textDecoration:"none",marginBottom:16}}>
-                  <span aria-hidden style={{fontSize:10}}>▶</span> Watch demo
-                </a>
-              )}
-              {bonusDone[todayIdx] ? (
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{fontSize:16,color:accent.main}}>✓</span>
-                  <span style={{fontFamily:T.serif,fontSize:15,fontWeight:300,color:accent.main,fontStyle:"italic"}}>Bonus banked. Animal.</span>
-                </div>
-              ) : (
-                <button className="forge-press" onClick={()=>onMarkBonusDone(viewDateStr)} aria-label="Mark bonus complete" style={{
-                  width:"100%",padding:"12px 16px",background:"transparent",
-                  border:`1px solid ${accent.main}66`,borderRadius:T.r.md,cursor:"pointer",
-                  display:"flex",alignItems:"center",justifyContent:"space-between",
-                }}>
-                  <span style={{fontSize:14,fontWeight:500,color:accent.main}}>Mark bonus done</span>
-                  <span style={{fontSize:14,color:accent.main}}>+</span>
-                </button>
-              )}
+          <Card style={{margin:"16px 24px 0",padding:"16px 18px 18px"}}>
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{fontSize:13,color:T.ink3}}>Today&rsquo;s bonus · optional</div>
+              <div style={{fontSize:12,color:T.ink3}}>~<span style={{fontFamily:T.measured}}>5</span> min</div>
             </div>
+            <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.25,marginBottom:4}}>
+              {dayBonus.name}
+            </div>
+            <div style={{fontSize:13,color:T.ink2,lineHeight:1.5,marginBottom:dayBonus.vid?8:14}}>
+              <MonoNums>{dayBonus.detail}</MonoNums>
+            </div>
+            {dayBonus.vid && (
+              <a href={`https://www.youtube.com/watch?v=${dayBonus.vid}`} target="_blank" rel="noopener noreferrer"
+                style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:13,color:T.ink3,textDecoration:"none",marginBottom:14}}>
+                Watch demo <Glyph name="arrowRight" size={11}/>
+              </a>
+            )}
+            {bonusDone[todayIdx] ? (
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <Glyph name="check" size={13} color={dayKey}/>
+                <span style={{fontSize:14,color:T.ink2}}>Bonus banked. Animal.</span>
+              </div>
+            ) : (
+              <button className="forge-press" onClick={()=>onMarkBonusDone(viewDateStr)} aria-label="Mark bonus complete" style={{
+                width:"100%",height:46,background:T.ground,
+                border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
+                display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 16px",
+                fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,
+              }}>
+                Mark bonus done
+                <Glyph name="plus" size={13} color={T.ink2}/>
+              </button>
+            )}
           </Card>
         </Fade>
       )}
 
+      {/* Tonnage wave — the week's work, six weeks deep. The stroke heats
+          along its own length as it climbs. First-run: hidden until real
+          work exists (never simulated data). */}
+      {hasWave && (
+        <Fade d={240}>
+          <div style={{margin:"22px 0 0",padding:"12px 24px 12px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+              <span style={{fontSize:13,color:T.ink3}}>Tonnage, six weeks</span>
+              <span style={{fontFamily:T.measured,fontSize:12,color:T.heat[3]}}>{formatTonnage(wave[wave.length-1].kg)}</span>
+            </div>
+            <svg width="100%" height="30" viewBox="0 0 342 30" preserveAspectRatio="none" style={{display:"block",overflow:"visible"}} aria-hidden="true">
+              <defs>
+                <linearGradient id="hwHomeWave" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stopColor="var(--heat-0)"/>
+                  <stop offset="0.35" stopColor="var(--heat-1)"/>
+                  <stop offset="0.65" stopColor="var(--heat-2)"/>
+                  <stop offset="1" stopColor="var(--heat-3)"/>
+                </linearGradient>
+              </defs>
+              <path
+                d={wave.map((w,i)=>`${i===0?"M":"L"} ${(i*(342/(wave.length-1))).toFixed(1)} ${(27 - 24*(w.kg/waveMax)).toFixed(1)}`).join(" ")}
+                fill="none" stroke="url(#hwHomeWave)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                strokeDasharray="400" style={{animation:`hwDraw 1.1s ${T.ease} both`}}/>
+              <circle cx="342" cy={(27 - 24*(wave[wave.length-1].kg/waveMax)).toFixed(1)} r="3.2" fill="var(--heat-3)"/>
+            </svg>
+          </div>
+        </Fade>
+      )}
+
       {/* Pick up where you left off — an interrupted session from within the
-          last 12 hours. Coral-tinted; the session is top-priority if it exists. */}
+          last 12 hours. Top priority if it exists. */}
       {pendingDraft && (
         <Fade d={160}>
-          <div style={{margin:"20px 24px 0",padding:"18px 20px",background:`${T.coral}0E`,border:`1px solid ${T.coral}40`,borderRadius:T.r.lg,boxShadow:`0 8px 28px ${T.coral}10`}}>
-            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:14}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:11,fontWeight:500,color:T.coral,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>
-                  Unfinished session
-                </div>
-                <div style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:T.text1,lineHeight:1.25}}>
-                  Pick up where you<br/><span style={{fontStyle:"italic",color:T.coral}}>left off.</span>
-                </div>
-                <div style={{fontSize:12,color:T.text3,marginTop:8,lineHeight:1.5}}>
-                  {pendingDraft.setCount} {pendingDraft.setCount === 1 ? "set" : "sets"} logged · {formatAgo(pendingDraft.ageMs)}
-                </div>
-              </div>
+          <Card style={{margin:"20px 24px 0",padding:"16px 18px 18px"}}>
+            <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>Unfinished session</div>
+            <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.3}}>
+              Pick up where you left off.
             </div>
-            <div style={{display:"flex",gap:8}}>
+            <div style={{fontSize:13,color:T.ink3,marginTop:6,lineHeight:1.5}}>
+              <span style={{fontFamily:T.measured}}>{pendingDraft.setCount}</span> {pendingDraft.setCount === 1 ? "set" : "sets"} logged · {formatAgo(pendingDraft.ageMs)}
+            </div>
+            <div style={{display:"flex",gap:8,marginTop:14}}>
               <button className="forge-press" onClick={onResumeDraft}
-                style={{flex:1,padding:"12px 16px",background:T.coral,border:"none",borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:16,fontWeight:400,color:T.bg0}}>
-                Resume →
+                style={{flex:1,height:48,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                Resume <Glyph name="arrowRight" size={12}/>
               </button>
               <button className="forge-press" onClick={onDiscardDraft}
-                style={{padding:"12px 16px",background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.sans,fontSize:13,fontWeight:500,color:T.text3}}>
+                style={{height:48,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,fontWeight:500,color:T.ink2}}>
                 Discard
               </button>
             </div>
-          </div>
+          </Card>
         </Fade>
       )}
 
       {/* BW re-prompt card — surfaces when bodyweight is stale (>14 days or never set) */}
       {showBwCard && (
         <Fade d={180}>
-          <div {...grain} className={`${grain.className} forge-press`} onClick={onOpenBwEdit}
-            style={{margin:"20px 24px 0",padding:"18px 20px",background:`${T.sage}0E`,border:`1px solid ${T.sage}40`,borderRadius:T.r.lg,cursor:"pointer"}}>
-            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
+          <Card style={{margin:"20px 24px 0",padding:"16px 18px",cursor:"pointer"}}>
+            <div onClick={onOpenBwEdit} style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:11,fontWeight:500,color:T.sage,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>
-                  Bodyweight
-                </div>
-                <div style={{fontFamily:T.serif,fontSize:18,fontWeight:300,color:T.text1,lineHeight:1.35,marginBottom:4}}>
+                <div style={{fontSize:13,color:T.ink3,marginBottom:5}}>Bodyweight</div>
+                <div style={{fontSize:16,fontWeight:500,color:T.ink,lineHeight:1.35,marginBottom:4}}>
                   How much do you weigh today?
                 </div>
-                <div style={{fontSize:12,color:T.text3,lineHeight:1.5}}>
+                <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
                   Tap to update — keeps loaded pull-ups and dips honest.
                 </div>
               </div>
               <button onClick={(e)=>{e.stopPropagation();onDismissBwCard();}} aria-label="Dismiss"
-                style={{flexShrink:0,background:"none",border:"none",padding:"4px 8px",cursor:"pointer",fontSize:14,color:T.text3,fontFamily:T.sans}}>✕</button>
+                style={{...linkBtn,flexShrink:0,padding:"4px 8px"}}><Glyph name="cross" size={12}/></button>
             </div>
-          </div>
+          </Card>
         </Fade>
       )}
 
-      {/* Phase 3 — Deload offer card. Sage-tinted, surfaces only when signals
-          warrant (stall convergence, deep stall, cooked accumulation, regression).
-          Cooldowns prevent re-surfacing immediately after dismiss or completion. */}
+      {/* Deload offer card. Surfaces only when signals warrant. Acknowledgement
+          voice — an offer, never an alarm. */}
       {deloadOffer && (() => {
         const copy = deloadCardCopy(deloadOffer);
         if (!copy) return null;
         return (
           <Fade d={170}>
-            <div style={{margin:"20px 24px 0",padding:"20px 22px",background:`${T.sage}0E`,border:`1px solid ${T.sage}40`,borderRadius:T.r.lg,boxShadow:`0 8px 28px ${T.sage}10`}}>
-              <div style={{fontSize:11,fontWeight:500,color:T.sage,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:10}}>
-                {copy.kicker}
-              </div>
-              <div style={{fontFamily:T.serif,fontSize:20,fontWeight:300,color:T.text1,lineHeight:1.25,marginBottom:8}}>
+            <Card style={{margin:"20px 24px 0",padding:"18px 20px"}}>
+              <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>{copy.kicker}</div>
+              <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.3,marginBottom:8}}>
                 {copy.headline}
               </div>
-              <div style={{fontSize:13,color:T.text2,lineHeight:1.55,marginBottom:18}}>
+              <div style={{fontSize:13,color:T.ink2,lineHeight:1.55,marginBottom:16}}>
                 {copy.body}
               </div>
               <div style={{display:"flex",gap:10}}>
                 <button className="forge-press" onClick={onAcceptDeload}
-                  style={{flex:1,padding:"12px 16px",background:T.coral,border:"none",borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.bg0}}>
-                  Run the deload →
+                  style={{flex:1,height:46,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                  Run the deload <Glyph name="arrowRight" size={12}/>
                 </button>
                 <button className="forge-press" onClick={onDismissDeload}
-                  style={{flexShrink:0,padding:"12px 16px",background:"transparent",border:`1px solid ${T.bg3}`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.sans,fontSize:13,color:T.text3}}>
+                  style={{flexShrink:0,height:46,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,color:T.ink2}}>
                   Not yet
                 </button>
               </div>
-            </div>
+            </Card>
           </Fade>
         );
       })()}
 
-      {/* Lifetime-tonnage milestone — surfaces ONCE when the user crosses a
-          new threshold (1t, 5t, 10t, 25t…). Tap-anywhere dismisses; the new
-          ceiling persists so it doesn't reappear. Editorial restraint — it's
-          a small celebration beat, not a permanent counter. */}
+      {/* Lifetime-tonnage milestone — surfaces ONCE per crossed threshold.
+          Tap-anywhere dismisses. A small ceremony beat — display face earns
+          its 500 weight here. */}
       {tonnageMilestone && (
         <Fade d={200}>
           <button className="forge-press" onClick={onDismissTonnageMilestone}
             aria-label={`Milestone: ${formatTonnage(tonnageMilestone)} moved — tap to dismiss`}
-            style={{display:"block",width:"calc(100% - 48px)",margin:"20px 24px 0",padding:"16px 20px",background:`${T.gold}0F`,border:`1px solid ${T.gold}3A`,borderRadius:T.r.lg,textAlign:"left",cursor:"pointer",fontFamily:"inherit"}}>
-            <div style={{fontSize:11,fontWeight:500,color:T.gold,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>
-              Milestone · {formatTonnage(tonnageMilestone)}
+            style={{display:"block",width:"calc(100% - 48px)",margin:"20px 24px 0",padding:"18px 20px",background:T.surface,border:"none",borderRadius:T.r,boxShadow:T.elev,textAlign:"left",cursor:"pointer",fontFamily:T.text}}>
+            <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
+              Milestone · <span style={{fontFamily:T.measured}}>{formatTonnage(tonnageMilestone)}</span>
             </div>
-            <div style={{fontFamily:T.serif,fontSize:18,fontWeight:300,color:T.text1,lineHeight:1.4}}>
-              You&apos;ve moved <span style={{color:T.gold,fontStyle:"italic"}}>{formatTonnage(tonnageTotalKg)}</span> since you started with Heatwayve.
+            <div style={{fontFamily:T.measured,fontWeight:300,fontSize:34,letterSpacing:"-0.04em",color:T.ink,lineHeight:1}}>
+              {formatTonnage(tonnageTotalKg)}<span style={{fontSize:15,color:T.ink3,letterSpacing:0}}> moved</span>
+            </div>
+            <div style={{fontSize:13,color:T.ink2,marginTop:9,lineHeight:1.5}}>
+              Since you started with Heatwayve. The bar remembers.
             </div>
           </button>
         </Fade>
       )}
 
-      {/* Honest recovery nudge — surfaces when the last 2 sessions were cooked.
-          Non-pushy. Dismisses in-memory for this session. */}
+      {/* Honest recovery nudge — surfaces when the last 2 sessions were cooked. */}
       {recoveryNudge && (
         <Fade d={180}>
-          <div style={{margin:"20px 24px 0",padding:"18px 20px",background:`${T.sage}0E`,border:`1px solid ${T.sage}35`,borderRadius:T.r.lg}}>
+          <Card style={{margin:"20px 24px 0",padding:"16px 18px"}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:11,fontWeight:500,color:T.sage,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>
-                  A gentle nudge
-                </div>
-                <div style={{fontFamily:T.serif,fontSize:16,fontWeight:300,color:T.text1,lineHeight:1.45,fontStyle:"italic"}}>
+                <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>A gentle nudge</div>
+                <div style={{fontSize:14,color:T.ink,lineHeight:1.5}}>
                   {recoveryNudge.message}
                 </div>
               </div>
               <button onClick={onDismissRecovery} aria-label="Dismiss"
-                style={{flexShrink:0,background:"none",border:"none",padding:"4px 8px",cursor:"pointer",fontSize:14,color:T.text3,fontFamily:T.sans}}>✕</button>
+                style={{...linkBtn,flexShrink:0,padding:"4px 8px"}}><Glyph name="cross" size={12}/></button>
             </div>
-          </div>
+          </Card>
         </Fade>
       )}
 
-      {/* Absence nudge — slides in when a breather-worthy gap is detected
-          (ForgeApp derives it from lib/absence.js). Leads with the welcome,
-          not "you're quitting": "here for a session" is answered by the
-          Begin button above; this offers the breather door. Suppressed while
-          already resting. Copy signed off 2026-07-06. */}
+      {/* Absence nudge — the welcome, not "you're quitting". */}
       {absenceNudge && onOpenBreather && (
         <Fade d={185}>
-          <div style={{margin:"20px 24px 0",padding:"18px 20px",background:`${T.gold}0E`,border:`1px solid ${T.gold}38`,borderRadius:T.r.lg}}>
+          <Card style={{margin:"20px 24px 0",padding:"16px 18px"}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:11,fontWeight:500,color:T.gold,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>
-                  No drama
-                </div>
-                <p style={{fontSize:14,color:T.text1,lineHeight:1.55,margin:0}}>
-                  {absenceNudge.days} days off. Here for a session, or need a breather? No wrong answer.
+                <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>No drama</div>
+                <p style={{fontSize:14,color:T.ink,lineHeight:1.55,margin:0}}>
+                  <span style={{fontFamily:T.measured}}>{absenceNudge.days}</span> days off. Here for a session, or need a breather? No wrong answer.
                 </p>
               </div>
               <button onClick={onDismissAbsenceNudge} aria-label="Dismiss"
-                style={{flexShrink:0,background:"none",border:"none",padding:"4px 8px",cursor:"pointer",fontSize:14,color:T.text3,fontFamily:T.sans}}>✕</button>
+                style={{...linkBtn,flexShrink:0,padding:"4px 8px"}}><Glyph name="cross" size={12}/></button>
             </div>
             <button className="forge-press" onClick={onOpenBreather}
-              style={{marginTop:14,padding:"9px 16px",background:"none",border:`1px solid ${T.gold}66`,borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.gold}}>
+              style={{marginTop:12,height:42,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink}}>
               Take a breather
             </button>
-          </div>
+          </Card>
         </Fade>
       )}
 
-      {/* Retrospective logging link — surfaces whenever the schedule has
-          an unmarked recent training day. Calm by design: no card, no
-          chrome, just an inline link tinted sage so it reads as a non-
-          action utility rather than competing with the day's "begin
-          session" CTA.
-          //
-          // !pendingDraft removed as a gate (was silently hiding the link
-          // for any user with a paused/half-started session). The link is
-          // informational and orthogonal to the resume-draft card — both
-          // can render. Inside the picker, pendingDraft still disables
-          // tappability with explicit "Finish your live session first"
-          // copy, so a user with an active draft sees the unmarked days
-          // and understands why they can't log them yet. */}
+      {/* Retrospective logging link — calm inline utility. */}
       {untickedDays.length > 0 && onOpenRetroPicker && (
         <Fade d={190}>
           <div style={{margin:"18px 24px 0",display:"flex",justifyContent:"center"}}>
-            <button onClick={onOpenRetroPicker}
-              style={{background:"none",border:"none",padding:"6px 4px",cursor:"pointer",fontFamily:T.sans,fontSize:13,color:T.sage,letterSpacing:"0.01em"}}>
-              <span style={{fontStyle:"italic",fontFamily:T.serif}}>Anything missed?</span> →
+            <button onClick={onOpenRetroPicker} style={{...linkBtn,padding:"6px 4px"}}>
+              Anything missed? <Glyph name="arrowRight" size={11}/>
             </button>
           </div>
         </Fade>
       )}
 
-      {/* Passkey nudge — chip phase (days 0-3). Subtle inline link with a tiny
-          dismiss ✕. Tone: discoverability cue. The chip presumes the user
-          might not know what a passkey is or why it matters — vague-but-curious
-          benefit framing ("across devices") is fine because the card phase is
-          where consequences get spelled out. */}
+      {/* Passkey nudge — chip phase (days 0-3). */}
       {pnStage === "chip" && (
         <Fade d={195}>
           <div style={{margin:"14px 24px 0",display:"flex",justifyContent:"center",alignItems:"center",gap:8}}>
             <button onClick={onPnRegister} disabled={pnBusy}
-              style={{background:"none",border:"none",padding:"6px 4px",cursor:pnBusy?"default":"pointer",fontFamily:T.sans,fontSize:13,color:T.sage,letterSpacing:"0.01em",opacity:pnBusy?0.6:1}}>
-              {pnBusy
-                ? <span style={{fontStyle:"italic",fontFamily:T.serif}}>Setting up…</span>
-                : <>Secure your name <span style={{fontStyle:"italic",fontFamily:T.serif}}>across devices</span> →</>}
+              style={{...linkBtn,padding:"6px 4px",cursor:pnBusy?"default":"pointer",opacity:pnBusy?0.6:1}}>
+              {pnBusy ? "Setting up…" : <>Secure your name across devices <Glyph name="arrowRight" size={11}/></>}
             </button>
             {!pnBusy && (
               <button onClick={onPnSnooze} aria-label="Dismiss for a week"
-                style={{background:"none",border:"none",padding:"4px 6px",cursor:"pointer",fontSize:11,color:T.text4,fontFamily:T.sans}}>✕</button>
+                style={{...linkBtn,padding:"4px 6px"}}><Glyph name="cross" size={10}/></button>
             )}
           </div>
           {pnError && (
-            <div style={{margin:"8px 24px 0",padding:"8px 14px",borderRadius:T.r.sm,background:`${T.rose}14`,fontSize:11,color:T.rose,textAlign:"center"}}>
+            <div style={{margin:"8px 24px 0",padding:"8px 14px",fontSize:12,color:T.heat[4],textAlign:"center"}}>
               {pnError}
             </div>
           )}
         </Fade>
       )}
 
-      {/* Passkey nudge — card phase (days 4+). Same scope as the chip but the
-          consequence becomes explicit. "Lives only on this device" is the
-          honest framing — calling it "data loss" would be true but
-          melodramatic. The 7-day snooze stays so users who keep dismissing
-          aren't trapped in a loop they can't escape. */}
+      {/* Passkey nudge — card phase (days 4+). Consequence made explicit. */}
       {pnStage === "card" && (
         <Fade d={200}>
-          <div style={{margin:"20px 24px 0",padding:"18px 20px",background:`${T.sage}0E`,border:`1px solid ${T.sage}40`,borderRadius:T.r.lg}}>
+          <Card style={{margin:"20px 24px 0",padding:"16px 18px"}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:12}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:11,fontWeight:500,color:T.sage,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>
-                  Secure across devices
-                </div>
-                <div style={{fontFamily:T.serif,fontSize:17,fontWeight:300,color:T.text1,lineHeight:1.35,marginBottom:6}}>
+                <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>Secure across devices</div>
+                <div style={{fontSize:16,fontWeight:500,color:T.ink,lineHeight:1.35,marginBottom:6}}>
                   Add a passkey
                 </div>
-                <p style={{fontSize:13,color:T.text2,lineHeight:1.55,margin:0}}>
+                <p style={{fontSize:13,color:T.ink2,lineHeight:1.55,margin:0}}>
                   Without one, your data lives only on this device. Face ID, Touch ID, or your device PIN — takes a second.
                 </p>
               </div>
               <button onClick={onPnSnooze} aria-label="Dismiss"
-                style={{flexShrink:0,background:"none",border:"none",padding:"4px 8px",cursor:"pointer",fontSize:14,color:T.text3,fontFamily:T.sans}}>✕</button>
+                style={{...linkBtn,flexShrink:0,padding:"4px 8px"}}><Glyph name="cross" size={12}/></button>
             </div>
             <button onClick={onPnRegister} disabled={pnBusy}
-              style={{width:"100%",padding:"12px 16px",background:T.coral,border:"none",borderRadius:T.r.md,cursor:pnBusy?"default":"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.bg0,opacity:pnBusy?0.6:1}}>
-              {pnBusy ? "Setting up…" : "Set up passkey →"}
+              style={{width:"100%",height:46,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:pnBusy?"default":"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:pnBusy?0.6:1}}>
+              {pnBusy ? "Setting up…" : <>Set up passkey <Glyph name="arrowRight" size={12}/></>}
             </button>
             {pnError && (
-              <div style={{marginTop:10,padding:"8px 12px",borderRadius:T.r.sm,background:`${T.rose}14`,fontSize:11,color:T.rose}}>
+              <div style={{marginTop:10,fontSize:12,color:T.heat[4]}}>
                 {pnError}
               </div>
             )}
-          </div>
+          </Card>
         </Fade>
       )}
 
-      {/* Passkey success toast — same pattern as retro toast. Sage, 3s auto-dismiss. */}
+      {/* Passkey success toast — vellum, 3s auto-dismiss. */}
       {pnSuccessToast && (
-        <div style={{position:"fixed",top:"calc(20px + env(safe-area-inset-top))",left:"50%",transform:"translateX(-50%)",zIndex:300,maxWidth:"calc(100% - 48px)",pointerEvents:"auto"}}>
-          <div onClick={onPnDismissToast}
-            style={{background:T.bg2,border:`1px solid ${T.sage}55`,borderRadius:T.r.lg,padding:"12px 18px",boxShadow:`0 12px 40px rgba(0,0,0,0.5), 0 0 24px ${T.sage}20`,cursor:"pointer",animation:`toastIn 280ms ${T.ease}`,display:"flex",alignItems:"center",gap:10}}>
-            <span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:T.sage,flexShrink:0}}/>
-            <span style={{fontSize:13,color:T.text1}}>
-              Passkey added. <span style={{fontStyle:"italic",fontFamily:T.serif}}>Your name's secure now.</span>
-            </span>
-          </div>
-        </div>
+        <Toast onClick={onPnDismissToast}>
+          Passkey added. Your name&rsquo;s secure now.
+        </Toast>
       )}
 
-      {/* Retro completion toast — sage, 3s auto-dismiss. Sits at the top of
-          the home screen because by the time it shows we're already back here. */}
+      {/* Retro completion toast — vellum, 3s auto-dismiss. */}
       {retroToast && (
-        <div style={{position:"fixed",top:"calc(20px + env(safe-area-inset-top))",left:"50%",transform:"translateX(-50%)",zIndex:300,maxWidth:"calc(100% - 48px)",pointerEvents:"auto"}}>
-          <div onClick={onDismissRetroToast}
-            style={{background:T.bg2,border:`1px solid ${T.sage}55`,borderRadius:T.r.lg,padding:"12px 18px",boxShadow:`0 12px 40px rgba(0,0,0,0.5), 0 0 24px ${T.sage}20`,cursor:"pointer",animation:`toastIn 280ms ${T.ease}`,display:"flex",alignItems:"center",gap:10}}>
-            <span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:T.sage,flexShrink:0}}/>
-            <span style={{fontSize:13,color:T.text1}}>
-              Logged <span style={{fontStyle:"italic",fontFamily:T.serif}}>{retroToast.sessionName}</span> for {retroToast.date}
-            </span>
-          </div>
-        </div>
+        <Toast onClick={onDismissRetroToast}>
+          Logged {retroToast.sessionName} for {retroToast.date}
+        </Toast>
       )}
 
       {/* Rotation nudge — surfaces at ROTATION_OPTIONAL weeks on a block */}
       {weeksOnBlock >= ROTATION_OPTIONAL && (
         <Fade d={200}>
-          <div style={{margin:"20px 24px 0",padding:"18px 20px",background:`${T.gold}10`,border:`1px solid ${T.gold}40`,borderRadius:T.r.lg}}>
+          <Card style={{margin:"20px 24px 0",padding:"16px 18px"}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:11,fontWeight:500,color:T.gold,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>
-                  Block {programmeBlock?.number} · {weeksOnBlock} weeks
+                <div style={{fontSize:13,color:T.ink3,marginBottom:4}}>
+                  Block <span style={{fontFamily:T.measured}}>{programmeBlock?.number}</span> · <span style={{fontFamily:T.measured}}>{weeksOnBlock}</span> weeks
                 </div>
-                <div style={{fontFamily:T.serif,fontSize:17,fontWeight:300,color:T.text1,lineHeight:1.3,marginBottom:4}}>
+                <div style={{fontSize:16,fontWeight:500,color:T.ink,lineHeight:1.3,marginBottom:4}}>
                   Time to rotate accessories
                 </div>
-                <div style={{fontSize:12,color:T.text3,lineHeight:1.5}}>
+                <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>
                   {offerRotationChoice
                     ? "You've earned a re-think. Refresh exercises, or change your focus altogether."
                     : "Your body has adapted. New exercises, same muscle targets."}
                 </div>
               </div>
-              <button className="forge-press" onClick={handleRotateTap} style={{flexShrink:0,marginTop:2,padding:"10px 16px",background:T.gold,border:"none",borderRadius:T.r.md,cursor:"pointer",fontFamily:T.serif,fontSize:14,fontWeight:400,color:T.bg0}}>
-                {offerRotationChoice ? "Choose →" : "Rotate →"}
+              <button className="forge-press" onClick={handleRotateTap} style={{flexShrink:0,marginTop:2,height:42,padding:"0 14px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"inline-flex",alignItems:"center",gap:6}}>
+                {offerRotationChoice ? "Choose" : "Rotate"} <Glyph name="arrowRight" size={12}/>
               </button>
             </div>
-          </div>
+          </Card>
         </Fade>
       )}
 
-      {/* Performance Lab entry — always visible, becomes active once data exists */}
+      {/* Performance Lab + Locker Room — quiet doors, rows on the ground. */}
       <Fade d={260}>
-        {/* forge-raised: the bevel material (device-judged B2, 2026-07-13).
-            Its background/border ARE the material — the old inline bg2 +
-            border are removed, and the old `transition: all` went with them
-            (it would tween box-shadow, the exact jiggle B1 was rejected
-            for; forge-press owns the motion). */}
-        <div {...grain} className={`${grain.className} forge-press forge-raised`} onClick={onPerformance}
-          style={{margin:"20px 24px 0",padding:"18px 20px",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
-              Performance lab
+        <div style={{margin:"24px 24px 0",borderTop:`1px solid ${T.rule}`}}>
+          <button className="forge-press" onClick={onPerformance}
+            style={{display:"flex",width:"100%",alignItems:"center",gap:12,padding:"14px 0",background:"none",border:"none",borderBottom:`1px solid ${T.ruleFaint}`,cursor:"pointer",textAlign:"left",fontFamily:T.text}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:16,fontWeight:500,color:T.ink,marginBottom:2}}>Performance lab</div>
+              <div style={{fontSize:13,color:T.ink3,lineHeight:1.45}}>
+                {historyCount === 0
+                  ? "Complete a session to light it up"
+                  : <><span style={{fontFamily:T.measured}}>{historyCount}</span> session{historyCount===1?"":"s"} · volume vs the bands · 1RM trends</>}
+              </div>
             </div>
-            <div style={{fontFamily:T.serif,fontSize:19,fontWeight:300,color:T.text1,lineHeight:1.3,marginBottom:3}}>
-              {historyCount === 0
-                ? "What the work's building"
-                : `${historyCount} session${historyCount===1?"":"s"} logged`}
-            </div>
-            <div style={{fontSize:12,color:T.text3,lineHeight:1.5,fontFamily:T.serif,fontStyle:"italic"}}>
-              {historyCount === 0
-                ? "Complete a session to light it up"
-                : "1RM trends · weekly volume · consistency"}
-            </div>
-          </div>
-          <div style={{flexShrink:0,width:40,height:40,borderRadius:"50%",background:historyCount > 0 ? `${T.gold}18` : T.bg3,border:`1px solid ${historyCount > 0 ? T.gold+"55" : T.bg4}`,display:"flex",alignItems:"center",justifyContent:"center",transition:`all 200ms ${T.ease}`}}>
-            <span style={{fontSize:16,color:historyCount > 0 ? T.gold : T.text3}}>→</span>
-          </div>
-        </div>
+            <Glyph name="arrowRight" size={14} color={T.ink3} style={{flexShrink:0}}/>
+          </button>
 
-        {/* Locker Room — the body surface (Lab = what you lift; Locker Room =
-            what it's doing to you). Chart is ungated; photos live behind the
-            "Show photos" door on the page itself. COPY: draft, intimacy pass
-            pending. */}
-        {/* Same anatomy as the Lab card above (boss device pass 2026-07-23:
-            the lighter variant read as a second-class citizen): identical
-            paddings, serif value line, 40px sage-ringed circle — sage, not
-            gold, because the Locker Room is the body surface, not the
-            barbell surface. */}
-        <div {...grain} className={`${grain.className} forge-press forge-raised`} onClick={onLockerRoom}
-          style={{margin:"12px 24px 0",padding:"18px 20px",borderRadius:T.r.lg,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:11,fontWeight:500,color:T.text3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
-              Locker room
+          <button className="forge-press" onClick={onLockerRoom}
+            style={{display:"flex",width:"100%",alignItems:"center",gap:12,padding:"14px 0",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,cursor:"pointer",textAlign:"left",fontFamily:T.text}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:16,fontWeight:500,color:T.ink,marginBottom:2}}>Locker room</div>
+              <div style={{fontSize:13,color:T.ink3,lineHeight:1.45}}>Bodyweight and photos, yours alone</div>
             </div>
-            <div style={{fontFamily:T.serif,fontSize:19,fontWeight:300,color:T.text1,lineHeight:1.3,marginBottom:3}}>
-              What it&apos;s doing to you
-            </div>
-            <div style={{fontSize:12,color:T.text3,lineHeight:1.5,fontFamily:T.serif,fontStyle:"italic"}}>
-              Bodyweight and photos, yours alone
-            </div>
-          </div>
-          <div style={{flexShrink:0,width:40,height:40,borderRadius:"50%",background:`${T.sage}18`,border:`1px solid ${T.sage}55`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{fontSize:16,color:T.sage}}>→</span>
-          </div>
+            <Glyph name="arrowRight" size={14} color={T.ink3} style={{flexShrink:0}}/>
+          </button>
         </div>
       </Fade>
 
-      {/* Reset accessories — quiet escape hatch for over-rotated users. Lives
-          below the Performance Lab card now so it doesn't compete for attention
-          with the day's session card. Only surfaces when there's actual
-          rotation drift to undo. Two-tap confirm inline, no modal, 5s
-          auto-disarm. */}
+      {/* Reset accessories — quiet escape hatch for over-rotated users.
+          Two-tap confirm inline, no modal, 5s auto-disarm. */}
       {hasRotationDrift && (
         <div style={{margin:"16px 24px 0",textAlign:"center"}}>
           <button
             onClick={handleResetTap}
-            style={{padding:"6px 10px",background:"none",border:"none",cursor:"pointer",fontSize:11,color:resetArmed?T.rose:T.text4,textDecoration:"underline",textUnderlineOffset:3,fontFamily:T.sans}}>
+            style={{...linkBtn,fontSize:12,padding:"6px 10px",color:resetArmed?T.heat[4]:T.ink3,textDecoration:"underline",textUnderlineOffset:3}}>
             {resetArmed ? "Tap again to reset accessories to defaults" : "Reset accessories to defaults"}
           </button>
         </div>
@@ -899,44 +725,55 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   );
 }
 
-// ─── Rotation choice modal ─────────────────────────────────────────────────
-// Shown when the user taps "Choose →" on the rotate card at ≥ ROTATION_AUTO
-// weeks. Two paths: refresh the accessory picks within the current focus,
-// or change focus altogether (which re-rotates automatically as a side
-// effect of the focus-save handler). Pre-AUTO weeks, the rotate card calls
-// onRotate directly and this modal never opens.
+// ─── Toast — vellum, top-anchored ────────────────────────────────────────────
+// The one translucent-sheet material, allowed on toasts. Cast shadow flips
+// downward for a top-anchored surface.
+function Toast({ onClick, children }) {
+  return (
+    <div style={{position:"fixed",top:"calc(20px + env(safe-area-inset-top))",left:"50%",transform:"translateX(-50%)",zIndex:300,maxWidth:"calc(100% - 48px)",pointerEvents:"auto"}}>
+      <div onClick={onClick} className="forge-vellum"
+        style={{borderRadius:T.r,padding:"12px 18px",boxShadow:"0 10px 24px -14px rgba(36,28,25,0.35)",cursor:"pointer",animation:`toastIn 280ms ${T.ease}`,fontSize:13,color:T.ink}}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
+// ─── Rotation choice modal ─────────────────────────────────────────────────
+// Two paths: refresh the accessory picks within the current focus, or
+// change focus altogether. Vellum sheet; no press visuals on sheet
+// controls (settled sheet grammar).
 function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFocus, onCancel }) {
   const { containerRef, onKeyDown } = useModalA11y(onCancel);
   const titleId = "rotation-choice-title";
   return (
     <div onKeyDown={onKeyDown} onClick={onCancel} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
-        className="forge-sheet-ground" style={{background:T.bg2,padding:"28px 24px 32px",width:"100%",borderTop:`1px solid ${T.gold}44`,animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        <div style={{fontSize:10,fontWeight:500,color:T.gold,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
-          {weeksOnBlock} weeks on this block
+        className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
+          <span style={{fontFamily:T.measured}}>{weeksOnBlock}</span> weeks on this block
         </div>
-        <div id={titleId} style={{fontFamily:T.serif,fontSize:26,fontWeight:300,lineHeight:1.15,marginBottom:6}}>
-          Time to rotate.<br/><span style={{color:T.gold,fontStyle:"italic"}}>What do you want to do?</span>
+        <div id={titleId} style={{...DISPLAY,fontSize:30,color:T.ink,marginBottom:8}}>
+          Rotation
         </div>
-        <p style={{fontSize:13,color:T.text3,marginBottom:18,lineHeight:1.5}}>
-          You&apos;re on <strong style={{color:T.text2}}>{currentFocus}</strong>. Refresh the accessory picks within it, or rethink the whole focus.
+        <p style={{fontSize:13,color:T.ink2,marginBottom:18,lineHeight:1.5}}>
+          You&apos;re on <strong style={{fontWeight:600}}>{currentFocus}</strong>. Refresh the accessory picks within it, or rethink the whole focus.
         </p>
 
         <button onClick={onRefresh}
-          style={{padding:"16px 18px",background:`${T.gold}14`,border:`1px solid ${T.gold}`,borderRadius:T.r.md,cursor:"pointer",textAlign:"left",marginBottom:10,transition:`all 160ms ${T.ease}`}}>
-          <div style={{fontFamily:T.serif,fontSize:17,fontWeight:300,color:T.gold,marginBottom:4}}>1. Refresh exercises</div>
-          <div style={{fontSize:12,color:T.text2,lineHeight:1.5}}>New picks within your current focus. Same muscle targets, fresh stimulus.</div>
+          style={{padding:"15px 16px",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,cursor:"pointer",textAlign:"left",marginBottom:10,fontFamily:T.text}}>
+          <div style={{fontSize:15,fontWeight:500,color:T.ink,marginBottom:4}}>Refresh exercises</div>
+          <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>New picks within your current focus. Same muscle targets, fresh stimulus.</div>
         </button>
 
         <button onClick={onChangeFocus}
-          style={{padding:"16px 18px",background:T.bg3,border:`1px solid ${T.bg4}`,borderRadius:T.r.md,cursor:"pointer",textAlign:"left",transition:`all 160ms ${T.ease}`}}>
-          <div style={{fontFamily:T.serif,fontSize:17,fontWeight:300,color:T.text1,marginBottom:4}}>2. Change focus</div>
-          <div style={{fontSize:12,color:T.text2,lineHeight:1.5}}>Switch to a different goal (Forged / Strong / Sculpt). Accessories re-rotate with the new bias.</div>
+          style={{padding:"15px 16px",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,cursor:"pointer",textAlign:"left",fontFamily:T.text}}>
+          <div style={{fontSize:15,fontWeight:500,color:T.ink,marginBottom:4}}>Change focus</div>
+          <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>Switch to a different goal (Forged / Strong / Sculpt). Accessories re-rotate with the new bias.</div>
         </button>
 
         <button onClick={onCancel}
-          style={{marginTop:16,padding:"10px",background:"none",border:"none",cursor:"pointer",fontSize:12,color:T.text3,fontFamily:T.sans,alignSelf:"center"}}>
+          style={{marginTop:16,padding:"10px",background:"none",border:"none",cursor:"pointer",fontSize:13,color:T.ink3,fontFamily:T.text,alignSelf:"center"}}>
           Not now
         </button>
       </div>
@@ -944,32 +781,24 @@ function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFo
   );
 }
 
-function StreakBadge({rhythm, resting=false}){
-  // Resting: a breather is active, so the rhythm pauses rather than showing
-  // a number that would only tick down. Calm dot + "Resting", no ratio.
+// ─── Streak line ───────────────────────────────────────────────────────────
+// The rhythm read, as a quiet line under the date — mono number, plain
+// words. Resting shows the state instead of a count that would only tick
+// down.
+function StreakLine({rhythm, resting=false}){
   if (resting) {
     return (
-      <div style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.pill,padding:"8px 16px",display:"flex",alignItems:"center",gap:9}}>
-        <span style={{width:7,height:7,borderRadius:"50%",background:T.sage,display:"inline-block",flexShrink:0}}/>
-        <div style={{fontSize:9,fontWeight:500,color:T.text3,letterSpacing:"0.1em",textTransform:"uppercase",lineHeight:1.5}}>Resting<br/>on a breather</div>
-      </div>
+      <div style={{fontSize:12,color:T.ink3,marginTop:3}}>Resting — on a breather</div>
     );
   }
   const completed = rhythm?.completed || 0;
   const expected  = rhythm?.expected  || 12;
-  // Window is a rolling 28-day count of strength sessions — labelled
-  // honestly. Used to say "this month", but a rolling window doesn't reset
-  // on the 1st, so users counting "since the month started" saw a mismatch
-  // (e.g. 5 strength sessions in June so far, badge says 6 because a late-
-  // May session is still inside the 28-day window).
+  // Rolling 28-day count of strength sessions — labelled honestly.
   const window  = rhythm?.window || 28;
   const over = completed > expected;
-  const primary = over ? `${expected}+` : `${completed}`;
-  const secondary = over ? `of ${expected} · strong` : `of ${expected}`;
   return (
-    <div style={{background:T.bg2,border:`1px solid ${T.bg3}`,borderRadius:T.r.pill,padding:"8px 16px",display:"flex",alignItems:"center",gap:8}}>
-      <span style={{fontFamily:T.serif,fontSize:22,fontWeight:400,color:T.gold,lineHeight:1}}>{primary}</span>
-      <div style={{fontSize:9,fontWeight:500,color:T.text3,letterSpacing:"0.1em",textTransform:"uppercase",lineHeight:1.5}}>{secondary}<br/>past {window} days</div>
+    <div style={{fontSize:12,color:T.ink3,marginTop:3}}>
+      <span style={{fontFamily:T.measured,color:T.ink2}}>{over ? `${expected}+` : completed}</span> of <span style={{fontFamily:T.measured}}>{expected}</span> sessions, past <span style={{fontFamily:T.measured}}>{window}</span> days{over ? " · strong" : ""}
     </div>
   );
 }

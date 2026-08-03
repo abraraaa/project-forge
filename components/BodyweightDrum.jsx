@@ -40,11 +40,11 @@ export default function BodyweightDrum({ value, onChange, min = 40, max = 200 })
         <ScrollDrum value={whole} onChange={(w) => onChange(joinKg(w, digit))} min={min} max={max} step={1} integer unit="" />
         {/* The decimal point sits on the selection band's centreline. */}
         <div aria-hidden style={{ height: 52 * 5, display: "flex", alignItems: "center" }}>
-          <span style={{ fontFamily: T.serif, fontSize: 30, fontWeight: 400, color: T.text3 }}>.</span>
+          <span style={{ fontFamily: T.measured, fontSize: 30, fontWeight: 400, color: T.ink3 }}>.</span>
         </div>
         <ScrollDrum value={digit} onChange={(d) => onChange(joinKg(whole, d))} min={0} max={9} step={1} unit="" />
       </div>
-      <div style={{ fontFamily: T.serif, fontSize: 12, fontWeight: 300, color: T.text3, marginTop: 2, fontStyle: "italic" }}>kg</div>
+      <div style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}>kg</div>
     </div>
   );
 }

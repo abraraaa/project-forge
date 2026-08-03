@@ -12,7 +12,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LIBRARY, getExercise, exerciseDescription } from "@/lib/library";
 import { getTempo, decodeTempo, TEMPO_SOURCES } from "@/lib/exercise-tempo";
-import { T } from "@/lib/tokens";
+import { T, DISPLAY } from "@/lib/tokens";
+import Glyph from "@/components/Glyph";
+import { MonoNums } from "@/components/ui";
 
 export const dynamicParams = false;
 
@@ -33,13 +35,17 @@ export async function generateMetadata({ params }) {
 
 // Contribution bar — weight is 0..1 of a full set's volume.
 function MuscleBar({ muscle, weight, primary = false }) {
+  // Contribution is a magnitude → it rides the thermal ramp: a full set's
+  // worth of stimulus runs hot, fractional contributions cool. Height and
+  // the printed number carry the value too (redundancy law).
+  const heat = weight >= 0.95 ? T.heat[3] : weight >= 0.5 ? T.heat[2] : weight >= 0.25 ? T.heat[1] : T.heat[0];
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "130px 1fr 44px", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: `1px solid ${T.bg3}` }}>
-      <span style={{ fontSize: 13, fontWeight: primary ? 500 : 400, color: primary ? T.text1 : T.text2 }}>{muscle}</span>
-      <span style={{ height: 6, borderRadius: 3, background: T.bg3, overflow: "hidden", display: "block" }} aria-hidden="true">
-        <span style={{ display: "block", height: "100%", width: `${weight * 100}%`, borderRadius: 3, background: primary ? T.coral : T.gold, opacity: primary ? 1 : 0.7 }} />
+    <div style={{ display: "grid", gridTemplateColumns: "130px 1fr 44px", alignItems: "center", gap: 12, padding: "9px 0", borderBottom: `1px solid ${T.ruleFaint}` }}>
+      <span style={{ fontSize: 13, fontWeight: primary ? 500 : 400, color: primary ? T.ink : T.ink2 }}>{muscle}</span>
+      <span style={{ height: primary ? 8 : 6, background: T.well, overflow: "hidden", display: "block" }} aria-hidden="true">
+        <span style={{ display: "block", height: "100%", width: `${weight * 100}%`, background: heat }} />
       </span>
-      <span style={{ fontSize: 12, color: T.text3, fontVariantNumeric: "tabular-nums", textAlign: "right" }}>
+      <span style={{ fontSize: 12, color: T.ink2, fontFamily: T.measured, textAlign: "right" }}>
         {weight.toFixed(weight === 1 ? 0 : 2).replace(/^0/, "")}
       </span>
     </div>
@@ -55,26 +61,26 @@ function TempoSection({ name }) {
   const segments = t.tempo ? decodeTempo(t.tempo) : null;
   return (
     <section style={{ marginTop: 36 }}>
-      <h2 style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 10px" }}>
+      <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 10px" }}>
         Tempo
       </h2>
       {segments ? (
         <div style={{ display: "flex", gap: 18, alignItems: "baseline" }}>
           {segments.map((seg, i) => (
             <div key={i}>
-              <span style={{ fontFamily: T.serif, fontSize: 34, fontWeight: 300, color: seg.n === "X" ? T.coral : T.text1 }}>{seg.n}</span>
-              <span style={{ display: "block", fontSize: 10, color: T.text4, letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2 }}>{seg.label}</span>
+              <span style={{ fontFamily: T.measured, fontSize: 32, fontWeight: 300, letterSpacing: "-0.03em", color: seg.n === "X" ? T.heat[3] : T.ink }}>{seg.n}</span>
+              <span style={{ display: "block", fontSize: 11, color: T.ink3, marginTop: 2 }}>{seg.label}</span>
             </div>
           ))}
         </div>
       ) : (
-        <p style={{ fontFamily: T.serif, fontSize: 17, fontWeight: 300, fontStyle: "italic", color: T.text1, margin: 0 }}>
+        <p style={{ fontSize: 15, color: T.ink, margin: 0 }}>
           Hold, don&apos;t count reps.
         </p>
       )}
-      <p style={{ fontSize: 13, color: T.text2, marginTop: 12, lineHeight: 1.6 }}>{t.principle}</p>
-      {t.note && <p style={{ fontSize: 12, color: T.text3, marginTop: 8, lineHeight: 1.6 }}>{t.note}</p>}
-      <p style={{ fontSize: 11, color: T.text4, marginTop: 10, lineHeight: 1.6 }}>
+      <p style={{ fontSize: 13, color: T.ink2, marginTop: 12, lineHeight: 1.6 }}>{t.principle}</p>
+      {t.note && <p style={{ fontSize: 13, color: T.ink3, marginTop: 8, lineHeight: 1.6 }}>{t.note}</p>}
+      <p style={{ fontSize: 12, color: T.ink3, marginTop: 10, lineHeight: 1.6 }}>
         {t.evidence === "derived" ? "Derived from tempo research on this movement class — " : ""}
         {t.sources.map((s) => TEMPO_SOURCES[s]?.cite.split(".")[0]).filter(Boolean).join("; ")}.
       </p>
@@ -100,17 +106,17 @@ export default async function ExercisePage({ params }) {
     <div style={{ minHeight: "100vh", padding: "max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 64px", maxWidth: 640, margin: "0 auto" }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
 
-      <Link href="/library" style={{ fontSize: 12, color: T.text3, fontFamily: T.sans, textDecoration: "none" }}>
-        ← Library
+      <Link href="/library" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+        <Glyph name="arrowLeft" size={12} color={T.ink3}/> The library
       </Link>
 
       <div style={{ marginTop: 32 }}>
-        <div style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 10 }}>
+        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
           {entry.categoryLabel}
         </div>
-        <h1 style={{ fontFamily: T.serif, fontSize: 38, fontWeight: 300, lineHeight: 1.15, margin: 0 }}>{entry.name}</h1>
-        <p style={{ fontSize: 14, color: T.text2, marginTop: 12, lineHeight: 1.6 }}>
-          Trains <span style={{ color: T.gold, fontStyle: "italic", fontFamily: T.serif }}>{entry.primary.toLowerCase()}</span> first
+        <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: 0 }}>{entry.name}</h1>
+        <p style={{ fontSize: 15, color: T.ink2, marginTop: 12, lineHeight: 1.6 }}>
+          Trains <span style={{ color: T.ink, fontWeight: 500 }}>{entry.primary.toLowerCase()}</span> first
           {entry.secondary.length > 0
             ? `, with real work landing on ${entry.secondary.slice(0, 3).map((s) => s.muscle.toLowerCase()).join(", ")}${entry.secondary.length > 3 ? " and more" : ""}.`
             : " — focused, direct, nothing hidden in the movement."}
@@ -118,16 +124,16 @@ export default async function ExercisePage({ params }) {
       </div>
 
       <section style={{ marginTop: 36 }}>
-        <h2 style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 6px" }}>
+        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 6px" }}>
           Muscle contribution per set
         </h2>
         <MuscleBar muscle={entry.primary} weight={1} primary />
         {entry.secondary.map((s) => (
           <MuscleBar key={s.muscle} muscle={s.muscle} weight={s.weight} />
         ))}
-        <p style={{ fontSize: 12, color: T.text3, marginTop: 12, lineHeight: 1.6 }}>
+        <p style={{ fontSize: 13, color: T.ink3, marginTop: 12, lineHeight: 1.6 }}>
           These are the weights Heatwayve&apos;s volume audit actually computes with — deliberately
-          conservative, so compounds don&apos;t masquerade as full coverage. A 0.5 means a set
+          conservative, so compounds don&apos;t masquerade as full coverage. A <span style={{ fontFamily: T.measured }}>0.5</span> means a set
           counts as half a set for that muscle: meaningful help, not a replacement for direct work.
         </p>
       </section>
@@ -135,40 +141,40 @@ export default async function ExercisePage({ params }) {
       <TempoSection name={entry.name} />
 
       <section style={{ marginTop: 36 }}>
-        <h2 style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 6px" }}>
+        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 6px" }}>
           How Heatwayve progresses it
         </h2>
-        <p style={{ fontSize: 14, color: T.text2, lineHeight: 1.6, margin: 0 }}>{entry.progression}</p>
+        <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}><MonoNums>{entry.progression}</MonoNums></p>
       </section>
 
       {entry.swaps.length > 0 && (
         <section style={{ marginTop: 36 }}>
-          <h2 style={{ fontSize: 11, fontWeight: 500, color: T.text3, letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 6px" }}>
+          <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 6px" }}>
             Swap it for
           </h2>
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {entry.swaps.map((s) => (
-              <li key={s.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "11px 0", borderBottom: `1px solid ${T.bg3}` }}>
+              <li key={s.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "11px 0", borderBottom: `1px solid ${T.ruleFaint}` }}>
                 {s.slug ? (
-                  <Link href={`/library/${s.slug}`} style={{ fontFamily: T.serif, fontSize: 16, fontWeight: 300, color: T.text1, textDecoration: "none" }}>
+                  <Link href={`/library/${s.slug}`} style={{ fontSize: 15, fontWeight: 400, color: T.ink, fontFamily: T.text, textDecoration: "none" }}>
                     {s.name}
                   </Link>
                 ) : (
-                  <span style={{ fontFamily: T.serif, fontSize: 16, fontWeight: 300, color: T.text1 }}>{s.name}</span>
+                  <span style={{ fontSize: 15, fontWeight: 400, color: T.ink, fontFamily: T.text }}>{s.name}</span>
                 )}
-                <span style={{ fontSize: 11, color: T.text4, fontFamily: T.sans, flexShrink: 0 }}>{s.equipment}</span>
+                <span style={{ fontSize: 12, color: T.ink3, fontFamily: T.text, flexShrink: 0 }}>{s.equipment}</span>
               </li>
             ))}
           </ul>
-          <p style={{ fontSize: 12, color: T.text3, marginTop: 12, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 13, color: T.ink3, marginTop: 12, lineHeight: 1.6 }}>
             Same movement pattern, same progression continuity — these are the alternatives the
             app offers mid-session when a rack is taken or equipment isn&apos;t there.
           </p>
         </section>
       )}
 
-      <p style={{ marginTop: 48, fontSize: 13, color: T.text3, fontFamily: T.serif, fontStyle: "italic", lineHeight: 1.6 }}>
-        Train with intention. <Link href="/" style={{ color: T.gold }}>Open Heatwayve</Link> — it prescribes
+      <p style={{ marginTop: 48, fontSize: 13, color: T.ink3, fontFamily: T.text, lineHeight: 1.6 }}>
+        Train with intention. <Link href="/" style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>Open Heatwayve</Link> — it prescribes
         the weight, watches the reps, and does this arithmetic for every set you log.
       </p>
     </div>

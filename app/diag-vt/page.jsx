@@ -30,8 +30,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 
-const A_BG = "#221A14"; // warm-dark
-const B_BG = "#141A22"; // cool-dark — visibly different so a "dim" reads clearly
+const A_BG = "var(--surface)"; // warm-dark
+const B_BG = "var(--surface)"; // cool-dark — visibly different so a "dim" reads clearly
 
 export default function DiagVT() {
   const [screen, setScreenRaw] = useState("A");
@@ -91,7 +91,7 @@ export default function DiagVT() {
     <div style={{
       minHeight: "100vh",
       background: bg,
-      color: "#EDEBE7",
+      color: "var(--ink)",
       padding: "calc(env(safe-area-inset-top) + 32px) 24px 32px",
       display: "flex",
       flexDirection: "column",
@@ -106,7 +106,7 @@ export default function DiagVT() {
       <div style={{ fontSize: 48, fontWeight: 300, lineHeight: 1.1 }}>{label}</div>
 
       <div style={{ fontSize: 14, opacity: 0.8, lineHeight: 1.5 }}>
-        Tap below. The screen-bg cross-fades from warm to cool. With <code>plus-lighter</code>
+        Tap below. The screen-bg cross-fades from warm to cool. With <code>plus-lighter</code>{" "}
         working, the midpoint should stay perceptually as bright as either end-state.
         If you see a darker dip at midpoint, plus-lighter isn&apos;t doing its job here.
       </div>
@@ -116,7 +116,7 @@ export default function DiagVT() {
         background: "rgba(255,255,255,0.08)",
         border: "1px solid rgba(255,255,255,0.18)",
         borderRadius: 12,
-        color: "#EDEBE7",
+        color: "var(--ink)",
         fontSize: 16,
         fontWeight: 500,
         cursor: "pointer",

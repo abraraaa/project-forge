@@ -96,8 +96,9 @@ describe("Locker Room chart sources (code shape)", () => {
   });
 
   it("the line carries its numbers (boss, 2026-07-26): reading + delta, values on the points, dates at the ends", () => {
-    // current reading + signed delta since the first point
-    expect(src).toContain("{last.kg} kg");
+    // current reading + signed delta since the first point (§11.4: the
+    // digits ride mono, "kg since …" stays in the text face)
+    expect(src).toContain("{last.kg}");
     expect(src).toMatch(/kg since \{fmtD\(first\.date\)\}/);
     // values ON the points while few enough to read; endpoints beyond that
     expect(src).toMatch(/n <= 6 \? pts : \[pts\[0\], pts\[n - 1\]\]/);

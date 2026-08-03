@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { T } from "@/lib/tokens";
+import { T, DISPLAY } from "@/lib/tokens";
+import Glyph from "@/components/Glyph";
 
 export const metadata = {
   title: "Not found",
@@ -11,38 +12,32 @@ export const metadata = {
 export default function NotFound() {
   return (
     <main style={{
-      color: T.text1, fontFamily: T.sans,
+      color: T.ink, fontFamily: T.text,
       padding: "88px 24px 24px",
       display: "flex", flexDirection: "column", alignItems: "flex-start",
     }}>
-      <div style={{
-        fontSize: 11, fontWeight: 500, color: T.text3,
-        letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 12,
-      }}>
-        404
+      <div style={{ fontSize: 13, color: T.ink3, marginBottom: 12 }}>
+        404 · nothing here
       </div>
 
-      <h1 style={{
-        fontFamily: T.serif, fontSize: 40, fontWeight: 300,
-        lineHeight: 1.1, letterSpacing: "-0.02em", margin: 0,
-      }}>
-        Nothing here.<br />
-        <span style={{ color: T.coral, fontStyle: "italic" }}>Back to the work.</span>
+      <h1 style={{ ...DISPLAY, fontSize: 40, color: T.ink, margin: 0 }}>
+        A dead end
       </h1>
 
-      <p style={{ fontSize: 14, color: T.text2, lineHeight: 1.6, margin: "14px 0 32px", maxWidth: "34ch" }}>
+      <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: "14px 0 32px", maxWidth: "34ch" }}>
         This page doesn&apos;t exist — or it moved. Your training is where you left it.
       </p>
 
       <Link
         href="/"
         style={{
-          padding: "14px 22px", background: T.coral, color: T.bg0,
-          borderRadius: T.r.lg, fontFamily: T.serif, fontSize: 16,
-          textDecoration: "none", display: "inline-block",
+          padding: "15px 22px", background: T.commit, color: T.commitInk,
+          borderRadius: T.r, boxShadow: T.elevStrong, fontFamily: T.text,
+          fontSize: 16, fontWeight: 500, textDecoration: "none",
+          display: "inline-flex", alignItems: "center", gap: 8,
         }}
       >
-        Take me home →
+        Take me home <Glyph name="arrowRight" size={13} />
       </Link>
     </main>
   );
