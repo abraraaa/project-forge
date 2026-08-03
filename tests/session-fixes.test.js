@@ -46,3 +46,26 @@ describe("mid-session bodyweight prompt — bodyweight family only", () => {
     expect(src).not.toMatch(/loadType !== "external" && bodyweight === null/);
   });
 });
+
+describe("locker room — the one screen that forgot its column", () => {
+  it("caps at the 430 app column like every other surface", () => {
+    const src = readFileSync(resolve(root, "app/locker-room/page.jsx"), "utf8");
+    expect(src).toMatch(/maxWidth: 430, margin: "0 auto"/);
+  });
+});
+
+describe("profile deletion — a confirmed local-only profile gets one honest option", () => {
+  it("the cloud/device split renders only when a passkey might exist", () => {
+    // A CONFIRMED passkey-less profile never synced (the sync gate demands
+    // proof of control) and cannot hold photos (the camera requires a
+    // passkey) — offering "Full wipe · cloud & device" there invents a
+    // second copy of the data to worry about. Unknown passkey state keeps
+    // the full dialog. The delete paths themselves are untouched.
+    const src = readFileSync(resolve(root, "components/ProfileScreen.jsx"), "utf8");
+    expect(src).toContain('profileHasPasskey[confirmWipe] === false');
+    expect(src).toContain("nothing ever synced");
+    // Both wipe paths still exist, unmodified in signature.
+    expect(src.match(/wipeProfile\(confirmWipe,\{cloud:false\}\)/g)?.length).toBe(2);
+    expect(src.match(/wipeProfile\(confirmWipe,\{cloud:true\}\)/g)?.length).toBe(1);
+  });
+});

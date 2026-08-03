@@ -917,11 +917,24 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         <div onKeyDown={wipeKeyDown} onClick={()=>!wipeBusy&&setConfirmWipe(null)} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
           <div ref={wipeRef} role="dialog" aria-modal="true" aria-labelledby="wipe-title" tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",animation:`slideUp 240ms ${T.ease}`,maxHeight:"92vh",overflowY:"auto",boxSizing:"border-box",outline:"none"}}>
             <div id="wipe-title" style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:8}}>
-              Wipe {confirmWipe}?
+              Delete {confirmWipe}?
             </div>
+            {/* A CONFIRMED passkey-less profile has never synced (the sync
+                gate requires proof of control) and cannot hold photos (the
+                camera requires a passkey) — so "cloud vs device" is a
+                question with one honest answer, and asking it only invents
+                worry. Unknown passkey state (check failed / in flight)
+                keeps the full dialog: never assume less data than there
+                might be. The delete paths themselves are unchanged. */}
+            {profileHasPasskey[confirmWipe] === false ? (
+              <p style={{fontSize:13,color:T.ink2,marginBottom:22,lineHeight:1.6}}>
+                This profile lives only on this device — without a passkey nothing ever synced, so there&apos;s no copy anywhere else. Deleting it removes everything, permanently.
+              </p>
+            ) : (
             <p style={{fontSize:13,color:T.ink2,marginBottom:22,lineHeight:1.6}}>
               Choose how far this goes. Local keeps your data in the cloud — you can reclaim the name by typing it again. Full wipe releases the name and deletes everything.
             </p>
+            )}
 
             {wipeError && (
               <div style={{marginBottom:16,fontSize:13,color:T.heat[4],lineHeight:1.5}}>
@@ -930,6 +943,19 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             )}
 
             <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
+              {profileHasPasskey[confirmWipe] === false ? (
+                <button
+                  disabled={wipeBusy}
+                  onClick={()=>wipeProfile(confirmWipe,{cloud:false})}
+                  style={{padding:"16px",background:T.surface,border:"none",boxShadow:`inset 0 0 0 1px ${T.heat[4]}`,borderRadius:T.r,cursor:wipeBusy?"default":"pointer",textAlign:"left",opacity:wipeBusy?0.5:1,fontFamily:T.text}}>
+                  <div style={{fontSize:15,fontWeight:500,color:T.heat[4],lineHeight:1.3,marginBottom:3}}>
+                    {wipeBusy ? "Deleting…" : "Delete this profile"}
+                  </div>
+                  <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
+                    Everything lives on this device only. Can&apos;t be undone.
+                  </div>
+                </button>
+              ) : (<>
               <button
                 disabled={wipeBusy}
                 onClick={()=>wipeProfile(confirmWipe,{cloud:false})}
@@ -950,9 +976,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                   {wipeBusy ? "Wiping…" : "Full wipe · cloud & device"}
                 </div>
                 <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
-                  Deletes all weights, history, and the name claim. Can't be undone.
+                  Deletes all weights, history, and the name claim. Can&apos;t be undone.
                 </div>
               </button>
+              </>)}
             </div>
 
             <button
