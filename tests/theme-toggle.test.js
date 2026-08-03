@@ -2,12 +2,12 @@
 // tests/theme-toggle.test.js
 // ─────────────────────────────────────────────────────────────────────────────
 // The appearance override (Sun · Auto · Moon in Profile). The mode contract
-// stays CSS-owned: manual states stamp data-theme on <html> and the token
-// blocks key off it. Per-profile: a shared device keeps each person's mode.
-// Locks:
-//   1. The dark tokens exist as TWIN blocks (system media query + manual
-//      attribute) — CSS can't express the disjunction without duplication,
-//      so the twins must never drift.
+// is ONE axis: every token resolves through light-dark(), and color-scheme
+// on <html> — `light dark` for auto, an inline "light"/"dark" for manual —
+// re-resolves the whole palette. Per-profile: a shared device keeps each
+// person's mode. Locks:
+//   1. Tokens are declared ONCE, via light-dark() — no duplicated mode
+//      blocks, no data-theme attribute machinery to drift.
 //   2. The stored preference applies at PARSE time (layout.jsx script) —
 //      profile resolution included — or every launch flashes.
 //   3. lib/theme.js round-trips the three states per profile, crossfades
@@ -26,33 +26,30 @@ import { GLYPH_NAMES } from "../components/Glyph.jsx";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const css = readFileSync(resolve(root, "app/globals.css"), "utf8");
 const layout = readFileSync(resolve(root, "app/layout.jsx"), "utf8");
+const themeSrc = readFileSync(resolve(root, "lib/theme.js"), "utf8");
 
-const dedent = (s) => s.split("\n").map((l) => l.trim()).filter(Boolean).join("\n");
-
-describe("twin dark-token blocks", () => {
-  it("the media block and the manual block carry identical declarations", () => {
-    const mediaStart = css.indexOf('@media (prefers-color-scheme: dark) {');
-    const mediaOpen = css.indexOf(':root:not([data-theme="light"]) {', mediaStart);
-    expect(mediaOpen).toBeGreaterThan(-1);
-    const mediaBody = css.slice(
-      mediaOpen + ':root:not([data-theme="light"]) {'.length,
-      css.indexOf("\n  }\n}", mediaOpen),
-    );
-    const manualOpen = css.indexOf(':root[data-theme="dark"] {');
-    expect(manualOpen).toBeGreaterThan(-1);
-    const manualBody = css.slice(
-      manualOpen + ':root[data-theme="dark"] {'.length,
-      css.indexOf("\n}", manualOpen),
-    );
-    expect(dedent(manualBody)).toBe(dedent(mediaBody));
-    expect(dedent(mediaBody)).toContain("--ground:");   // extraction sanity
+describe("the mode contract is one axis — light-dark(), no twins", () => {
+  it("flipped tokens declare both values once", () => {
+    expect(css).toMatch(/--ground:\s*light-dark\(#F2E9E3, #1A1512\)/);
+    expect(css).toMatch(/--ink:\s*light-dark\(#241C19, #F2E9E3\)/);
+    // Declared exactly once — a reintroduced dark block would double these.
+    expect(css.match(/--ground:/g)).toHaveLength(1);
+    expect(css.match(/--ink:\s/g)).toHaveLength(1);
   });
 
-  it("the system block yields to a manual light override", () => {
-    // The media query must scope to :not([data-theme="light"]) — a plain
-    // :root inside it would beat the light tokens whenever the system is
-    // dark, making the Sun position a no-op exactly when it matters.
-    expect(css).toContain(':root:not([data-theme="light"])');
+  it("no duplicated mode blocks and no attribute machinery survive", () => {
+    // The old shape was a prefers-color-scheme token block twinned with a
+    // [data-theme] block plus a drift guard. light-dark() deletes all of
+    // it; anything matching these is the legacy pattern coming back.
+    expect(css).not.toContain("data-theme");
+    expect(css).not.toMatch(/@media \(prefers-color-scheme: dark\)[\s\S]*--ground/);
+  });
+
+  it("the elevation pair stacks both edges (offsets can't ride light-dark)", () => {
+    // Bottom-edge shadow on light, top-edge highlight on dark: one token,
+    // two shadows, the wrong edge faded to transparent per mode.
+    expect(css).toMatch(/--elev:[\s\S]{0,200}light-dark\(rgba\(36, 28, 25, 0\.08\), transparent\)/);
+    expect(css).toMatch(/--elev:[\s\S]{0,200}light-dark\(transparent, rgba\(242, 233, 227, 0\.07\)\)/);
   });
 });
 
@@ -60,23 +57,17 @@ describe("parse-time application (layout.jsx)", () => {
   it("a blocking head script resolves the ACTIVE PROFILE's preference before first paint", () => {
     expect(layout).toContain('localStorage.getItem("forge:active")');
     expect(layout).toContain('":theme"');
-    expect(layout).toMatch(/dataset\.theme\s*=\s*t/);
-    // The inline colorScheme on <html> wins over any stylesheet rule, so
-    // the script must override it too or UA chrome follows the system.
+    // color-scheme is the single mechanism — the script sets it inline
+    // (inline beats stylesheet) and touches nothing else.
     expect(layout).toMatch(/style\.colorScheme\s*=\s*t/);
+    expect(layout).not.toContain("dataset.theme");
     // Fail-safe: a throwing localStorage (private mode) must not take the
     // shell down with it.
     expect(layout).toMatch(/try\{.*:theme.*\}catch/);
   });
 
-  it("the parse-time ground style resolves the same race, manual rules last", () => {
-    const style = layout.match(/html\{background:#F2E9E3\}[^"]+/)?.[0] ?? "";
-    expect(style).toContain("html:not([data-theme=light]){background:#1A1512}");
-    // Manual dark must appear AFTER the media rule — equal specificity,
-    // source order decides.
-    expect(style.indexOf("html[data-theme=dark]")).toBeGreaterThan(
-      style.indexOf("prefers-color-scheme:dark"),
-    );
+  it("the parse-time ground tone rides the same axis", () => {
+    expect(layout).toContain("html{background:light-dark(#F2E9E3,#1A1512)}");
   });
 });
 
@@ -86,15 +77,14 @@ describe("lib/theme.js — three states, per profile", () => {
     applyThemePreference("alex", "auto");
   });
 
-  it("manual states stamp the attribute, the inline colorScheme, and the profile's key", () => {
+  it("manual states set the inline colorScheme and the profile's key", () => {
     applyThemePreference("sam", "dark");
-    expect(document.documentElement.dataset.theme).toBe("dark");
     expect(document.documentElement.style.colorScheme).toBe("dark");
     expect(window.localStorage.getItem("forge:sam:theme")).toBe('"dark"');
     expect(getThemePreference("sam")).toBe("dark");
 
     applyThemePreference("sam", "light");
-    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(document.documentElement.style.colorScheme).toBe("light");
     expect(getThemePreference("sam")).toBe("light");
   });
 
@@ -104,10 +94,9 @@ describe("lib/theme.js — three states, per profile", () => {
     expect(window.localStorage.getItem("forge:alex:theme")).toBe(null);
   });
 
-  it("auto removes all three — nothing stored, nothing stamped", () => {
+  it("auto restores `light dark` and stores nothing", () => {
     applyThemePreference("sam", "dark");
     applyThemePreference("sam", "auto");
-    expect(document.documentElement.dataset.theme).toBeUndefined();
     expect(document.documentElement.style.colorScheme).toBe("light dark");
     expect(window.localStorage.getItem("forge:sam:theme")).toBe(null);
     expect(getThemePreference("sam")).toBe("auto");
@@ -124,13 +113,17 @@ describe("lib/theme.js — three states, per profile", () => {
     expect(PROFILE_SUFFIXES.has("theme")).toBe(true);
   });
 
+  it("stamping never touches the DOM beyond colorScheme", () => {
+    expect(themeSrc).not.toContain("dataset");
+  });
+
   it("the stamp crossfades through startViewTransition when the platform offers it", () => {
     const vt = vi.fn((cb) => cb());
     document.startViewTransition = vt;
     try {
       stampTheme("dark");
       expect(vt).toHaveBeenCalledTimes(1);
-      expect(document.documentElement.dataset.theme).toBe("dark");
+      expect(document.documentElement.style.colorScheme).toBe("dark");
       // Idempotent: re-stamping the same state must NOT mint a transition.
       stampTheme("dark");
       expect(vt).toHaveBeenCalledTimes(1);
@@ -159,10 +152,7 @@ describe("the switch and its glyphs", () => {
     const s = readFileSync(resolve(root, "components/ProfileScreen.jsx"), "utf8");
     expect(s).toMatch(/lit: T\.sun/);
     expect(s).toMatch(/lit: T\.moon/);
-    // Both mode blocks declare the pair (the twin guard covers dark drift).
-    expect(css).toMatch(/--sun:\s*#A65340/);
-    expect(css).toMatch(/--moon:\s*#4E6674/);
-    expect(css).toMatch(/--sun:\s*#BE7E62/);
-    expect(css).toMatch(/--moon:\s*#9FB8C6/);
+    expect(css).toMatch(/--sun:\s*light-dark\(#A65340, #BE7E62\)/);
+    expect(css).toMatch(/--moon:\s*light-dark\(#4E6674, #9FB8C6\)/);
   });
 });

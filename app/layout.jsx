@@ -171,18 +171,17 @@ export default function RootLayout({ children }) {
         <script
           dangerouslySetInnerHTML={{
             __html:
-              'try{var p=JSON.parse(localStorage.getItem("forge:active")||"null");var t=p?JSON.parse(localStorage.getItem("forge:"+p+":theme")||"null"):null;if(t==="light"||t==="dark"){var d=document.documentElement;d.dataset.theme=t;d.style.colorScheme=t}}catch(e){}',
+              'try{var p=JSON.parse(localStorage.getItem("forge:active")||"null");var t=p?JSON.parse(localStorage.getItem("forge:"+p+":theme")||"null"):null;if(t==="light"||t==="dark"){document.documentElement.style.colorScheme=t}}catch(e){}',
           }}
         />
-        {/* Parse-time ground tone, both modes — see the <html> style note.
-            Must stay in sync with --ground in globals.css. The data-theme
-            variants let the manual override win the same parse-time race;
-            they sit AFTER the media rule so equal specificity resolves to
-            the manual value. */}
+        {/* Parse-time ground tone — see the <html> style note. One rule:
+            light-dark() re-resolves against whatever color-scheme the
+            script above just set, so the manual override wins the same
+            parse-time race for free. Must stay in sync with --ground in
+            globals.css. */}
         <style
           dangerouslySetInnerHTML={{
-            __html:
-              "html{background:#F2E9E3}@media (prefers-color-scheme:dark){html:not([data-theme=light]){background:#1A1512}}html[data-theme=dark]{background:#1A1512}",
+            __html: "html{background:light-dark(#F2E9E3,#1A1512)}",
           }}
         />
         {/* Build-output-verified manual tags. Next 16's Metadata API

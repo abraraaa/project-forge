@@ -19,21 +19,18 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const css = readFileSync(resolve(root, "app/globals.css"), "utf8");
 
 // ── Token extraction ─────────────────────────────────────────────────────────
-// Light tokens live in :root, dark in the prefers-color-scheme block; the
-// dark block redeclares only what flips, so dark falls back to light.
-const darkStart = css.indexOf("@media (prefers-color-scheme: dark)");
-const lightSrc = css.slice(0, darkStart);
-const darkSrc = css.slice(darkStart, css.indexOf("}", css.indexOf("--elev", darkStart)));
-
-function tokens(src) {
-  const out = {};
-  for (const m of src.matchAll(/--([a-z0-9-]+):\s*(#[0-9A-Fa-f]{6}|var\(--[a-z0-9-]+\))\s*;/g)) {
-    out[m[1]] = m[2];
+// Every flipped token is declared once via light-dark(light, dark); a plain
+// value means the token is mode-constant. Two maps fall out of one pass.
+function tokenSets(src) {
+  const light = {}, dark = {};
+  for (const m of src.matchAll(/--([a-z0-9-]+):\s*(#[0-9A-Fa-f]{6}|var\(--[a-z0-9-]+\)|light-dark\(\s*#[0-9A-Fa-f]{6},\s*#[0-9A-Fa-f]{6}\s*\))\s*;/g)) {
+    const ld = m[2].match(/^light-dark\(\s*(#[0-9A-Fa-f]{6}),\s*(#[0-9A-Fa-f]{6})\s*\)$/);
+    if (ld) { light[m[1]] = ld[1]; dark[m[1]] = ld[2]; }
+    else { light[m[1]] = m[2]; dark[m[1]] = m[2]; }
   }
-  return out;
+  return { light, dark };
 }
-const light = tokens(lightSrc);
-const dark = { ...light, ...tokens(darkSrc) };
+const { light, dark } = tokenSets(css);
 const resolveTok = (t, k) => {
   let v = t[k];
   while (v && v.startsWith("var(")) v = t[v.slice(6, -1)];

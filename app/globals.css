@@ -14,197 +14,96 @@
    the body background for its chrome tint (see the html/body comment
    below), which now resolves per-mode through --ground. */
 :root {
+  /* The whole mode contract in one axis: every flipped token declares its
+     bone and ash values ONCE via light-dark(), resolved by the element's
+     used color-scheme. Auto follows the system through `light dark`; the
+     Profile toggle (lib/theme.js) overrides by setting an inline
+     color-scheme on <html> — inline beats stylesheet, descendants
+     inherit, every light-dark() below re-resolves. No duplicated blocks,
+     no attribute selectors, nothing to drift. */
   color-scheme: light dark;
 
-  --ground:  #F2E9E3;
-  --surface: #FBF6F2;
-  --ink:     #241C19;
-  --ink-2:   #6A5B54;
+  --ground:  light-dark(#F2E9E3, #1A1512);
+  --surface: light-dark(#FBF6F2, #241D19);
+  --ink:     light-dark(#241C19, #F2E9E3);
+  --ink-2:   light-dark(#6A5B54, #B5A79E);
   /* Non-text in BOTH modes (§13): glyphs, hairlines, scale numerals,
      disabled labels — never sentences. Light value clears the 3:1 glyph
      floor; body/support copy floors at --ink-2. */
-  --ink-3:   #8F7D74;
-  --rule:       #E0D2C9;
-  --rule-faint: rgba(36, 28, 25, 0.07);
+  --ink-3:   light-dark(#8F7D74, #857870);
+  --rule:       light-dark(#E0D2C9, rgba(242, 233, 227, 0.1));
+  --rule-faint: light-dark(rgba(36, 28, 25, 0.07), rgba(242, 233, 227, 0.07));
 
-  /* Thermal ramp — ink density is intensity. L* 84→71→58→45→32, hatch 22. */
-  --heat-0: #E3CFC6;
-  --heat-1: #D3A492;
-  --heat-2: #C07B63;
-  --heat-3: #A65340;
-  --heat-4: #82301F;
-  --heat-over: #5A1C12;
-  --hatch-line: rgba(242, 233, 227, 0.4);
+  /* Thermal ramp — ink density is intensity on bone (L* 84→71→58→45→32,
+     hatch 22); same hue sequence with lightness inverted on ash, where
+     emission is intensity. The ramp always runs AWAY from the ground. */
+  --heat-0: light-dark(#E3CFC6, #6E625C);
+  --heat-1: light-dark(#D3A492, #9C6A56);
+  --heat-2: light-dark(#C07B63, #BE7E62);
+  --heat-3: light-dark(#A65340, #D69A7A);
+  --heat-4: light-dark(#82301F, #EBBEA0);
+  --heat-over: light-dark(#5A1C12, #F6DCC4);
+  --hatch-line: light-dark(rgba(242, 233, 227, 0.4), rgba(26, 21, 18, 0.45));
 
   /* The under-dosed outsider (below MEV) — the only non-thermal data colour. */
-  --under: #6F8189;
+  --under: light-dark(#6F8189, #8FA6B5);
 
   /* Day keys — categorical, costume-only. Session identifiers ONLY. */
-  --key-strength: #A65340;
-  --key-cardio:   #4E6674;
-  --key-hiit:     #5F5070;
+  --key-strength: light-dark(#A65340, #D69A7A);
+  --key-cardio:   light-dark(#4E6674, #9FB8C6);
+  --key-hiit:     light-dark(#5F5070, #B3A3CC);
 
   /* The appearance switch's lit glyphs — warm oxide sun, slate moon.
      State colour (it names the chosen mode), not data; own tokens so the
      day-key and under-MEV meanings stay unborrowed. */
-  --sun:  #A65340;
-  --moon: #4E6674;
+  --sun:  light-dark(#A65340, #BE7E62);
+  --moon: light-dark(#4E6674, #9FB8C6);
 
   /* Commit actions — the one coloured surface. */
-  --commit:     #A65340;
-  --commit-ink: #F6EEE8;
+  --commit:     light-dark(#A65340, #BE7E62);
+  --commit-ink: light-dark(#F6EEE8, #1A1512);
 
   /* Ink-on-heat (§13) — mechanical, never a component judgement. The flip
-     point is stop 3 on bone (dark ink while the ramp is still pale, cream
-     once it deepens). Components read the per-stop alias for their bloom
-     stop; heat-carrying fills QUANTIZE to that stop — a continuous
-     gradient crosses the flip mid-slide and drives its label below the
-     text floor. */
-  --on-heat-lo: #241C19;
-  --on-heat-hi: #F6EEE8;
+     point differs per mode (stop 3 on bone, stop 2 on ash — the inverted
+     ramp inverts the ink rule), so the per-stop aliases below carry the
+     mode split; components read the alias for their bloom stop.
+     Heat-carrying fills QUANTIZE to that stop — a continuous gradient
+     crosses the flip mid-slide and drives its label below the text floor.
+     Dark stops 0–1 sit at the licensed 3:1 mark floor with light ink; the
+     number and RIR words always print beside them. */
+  --on-heat-lo: light-dark(#241C19, #F2E9E3);
+  --on-heat-hi: light-dark(#F6EEE8, #241C19);
   --on-heat-0: var(--on-heat-lo);
   --on-heat-1: var(--on-heat-lo);
-  --on-heat-2: var(--on-heat-lo);
+  /* The flip differential: light still reads lo here, dark already reads
+     hi — and the two values coincide at ink #241C19, so the stop is a
+     constant. If either palette moves, re-derive this from the §13 table. */
+  --on-heat-2: #241C19;
   --on-heat-3: var(--on-heat-hi);
   --on-heat-4: var(--on-heat-hi);
   --on-heat-over: var(--on-heat-hi);
 
   /* Elevation, the entire model: bottom-edge shadow on light, top-edge
-     highlight on dark — light always comes from above. */
-  --elev:        inset 0 -1px 0 rgba(36, 28, 25, 0.08);
-  --elev-strong: inset 0 -1px 0 rgba(36, 28, 25, 0.18);
+     highlight on dark — light always comes from above. The offsets differ
+     per mode, which light-dark() can't express alone, so each token
+     stacks both edges and fades the wrong one to transparent. */
+  --elev:        inset 0 -1px 0 light-dark(rgba(36, 28, 25, 0.08), transparent),
+                 inset 0 1px 0 light-dark(transparent, rgba(242, 233, 227, 0.07));
+  --elev-strong: inset 0 -1px 0 light-dark(rgba(36, 28, 25, 0.18), transparent),
+                 inset 0 1px 0 light-dark(transparent, rgba(255, 255, 255, 0.14));
 
   /* Vellum (sheets, toasts, timer pill only) + scrim dim. No
      backdrop-filter anywhere — never-list. */
-  --vellum: rgba(251, 246, 242, 0.94);
-  --scrim:      rgba(36, 28, 25, 0.38);
-  --scrim-deep: rgba(36, 28, 25, 0.52);
+  --vellum: light-dark(rgba(251, 246, 242, 0.94), rgba(36, 29, 25, 0.94));
+  --scrim:      light-dark(rgba(36, 28, 25, 0.38), rgba(0, 0, 0, 0.5));
+  --scrim-deep: light-dark(rgba(36, 28, 25, 0.52), rgba(0, 0, 0, 0.62));
 
   /* Pressed-surface tint for quiet (non-commit) touchables. */
-  --press: #F1E7DF;
+  --press: light-dark(#F1E7DF, #2C241F);
 
   /* Recessed well — the RPE track's unfilled bed, drum troughs. Slightly
      below the ground; the one "inset" tone. */
-  --well: #E8DCD4;
-
-}
-
-/* ─── Dark tokens — TWIN BLOCKS, kept byte-identical ───────────────────────
-   The same declarations appear twice: once under the system media query
-   (scoped so a manual "light" override wins over a dark system), and once
-   under the manual [data-theme="dark"] attribute the Profile toggle stamps
-   via lib/theme.js. CSS cannot express "media query OR attribute" without
-   duplication; tests/theme-toggle.test.js asserts the two bodies never
-   drift. Edit BOTH or the guard fails. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --ground:  #1A1512;
-    --surface: #241D19;
-    --ink:     #F2E9E3;
-    --ink-2:   #B5A79E;
-    --ink-3:   #857870;
-    --rule:       rgba(242, 233, 227, 0.1);
-    --rule-faint: rgba(242, 233, 227, 0.07);
-
-    /* Same hue sequence, lightness inverted — emission is intensity. */
-    --heat-0: #6E625C;
-    --heat-1: #9C6A56;
-    --heat-2: #BE7E62;
-    --heat-3: #D69A7A;
-    --heat-4: #EBBEA0;
-    --heat-over: #F6DCC4;
-    --hatch-line: rgba(26, 21, 18, 0.45);
-
-    --under: #8FA6B5;
-
-    --key-strength: #D69A7A;
-    --key-cardio:   #9FB8C6;
-    --key-hiit:     #B3A3CC;
-
-    --sun:  #BE7E62;
-    --moon: #9FB8C6;
-
-    --commit:     #BE7E62;
-    --commit-ink: #1A1512;
-
-    /* Inverted ramp inverts the ink rule — flip moves to stop 2 (§13).
-       Stops 0–1 sit at the licensed 3:1 mark floor with light ink; the
-       number and RIR words always print beside them. */
-    --on-heat-lo: #F2E9E3;
-    --on-heat-hi: #241C19;
-    --on-heat-0: var(--on-heat-lo);
-    --on-heat-1: var(--on-heat-lo);
-    --on-heat-2: var(--on-heat-hi);
-    --on-heat-3: var(--on-heat-hi);
-    --on-heat-4: var(--on-heat-hi);
-    --on-heat-over: var(--on-heat-hi);
-
-    --elev:        inset 0 1px 0 rgba(242, 233, 227, 0.07);
-    --elev-strong: inset 0 1px 0 rgba(255, 255, 255, 0.14);
-
-    --vellum: rgba(36, 29, 25, 0.94);
-    --scrim:      rgba(0, 0, 0, 0.5);
-    --scrim-deep: rgba(0, 0, 0, 0.62);
-
-    --press: #2C241F;
-
-    --well: #241D19;
-
-  }
-}
-:root[data-theme="dark"] {
-  --ground:  #1A1512;
-  --surface: #241D19;
-  --ink:     #F2E9E3;
-  --ink-2:   #B5A79E;
-  --ink-3:   #857870;
-  --rule:       rgba(242, 233, 227, 0.1);
-  --rule-faint: rgba(242, 233, 227, 0.07);
-
-  /* Same hue sequence, lightness inverted — emission is intensity. */
-  --heat-0: #6E625C;
-  --heat-1: #9C6A56;
-  --heat-2: #BE7E62;
-  --heat-3: #D69A7A;
-  --heat-4: #EBBEA0;
-  --heat-over: #F6DCC4;
-  --hatch-line: rgba(26, 21, 18, 0.45);
-
-  --under: #8FA6B5;
-
-  --key-strength: #D69A7A;
-  --key-cardio:   #9FB8C6;
-  --key-hiit:     #B3A3CC;
-
-  --sun:  #BE7E62;
-  --moon: #9FB8C6;
-
-  --commit:     #BE7E62;
-  --commit-ink: #1A1512;
-
-  /* Inverted ramp inverts the ink rule — flip moves to stop 2 (§13).
-     Stops 0–1 sit at the licensed 3:1 mark floor with light ink; the
-     number and RIR words always print beside them. */
-  --on-heat-lo: #F2E9E3;
-  --on-heat-hi: #241C19;
-  --on-heat-0: var(--on-heat-lo);
-  --on-heat-1: var(--on-heat-lo);
-  --on-heat-2: var(--on-heat-hi);
-  --on-heat-3: var(--on-heat-hi);
-  --on-heat-4: var(--on-heat-hi);
-  --on-heat-over: var(--on-heat-hi);
-
-  --elev:        inset 0 1px 0 rgba(242, 233, 227, 0.07);
-  --elev-strong: inset 0 1px 0 rgba(255, 255, 255, 0.14);
-
-  --vellum: rgba(36, 29, 25, 0.94);
-  --scrim:      rgba(0, 0, 0, 0.5);
-  --scrim-deep: rgba(0, 0, 0, 0.62);
-
-  --press: #2C241F;
-
-  --well: #241D19;
-
+  --well: light-dark(#E8DCD4, #241D19);
 }
 
 html, body {
