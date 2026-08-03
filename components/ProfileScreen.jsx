@@ -25,6 +25,7 @@ import { isAdminSession } from "@/lib/auth-session";
 import { useInlineModalA11y } from "@/lib/a11y";
 import { PROFILE_SUFFIXES, LEGACY_PROFILE_KEY_PREFIXES } from "@/lib/store-health";
 import { Fade } from "@/components/ui";
+import { getThemePreference, applyThemePreference } from "@/lib/theme";
 import Glyph from "@/components/Glyph";
 import { SyncStatusCard, SyncNowRow } from "@/components/sync-cards";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
@@ -37,8 +38,48 @@ import TakenNameModal from "@/components/TakenNameModal";
 const NAME_BLOCKED_RE = /[/\\\u0000-\u001F\u007F]/;
 const NAME_MAX_LEN = 64;
 
+// Sun · Auto · Moon — the appearance switch. Selection is the card
+// (§12.3, turned horizontal): three cells on the ground, the chosen one
+// lifts to surface with the whisper elevation. Sun and moon are drawn
+// glyphs; Auto is a WORD — it names a behaviour, not a thing, and words
+// belong to the text face. Compact control → 8px radius (§12.1).
+function ThemeSwitch({ value, onChange }) {
+  const cells = [
+    { id: "light", glyph: "sun",  label: "Always light" },
+    { id: "auto",  word:  "Auto", label: "Follow the device setting" },
+    { id: "dark",  glyph: "moon", label: "Always dark" },
+  ];
+  return (
+    <div role="radiogroup" aria-label="Appearance"
+      style={{display:"inline-flex",border:`1px solid ${T.rule}`,borderRadius:T.rSm,padding:2,flexShrink:0}}>
+      {cells.map(c => {
+        const sel = value === c.id;
+        return (
+          <button key={c.id} role="radio" aria-checked={sel} aria-label={c.label}
+            onClick={() => onChange(c.id)}
+            style={{
+              minWidth:44,height:32,padding:"0 10px",border:"none",cursor:"pointer",
+              display:"inline-flex",alignItems:"center",justifyContent:"center",
+              borderRadius:T.rSm-2,fontFamily:T.text,fontSize:12,fontWeight:500,
+              background:sel?T.surface:"transparent",
+              boxShadow:sel?T.elev:"none",
+              color:sel?T.ink:(c.word?T.ink2:T.ink3),
+              transition:`background 180ms ${T.ease}, color 180ms ${T.ease}`,
+            }}>
+            {c.glyph ? <Glyph name={c.glyph} size={14}/> : c.word}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,onOpenBreather=null,resting=false,restingReason=null,onEndBreather=null}){
   const [name,setName]=useState("");
+  // Lazy init: SSR has no localStorage, and the pre-paint script in
+  // layout.jsx has already applied the stored value by the time we mount.
+  const [themePref,setThemePref]=useState(()=>typeof window==="undefined"?"auto":getThemePreference());
+  const handleThemeChange=(pref)=>{ applyThemePreference(pref); setThemePref(pref); };
   const [confirmWipe,setConfirmWipe]=useState(null);
   const [showTakenHelp,setShowTakenHelp]=useState(false);
   // availability: "idle" | "checking" | "available" | "taken" | "invalid" | "network-err"
@@ -645,6 +686,22 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               </div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
+          </div>
+        </Fade>
+      )}
+
+      {/* Appearance row — device-level, not per-profile (lib/theme.js).
+          The switch is the control; the row itself doesn't tap. */}
+      {current && (
+        <Fade d={275}>
+          <div style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Appearance</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
+                {themePref === "light" ? "Always light" : themePref === "dark" ? "Always dark" : "Follows your device"}
+              </div>
+            </div>
+            <ThemeSwitch value={themePref} onChange={handleThemeChange}/>
           </div>
         </Fade>
       )}

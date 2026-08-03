@@ -83,8 +83,15 @@
 
 }
 
+/* ─── Dark tokens — TWIN BLOCKS, kept byte-identical ───────────────────────
+   The same declarations appear twice: once under the system media query
+   (scoped so a manual "light" override wins over a dark system), and once
+   under the manual [data-theme="dark"] attribute the Profile toggle stamps
+   via lib/theme.js. CSS cannot express "media query OR attribute" without
+   duplication; tests/theme-toggle.test.js asserts the two bodies never
+   drift. Edit BOTH or the guard fails. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --ground:  #1A1512;
     --surface: #241D19;
     --ink:     #F2E9E3;
@@ -135,6 +142,57 @@
     --well: #241D19;
 
   }
+}
+:root[data-theme="dark"] {
+  --ground:  #1A1512;
+  --surface: #241D19;
+  --ink:     #F2E9E3;
+  --ink-2:   #B5A79E;
+  --ink-3:   #857870;
+  --rule:       rgba(242, 233, 227, 0.1);
+  --rule-faint: rgba(242, 233, 227, 0.07);
+
+  /* Same hue sequence, lightness inverted — emission is intensity. */
+  --heat-0: #6E625C;
+  --heat-1: #9C6A56;
+  --heat-2: #BE7E62;
+  --heat-3: #D69A7A;
+  --heat-4: #EBBEA0;
+  --heat-over: #F6DCC4;
+  --hatch-line: rgba(26, 21, 18, 0.45);
+
+  --under: #8FA6B5;
+
+  --key-strength: #D69A7A;
+  --key-cardio:   #9FB8C6;
+  --key-hiit:     #B3A3CC;
+
+  --commit:     #BE7E62;
+  --commit-ink: #1A1512;
+
+  /* Inverted ramp inverts the ink rule — flip moves to stop 2 (§13).
+     Stops 0–1 sit at the licensed 3:1 mark floor with light ink; the
+     number and RIR words always print beside them. */
+  --on-heat-lo: #F2E9E3;
+  --on-heat-hi: #241C19;
+  --on-heat-0: var(--on-heat-lo);
+  --on-heat-1: var(--on-heat-lo);
+  --on-heat-2: var(--on-heat-hi);
+  --on-heat-3: var(--on-heat-hi);
+  --on-heat-4: var(--on-heat-hi);
+  --on-heat-over: var(--on-heat-hi);
+
+  --elev:        inset 0 1px 0 rgba(242, 233, 227, 0.07);
+  --elev-strong: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+
+  --vellum: rgba(36, 29, 25, 0.94);
+  --scrim:      rgba(0, 0, 0, 0.5);
+  --scrim-deep: rgba(0, 0, 0, 0.62);
+
+  --press: #2C241F;
+
+  --well: #241D19;
+
 }
 
 html, body {

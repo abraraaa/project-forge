@@ -36,6 +36,13 @@ const PATHS = {
   // Refresh: an open arc breaking at the top-right — the aperture again —
   // with the arrowhead landing on the break.
   refresh:     ["M18.5 13.5 A 6.8 6.8 0 1 1 16.6 7.2", "M17 3.5 L17 7.7 L12.8 7.7"],
+  // Sun: a stroked disc (two half-arcs — no filled shapes) with eight
+  // short rays; the round caps render them as dots — stroke artefacts,
+  // same trick as the info glyph's dot. Four rays read as a crosshair.
+  sun:         ["M12 7 A 5 5 0 1 1 12 17 A 5 5 0 1 1 12 7", "M12 2.2 L12 3.4", "M12 20.6 L12 21.8", "M2.2 12 L3.4 12", "M20.6 12 L21.8 12", "M5.1 5.1 L5.9 5.9", "M18.1 18.1 L18.9 18.9", "M18.9 5.1 L18.1 5.9", "M5.1 18.9 L5.9 18.1"],
+  // Moon: one open arc, aperture tilted to the top-right — the crescent
+  // is the break itself, in the mark's own grammar.
+  moon:        ["M13.9 3.7 A 8.1 8.1 0 1 0 20.3 12.4"],
 };
 
 export const GLYPH_NAMES = Object.keys(PATHS);
