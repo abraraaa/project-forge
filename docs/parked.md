@@ -26,6 +26,30 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
 
 ### Open — codeable
 
+- **Queued behind the visual refresh — PARKED 2026-08-03.** Held so the
+  rebrand lands on a quiet base; pick up in this order once we're confident
+  in the refresh.
+  1. *Sync session refresh via biometric-on-launch.* Standalone launches
+     re-prompt Face ID/Touch ID (behaviour users already know from banking
+     apps) and use that moment to refresh the `hw_sync` cookie, instead of
+     the sync card asking at an arbitrary moment. Cookie window widens to
+     30 days. The sync card's "On this device only" state becomes
+     actionable (tap → the same ceremony) rather than a dead readout.
+  2. *Install screenshots + SEO pass.* Re-shoot with the synthetic-profile
+     harness (`scripts/shoot-screenshots.mjs`) AFTER the refresh ships —
+     current `home.png`/`lab.png` show the retired design, and the manifest
+     still references them.
+
+- **Lightweight accounts — LATER STREAM, boss-confirmed 2026-08-03.** A
+  minimal account structure (nothing social, nothing heavy) would collapse a
+  set of headaches we currently design around one at a time: profile↔device
+  binding, sync authorization ceremonies, multi-device identity, and recovery
+  when a device is lost. Constraint from the boss: "the most minimally
+  bullshit way possible." Not started; revisit after the visual refresh and
+  its device pass are done. First step when it fires: a one-page design note
+  on what the minimum actually is (likely: passkey IS the account), before
+  any code.
+
 - **Traveller-correct dates (Temporal) — RAISED 2026-08-01.** Boss: we have
   frequent travellers, so the trigger recorded against this is already met.
   **Two separable pieces, and only one has a deadline.**
@@ -55,8 +79,9 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
   precached PWA shell, or forking the implementation, which is the exact thing
   that module exists to prevent.
 
-  **Sequence when it fires:** stamp the timezone (a) → decide semantics (b) →
-  implement with Temporal once Safari 27 is the floor. The doctrine and
+  **Sequence when it fires:** ~~stamp the timezone (a)~~ (SHIPPED 2026-08-02,
+  PR #269 — `captureZone()` in `lib/dates.js`, stamped on new records) →
+  decide semantics (b) → implement with Temporal once Safari 27 is the floor. The doctrine and
   `tests/date-doctrine.test.js` survive all three; they are the value, not the
   arithmetic.
 
