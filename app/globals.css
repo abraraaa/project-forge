@@ -44,6 +44,12 @@
   --key-cardio:   #4E6674;
   --key-hiit:     #5F5070;
 
+  /* The appearance switch's lit glyphs — warm oxide sun, slate moon.
+     State colour (it names the chosen mode), not data; own tokens so the
+     day-key and under-MEV meanings stay unborrowed. */
+  --sun:  #A65340;
+  --moon: #4E6674;
+
   /* Commit actions — the one coloured surface. */
   --commit:     #A65340;
   --commit-ink: #F6EEE8;
@@ -115,6 +121,9 @@
     --key-cardio:   #9FB8C6;
     --key-hiit:     #B3A3CC;
 
+    --sun:  #BE7E62;
+    --moon: #9FB8C6;
+
     --commit:     #BE7E62;
     --commit-ink: #1A1512;
 
@@ -166,6 +175,9 @@
   --key-strength: #D69A7A;
   --key-cardio:   #9FB8C6;
   --key-hiit:     #B3A3CC;
+
+  --sun:  #BE7E62;
+  --moon: #9FB8C6;
 
   --commit:     #BE7E62;
   --commit-ink: #1A1512;

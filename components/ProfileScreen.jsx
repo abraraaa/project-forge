@@ -45,9 +45,9 @@ const NAME_MAX_LEN = 64;
 // belong to the text face. Compact control → 8px radius (§12.1).
 function ThemeSwitch({ value, onChange }) {
   const cells = [
-    { id: "light", glyph: "sun",  label: "Always light" },
-    { id: "auto",  word:  "Auto", label: "Follow the device setting" },
-    { id: "dark",  glyph: "moon", label: "Always dark" },
+    { id: "light", glyph: "sun",  lit: T.sun,  label: "Always light" },
+    { id: "auto",  word:  "Auto",              label: "Follow the device setting" },
+    { id: "dark",  glyph: "moon", lit: T.moon, label: "Always dark" },
   ];
   return (
     <div role="radiogroup" aria-label="Appearance"
@@ -63,8 +63,11 @@ function ThemeSwitch({ value, onChange }) {
               borderRadius:T.rSm-2,fontFamily:T.text,fontSize:12,fontWeight:500,
               background:sel?T.surface:"transparent",
               boxShadow:sel?T.elev:"none",
-              color:sel?T.ink:(c.word?T.ink2:T.ink3),
-              transition:`background 180ms ${T.ease}, color 180ms ${T.ease}`,
+              // Lit when chosen: the sun warms (oxide), the moon cools
+              // (slate) — the light-up rides the give timing, not the
+              // cell swap.
+              color:sel?(c.lit||T.ink):(c.word?T.ink2:T.ink3),
+              transition:`background 180ms ${T.ease}, color 380ms ${T.ease}`,
             }}>
             {c.glyph ? <Glyph name={c.glyph} size={14}/> : c.word}
           </button>
@@ -76,10 +79,15 @@ function ThemeSwitch({ value, onChange }) {
 
 export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,onOpenBreather=null,resting=false,restingReason=null,onEndBreather=null}){
   const [name,setName]=useState("");
-  // Lazy init: SSR has no localStorage, and the pre-paint script in
-  // layout.jsx has already applied the stored value by the time we mount.
-  const [themePref,setThemePref]=useState(()=>typeof window==="undefined"?"auto":getThemePreference());
-  const handleThemeChange=(pref)=>{ applyThemePreference(pref); setThemePref(pref); };
+  // Per-profile preference. State carries the profile it was read for and
+  // adjusts DURING render when the shown profile changes (the derived-state
+  // pattern — an effect would set state after a paint of the stale value).
+  // Lazy init: SSR has no localStorage; the pre-paint script in layout.jsx
+  // has already applied the stored value by the time we mount.
+  const [themeState,setThemeState]=useState(()=>({profile:current, pref: typeof window==="undefined"?"auto":getThemePreference(current)}));
+  if (themeState.profile !== current) setThemeState({profile:current, pref:getThemePreference(current)});
+  const themePref = themeState.pref;
+  const handleThemeChange=(pref)=>{ applyThemePreference(current, pref); setThemeState({profile:current, pref}); };
   const [confirmWipe,setConfirmWipe]=useState(null);
   const [showTakenHelp,setShowTakenHelp]=useState(false);
   // availability: "idle" | "checking" | "available" | "taken" | "invalid" | "network-err"

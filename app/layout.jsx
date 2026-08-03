@@ -161,15 +161,17 @@ export default function RootLayout({ children }) {
     >
       <head>
         {/* Appearance override, applied at PARSE time. The Profile toggle
-            (lib/theme.js) stores a device-level preference; without this
-            blocking script every launch would first paint the system mode
+            (lib/theme.js) stores a PER-PROFILE preference; profile
+            resolution is itself just a localStorage read (forge:active),
+            so the active profile's mode lands before first paint. Without
+            this blocking script every launch would paint the system mode
             and then snap — the same flash class the inline background
             below exists to prevent. Auto stores nothing, so the default
             path does no work. Must stay in sync with lib/theme.js. */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              'try{var t=localStorage.getItem("forge:theme");if(t==="light"||t==="dark"){var d=document.documentElement;d.dataset.theme=t;d.style.colorScheme=t}}catch(e){}',
+              'try{var p=JSON.parse(localStorage.getItem("forge:active")||"null");var t=p?JSON.parse(localStorage.getItem("forge:"+p+":theme")||"null"):null;if(t==="light"||t==="dark"){var d=document.documentElement;d.dataset.theme=t;d.style.colorScheme=t}}catch(e){}',
           }}
         />
         {/* Parse-time ground tone, both modes — see the <html> style note.

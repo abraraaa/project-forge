@@ -22,6 +22,7 @@ import { absencesFromHistory, weeklySlotsFromWeek } from "@/lib/absence";
 import { isHeatwayveOrigin, migrationWindowOpen, hasPreFlipStory } from "@/lib/origin";
 import { activeBreak } from "@/lib/breaks";
 import { todayLocalIso } from "@/lib/dates";
+import { getThemePreference, stampTheme } from "@/lib/theme";
 import BreatherModal from "@/components/BreatherModal";
 import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
 import { shouldOfferDeload, startDeload, dismissDeloadOffer } from "@/lib/progression";
@@ -253,6 +254,12 @@ export default function ForgeApp(){
     setProgrammeBlock(next);
     PB.save(next);
   }, [activeProfile, programmeBlock, userFocus]);
+
+  // Each profile carries its own appearance (lib/theme.js). Stamp it
+  // whenever the active profile changes; sign-out reverts to auto. The
+  // stamp is idempotent, so the mount-time re-stamp of what the pre-paint
+  // script already applied is a no-op.
+  useEffect(() => { stampTheme(getThemePreference(activeProfile)); }, [activeProfile]);
 
   // Lifetime-tonnage milestone. Recomputes on every history change (cheap — O(n)
   // over sessions). When the user crosses a new milestone, a small card surfaces

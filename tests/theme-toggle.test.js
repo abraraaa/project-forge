@@ -3,22 +3,24 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // The appearance override (Sun · Auto · Moon in Profile). The mode contract
 // stays CSS-owned: manual states stamp data-theme on <html> and the token
-// blocks key off it. Three locks:
+// blocks key off it. Per-profile: a shared device keeps each person's mode.
+// Locks:
 //   1. The dark tokens exist as TWIN blocks (system media query + manual
 //      attribute) — CSS can't express the disjunction without duplication,
 //      so the twins must never drift.
 //   2. The stored preference applies at PARSE time (layout.jsx script) —
-//      otherwise every launch flashes the system mode first.
-//   3. lib/theme.js round-trips the three states and survives a dead
+//      profile resolution included — or every launch flashes.
+//   3. lib/theme.js round-trips the three states per profile, crossfades
+//      through the view-transition API when present, and survives a dead
 //      localStorage.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { getThemePreference, applyThemePreference, THEME_KEY } from "../lib/theme.js";
-import { DEVICE_KEYS } from "../lib/store-health.js";
+import { getThemePreference, applyThemePreference, stampTheme } from "../lib/theme.js";
+import { PROFILE_SUFFIXES } from "../lib/store-health.js";
 import { GLYPH_NAMES } from "../components/Glyph.jsx";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -55,15 +57,16 @@ describe("twin dark-token blocks", () => {
 });
 
 describe("parse-time application (layout.jsx)", () => {
-  it("a blocking head script applies the stored preference before first paint", () => {
-    expect(layout).toContain('localStorage.getItem("forge:theme")');
+  it("a blocking head script resolves the ACTIVE PROFILE's preference before first paint", () => {
+    expect(layout).toContain('localStorage.getItem("forge:active")');
+    expect(layout).toContain('":theme"');
     expect(layout).toMatch(/dataset\.theme\s*=\s*t/);
     // The inline colorScheme on <html> wins over any stylesheet rule, so
     // the script must override it too or UA chrome follows the system.
     expect(layout).toMatch(/style\.colorScheme\s*=\s*t/);
     // Fail-safe: a throwing localStorage (private mode) must not take the
     // shell down with it.
-    expect(layout).toMatch(/try\{.*forge:theme.*\}catch/);
+    expect(layout).toMatch(/try\{.*:theme.*\}catch/);
   });
 
   it("the parse-time ground style resolves the same race, manual rules last", () => {
@@ -77,38 +80,64 @@ describe("parse-time application (layout.jsx)", () => {
   });
 });
 
-describe("lib/theme.js — the three states", () => {
-  afterEach(() => applyThemePreference("auto"));
+describe("lib/theme.js — three states, per profile", () => {
+  afterEach(() => {
+    applyThemePreference("sam", "auto");
+    applyThemePreference("alex", "auto");
+  });
 
-  it("manual states stamp the attribute, the inline colorScheme, and the key", () => {
-    applyThemePreference("dark");
+  it("manual states stamp the attribute, the inline colorScheme, and the profile's key", () => {
+    applyThemePreference("sam", "dark");
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(document.documentElement.style.colorScheme).toBe("dark");
-    expect(window.localStorage.getItem(THEME_KEY)).toBe("dark");
-    expect(getThemePreference()).toBe("dark");
+    expect(window.localStorage.getItem("forge:sam:theme")).toBe('"dark"');
+    expect(getThemePreference("sam")).toBe("dark");
 
-    applyThemePreference("light");
+    applyThemePreference("sam", "light");
     expect(document.documentElement.dataset.theme).toBe("light");
-    expect(getThemePreference()).toBe("light");
+    expect(getThemePreference("sam")).toBe("light");
+  });
+
+  it("profiles are independent — one person's mode never leaks to another", () => {
+    applyThemePreference("sam", "dark");
+    expect(getThemePreference("alex")).toBe("auto");
+    expect(window.localStorage.getItem("forge:alex:theme")).toBe(null);
   });
 
   it("auto removes all three — nothing stored, nothing stamped", () => {
-    applyThemePreference("dark");
-    applyThemePreference("auto");
+    applyThemePreference("sam", "dark");
+    applyThemePreference("sam", "auto");
     expect(document.documentElement.dataset.theme).toBeUndefined();
     expect(document.documentElement.style.colorScheme).toBe("light dark");
-    expect(window.localStorage.getItem(THEME_KEY)).toBe(null);
-    expect(getThemePreference()).toBe("auto");
+    expect(window.localStorage.getItem("forge:sam:theme")).toBe(null);
+    expect(getThemePreference("sam")).toBe("auto");
   });
 
-  it("junk in the key reads as auto, never as a mode", () => {
-    window.localStorage.setItem(THEME_KEY, "sepia");
-    expect(getThemePreference()).toBe("auto");
-    window.localStorage.removeItem(THEME_KEY);
+  it("junk in the key reads as auto; no profile reads as auto", () => {
+    window.localStorage.setItem("forge:sam:theme", '"sepia"');
+    expect(getThemePreference("sam")).toBe("auto");
+    window.localStorage.removeItem("forge:sam:theme");
+    expect(getThemePreference(null)).toBe("auto");
   });
 
-  it("the key is registered device-level — diag must not flag it", () => {
-    expect(DEVICE_KEYS.has(THEME_KEY)).toBe(true);
+  it("the suffix is registered per-profile — recognised by diag, cleared by a wipe", () => {
+    expect(PROFILE_SUFFIXES.has("theme")).toBe(true);
+  });
+
+  it("the stamp crossfades through startViewTransition when the platform offers it", () => {
+    const vt = vi.fn((cb) => cb());
+    document.startViewTransition = vt;
+    try {
+      stampTheme("dark");
+      expect(vt).toHaveBeenCalledTimes(1);
+      expect(document.documentElement.dataset.theme).toBe("dark");
+      // Idempotent: re-stamping the same state must NOT mint a transition.
+      stampTheme("dark");
+      expect(vt).toHaveBeenCalledTimes(1);
+    } finally {
+      delete document.startViewTransition;
+      stampTheme("auto");
+    }
   });
 });
 
@@ -124,5 +153,16 @@ describe("the switch and its glyphs", () => {
     expect(s).toContain('word:  "Auto"');
     expect(s).toMatch(/glyph: "sun"/);
     expect(s).toMatch(/glyph: "moon"/);
+  });
+
+  it("the chosen glyph lights up — warm sun, cool moon, own tokens", () => {
+    const s = readFileSync(resolve(root, "components/ProfileScreen.jsx"), "utf8");
+    expect(s).toMatch(/lit: T\.sun/);
+    expect(s).toMatch(/lit: T\.moon/);
+    // Both mode blocks declare the pair (the twin guard covers dark drift).
+    expect(css).toMatch(/--sun:\s*#A65340/);
+    expect(css).toMatch(/--moon:\s*#4E6674/);
+    expect(css).toMatch(/--sun:\s*#BE7E62/);
+    expect(css).toMatch(/--moon:\s*#9FB8C6/);
   });
 });

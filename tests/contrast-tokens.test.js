@@ -82,6 +82,11 @@ describe.each([
     expect(contrast(g("ink-3"), g("surface"))).toBeGreaterThanOrEqual(3);
   });
 
+  it("the lit switch glyphs clear the glyph floor on their selected cell", () => {
+    expect(contrast(g("sun"), g("surface"))).toBeGreaterThanOrEqual(3);
+    expect(contrast(g("moon"), g("surface"))).toBeGreaterThanOrEqual(3);
+  });
+
   it("the commit label clears 4.5:1 on the commit surface", () => {
     expect(contrast(g("commit-ink"), g("commit"))).toBeGreaterThanOrEqual(4.5);
   });
