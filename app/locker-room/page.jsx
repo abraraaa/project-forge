@@ -132,7 +132,14 @@ export default function LockerRoom() {
   // A collection that fits in the window loads fully — today's small collections
   // behave EXACTLY as before; the bounding only engages past the window.
   const syncWindow = useCallback((center, tok, list) => {
-    if (!tok || !list?.length) return;
+    // NOT guarded on `tok`: access can be COOKIE-based, where `tok` is null
+    // but the httpOnly hw_photos cookie authenticates every /api/photos GET
+    // (fetch sends it same-origin). The old `!tok` guard skipped all image
+    // loading on the cookie path — the "photo shows, or white space"
+    // intermittency (root-caused 2026-08-04). `shown` already proves access:
+    // reveal() only renders after the index GET succeeds. A truly-expired
+    // credential surfaces as a per-frame retry, not a blank.
+    if (!list?.length) return;
     for (const i of photoWindowIndices(center, list.length)) mintUrl(tok, list[i].date);
     for (const d of Object.keys(urlsRef.current)) {
       const i = list.findIndex((p) => p.date === d);
@@ -220,7 +227,9 @@ export default function LockerRoom() {
   // ROUNDED centre so a drag re-syncs once per frame crossed, not per pixel.
   const centerFrame = photos?.length ? Math.max(0, Math.min(photos.length - 1, Math.round(pos))) : 0;
   useEffect(() => {
-    if (!shown || !token || !photos?.length) return;
+    // `shown` implies access (reveal gates on the index GET); `token` may be
+    // null on the cookie path — see syncWindow. Loading must not depend on it.
+    if (!shown || !photos?.length) return;
     syncWindow(centerFrame, token, photos);
   }, [shown, token, photos, centerFrame, syncWindow]);
 
