@@ -11,7 +11,7 @@
 import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { localDateStr, todayLocalIso, parseLocalDate, mondayOfWeekIso } from "../lib/dates.js";
+import { localDateStr, todayLocalIso, parseLocalDate, mondayOfWeekIso, addDaysIso, daysBetween, mondayIndex, jsDow } from "../lib/dates.js";
 
 const DATES_PATH = resolve(process.cwd(), "lib/dates.js");
 
@@ -39,6 +39,39 @@ describe("dates — in-process", () => {
   it("todayLocalIso is a well-formed ISO date", () => {
     expect(todayLocalIso()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
+
+  it("addDaysIso walks calendar days both directions, across month and year ends", () => {
+    expect(addDaysIso("2026-08-04", 1)).toBe("2026-08-05");
+    expect(addDaysIso("2026-08-01", -1)).toBe("2026-07-31");
+    expect(addDaysIso("2026-12-31", 1)).toBe("2027-01-01");
+    expect(addDaysIso("2026-08-04", 0)).toBe("2026-08-04");
+    expect(addDaysIso(new Date(2026, 7, 4), 1)).toBe("2026-08-05"); // Date input
+    expect(addDaysIso("garbage", 1)).toBeNull();
+    expect(addDaysIso("2026-08-04", NaN)).toBeNull();
+  });
+
+  it("daysBetween is signed whole calendar days, null on malformed input", () => {
+    expect(daysBetween("2026-08-01", "2026-08-04")).toBe(3);
+    expect(daysBetween("2026-08-04", "2026-08-01")).toBe(-3);
+    expect(daysBetween("2026-08-04", "2026-08-04")).toBe(0);
+    expect(daysBetween("2026-07-31", new Date(2026, 7, 1))).toBe(1); // mixed input
+    expect(daysBetween("junk", "2026-08-04")).toBeNull();
+  });
+
+  it("mondayIndex IS the retired [6,0,1,2,3,4,5] week map: 0=Mon..6=Sun", () => {
+    expect(mondayIndex("2026-08-03")).toBe(0); // a Monday
+    expect(mondayIndex("2026-08-05")).toBe(2); // Wednesday
+    expect(mondayIndex("2026-08-09")).toBe(6); // Sunday
+    expect(mondayIndex(new Date(2026, 7, 9))).toBe(6);
+    expect(mondayIndex("nope")).toBeNull();
+  });
+
+  it("jsDow keeps the record schema's native Sun=0 convention, defaulting to today", () => {
+    expect(jsDow("2026-08-09")).toBe(0); // Sunday
+    expect(jsDow("2026-08-03")).toBe(1); // Monday
+    expect(jsDow()).toBe(new Date().getDay());
+    expect(jsDow("nope")).toBeNull();
+  });
 });
 
 // Run the pure functions under several timezones and assert the calendar-date
@@ -46,15 +79,20 @@ describe("dates — in-process", () => {
 // UTC-based implementations produced DIFFERENT results per timezone (a Monday
 // bucketed into the prior week, a Wednesday session dated Tuesday, etc).
 describe("dates — timezone independence (subprocess)", () => {
-  const TZS = ["UTC", "America/New_York", "Pacific/Auckland", "Pacific/Kiritimati"]; // UTC-4 … UTC+14
+  const TZS = ["UTC", "Europe/London", "America/New_York", "Pacific/Auckland", "Pacific/Kiritimati"]; // UTC-4 … UTC+14, with DST
   const probe = (tz) => {
     const src = `
-      import { mondayOfWeekIso, localDateStr, parseLocalDate } from ${JSON.stringify(DATES_PATH)};
+      import { mondayOfWeekIso, localDateStr, parseLocalDate, addDaysIso, daysBetween, mondayIndex } from ${JSON.stringify(DATES_PATH)};
       const out = {
         wedMon: mondayOfWeekIso("2026-07-15"),
         sunMon: mondayOfWeekIso("2026-07-19"),
         monMon: mondayOfWeekIso("2026-07-13"),
         roundtrip: localDateStr(parseLocalDate("2026-07-15")),
+        // London falls back 2026-10-25, New York 2026-11-01: a walk across
+        // either must still land 7 calendar days on, and count back as 7.
+        dstWalk: addDaysIso("2026-10-22", 7),
+        dstBack: daysBetween("2026-10-29", "2026-11-05"),
+        monIdx: mondayIndex("2026-08-03"),
       };
       process.stdout.write(JSON.stringify(out));
     `;
@@ -67,7 +105,10 @@ describe("dates — timezone independence (subprocess)", () => {
 
   it("every timezone agrees on the local Monday and the round-trip", () => {
     const results = TZS.map(probe);
-    const expected = { wedMon: "2026-07-13", sunMon: "2026-07-13", monMon: "2026-07-13", roundtrip: "2026-07-15" };
+    const expected = {
+      wedMon: "2026-07-13", sunMon: "2026-07-13", monMon: "2026-07-13", roundtrip: "2026-07-15",
+      dstWalk: "2026-10-29", dstBack: 7, monIdx: 0,
+    };
     for (let i = 0; i < TZS.length; i++) {
       expect(results[i], `timezone ${TZS[i]}`).toEqual(expected);
     }

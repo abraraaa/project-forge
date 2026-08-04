@@ -21,7 +21,7 @@ import {
 import { absencesFromHistory, weeklySlotsFromWeek } from "@/lib/absence";
 import { isHeatwayveOrigin, migrationWindowOpen, hasPreFlipStory } from "@/lib/origin";
 import { activeBreak } from "@/lib/breaks";
-import { todayLocalIso } from "@/lib/dates";
+import { todayLocalIso, mondayIndex, jsDow } from "@/lib/dates";
 import { getThemePreference, stampTheme } from "@/lib/theme";
 import BreatherModal from "@/components/BreatherModal";
 import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
@@ -650,11 +650,7 @@ export default function ForgeApp(){
   // without separate state plumbing.
   const handleMarkDayDone = useCallback((target)=>{
     if(!activeProfile) return;
-    const todayDate = (() => {
-      const d = new Date(); d.setHours(0,0,0,0);
-      const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
-      return `${y}-${m}-${day}`;
-    })();
+    const todayDate = todayLocalIso();
     let dateStr;
     if (typeof target === "string" && /^\d{4}-\d{2}-\d{2}$/.test(target)) {
       dateStr = target;
@@ -765,9 +761,7 @@ export default function ForgeApp(){
   }
 
   // Derive today's session index for HomeScreen
-  const dow      = new Date().getDay();
-  const weekMap  = [6,0,1,2,3,4,5];
-  const todayIdx = weekMap[dow];
+  const todayIdx = mondayIndex(new Date());
   const todaySessionIdx = strengthDaySessions[todayIdx] ?? 0;
 
   // Pure rotation preview — computes a candidate config without touching
@@ -997,7 +991,7 @@ export default function ForgeApp(){
       // so it sorts cleanly against live records (which are timestamped at log time).
       draft.id   = `${retroDate}T12:00:00.000Z`;
       draft.date = retroDate;
-      draft.dow  = new Date(retroDate + "T12:00:00").getDay();
+      draft.dow  = jsDow(retroDate);
       draft.startedAt = new Date(retroDate + "T12:00:00").getTime();
       draft.retrospective = true;             // explicit flag — survives finaliseDraft
       draft.loggedAt = new Date().toISOString(); // when the user actually entered it

@@ -18,6 +18,7 @@ import Glyph from "@/components/Glyph";
 import { W } from "@/lib/storage";
 import { WEEK } from "@/lib/programme";
 import { T, DISPLAY, HATCH } from "@/lib/tokens";
+import { addDaysIso } from "@/lib/dates";
 import { haptic } from "@/lib/a11y";
 import GlossarySheet, { GlossaryTrigger } from "@/components/GlossarySheet";
 import { renderShareCard, shareCanvas } from "@/lib/share-card";
@@ -336,8 +337,7 @@ function InkSpark({ values, width = 44, height = 12, stroke = 1.5, color = "var(
 function StrengthRow({ lift, series, expanded = false, onToggle }) {
   const cur = series[series.length - 1];
   if (!cur) return null;
-  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 28);
-  const cutIso = `${cutoff.getFullYear()}-${String(cutoff.getMonth()+1).padStart(2,"0")}-${String(cutoff.getDate()).padStart(2,"0")}`;
+  const cutIso = addDaysIso(new Date(), -28);
   const base = series.find((p) => p.date >= cutIso) || series[0];
   const delta = Math.round((cur.est1RM - base.est1RM) * 10) / 10;
   const deltaStr = delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : "level";
