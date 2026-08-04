@@ -123,10 +123,12 @@ export async function POST(request) {
     // Without this the flow would be "register a passkey → now sign in with
     // it" — two ceremonies back to back for one intent. The user just proved
     // control of this profile with an authenticator; that IS the ceremony.
-    const syncToken = await mintAuthToken({ profile, ttlMs: 7 * 86400000, scope: "sync" });
+    const syncToken = await mintAuthToken({ profile, ttlMs: 30 * 86400000, scope: "sync" });
     const res = NextResponse.json({ ok: true, credentialId: vc.id });
     res.cookies.set("hw_sync", syncToken, {
-      httpOnly: true, secure: true, sameSite: "strict", path: "/api/sync", maxAge: 7 * 86400,
+      // 30 days, matching the token TTL and the gate's sliding refresh —
+      // the photos cookie deliberately stays at 7.
+      httpOnly: true, secure: true, sameSite: "strict", path: "/api/sync", maxAge: 30 * 86400,
     });
     return res;
   } catch (e) {

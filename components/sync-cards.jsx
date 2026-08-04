@@ -11,11 +11,12 @@
 
 import { useState, useEffect } from "react";
 import { SyncStatus, backgroundSync, pushNow } from "@/lib/storage";
+import { authenticatePasskey } from "@/lib/webauthn";
 import { T } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
 
 // ─── Sync Status Card ──────────────────────────────────────────────────────────
-export function SyncStatusCard({ profile }) {
+export function SyncStatusCard({ profile, hasPasskey = undefined }) {
   const [status, setStatus] = useState(SyncStatus.get());
   const [retrying, setRetrying] = useState(false);
   // Snapshot of "now" for the relative-time label. Refreshed whenever sync
@@ -109,7 +110,9 @@ export function SyncStatusCard({ profile }) {
           )}
           {status.state === "needsAuth" && (
             <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
-              Add a passkey to carry it across devices
+              {hasPasskey
+                ? "Confirm it's you below to resume"
+                : "Add a passkey to carry it across devices"}
             </div>
           )}
         </div>
@@ -142,7 +145,7 @@ export function SyncStatusCard({ profile }) {
 // the normal path; this row exists as power-user reassurance and as an
 // escape hatch when observability looks stale. Subscribes to SyncStatus
 // so the subtitle reflects the same state as the SyncStatusCard above.
-export function SyncNowRow({ profile }) {
+export function SyncNowRow({ profile, hasPasskey = undefined }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(SyncStatus.get());
   // `now` is snapshotted on mount + whenever sync status changes — same
@@ -164,17 +167,39 @@ export function SyncNowRow({ profile }) {
   const handleClick = async () => {
     if (busy) return;
     setBusy(true);
-    try { await pushNow(profile); } finally {
+    try {
+      // Resting state with a passkey on file: the cookie lapsed, and this
+      // tap IS the transient user activation WebAuthn needs — run the
+      // ceremony here, then a FULL sync (the device may be days stale, so
+      // it needs the pull, not just a push). A cancelled prompt returns
+      // null and the row simply stays at rest — cancelling is an answer.
+      if (SyncStatus.get().state === "needsAuth" && hasPasskey) {
+        const auth = await authenticatePasskey(profile);
+        if (!auth) return;
+        await backgroundSync(profile, { onUpdate: () => {} });
+        return;
+      }
+      await pushNow(profile);
+    } catch { /* surfaced via SyncStatus — the card names the state */ } finally {
       setBusy(false);
       setNow(Date.now());
     }
   };
 
+  const ago = (ts) => {
+    const s = Math.max(1, Math.round((now - ts) / 1000));
+    if (s < 60) return `${s}s`;
+    if (s < 3600) return `${Math.floor(s / 60)}m`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h`;
+    return `${Math.floor(s / 86400)}d`;
+  };
   const subtitle = busy
     ? "Syncing now…"
-    : status.lastSync
-      ? `Last sync ${Math.max(1, Math.round((now - status.lastSync) / 1000))}s ago`
-      : "Never synced";
+    : status.state === "needsAuth" && hasPasskey
+      ? "Tap to confirm it's you and resume"
+      : status.lastSync
+        ? `Last sync ${ago(status.lastSync)} ago`
+        : "Never synced";
 
   return (
     <div onClick={handleClick} role="button" aria-label="Sync now" className="forge-press"

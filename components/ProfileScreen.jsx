@@ -782,14 +782,14 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && (
         <Fade d={290}>
           <div style={{marginTop:36}}>
-            <SyncStatusCard profile={current} />
+            <SyncStatusCard profile={current} hasPasskey={profileHasPasskey[current]} />
           </div>
         </Fade>
       )}
 
       {current && (
         <Fade d={295}>
-          <SyncNowRow profile={current} />
+          <SyncNowRow profile={current} hasPasskey={profileHasPasskey[current]} />
         </Fade>
       )}
 
