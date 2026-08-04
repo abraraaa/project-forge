@@ -42,7 +42,7 @@ The repo name, the `forge:` localStorage prefix and the `forge/` blob paths keep
 | UI | React 19 | `ForgeApp.jsx` shell plus extracted screens — Home, Session, Profile, Lab |
 | Lint | ESLint flat config | `react-hooks/purity` + `set-state-in-effect` on as errors |
 | Types | TypeScript, `checkJs` | No `.ts` source — JSDoc types checked over plain JS |
-| Tests | Vitest | 803 tests across 53 files — invariants, engines, merge algebra, component tests |
+| Tests | Vitest | 876 tests across 57 files — invariants, engines, merge algebra, component tests |
 | Database | Neon Postgres | Canonical store: sessions, meta, photo index, auth tokens, bug reports |
 | Blob | Vercel Blob | Photo bytes, passkey credentials, write-only snapshots. Not a database |
 | Auth | WebAuthn passkeys | Optional — a lock on destructive operations, not an account system |
@@ -78,6 +78,7 @@ lib/
 ├── storage.js           # local cache, sync orchestration, session records
 ├── session-engine.js    # the one session-finalise choreography
 ├── analytics.js         # weekly volume, e1RM trends, plateau detection
+├── dates.js             # THE local calendar-day math — no other module hand-rolls it
 ├── exercise-anatomy.js  # muscle distribution map
 ├── absence.js/breaks.js # absence is derived; a breather is declared
 ├── auth-server.js       # rpId/origin config, signed challenges, tokens
@@ -172,7 +173,7 @@ npm test               # one-shot
 npm run test:watch     # watch mode
 ```
 
-803 tests across 53 files:
+876 tests across 57 files:
 
 - Programme invariants — `pool[0] === SESSIONS default`, load-profile coverage, main-lift equivalents alignment, library invariants.
 - Engines — rotation (block exclusion, profile filter, stimulus-delta maths, the volume solver), progression (decision table, cold starts, readiness gating), session finalise.

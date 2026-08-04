@@ -20,6 +20,7 @@ import {
 import { FOCUS_SUMMARIES } from "@/lib/programme";
 import { reasonLabel } from "@/lib/breaks";
 import BugReportSheet from "@/components/BugReportSheet";
+import InstallWalkthrough, { canWalkthroughInstall } from "@/components/InstallWalkthrough";
 import BodyweightDrum from "@/components/BodyweightDrum";
 import { isAdminSession } from "@/lib/auth-session";
 import { useInlineModalA11y } from "@/lib/a11y";
@@ -119,6 +120,12 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const [authToken, setAuthToken] = useState(null); // For authenticated destructive ops
   const [needsPasskeyAuth, setNeedsPasskeyAuth] = useState(null); // Profile name requiring auth
   const [bugSheetOpen, setBugSheetOpen] = useState(false);
+  // The install walkthrough, findable on purpose: the home-screen nudge fires
+  // once and "Maybe later" is remembered forever, so this row is the only way
+  // back to the steps. iOS-browser-only (this screen never SSRs — ssr:false
+  // in client-shells — so the lazy read can't mismatch hydration).
+  const [installOpen, setInstallOpen] = useState(false);
+  const [canInstall] = useState(() => canWalkthroughInstall());
 
   // Check WebAuthn support on mount
   useEffect(() => {
@@ -854,7 +861,23 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
+      {/* Add-to-home-screen, on demand — only where it applies (iOS browser,
+          not already installed). Same quiet-row grammar as its neighbours. */}
+      {current && canInstall && (
+        <Fade d={308}>
+          <button onClick={() => setInstallOpen(true)}
+            style={{width:"100%",padding:"15px 2px",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",textAlign:"left",fontFamily:T.text}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Add to home screen</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>One tap to open. Fullscreen, offline, yours.</div>
+            </div>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
+          </button>
+        </Fade>
+      )}
+
       {bugSheetOpen && <BugReportSheet profileName={current} onClose={() => setBugSheetOpen(false)} />}
+      {installOpen && <InstallWalkthrough cta="Close" onDismiss={() => setInstallOpen(false)} />}
 
       {/* The tip jar (boss, 2026-07-24; BMAC handle wired via FUNDING.yml
           2026-07-26). DISCREET by decree: a whisper at the end of the page,

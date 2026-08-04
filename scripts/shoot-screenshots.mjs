@@ -62,8 +62,11 @@ const LIFTS = {
 // visual surface in the app — look like it has nothing to say.
 const SESSIONS = 18;
 const history = [];
+// Last session lands YESTERDAY so the current week carries tonnage — a shot
+// whose tonnage strip reads "0 kg" with a spark dipping to zero advertises
+// falling off, which is not the story an install prompt tells.
 const cursor = new Date();
-cursor.setDate(cursor.getDate() - 2);
+cursor.setDate(cursor.getDate() - 1);
 for (let i = 0; i < SESSIONS; i++) {
   const letter = LETTERS[i % 3];
   const date = iso(cursor);
