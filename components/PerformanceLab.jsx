@@ -514,7 +514,12 @@ function MuscleRow({ muscle, sets, target, status, series, muted = false }) {
     : null;
 
   return (
-    <div style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:`1px solid ${T.ruleFaint}`}}
+    // lab-card: the scroll-driven arrival (view() timeline). The old Lab's
+    // CARDS wore it; when §11.2 turned cards into rows the rows came out
+    // bare and the whole list rendered at once, stranding the scroll cue
+    // (boss report, 2026-08-04). Per-row is finer-grained than the old
+    // per-card glide — each row arrives as it enters.
+    <div className="lab-card" style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:`1px solid ${T.ruleFaint}`}}
       aria-label={`${displayName}: ${sets} sets per week${target ? `, ${label}, MEV ${target.mev}, MRV ${target.mrv}` : ""}`}>
       <span style={{width:82,fontSize:15,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayName}</span>
       <svg width="38" height="13" viewBox="0 0 38 13" style={{overflow:"visible",flexShrink:0}} aria-hidden="true">
