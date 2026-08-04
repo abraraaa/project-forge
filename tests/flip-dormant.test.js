@@ -1,6 +1,6 @@
 // tests/flip-dormant.test.js
 // ─────────────────────────────────────────────────────────────────────────────
-// The flip package's dormant UX layer (docs/heatwayve-flip.md): built and
+// The flip package's dormant UX layer: built and
 // shipped BEFORE the flip, gated on lib/origin.js, asleep on theforged.fit.
 // The locks here guarantee both halves: it wakes on the new origin, and it
 // cannot leak onto the old one.
@@ -57,14 +57,16 @@ describe("dormant surfaces (code shape)", () => {
     // conditions — rather than one exact JSX string. A literal lock breaks on
     // harmless reformatting and gets "fixed" by deleting the assertion.
     const s = readFileSync(resolve(root, "components/ForgeApp.jsx"), "utf8");
-    const prop = s.match(/<IosInstallOverlay[^>]*migration=\{([^}]*)\}/)?.[1] || "";
+    const prop = s.match(/<InstallWalkthrough[^>]*migration=\{([^}]*)\}/)?.[1] || "";
     expect(prop).toMatch(/isHeatwayveOrigin\(\)/);
     expect(prop).toMatch(/migrationWindowOpen\(\)/);
     expect(prop).toMatch(/hasPreFlipStory\(/);
-    // Both voices are present: the migration line and the default.
-    expect(s).toContain("Same fire, new home");
-    expect(s).toContain("Add it back");
-    expect(s).toContain("Install it:");
+    // Both voices are present: the migration line and the default
+    // (the walkthrough itself lives in components/InstallWalkthrough.jsx).
+    const w = readFileSync(resolve(root, "components/InstallWalkthrough.jsx"), "utf8");
+    expect(w).toContain("Same fire, new home");
+    expect(w).toContain("Add it back");
+    expect(w).toContain("Install it:");
   });
   it("the welcome-back beat greets the move only on the new origin", () => {
     const s = readFileSync(resolve(root, "components/TakenNameModal.jsx"), "utf8");

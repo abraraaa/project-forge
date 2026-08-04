@@ -21,6 +21,7 @@ import { T, DISPLAY, heatForRpe, onHeatForRpe, heatMarkHeight, rpeForEffort, rpe
 import { Fade, Card, MonoNums } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import { useModalA11y, haptic } from "@/lib/a11y";
+import { todayLocalIso, daysBetween, mondayIndex } from "@/lib/dates";
 import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { WEEK, SWAP_DB } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
@@ -254,10 +255,8 @@ function RecentHistorySheet({ exerciseName, recent, onCancel }) {
 
   const fmt = (dateStr) => {
     if (!dateStr) return "";
-    const d = new Date(dateStr + "T12:00:00");
-    if (isNaN(d.getTime())) return dateStr;
-    const today = new Date(); today.setHours(0,0,0,0);
-    const diff = Math.floor((today.getTime() - d.getTime()) / 86400000);
+    const diff = daysBetween(dateStr, todayLocalIso());
+    if (diff === null) return dateStr;
     if (diff <= 0) return "today";
     if (diff === 1) return "yesterday";
     if (diff < 7)   return `${diff} days ago`;
@@ -973,9 +972,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
   const [hi] = useState(()=>DONE_HEADLINES[Math.floor(Math.random()*DONE_HEADLINES.length)]);
 
   // Derive what's next
-  const dow     = new Date().getDay();
-  const weekMap = [6,0,1,2,3,4,5];
-  const todayIdx= weekMap[dow];
+  const todayIdx= mondayIndex(new Date());
   const nextIdx = (todayIdx+1) % 7;
   const nextType= userWeek[nextIdx]?.type ?? "rest";
   const [nextMsg] = useState(() => {

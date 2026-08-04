@@ -42,6 +42,7 @@ import { deloadDayLabel } from "@/lib/progression";
 import { applySessionToEngine } from "@/lib/session-engine";
 import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR } from "@/lib/lift-translations";
 import { pickFlashLine } from "@/lib/set-flash";
+import { todayLocalIso, daysBetween } from "@/lib/dates";
 import { T } from "@/lib/tokens";
 import { haptic } from "@/lib/a11y";
 import { withNavTransition } from "@/lib/nav-transitions";
@@ -447,7 +448,7 @@ export default function SessionHost() {
           .filter(r => r?.date && String(r.session || "").startsWith("strength"))
           .map(r => r.date).sort().pop();
         if (prior) {
-          const gap = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(prior).setHours(0, 0, 0, 0)) / 86400000);
+          const gap = daysBetween(prior, todayLocalIso());
           setReturnGapDays(gap > 7 ? gap : null);
         } else {
           setReturnGapDays(null);

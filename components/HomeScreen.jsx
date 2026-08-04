@@ -16,6 +16,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
+import { mondayIndex, addDaysIso } from "@/lib/dates";
 import { Fade, Card, Tag, MonoNums } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import { useModalA11y } from "@/lib/a11y";
@@ -95,9 +96,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
     const id = setInterval(reanchor, 60_000);
     return () => { document.removeEventListener("visibilitychange", reanchor); window.removeEventListener("focus", reanchor); clearInterval(id); };
   }, []);
-  const dow      = new Date(nowMs).getDay(); // 0=Sun
-  const weekMap  = [6,0,1,2,3,4,5];    // JS day → WEEK index (Mon=0 … Sun=6)
-  const todayIdx = weekMap[dow];
+  const todayIdx = mondayIndex(new Date(nowMs)); // 0=Mon..6=Sun, the WEEK convention
 
   const [viewIdx, setViewIdx] = useState(todayIdx);
 
@@ -109,9 +108,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // Optional cardio-day bonus for the VIEWED day. bonusForDay returns null for
   // ineligible day types, so this is the only guard needed. Local date string
   // (not toISOString — avoids the UTC day-shift).
-  const _vd = new Date(nowMs);
-  _vd.setDate(_vd.getDate() + (viewIdx - todayIdx));
-  const viewDateStr = `${_vd.getFullYear()}-${String(_vd.getMonth()+1).padStart(2,"0")}-${String(_vd.getDate()).padStart(2,"0")}`;
+  const viewDateStr = addDaysIso(new Date(nowMs), viewIdx - todayIdx);
   const dayBonus   = bonusForDay(viewDateStr, viewDay.type);
 
   // Resolve which session to preview for the viewed day (null for non-strength days)

@@ -28,7 +28,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { parseLocalDate, localDateStr, mondayOfWeekIso } from "../lib/dates.js";
+import { parseLocalDate, localDateStr, mondayOfWeekIso, addDaysIso } from "../lib/dates.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -95,6 +95,29 @@ describe("the day-maths helpers are used, not re-derived", () => {
   }
 });
 
+describe("raw day-mutation methods live only in lib/dates.js", () => {
+  // Stage 1 of the Temporal plan (2026-08-04). Every setDate/setHours/getDay
+  // outside the doctrine module was a hand-rolled copy of addDaysIso /
+  // daysBetween / mondayIndex — 34 sites across ten files, including three
+  // private re-implementations of addDays and four copies of the
+  // [6,0,1,2,3,4,5] week map. With them centralised, swapping Temporal into
+  // dates.js internals is a one-file change when the browser floor allows it.
+  // getUTCDay is deliberately not banned: the snapshot cron reasons in UTC
+  // on purpose.
+  const RAW_DAY_MATH = /\.(setDate|setHours|getDay)\s*\(/;
+
+  it("no module outside lib/dates.js calls setDate/setHours/getDay", () => {
+    const offenders = [];
+    for (const f of sourceFiles()) {
+      if (f === join("lib", "dates.js")) continue;
+      const src = code(readFileSync(resolve(root, f), "utf8"));
+      if (RAW_DAY_MATH.test(src)) offenders.push(f);
+    }
+    expect(offenders, `use addDaysIso/daysBetween/mondayIndex from lib/dates.js instead:\n${offenders.join("\n")}`)
+      .toEqual([]);
+  });
+});
+
 describe("the behaviour the guard protects", () => {
   it("a week scaffold built the local way survives a DST transition", () => {
     // Europe/London clocks went back 2026-10-25. Building columns back from
@@ -104,9 +127,7 @@ describe("the behaviour the guard protects", () => {
     const todayMon = mondayOfWeekIso(new Date(2026, 10, 2)); // 2 Nov 2026, local
     const columns = [];
     for (let w = 3; w >= 0; w--) {
-      const d = parseLocalDate(todayMon);
-      d.setDate(d.getDate() - w * 7);
-      columns.push(localDateStr(d));
+      columns.push(addDaysIso(todayMon, -w * 7)); // the shape analytics.js now uses
     }
     // Every column must be a Monday that mondayOfWeekIso agrees with —
     // i.e. round-tripping a column through the record-side hash is identity.

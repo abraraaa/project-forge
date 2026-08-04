@@ -1,6 +1,6 @@
 // tests/sw-precache.test.js
 // ─────────────────────────────────────────────────────────────────────────────
-// The offline shell's build step (docs/offline-shell.md). buildPrecache parses
+// The offline shell's build step . buildPrecache parses
 // the shell routes' PRERENDERED HTML for /_next/static references — exact by
 // construction. These lock the extraction (incl. the escaped-JSON phantom
 // trap), the manifest shape the SW consumes, and the missing-route signal that
