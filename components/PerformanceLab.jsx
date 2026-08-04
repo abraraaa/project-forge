@@ -71,6 +71,9 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
   const volumeAudit  = useMemo(() => auditHistoryVolume(history, { weeks: 2 }), [history]);
   const volumeTrend  = useMemo(() => weeklyVolumeByMuscle(history, { weeks: 8 }), [history]);
   const mainLifts = Object.keys(trends);
+  // Drill-down tier (§07): the row is the glance; tapping unfolds the
+  // full trend chart beneath it. One open at a time.
+  const [expandedLift, setExpandedLift] = useState(null);
 
   // Glossary sheet — opened by ⓘ triggers throughout the lab.
   const [glossaryAnchor, setGlossaryAnchor] = useState(null);
@@ -170,9 +173,13 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
           {mainLifts.length > 0 && !volumeAudit?.away && (
             <div className="lab-card" style={{margin:"24px 24px 0"}}>
               <div style={{paddingBottom:8,borderBottom:`1px solid ${T.rule}`,fontSize:13,color:T.ink3}}>
-                Strength · e1RM vs <span style={{fontFamily:T.measured}}>28</span> days
+                Strength · e1RM vs <span style={{fontFamily:T.measured}}>28</span> days · tap a lift for the full trend
               </div>
-              {mainLifts.map(lift => <StrengthRow key={lift} lift={lift} series={trends[lift] || []}/>)}
+              {mainLifts.map(lift => (
+                <StrengthRow key={lift} lift={lift} series={trends[lift] || []}
+                  expanded={expandedLift === lift}
+                  onToggle={() => setExpandedLift(expandedLift === lift ? null : lift)}/>
+              ))}
             </div>
           )}
 
@@ -328,7 +335,7 @@ function InkSpark({ values, width = 44, height = 12, stroke = 1.5, color = "var(
 // lift · e1RM sparkline · mono current · delta vs 28 days. The old
 // one-chart-with-selector died here (§13.5: nothing gets its own card);
 // the share card survives per row.
-function StrengthRow({ lift, series }) {
+function StrengthRow({ lift, series, expanded = false, onToggle }) {
   const cur = series[series.length - 1];
   if (!cur) return null;
   const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 28);
@@ -337,8 +344,13 @@ function StrengthRow({ lift, series }) {
   const delta = Math.round((cur.est1RM - base.est1RM) * 10) / 10;
   const deltaStr = delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : "level";
   return (
-    <div className="lab-card" style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderTop:`1px solid ${T.ruleFaint}`}}
-      aria-label={`${lift}: estimated 1RM ${cur.est1RM} kg, ${deltaStr === "level" ? "level" : `${deltaStr} kg`} vs 28 days ago`}>
+    <div className="lab-card" style={{borderTop:`1px solid ${T.ruleFaint}`}}>
+    <div role="button" tabIndex={0} onClick={onToggle}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle?.(); } }}
+      className="forge-press forge-tint"
+      style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",cursor:"pointer"}}
+      aria-expanded={expanded}
+      aria-label={`${lift}: estimated 1RM ${cur.est1RM} kg, ${deltaStr === "level" ? "level" : `${deltaStr} kg`} vs 28 days ago. ${expanded ? "Hide" : "Show"} full trend`}>
       <span style={{flex:1,minWidth:0,fontSize:15,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lift}</span>
       <InkSpark values={series.slice(-8).map(p => p.est1RM)}/>
       <span style={{fontFamily:T.measured,fontSize:15,color:T.ink,flexShrink:0}}>{cur.est1RM}<span style={{fontFamily:T.text,fontSize:11,color:T.ink3}}> kg</span></span>
@@ -354,6 +366,90 @@ function StrengthRow({ lift, series }) {
         aria-label={`Share ${lift} trend`}>
         <Glyph name="arrowUpRight" size={11} color={T.ink3}/>
       </button>
+    </div>
+    {/* §07's second tier — surface: detail fades in on engagement,
+        progressive disclosure over resizing. */}
+    {expanded && (
+      <div style={{padding:"4px 0 14px",animation:`fadeSlide 240ms ${T.ease}`}}>
+        <LineChart series={series}/>
+      </div>
+    )}
+    </div>
+  );
+}
+
+// ─── Line chart (1RM trend) ──────────────────────────────────────────────────
+// Hand-rolled SVG. The stroke is a heat gradient along its own length —
+// the line heats as it climbs. Cooked sessions print hollow points.
+function LineChart({ series }) {
+  const W = 320, H = 108, PAD_X = 12, PAD_Y = 18;
+  if (!series || series.length === 0) {
+    return <div style={{padding:"24px 0", fontSize:13, color:T.ink3, textAlign:"center"}}>No data yet</div>;
+  }
+  // Single data point: show the number, no line.
+  if (series.length === 1) {
+    const p = series[0];
+    return (
+      <div style={{textAlign:"center", padding:"18px 0"}}>
+        <div style={{fontFamily:T.measured, fontSize:48, fontWeight:300, letterSpacing:"-0.04em", color:T.ink, lineHeight:1}}>{p.est1RM}<span style={{fontSize:18, color:T.ink3, marginLeft:4}}>kg</span></div>
+        <div style={{fontSize:12, color:T.ink3, marginTop:8}}>{p.date} · top set <span style={{fontFamily:T.measured}}>{p.topSet.weight}</span> kg × <span style={{fontFamily:T.measured}}>{p.topSet.reps}</span></div>
+        <div style={{fontSize:12, color:T.ink3, marginTop:6}}>Log another session to see the trend</div>
+      </div>
+    );
+  }
+
+  const values = series.map(p => p.est1RM);
+  const minV = Math.min(...values), maxV = Math.max(...values);
+  const rangeV = maxV - minV || 1;
+  const yMin = minV - rangeV * 0.2;
+  const yMax = maxV + rangeV * 0.2;
+
+  const xAt = (i) => PAD_X + (W - 2*PAD_X) * (i / (series.length - 1));
+  const yAt = (v) => PAD_Y + (H - 2*PAD_Y) * (1 - (v - yMin) / (yMax - yMin));
+
+  const pathD = series.map((p, i) => `${i===0 ? "M" : "L"} ${xAt(i)} ${yAt(p.est1RM)}`).join(" ");
+  const areaD = `${pathD} L ${xAt(series.length-1)} ${H-PAD_Y} L ${xAt(0)} ${H-PAD_Y} Z`;
+
+  const latest  = series[series.length-1];
+  const first   = series[0];
+  const delta   = latest.est1RM - first.est1RM;
+  const pctDelta= first.est1RM > 0 ? (delta / first.est1RM) * 100 : 0;
+
+  return (
+    <div>
+      <div style={{display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:10}}>
+        <div>
+          <span style={{fontFamily:T.measured, fontSize:30, fontWeight:300, letterSpacing:"-0.03em", color:T.ink}}>{latest.est1RM}</span>
+          <span style={{fontSize:13, color:T.ink3, marginLeft:4}}>kg</span>
+        </div>
+        <div style={{fontFamily:T.measured, fontSize:12, color:T.ink2}}>
+          {delta >= 0 ? "+" : ""}{delta.toFixed(1)} kg · {pctDelta >= 0 ? "+" : ""}{pctDelta.toFixed(1)}%
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:"auto", display:"block"}}>
+        <defs>
+          <linearGradient id="hwLabTrend" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="var(--heat-1)"/>
+            <stop offset="0.6" stopColor="var(--heat-2)"/>
+            <stop offset="1" stopColor="var(--heat-3)"/>
+          </linearGradient>
+          <linearGradient id="hwLabArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="var(--heat-3)" stopOpacity="0.12"/>
+            <stop offset="1" stopColor="var(--heat-3)" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d={areaD} fill="url(#hwLabArea)" />
+        <path d={pathD} stroke="url(#hwLabTrend)" strokeWidth="1.6" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
+        {series.map((p, i) => (
+          <circle key={i} cx={xAt(i)} cy={yAt(p.est1RM)} r={i === series.length-1 ? 3.6 : 2.4}
+            fill={p.cooked ? "var(--heat-4)" : "var(--heat-2)"}
+            stroke="var(--ground)" strokeWidth="1.4"/>
+        ))}
+      </svg>
+      <div style={{display:"flex", justifyContent:"space-between", marginTop:6, fontFamily:T.measured, fontSize:10, color:T.ink3}}>
+        <span>{first.date.slice(5).replace("-","/")}</span>
+        <span>{latest.date.slice(5).replace("-","/")}</span>
+      </div>
     </div>
   );
 }
