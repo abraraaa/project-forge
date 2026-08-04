@@ -170,7 +170,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
           {/* §13.5 — the Lab is a journal, not one chart: strength first
               (the e1RM numbers are the headline), the rhythm she controls
               second, the volume diagnostics that explain both last. */}
-          {mainLifts.length > 0 && !volumeAudit?.away && (
+          {mainLifts.length > 0 && (
             <div className="lab-card" style={{margin:"24px 24px 0"}}>
               <div style={{paddingBottom:8,borderBottom:`1px solid ${T.rule}`,fontSize:13,color:T.ink3}}>
                 Strength · e1RM vs <span style={{fontFamily:T.measured}}>28</span> days · tap a lift for the full trend
@@ -185,11 +185,9 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
 
           {/* §13.5 consistency — planned sessions as hairline squares,
               completed filled with the day key; adherence as texture. */}
-          {!volumeAudit?.away && (
-            <div className="lab-card" style={{margin:"28px 24px 0"}}>
-              <ConsistencyCells weeks={rhythmWeeks} quota={weeklyQuota}/>
-            </div>
-          )}
+          <div className="lab-card" style={{margin:"28px 24px 0"}}>
+            <ConsistencyCells weeks={rhythmWeeks} quota={weeklyQuota}/>
+          </div>
 
           {/* Volume ledger — muscles grouped by training day, dense rows. */}
           <div className="lab-card">
@@ -518,8 +516,16 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
     // The away beat lives ONCE, in the masthead support line — a callout
     // here repeated it and spent six lines saying so (boss report,
     // 2026-08-04). The muted rows carry the eight-week state on their own.
+    // The columns still introduce themselves: the away branch skipped the
+    // section kicker entirely, so "0 of 8" met the user unexplained.
     return (
       <div style={{margin:"18px 24px 0"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,paddingBottom:6,borderBottom:`1px solid ${T.rule}`,marginBottom:4}}>
+          <span style={{fontSize:12,color:T.ink2,lineHeight:1.5}}>
+            The line is your last <span style={{fontFamily:T.measured}}>8</span> weeks. The count is this week&rsquo;s sets against the least that still grows it.
+          </span>
+          <GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/>
+        </div>
         {historical.map(row => <MuscleRow key={row.muscle} {...row} muted />)}
       </div>
     );
@@ -547,6 +553,11 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
           Sets per week vs MEV/MAV/MRV · last <span style={{fontFamily:T.measured}}>{audit.weeksAnalysed}</span> complete weeks
         </span>
         <GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/>
+      </div>
+      {/* The columns introduce themselves once, in reading order and in
+          the user's language — the pack's nouns stay in the pack. */}
+      <div style={{padding:"6px 24px 0",fontSize:12,color:T.ink2,lineHeight:1.5}}>
+        The line is your last <span style={{fontFamily:T.measured}}>8</span> weeks. The bar fills toward the sweet spot — between the marks is where growth lives. The number is this week&rsquo;s sets.
       </div>
       {groups.map(g => {
         const gSets = Math.round(g.rows.reduce((n, r) => n + (r.sets || 0), 0));

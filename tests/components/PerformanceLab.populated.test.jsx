@@ -103,4 +103,15 @@ describe("PerformanceLab — populated history", () => {
     // Group headers carry their aggregate as data.
     expect(screen.getAllByText(/in band/).length).toBeGreaterThan(0);
   });
+
+  it("away suspends judgement, never history — strength and consistency survive", () => {
+    // The away state mutes band verdicts and the recommendation; it must
+    // NOT hide the e1RM rows or the consistency cells (regression
+    // 2026-08-04: an over-eager away gate left only muted muscle rows).
+    // Sessions 60+ days old put the audit in away while history exists.
+    const stale = ["2026-05-04","2026-05-11","2026-05-18","2026-05-25"].map(buildSession);
+    render(<PerformanceLab history={stale} onBack={() => {}} />);
+    expect(screen.getByText(/Strength · e1RM/)).toBeTruthy();
+    expect(screen.getByText(/planned/)).toBeTruthy();
+  });
 });
