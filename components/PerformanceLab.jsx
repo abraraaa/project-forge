@@ -521,8 +521,8 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
     return (
       <div style={{margin:"18px 24px 0"}}>
         <div style={{display:"flex",alignItems:"center",gap:6,paddingBottom:6,borderBottom:`1px solid ${T.rule}`,marginBottom:4}}>
-          <span style={{fontSize:12,color:T.ink2}}>
-            Each row: the 8-week trend, and sets against the muscle&rsquo;s minimum.
+          <span style={{fontSize:12,color:T.ink2,lineHeight:1.5}}>
+            The line is your last <span style={{fontFamily:T.measured}}>8</span> weeks. The count is this week&rsquo;s sets against the least that still grows it.
           </span>
           <GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/>
         </div>
@@ -554,9 +554,10 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
         </span>
         <GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/>
       </div>
-      {/* The columns introduce themselves once, before the first group. */}
-      <div style={{padding:"6px 24px 0",fontSize:12,color:T.ink2}}>
-        Each row: the 8-week trend, this week&rsquo;s sets, and the band rail with its MEV and MRV ticks.
+      {/* The columns introduce themselves once, in reading order and in
+          the user's language — the pack's nouns stay in the pack. */}
+      <div style={{padding:"6px 24px 0",fontSize:12,color:T.ink2,lineHeight:1.5}}>
+        The line is your last <span style={{fontFamily:T.measured}}>8</span> weeks. The number is this week&rsquo;s sets. The bar fills toward the sweet spot — between the marks is where growth lives.
       </div>
       {groups.map(g => {
         const gSets = Math.round(g.rows.reduce((n, r) => n + (r.sets || 0), 0));
