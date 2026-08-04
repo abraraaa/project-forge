@@ -170,7 +170,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
           {/* §13.5 — the Lab is a journal, not one chart: strength first
               (the e1RM numbers are the headline), the rhythm she controls
               second, the volume diagnostics that explain both last. */}
-          {mainLifts.length > 0 && !volumeAudit?.away && (
+          {mainLifts.length > 0 && (
             <div className="lab-card" style={{margin:"24px 24px 0"}}>
               <div style={{paddingBottom:8,borderBottom:`1px solid ${T.rule}`,fontSize:13,color:T.ink3}}>
                 Strength · e1RM vs <span style={{fontFamily:T.measured}}>28</span> days · tap a lift for the full trend
@@ -185,11 +185,9 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
 
           {/* §13.5 consistency — planned sessions as hairline squares,
               completed filled with the day key; adherence as texture. */}
-          {!volumeAudit?.away && (
-            <div className="lab-card" style={{margin:"28px 24px 0"}}>
-              <ConsistencyCells weeks={rhythmWeeks} quota={weeklyQuota}/>
-            </div>
-          )}
+          <div className="lab-card" style={{margin:"28px 24px 0"}}>
+            <ConsistencyCells weeks={rhythmWeeks} quota={weeklyQuota}/>
+          </div>
 
           {/* Volume ledger — muscles grouped by training day, dense rows. */}
           <div className="lab-card">
