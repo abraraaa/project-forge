@@ -9,7 +9,33 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { photoWindowIndices, outsideEvictBand, PREFETCH, EVICT } from "../app/locker-room/page.jsx";
+
+const pageSrc = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), "../app/locker-room/page.jsx"), "utf8");
+
+describe("image loading never gates on a truthy token (cookie-path bug, 2026-08-04)", () => {
+  // Access can be cookie-based, where the auth token is null but the
+  // httpOnly hw_photos cookie authenticates every GET. A `!token` guard on
+  // the load path skipped ALL image fetches for those users — photo present,
+  // white space rendered. `shown` proves access (reveal gates on the index
+  // GET); loading must proceed regardless of token.
+  it("the window sync guards on the list, not the token", () => {
+    const fn = pageSrc.slice(pageSrc.indexOf("const syncWindow = useCallback"));
+    const guard = fn.slice(0, fn.indexOf("\n"));
+    expect(pageSrc).toMatch(/if \(!list\?\.length\) return;/);
+    expect(fn.slice(0, 400)).not.toMatch(/if \(!tok \|\| !list/);
+  });
+
+  it("the window EFFECT does not bail on a null token", () => {
+    const eff = pageSrc.slice(pageSrc.indexOf("if (!shown"), pageSrc.indexOf("syncWindow(centerFrame"));
+    expect(eff).toContain("if (!shown || !photos?.length) return;");
+    expect(eff).not.toContain("!token");
+  });
+});
 
 describe("photoWindowIndices — what loads around the visible frame", () => {
   it("a small collection (<= 2·PREFETCH+1) loads in FULL — no behaviour change", () => {

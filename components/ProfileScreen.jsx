@@ -330,6 +330,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
     return null;
   };
   const pip = availabilityPip();
+  // True first run means NO profiles on the device at all — not merely "none
+  // active". Deleting the active profile with others still present is "This
+  // device", not "New here".
+  const hasAnyProfile = !!current || existing.length > 0;
 
   // Post-claim passkey step (first-time onboarding only). Sits between name
   // claim and BW step. Three exit paths all fall through to BW:
@@ -501,15 +505,17 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"clip"}}>
       {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text,marginBottom:32,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Home</button>}
       <Fade d={0}>
-        {/* Kicker — the room's scope. Never absent (§11.3). */}
+        {/* Kicker — the room's scope. Never absent (§11.3). Three states,
+            not two: a device with profiles but none active (you deleted the
+            active one) is NOT "first run" — the list is right below. */}
         <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
-          {current?"This device":"First run"}
+          {hasAnyProfile?"This device":"New here"}
         </div>
         <div style={{...DISPLAY,fontSize:38,color:T.ink,marginBottom:10}}>
-          {current?"Profiles":"Your name"}
+          {hasAnyProfile?"Profiles":"Your name"}
         </div>
         <p style={{fontSize:14,color:T.ink2,marginBottom:36,lineHeight:1.6}}>
-          {current?"Pick a profile or add someone new.":"Who's training? Pick a name — it travels with you across devices."}
+          {hasAnyProfile?"Pick a profile, or add someone new.":"Who's training? Pick a name — it travels with you across devices."}
         </p>
       </Fade>
       {existing.length>0&&(
@@ -531,14 +537,14 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       )}
       <Fade d={120}>
         <div style={{fontSize:13,color:T.ink3,marginBottom:12}}>
-          {existing.length > 0 ? "Add new" : "Pick your name"}
+          {existing.length > 0 ? "Add new" : "Name"}
         </div>
         <div style={{position:"relative"}}>
           <div style={{display:"flex",gap:10}}>
             <div style={{flex:1,position:"relative"}}>
               <input value={name} onChange={e=>{setName(e.target.value); setSubmitError(null);}}
                 onKeyDown={e=>{if(e.key==="Enter"&&canSubmit) handleSubmit();}}
-                placeholder="Your name" maxLength={NAME_MAX_LEN}
+                placeholder="e.g. Sam" maxLength={NAME_MAX_LEN}
                 aria-label="Your name"
                 // The status line below carries the rules AND the live result
                 // (available / taken / invalid). Pointing at it means a screen
