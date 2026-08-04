@@ -95,7 +95,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
   const guidance = isEmpty
     ? "Go train. The numbers follow."
     : volumeAudit?.away
-    ? "A lighter stretch — the lines hold your last eight weeks."
+    ? "A lighter stretch. That's part of training."
     : underMuscles.length === 0
     ? "Every muscle is in its productive band. Keep going."
     : underMuscles.length === 1
@@ -441,18 +441,11 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
     const historical = AUDIT_MUSCLE_ORDER.map(rowFor)
       .filter(r => r.series.some(v => v > 0))
       .sort((a, b) => b.series.reduce((s, v) => s + v, 0) - a.series.reduce((s, v) => s + v, 0));
+    // The away beat lives ONCE, in the masthead support line — a callout
+    // here repeated it and spent six lines saying so (boss report,
+    // 2026-08-04). The muted rows carry the eight-week state on their own.
     return (
       <div style={{margin:"18px 24px 0"}}>
-        <div style={{padding:"0 0 12px"}}>
-          <div style={{fontSize:15, color:T.ink, lineHeight:1.4, marginBottom:6}}>
-            A lighter stretch — that&apos;s part of training.
-          </div>
-          <div style={{fontSize:13, color:T.ink2, lineHeight:1.55}}>
-            What builds muscle is showing up over time, not any single week.
-            The lines hold your last eight weeks — they&apos;ll fill back in as
-            you train.
-          </div>
-        </div>
         {historical.map(row => <MuscleRow key={row.muscle} {...row} muted />)}
       </div>
     );

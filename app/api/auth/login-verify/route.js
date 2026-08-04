@@ -140,7 +140,7 @@ export async function POST(request) {
     // path rejects every scoped token, so this cookie can read and write a
     // profile but can never destroy one. Sliding 7 days — same window as
     // hw_photos: any active day rotates it, so a device in use never re-auths.
-    const syncToken = await mintAuthToken({ profile, ttlMs: 7 * 86400000, scope: "sync" });
+    const syncToken = await mintAuthToken({ profile, ttlMs: 30 * 86400000, scope: "sync" });
 
     const res = NextResponse.json({
       ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600,
@@ -152,7 +152,9 @@ export async function POST(request) {
       httpOnly: true, secure: true, sameSite: "strict", path: "/api/photos", maxAge: 7 * 86400,
     });
     res.cookies.set("hw_sync", syncToken, {
-      httpOnly: true, secure: true, sameSite: "strict", path: "/api/sync", maxAge: 7 * 86400,
+      // 30 days, matching the token TTL and the gate's sliding refresh —
+      // the photos cookie deliberately stays at 7.
+      httpOnly: true, secure: true, sameSite: "strict", path: "/api/sync", maxAge: 30 * 86400,
     });
     return res;
   } catch (e) {

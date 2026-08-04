@@ -154,7 +154,7 @@ async function safeReadJson(request) {
 // Sliding window, matching the photo cookie. Because any active day rotates
 // it, lengthening this buys a regularly-used device nothing and only extends
 // the window on a lost one. Keep the two values consistent.
-const SYNC_TTL_MS = 7 * 86400000;
+const SYNC_TTL_MS = 30 * 86400000;
 const SYNC_ROTATE_AFTER_MS = 86400000;   // any active day slides it
 // ...but the chain is not infinite: rotation stops at 90 days from the
 // ORIGINAL ceremony, so a credential used daily forever still comes back to a
@@ -164,7 +164,7 @@ const SYNC_ABSOLUTE_CAP_MS = 90 * 86400000;
 export const SYNC_COOKIE = "hw_sync";
 const SYNC_COOKIE_OPTS = {
   httpOnly: true, secure: true, sameSite: "strict",
-  path: "/api/sync", maxAge: 7 * 86400,
+  path: "/api/sync", maxAge: 30 * 86400,
 };
 
 /** Attach a rotated sync cookie (if the gate minted one) to a success response. */

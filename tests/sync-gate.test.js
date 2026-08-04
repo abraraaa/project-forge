@@ -102,15 +102,33 @@ describe("cookie shape", () => {
     expect(route).toMatch(/httpOnly: true, secure: true, sameSite: "strict"/);
   });
 
-  it("slides on a 7-day window, matching hw_photos", () => {
-    // Boss, 2026-07-26: window length is not a UX dial — any active day
-    // rotates it, so a trusted device never re-auths regardless. A longer
-    // window only gives a LOST phone more days. Keep parity with the photo
-    // cookie rather than inventing a second policy.
-    expect(route).toContain("const SYNC_TTL_MS = 7 * 86400000;");
-    expect(route).toContain("maxAge: 7 * 86400");
+  it("slides on a 30-day window; photos deliberately stay at 7", () => {
+    // Boss, 2026-08-01 (supersedes the 7-day parity ruling): the daily
+    // rotation only protects a device that syncs at least weekly — a
+    // normal training pause (holiday, deload, illness) lapsed the cookie
+    // and stranded the device in the resting state with no ceremony
+    // offered. 30 days covers real absence; the 90-day absolute ceiling
+    // still bounds a lost phone. Photos keep the tighter 7 — different
+    // sensitivity, deliberately not parity.
+    expect(route).toContain("const SYNC_TTL_MS = 30 * 86400000;");
+    expect(route).toContain("maxAge: 30 * 86400");
     const photos = readFileSync(resolve(root, "app/api/photos/route.js"), "utf8");
     expect(photos).toContain("const PHOTO_TTL_MS = 7 * 86400000;");
+    expect(photos).toContain("maxAge: 7 * 86400");
+  });
+
+  it("the resting state offers the way back — Sync now runs the ceremony", () => {
+    // The lapse above is only survivable if some tap re-auths. With a
+    // passkey on file, Sync now IS the ceremony (the tap carries the
+    // transient user activation WebAuthn needs), followed by a FULL sync
+    // — the device may be days stale and needs the pull. A cancelled
+    // prompt is an answer: the row stays at rest.
+    const cards = readFileSync(resolve(root, "components/sync-cards.jsx"), "utf8");
+    expect(cards).toContain("authenticatePasskey(profile)");
+    expect(cards).toMatch(/needsAuth" && hasPasskey/);
+    const ceremony = cards.slice(cards.indexOf("const handleClick"), cards.indexOf("const ago"));
+    expect(ceremony).toContain("backgroundSync(profile");
+    expect(ceremony).toMatch(/if \(!auth\) return;/);
   });
 
   it("rotation stops at an absolute ceiling measured from the ORIGINAL ceremony", () => {
