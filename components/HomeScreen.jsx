@@ -665,7 +665,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                     : "Your body has adapted. New exercises, same muscle targets."}
                 </div>
               </div>
-              <button className="forge-press" onClick={handleRotateTap} style={{flexShrink:0,marginTop:2,height:42,padding:"0 14px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"inline-flex",alignItems:"center",gap:6}}>
+              <button className="forge-press forge-tint" onClick={handleRotateTap} style={{flexShrink:0,marginTop:2,height:42,padding:"0 14px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"inline-flex",alignItems:"center",gap:6}}>
                 {offerRotationChoice ? "Choose" : "Rotate"} <Glyph name="arrowRight" size={12}/>
               </button>
             </div>
@@ -676,7 +676,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       {/* Performance Lab + Locker Room — quiet doors, rows on the ground. */}
       <Fade d={260}>
         <div style={{margin:"24px 24px 0",borderTop:`1px solid ${T.rule}`}}>
-          <button className="forge-press" onClick={onPerformance}
+          <button className="forge-press forge-tint" onClick={onPerformance}
             style={{display:"flex",width:"100%",alignItems:"center",gap:12,padding:"14px 0",background:"none",border:"none",borderBottom:`1px solid ${T.ruleFaint}`,cursor:"pointer",textAlign:"left",fontFamily:T.text}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:16,fontWeight:500,color:T.ink,marginBottom:2}}>Performance lab</div>
@@ -689,7 +689,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             <Glyph name="arrowRight" size={14} color={T.ink3} style={{flexShrink:0}}/>
           </button>
 
-          <button className="forge-press" onClick={onLockerRoom}
+          <button className="forge-press forge-tint" onClick={onLockerRoom}
             style={{display:"flex",width:"100%",alignItems:"center",gap:12,padding:"14px 0",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,cursor:"pointer",textAlign:"left",fontFamily:T.text}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:16,fontWeight:500,color:T.ink,marginBottom:2}}>Locker room</div>

@@ -439,11 +439,21 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
    reintroduced the safe-area chin in Safari-browser on sheet entry.
    Sheet controls keep haptics only. */
 .forge-press {
-  transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1),
+              background-color 380ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .forge-press:active {
   transform: scale(0.99);
   transition-duration: 90ms;
+}
+/* Pressed tint — the give's colour half (§06: colour is whitelisted; the
+   grain-era radial bloom is not — glows are on the never-list). Opt-in
+   via .forge-tint, QUIET touchables only: --press is never for commit
+   surfaces, whose colour carries meaning. Arrives with the 90ms press,
+   exhales over 380ms on release. Pair with .forge-press (the transition
+   lives there). */
+.forge-press.forge-tint:active {
+  background-color: var(--press);
 }
 
 /* ─── Native motion polish (Safari 26+ / Chrome 115+) ──────────────────────

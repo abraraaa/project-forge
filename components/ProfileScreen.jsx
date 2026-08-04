@@ -648,7 +648,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       ) : current && onOpenBreather ? (
         <Fade d={240}>
           <button onClick={onOpenBreather}
-            className="forge-press" style={{width:"100%",textAlign:"left",marginTop:36,padding:"15px 2px",background:"none",border:"none",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",fontFamily:T.text}}>
+            className="forge-press forge-tint" style={{width:"100%",textAlign:"left",marginTop:36,padding:"15px 2px",background:"none",border:"none",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",fontFamily:T.text}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Need a breather?</div>
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Pause your rhythm while life happens</div>
@@ -662,7 +662,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && setBwEditOpen && (
         <Fade d={260}>
           <div onClick={()=>setBwEditOpen(true)}
-            className="forge-press" style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            className="forge-press forge-tint" style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Bodyweight</div>
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
@@ -686,7 +686,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && onEditFocus && (
         <Fade d={270}>
           <div onClick={onEditFocus}
-            className="forge-press" style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            className="forge-press forge-tint" style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Training focus</div>
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
