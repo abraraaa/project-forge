@@ -149,7 +149,7 @@ export default function LockerRoom() {
     try {
       // Cookie-first: most visits need no prompt at all.
       const { token: t, result: idx } = await ensurePhotoAccess(profile, (tok) => fetchPhotoIndex(profile, tok));
-      if (!idx?.ok) { setErr(idx?.requiresAuth ? "No bother — the chart's still here." : "Couldn't load your photos."); return; }
+      if (!idx?.ok) { setErr(idx?.requiresAuth ? "No bother — the chart's still here." : "The door stuck. Pull it again?"); return; }
       setToken(t);
       setPhotos(idx.photos);
       setPos(Math.max(0, idx.photos.length - 1));
@@ -171,7 +171,7 @@ export default function LockerRoom() {
       const date = todayLocalIso();
       const latestBw = BW.getKg(profile);
       const res = await uploadPhoto(profile, token, date, blob, { bodyweightAt: latestBw });
-      if (!res.ok) { setErr(res.error || "Upload failed."); return; }
+      if (!res.ok) { setErr(res.error || "That one didn't stick. Try it again?"); return; }
       haptic.commit();
       const idx = await fetchPhotoIndex(profile, token);
       if (idx.ok) {

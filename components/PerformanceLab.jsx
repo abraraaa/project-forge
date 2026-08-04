@@ -400,8 +400,8 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
   if (!audit || totalSessions < 4) {
     return (
       <div style={{margin:"20px 24px 0",fontSize:13, color:T.ink2, lineHeight:1.5}}>
-        A few more logged sessions and this list will hold each muscle
-        against its MEV/MAV/MRV bands.
+        A few more sessions and every muscle takes its place on these
+        rails, held against its own productive band.
       </div>
     );
   }
@@ -554,7 +554,7 @@ function MuscleRow({ muscle, sets, target, status, series, muted = false }) {
 // middle and hot steps. Numbers always printed.
 function ReadinessBar({ readiness }) {
   const { fresh, normal, cooked, total } = readiness;
-  if (!total) return <div style={{fontSize:13, color:T.ink3}}>No data yet</div>;
+  if (!total) return <div style={{fontSize:13, color:T.ink2}}>Rate a session and this fills in.</div>;
   const p = (n) => (n / total) * 100;
   return (
     <div>
