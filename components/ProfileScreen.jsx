@@ -28,6 +28,7 @@ import { PROFILE_SUFFIXES, LEGACY_PROFILE_KEY_PREFIXES } from "@/lib/store-healt
 import { Fade } from "@/components/ui";
 import { getThemePreference, applyThemePreference } from "@/lib/theme";
 import Glyph from "@/components/Glyph";
+import Link from "next/link";
 import { SyncStatusCard, SyncNowRow } from "@/components/sync-cards";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
 import TakenNameModal from "@/components/TakenNameModal";
@@ -873,6 +874,22 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </button>
+        </Fade>
+      )}
+
+      {/* The library, promoted from Easter egg (boss, 2026-08-04) — the 168
+          pages existed but nothing in the app pointed at them. Sits above
+          the tip jar; the jar keeps the last word. */}
+      {current && (
+        <Fade d={309}>
+          <Link href="/library"
+            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Explore the full exercise library</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Every lift, laid bare. Bedtime reading for the committed.</div>
+            </div>
+            <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
+          </Link>
         </Fade>
       )}
 

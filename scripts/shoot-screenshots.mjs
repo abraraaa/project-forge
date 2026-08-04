@@ -128,7 +128,11 @@ const ctx = await browser.newContext({
   deviceScaleFactor: 3,
   isMobile: true,
   hasTouch: true,
-  colorScheme: "dark",
+  // Light is the shot: the app defaults to Auto (follow the device), and the
+  // brand's primary canvas is the warm bone ground — the manifest's
+  // background/theme colours. The earlier dark forcing predated the
+  // light-dark() rework; it was never a time-of-day effect.
+  colorScheme: "light",
 });
 const page = await ctx.newPage();
 await page.addInitScript((s) => {
