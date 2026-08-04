@@ -1,6 +1,6 @@
 // tests/delta-sync-retire.test.js
 // ─────────────────────────────────────────────────────────────────────────────
-// PR C locks (#2 family — docs/delta-sync.md, dual-write retirement).
+// PR C locks (#2 family, dual-write retirement).
 //   - fat PUT is DB-first: no meta/history blob writes in the DB branch
 //   - snapshot cron is WRITE-ONLY by construction (zero delete authority)
 //   - profile DELETE covers the snapshot generations (enumerated paths)

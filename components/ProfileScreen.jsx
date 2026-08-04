@@ -7,7 +7,7 @@
 // rendered by ForgeApp exactly as before (when !activeProfile, or on
 // profile-switch) — this is pure decomposition, no routing change. All
 // activation logic stays in ForgeApp and arrives via the onActivate prop;
-// see docs/decomposition-map.md for the 3d-route design call that would
+// see the 3d-route design call (internal notes) that would
 // change that.
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -327,7 +327,7 @@ export async function GET(request) {
     const gate = await syncGate(request, profile);
     if (gate.fail) return gate.fail;
 
-    // ── Delta pull (#2 family — docs/delta-sync.md) ─────────────────────
+    // ── Delta pull (#2 family) ─────────────────────
     // GET ?since=<cursor> returns only rows whose updated_at is newer,
     // plus a fresh cursor. DB-only by definition: a client holding a
     // cursor hydrated from the DB era. Blob backfill never runs here.
@@ -463,7 +463,7 @@ export async function PUT(request) {
   const gate = await syncGate(request, profile);
   if (gate.fail) return gate.fail;
 
-  // ── Delta push (#2 family — docs/delta-sync.md) ────────────────────────
+  // ── Delta push (#2 family) ────────────────────────
   // Body: { profile, delta: { meta: { field: value… }, history: [records] } }.
   // Meta fields merge via THE merge, scoped to the closure of what arrived
   // (paired stamp fields travel together — see fieldClosure); records are
@@ -495,7 +495,7 @@ export async function PUT(request) {
 
   if (!data) return NextResponse.json({ error: "No data" }, { status: 400 });
 
-  // ── Fat PUT, DB era (PR C — docs/delta-sync.md): DUAL-WRITE RETIRED ────
+  // ── Fat PUT, DB era (PR C): DUAL-WRITE RETIRED ────
   // The DB is the store; meta/history blobs are no longer written (the
   // snapshot cron owns blob durability now; the claim blob remains the
   // name marker). Merge base comes from the DB; a profile with no rows yet

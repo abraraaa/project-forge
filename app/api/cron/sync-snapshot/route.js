@@ -1,6 +1,6 @@
 // app/api/cron/sync-snapshot/route.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Daily blob snapshot of every DB profile (PR C — docs/delta-sync.md).
+// Daily blob snapshot of every DB profile (PR C).
 //
 // WRITE-ONLY BY CONSTRUCTION. This job holds zero delete authority — no
 // delete calls, no sweeping, ever (wipe protocol rule 4: a scheduled job with

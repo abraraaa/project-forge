@@ -4,7 +4,7 @@
 // store routes through one of the TWO canonical push helpers: pushNow() for
 // class-1 (immediate) or pushDeferred() for class-2 (coalesced). Both build
 // their payload from getLocalProfile — the ONE payload builder. Routing
-// taxonomy lives in docs/push-refactor.md.
+// taxonomy: class-1 mutations push before returning; class-2 may defer to the next natural sync.
 //
 // A raw blobPush() with a hand-rolled meta subset is NOT accepted: that is the
 // audit-S1 bug class (a partial payload without weightStamps/repStamps/
@@ -217,7 +217,7 @@ describe.each(HOSTS)("$name mutation coverage — every persisted mutation pushe
           (rawPush
             ? ` — it calls blobPush() directly, which is the audit-S1 hand-rolled` +
               ` partial-payload class. Route through pushNow (getLocalProfile) instead.`
-            : `. Pick a class (see docs/push-refactor.md) and add the call, or — if ` +
+            : `. Pick a class (class-1 immediate vs class-2 deferred) and add the call, or — if ` +
               `intentionally not pushing — add ${decl.name} to EXEMPT_FUNCTIONS with a reason.`),
         );
       }

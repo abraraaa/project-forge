@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // tests/delta-sync-client.test.js
 // ─────────────────────────────────────────────────────────────────────────────
-// PR B locks (#2 family — docs/delta-sync.md, client half).
+// PR B locks (#2 family, client half).
 // The two traps that matter most:
 //   1. a partial delta must NEVER clobber local fields it didn't carry
 //   2. the delta pull must NEVER trigger the localHadMore push-back

@@ -1,6 +1,6 @@
 // tests/delta-sync.test.js
 // ─────────────────────────────────────────────────────────────────────────────
-// PR A locks for the delta-sync design (#2 family — docs/delta-sync.md).
+// PR A locks for the delta-sync design (#2 family).
 // Pure pieces tested directly (fieldClosure, mergeMetaFields); the route's
 // delta branches + cursor ordering locked by code shape.
 // ─────────────────────────────────────────────────────────────────────────────

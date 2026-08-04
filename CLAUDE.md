@@ -1,10 +1,11 @@
 # Working with Forge
 
-Project context lives in `README.md` (design principles, programme model) and
-`docs/` (`architecture.md`, `absence-modelling.md`, …). Read those for the
-*what*. The roadmap/backlog and internal reasoning live in Drive ("Heatwayve
-— Internal Notes"), deliberately NOT in this public repo — don't reintroduce
-a `parked.md` or a strategy doc here. This file is the *how we work together*
+Project context lives in `README.md` (programme model, the science). The
+roadmap/backlog, internal reasoning AND the architecture/design docs live in
+Drive ("Heatwayve — Internal Notes"), deliberately NOT in this public repo —
+don't reintroduce a `parked.md`, a strategy doc, or an architecture essay
+here (docs/ was culled to `internal-notes.md` on 2026-08-04; git history
+holds the old versions). This file is the *how we work together*
 — the collaboration contract. Honour it.
 
 ## Verify before you build. Don't pummel.

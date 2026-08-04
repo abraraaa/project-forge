@@ -1,6 +1,6 @@
 // tests/flip-dormant.test.js
 // ─────────────────────────────────────────────────────────────────────────────
-// The flip package's dormant UX layer (docs/heatwayve-flip.md): built and
+// The flip package's dormant UX layer: built and
 // shipped BEFORE the flip, gated on lib/origin.js, asleep on theforged.fit.
 // The locks here guarantee both halves: it wakes on the new origin, and it
 // cannot leak onto the old one.

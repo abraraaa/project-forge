@@ -1,7 +1,7 @@
 # Internal notes live outside this repo
 
-**Rule, set 2026-07-27: design rationale and review findings do not get
-committed here.**
+**Rule, set 2026-07-27, widened 2026-08-04: design rationale, review findings
+and architecture narration do not get committed here.**
 
 This repository is public on purpose — the training science should be open to
 inspection. But the *reasoning* is a different asset. The sync/merge algebra and
@@ -15,7 +15,8 @@ goes for review findings, which double as a map of where to push.
 |---|---|
 | Audit findings, review notes, threat/trust analysis | Google Drive — **Heatwayve — Internal Notes** |
 | Design rationale, "why we built it this way" essays | Same |
-| The live to-do / parking list | `docs/parked.md`, kept terse — what and why-in-a-line, not the reasoning behind the engine |
+| Architecture / sync / platform-research docs | Same (moved 2026-08-04 — the repo history holds the pre-move versions) |
+| The live to-do / parking list, roadmap | Same |
 | Code-level intent | Comments at the site, stating the *invariant* being protected — not the failure mode that motivated it |
 
 ## How to write in this repo
@@ -28,7 +29,7 @@ goes for review findings, which double as a map of where to push.
   recipe.
 - **Never enumerate what's still open.** A public list of known-weak seams is
   the single most useful document an attacker can find. Open items live in
-  Drive; `parked.md` carries only what's safe in daylight.
+  Drive, all of them.
 - **Feature work stays expressive.** This restraint is for vulnerability
   handling and core-IP rationale. Copy, UI, product decisions — write those with
   the usual voice.

@@ -1,7 +1,7 @@
 // tests/exercise-tempo.test.js
 // ─────────────────────────────────────────────────────────────────────────────
 // Invariants for the tempo dataset (lib/exercise-tempo.js). The data was
-// compiled externally from docs/research/tempo-sourcing-prompt.md; these
+// compiled externally via the tempo sourcing prompt (internal notes); these
 // tests lock what ingestion validated — full canonical coverage, valid
 // notation, honest evidence labels, resolvable citations — so a future
 // re-run of the sourcing prompt can't silently regress the joins.

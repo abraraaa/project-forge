@@ -3,7 +3,7 @@
 // Semantics lock for lib/absence.js. These tests ARE the specification —
 // absence is derived (never stored), measured in quiet days against the
 // user's cadence, and symmetric between closed and ongoing gaps. If a
-// change here is needed, the design in docs/absence-modelling.md moved.
+// change here is needed, the absence design itself moved.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
