@@ -92,6 +92,7 @@ export default function LockerRoom() {
   const lastSnapRef = useRef(0);
   const urlsRef = useRef({});
   const inflightRef = useRef(new Set());
+  const [failed, setFailed] = useState(new Set()); // dates whose fetch died — tappable to retry
 
   useEffect(() => () => { Object.values(urlsRef.current).forEach((u) => URL.revokeObjectURL(u)); }, []);
 
@@ -99,15 +100,29 @@ export default function LockerRoom() {
   // (Was called in a loop over every photo on reveal — the N+1 full-res fetch
   // our own audit + an external review both flagged. Now driven by the window
   // below, so only a bounded neighbourhood is ever fetched.)
+  // An <img> that mounts but can't DECODE its blob paints nothing while
+  // urls[date] exists — the one failure the fetch-level state can't see.
+  // Treat it identically: drop the dud URL, mark failed, offer the retry.
+  const onImgError = useCallback((date) => {
+    const u = urlsRef.current[date];
+    if (u) { URL.revokeObjectURL(u); delete urlsRef.current[date]; }
+    setUrls((prev) => { const n = { ...prev }; delete n[date]; return n; });
+    setFailed((prev) => new Set(prev).add(date));
+  }, []);
+
   const mintUrl = useCallback((tok, date) => {
     if (urlsRef.current[date] || inflightRef.current.has(date)) return;
     inflightRef.current.add(date);
+    setFailed((prev) => { if (!prev.has(date)) return prev; const n = new Set(prev); n.delete(date); return n; });
     fetchPhotoObjectUrl(profile, tok, date)
       .then((u) => {
         inflightRef.current.delete(date);
         if (u) { urlsRef.current[date] = u; setUrls((prev) => ({ ...prev, [date]: u })); }
+        // A null is a real outcome (timeout, auth lapse, 404) — surface
+        // it. Silent null painted a permanent white frame with no retry.
+        else setFailed((prev) => new Set(prev).add(date));
       })
-      .catch(() => inflightRef.current.delete(date));
+      .catch(() => { inflightRef.current.delete(date); setFailed((prev) => new Set(prev).add(date)); });
   }, [profile]);
 
   // Bounded prefetch window + LRU eviction (geometry in photoWindowIndices /
@@ -416,11 +431,18 @@ export default function LockerRoom() {
           style={{ position: "relative", width: "100%", aspectRatio: "3/4", maxHeight: "46dvh", borderRadius: T.r, overflow: "hidden", background: T.surface, boxShadow: T.elev, touchAction: "pan-y", marginBottom: 12 }}>
           {urls[photos[i0].date] && (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={urls[photos[i0].date]} alt={photos[i0].date} draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 1 - frac }} />
+            <img src={urls[photos[i0].date]} alt={photos[i0].date} draggable={false} onError={() => onImgError(photos[i0].date)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 1 - frac }} />
           )}
           {i1 !== i0 && urls[photos[i1].date] && (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={urls[photos[i1].date]} alt={photos[i1].date} draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: frac }} />
+            <img src={urls[photos[i1].date]} alt={photos[i1].date} draggable={false} onError={() => onImgError(photos[i1].date)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: frac }} />
+          )}
+          {!urls[photos[i0].date] && failed.has(photos[i0].date) && (
+            <button onClick={() => mintUrl(token, photos[i0].date)}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: T.text }}>
+              <Glyph name="refresh" size={18} color={T.ink3}/>
+              <span style={{ fontSize: 13, color: T.ink2 }}>Didn&apos;t load. Tap to try again.</span>
+            </button>
           )}
           <div className="forge-vellum" style={{ position: "absolute", left: 12, bottom: 12, padding: "8px 12px", borderRadius: T.r, boxShadow: "0 4px 14px -8px rgba(36,28,25,0.4)" }}>
             <div style={{ ...mono, fontSize: 17, color: T.ink }}>{cur?.bodyweightAt != null ? `${cur.bodyweightAt} kg` : "—"}</div>
