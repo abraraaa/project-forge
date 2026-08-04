@@ -555,7 +555,11 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
 .lab-card {
   animation: lab-card-arrive linear both;
   animation-timeline: view();
-  animation-range: entry 0% entry 80%;
+  /* Range runs into `cover` so rows near the FOLD sit part-faded on
+     first paint — a calm page that unveils detail as you scroll (boss
+     direction, 2026-08-04). Rows fully above the fold resolve complete;
+     the glide finishes a third of the way up the viewport. */
+  animation-range: entry 0% cover 35%;
 }
 
 /* Scroll cue — a slow, small downward bob so the eye catches the "more

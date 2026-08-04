@@ -516,8 +516,16 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
     // The away beat lives ONCE, in the masthead support line — a callout
     // here repeated it and spent six lines saying so (boss report,
     // 2026-08-04). The muted rows carry the eight-week state on their own.
+    // The columns still introduce themselves: the away branch skipped the
+    // section kicker entirely, so "0 of 8" met the user unexplained.
     return (
       <div style={{margin:"18px 24px 0"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,paddingBottom:6,borderBottom:`1px solid ${T.rule}`,marginBottom:4}}>
+          <span style={{fontSize:12,color:T.ink2}}>
+            Each row: the 8-week trend, and sets against the muscle&rsquo;s minimum.
+          </span>
+          <GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/>
+        </div>
         {historical.map(row => <MuscleRow key={row.muscle} {...row} muted />)}
       </div>
     );
@@ -545,6 +553,10 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
           Sets per week vs MEV/MAV/MRV · last <span style={{fontFamily:T.measured}}>{audit.weeksAnalysed}</span> complete weeks
         </span>
         <GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/>
+      </div>
+      {/* The columns introduce themselves once, before the first group. */}
+      <div style={{padding:"6px 24px 0",fontSize:12,color:T.ink2}}>
+        Each row: the 8-week trend, this week&rsquo;s sets, and the band rail with its MEV and MRV ticks.
       </div>
       {groups.map(g => {
         const gSets = Math.round(g.rows.reduce((n, r) => n + (r.sets || 0), 0));
