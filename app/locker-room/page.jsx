@@ -92,6 +92,7 @@ export default function LockerRoom() {
   const lastSnapRef = useRef(0);
   const urlsRef = useRef({});
   const inflightRef = useRef(new Set());
+  const [failed, setFailed] = useState(new Set()); // dates whose fetch died — tappable to retry
 
   useEffect(() => () => { Object.values(urlsRef.current).forEach((u) => URL.revokeObjectURL(u)); }, []);
 
@@ -102,12 +103,16 @@ export default function LockerRoom() {
   const mintUrl = useCallback((tok, date) => {
     if (urlsRef.current[date] || inflightRef.current.has(date)) return;
     inflightRef.current.add(date);
+    setFailed((prev) => { if (!prev.has(date)) return prev; const n = new Set(prev); n.delete(date); return n; });
     fetchPhotoObjectUrl(profile, tok, date)
       .then((u) => {
         inflightRef.current.delete(date);
         if (u) { urlsRef.current[date] = u; setUrls((prev) => ({ ...prev, [date]: u })); }
+        // A null is a real outcome (timeout, auth lapse, 404) — surface
+        // it. Silent null painted a permanent white frame with no retry.
+        else setFailed((prev) => new Set(prev).add(date));
       })
-      .catch(() => inflightRef.current.delete(date));
+      .catch(() => { inflightRef.current.delete(date); setFailed((prev) => new Set(prev).add(date)); });
   }, [profile]);
 
   // Bounded prefetch window + LRU eviction (geometry in photoWindowIndices /
@@ -421,6 +426,13 @@ export default function LockerRoom() {
           {i1 !== i0 && urls[photos[i1].date] && (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img src={urls[photos[i1].date]} alt={photos[i1].date} draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: frac }} />
+          )}
+          {!urls[photos[i0].date] && failed.has(photos[i0].date) && (
+            <button onClick={() => mintUrl(token, photos[i0].date)}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: T.text }}>
+              <Glyph name="refresh" size={18} color={T.ink3}/>
+              <span style={{ fontSize: 13, color: T.ink2 }}>Didn&apos;t load. Tap to try again.</span>
+            </button>
           )}
           <div className="forge-vellum" style={{ position: "absolute", left: 12, bottom: 12, padding: "8px 12px", borderRadius: T.r, boxShadow: "0 4px 14px -8px rgba(36,28,25,0.4)" }}>
             <div style={{ ...mono, fontSize: 17, color: T.ink }}>{cur?.bodyweightAt != null ? `${cur.bodyweightAt} kg` : "—"}</div>
