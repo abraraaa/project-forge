@@ -185,7 +185,7 @@ Add a new `SESSIONS` exercise and the pool/anatomy/canonical-name invariants wil
 ## Documentation
 
 - **CHANGELOG** — [CHANGELOG.md](./CHANGELOG.md): what changed and why, newest first.
-- **Design notes** — `docs/`: [architecture.md](./docs/architecture.md), [delta-sync.md](./docs/delta-sync.md), [absence-modelling.md](./docs/absence-modelling.md), [offline-shell.md](./docs/offline-shell.md), and [parked.md](./docs/parked.md) for everything deliberately not built yet.
+- **Design notes** — `docs/`: [architecture.md](./docs/architecture.md), [delta-sync.md](./docs/delta-sync.md), [absence-modelling.md](./docs/absence-modelling.md), and [offline-shell.md](./docs/offline-shell.md).
 - **Platform research** — [frontend-audit.md](./docs/frontend-audit.md): the living map of how the app sits against Next and Safari/iOS, including what's been ruled out and why. Cited sources throughout.
 - **Working practice** — [docs/internal-notes.md](./docs/internal-notes.md): what belongs in this repo and what doesn't.
 - **Licensing** — [LICENSING.md](./LICENSING.md) · **Code of Conduct** — [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).

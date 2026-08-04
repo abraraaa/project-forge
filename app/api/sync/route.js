@@ -24,7 +24,7 @@ import { NextResponse } from "next/server";
 // authoritative, leaves the DB empty so the trigger stays live, and says so
 // loudly.
 //
-// Sized from measurement (docs/parked.md): ~114 queries at 100 records, which
+// Sized from measurement (internal notes): ~114 queries at 100 records, which
 // leaves ~70ms per round-trip inside a 10s budget. Raise only with numbers.
 const MAX_INLINE_BACKFILL = 100;
 

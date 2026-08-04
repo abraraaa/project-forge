@@ -1,9 +1,11 @@
 # Working with Forge
 
 Project context lives in `README.md` (design principles, programme model) and
-`docs/` (`parked.md`, `architecture.md`, `absence-modelling.md`, …). Read those
-for the *what*. This file is the *how we work together* — the collaboration
-contract. Honour it.
+`docs/` (`architecture.md`, `absence-modelling.md`, …). Read those for the
+*what*. The roadmap/backlog and internal reasoning live in Drive ("Heatwayve
+— Internal Notes"), deliberately NOT in this public repo — don't reintroduce
+a `parked.md` or a strategy doc here. This file is the *how we work together*
+— the collaboration contract. Honour it.
 
 ## Verify before you build. Don't pummel.
 
