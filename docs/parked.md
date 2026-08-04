@@ -56,6 +56,18 @@ hygiene; detector correctness and error-handling in the audit-tail batch.
   passkey-less devices re-attempt a pull on launch — if not, the
   heartbeat needs an app-open nudge instead.
 
+- **Voice sweep — playfulness + jargon, PLANNED 2026-08-04.** One pass,
+  two lenses, after the boss rules on dash density. (1) *Playfulness*:
+  flat utilitarian strings get the house voice — the bounded 2026-08-04
+  pass set the register; this extends it app-wide. (2) *Jargon*: the
+  pack's nouns stay in the pack. Captions, labels and empty states
+  translate internal vocabulary into a lifter's words ("sweet spot", "the
+  least that still grows it"), never quote it ("band rail", "MEV ticks").
+  Known leak candidates: "readiness", "e1RM", "day key" wherever they
+  face users; the About/glossary keeps the science by name one tap away.
+  Explanatory copy follows the EYE's order across the visual it explains,
+  not the DOM's.
+
 - **Travel mode (via swap) — RAISED 2026-08-03, boss verdict: "does fuck
   all."** Needs a diagnosis pass before any fix: what it currently changes,
   what a traveller actually needs (equipment-constrained swaps? hotel-gym
