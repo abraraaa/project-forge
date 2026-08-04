@@ -355,15 +355,29 @@ export default function ForgeApp(){
     pushNow(activeProfile);
   }, [activeProfile]);
   const [weekEditorOpen, setWeekEditorOpen] = useState(false);
+  // A schedule edit changes what "satisfied" means for the whole week
+  // (a manual tick only counts against its own type), so the completion
+  // projection must re-run HERE, not just at profile load — without this,
+  // marking cardio done and then flipping today to strength left the day
+  // reading "done" and Begin unreachable until a full reload (boss report,
+  // 2026-08-04).
+  const refreshDayProjection = useCallback(() => {
+    const proj = Days.projectCurrentWeek(activeProfile);
+    setWeekDone(proj.complete);
+    setBonusDone(proj.bonus);
+    setDayDone(Days.manualTickDates(activeProfile));
+  }, [activeProfile]);
   const handleSaveWeek = (newWeek) => {
     W.save(newWeek);
     setUserWeek(W.get() || WEEK); // re-read so state mirrors the persisted/normalised shape
+    refreshDayProjection();
     setWeekEditorOpen(false);
     pushNow(activeProfile);
   };
   const handleResetWeek = () => {
     W.reset();
     setUserWeek(WEEK);
+    refreshDayProjection();
     setWeekEditorOpen(false);
     pushNow(activeProfile);
   };

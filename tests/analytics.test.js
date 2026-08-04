@@ -577,14 +577,20 @@ describe("pendingTonnageMilestone", () => {
   });
 
   it("returns the lowest unseen milestone the user has crossed", () => {
-    expect(pendingTonnageMilestone(1200, 0)).toBe(1000);
-    expect(pendingTonnageMilestone(7000, 1000)).toBe(5000);
-    expect(pendingTonnageMilestone(7000, 5000)).toBeNull();
+    // Re-cut 2026-08-04: the sparkline carries the weekly story, so the
+    // card keeps only rare beats — 100 t is now the first.
+    expect(pendingTonnageMilestone(1200, 0)).toBeNull();
+    expect(pendingTonnageMilestone(120_000, 0)).toBe(100_000);
+    expect(pendingTonnageMilestone(600_000, 100_000)).toBe(500_000);
+    expect(pendingTonnageMilestone(600_000, 500_000)).toBeNull();
   });
 
   it("skips milestones already acknowledged", () => {
-    expect(pendingTonnageMilestone(11000, 10000)).toBeNull();
-    expect(pendingTonnageMilestone(26000, 10000)).toBe(25000);
+    expect(pendingTonnageMilestone(1_100_000, 1_000_000)).toBeNull();
+    expect(pendingTonnageMilestone(2_600_000, 1_000_000)).toBe(2_000_000);
+    // Transition: a seen value from the retired scale surfaces at most one
+    // card — the highest newly-crossed threshold, not a parade.
+    expect(pendingTonnageMilestone(120_000, 25_000)).toBe(100_000);
   });
 
   it("milestones are sorted ascending", () => {
