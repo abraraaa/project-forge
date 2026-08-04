@@ -91,4 +91,16 @@ describe("PerformanceLab — populated history", () => {
     expect(screen.getAllByText(/logged/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText("5").length).toBeGreaterThan(0);
   });
+
+  it("§13 sections mount on typed history: strength rows, consistency cells, group aggregates", () => {
+    const history = ["2026-07-07","2026-07-14","2026-07-21","2026-07-28"].map(buildSession);
+    render(<PerformanceLab history={history} onBack={() => {}} />);
+    // Strength — one row per main lift, with the section kicker.
+    expect(screen.getByText(/Strength · e1RM/)).toBeTruthy();
+    expect(screen.getByLabelText(/Barbell Back Squat: estimated 1RM/)).toBeTruthy();
+    // Consistency — planned-vs-done streak in mono.
+    expect(screen.getByText(/planned/)).toBeTruthy();
+    // Group headers carry their aggregate as data.
+    expect(screen.getAllByText(/in band/).length).toBeGreaterThan(0);
+  });
 });

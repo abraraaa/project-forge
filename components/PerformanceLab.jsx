@@ -11,7 +11,7 @@
 import { useMemo, useState, useEffect } from "react";
 import {
   mainLiftTrend, weeklyVolumeByMuscle, weeklyRhythm,
-  readinessBreakdown, sessionCount, detectPlateaus, weeklyTonnage, formatTonnage,
+  readinessBreakdown, sessionCount, detectPlateaus,
 } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER, VOLUME_TARGETS } from "@/lib/volume-audit";
 import Glyph from "@/components/Glyph";
@@ -59,7 +59,7 @@ const linkBtn = {
 // ─── Main export ──────────────────────────────────────────────────────────────
 export default function PerformanceLab({ history, onBack, resting = false }) {
   const trends  = useMemo(() => mainLiftTrend(history),   [history]);
-  const rhythmWeeks = useMemo(() => weeklyRhythm(history, 12), [history]);
+  const rhythmWeeks = useMemo(() => weeklyRhythm(history, 8), [history]);
   // The strip reads against the user's OWN weekly quota (schedule-aware).
   const weeklyQuota = useMemo(() => {
     const week = W.get() || WEEK;
@@ -70,11 +70,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
   const plateaus  = useMemo(() => detectPlateaus(history),     [history]);
   const volumeAudit  = useMemo(() => auditHistoryVolume(history, { weeks: 2 }), [history]);
   const volumeTrend  = useMemo(() => weeklyVolumeByMuscle(history, { weeks: 8 }), [history]);
-  const tonnageWeeks = useMemo(() => weeklyTonnage(history, 2), [history]);
-
   const mainLifts = Object.keys(trends);
-  const [selectedLift, setSelectedLift] = useState(null);
-  const activeLift = selectedLift || mainLifts[0] || null;
 
   // Glossary sheet — opened by ⓘ triggers throughout the lab.
   const [glossaryAnchor, setGlossaryAnchor] = useState(null);
@@ -91,7 +87,21 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
   const setsPerWk = volumeAudit
     ? Math.round(Object.values(volumeAudit.perMuscle || {}).reduce((s, m) => s + (m.sets || 0), 0))
     : 0;
-  const lastFullWeekKg = tonnageWeeks.length > 1 ? tonnageWeeks[tonnageWeeks.length - 2].kg : 0;
+  // Band census for the glance strip: judged = every muscle the audit
+  // holds against a landmark; in-band = productive (low/optimal).
+  const bandCounts = useMemo(() => {
+    const out = { judged: 0, inBand: 0, under: 0, over: 0 };
+    if (!volumeAudit || volumeAudit.away) return out;
+    for (const m of AUDIT_MUSCLE_ORDER) {
+      const st = volumeAudit.perMuscle[m]?.status;
+      if (!st || st === "untargeted") continue;
+      out.judged++;
+      if (st === "low" || st === "optimal") out.inBand++;
+      else if (st === "under_mev") out.under++;
+      else if (st === "over_mrv") out.over++;
+    }
+    return out;
+  }, [volumeAudit]);
   const guidance = isEmpty
     ? "Go train. The numbers follow."
     : volumeAudit?.away
@@ -129,22 +139,14 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
         </div>
       </div>
 
-      {/* Headline numbers — on the ground between hairlines. Steel carries
-          the under count: the one non-thermal data colour. */}
-      {!isEmpty && (
-        <div style={{margin:"16px 0 0",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex"}}>
-          <div style={{flex:1,padding:"12px 0 12px 24px"}}>
-            <div style={{fontFamily:T.measured,fontSize:21,color:T.ink,letterSpacing:"-0.03em"}}>{setsPerWk}</div>
-            <div style={{fontSize:11,color:T.ink3,marginTop:2}}>sets /wk</div>
-          </div>
-          <div style={{flex:1,padding:"12px 0 12px 14px",borderLeft:`1px solid ${T.rule}`}}>
-            <div style={{fontFamily:T.measured,fontSize:21,color:T.ink,letterSpacing:"-0.03em"}}>{formatTonnage(lastFullWeekKg)}</div>
-            <div style={{fontSize:11,color:T.ink3,marginTop:2}}>last week</div>
-          </div>
-          <div style={{flex:1,padding:"12px 24px 12px 14px",borderLeft:`1px solid ${T.rule}`}}>
-            <div style={{fontFamily:T.measured,fontSize:21,color:underMuscles.length?T.under:T.ink,letterSpacing:"-0.03em"}}>{underMuscles.length}</div>
-            <div style={{fontSize:11,color:T.ink3,marginTop:2}}>under</div>
-          </div>
+      {/* §13.3 — the glance strip: one hairline-bounded line, the whole
+          Lab in one reading. The tier-one promise, literally. */}
+      {!isEmpty && !volumeAudit?.away && (
+        <div style={{margin:"16px 0 0",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,padding:"10px 24px",fontSize:13,color:T.ink2,display:"flex",gap:14,flexWrap:"wrap"}}>
+          <span><span style={{fontFamily:T.measured}}>{setsPerWk}</span> sets /wk</span>
+          <span><span style={{fontFamily:T.measured}}>{bandCounts.inBand}</span> of <span style={{fontFamily:T.measured}}>{bandCounts.judged}</span> in band</span>
+          {bandCounts.under > 0 && <span style={{color:T.under}}><span style={{fontFamily:T.measured}}>{bandCounts.under}</span> under</span>}
+          {bandCounts.over > 0 && <span><span style={{fontFamily:T.measured}}>{bandCounts.over}</span> over</span>}
         </div>
       )}
 
@@ -162,7 +164,27 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
 
       {!isEmpty && (
         <>
-          {/* Volume per muscle, grouped by training day. */}
+          {/* §13.5 — the Lab is a journal, not one chart: strength first
+              (the e1RM numbers are the headline), the rhythm she controls
+              second, the volume diagnostics that explain both last. */}
+          {mainLifts.length > 0 && !volumeAudit?.away && (
+            <div className="lab-card" style={{margin:"24px 24px 0"}}>
+              <div style={{paddingBottom:8,borderBottom:`1px solid ${T.rule}`,fontSize:13,color:T.ink3}}>
+                Strength · e1RM vs <span style={{fontFamily:T.measured}}>28</span> days
+              </div>
+              {mainLifts.map(lift => <StrengthRow key={lift} lift={lift} series={trends[lift] || []}/>)}
+            </div>
+          )}
+
+          {/* §13.5 consistency — planned sessions as hairline squares,
+              completed filled with the day key; adherence as texture. */}
+          {!volumeAudit?.away && (
+            <div className="lab-card" style={{margin:"28px 24px 0"}}>
+              <ConsistencyCells weeks={rhythmWeeks} quota={weeklyQuota}/>
+            </div>
+          )}
+
+          {/* Volume ledger — muscles grouped by training day, dense rows. */}
           <div className="lab-card">
             <VolumeLandscape trend={volumeTrend} audit={volumeAudit} totalSessions={counts.total} openGlossary={openGlossary} />
           </div>
@@ -181,41 +203,6 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
               </span>
             </div>
           )}
-
-          {/* 1RM trend */}
-          {activeLift && (
-            <div className="lab-card" style={{margin:"28px 24px 0"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",paddingBottom:8,borderBottom:`1px solid ${T.rule}`}}>
-                <span style={{fontSize:13,color:T.ink3}}>Estimated 1RM</span>
-                <button
-                  onClick={async ()=>{
-                    const canvas = await renderShareCard({ lift: activeLift, series: trends[activeLift] || [] });
-                    await shareCanvas(canvas, `heatwayve-${activeLift.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-1rm.png`);
-                  }}
-                  style={{...linkBtn,fontSize:12}}
-                  aria-label={`Share ${activeLift} trend`}
-                >
-                  Share <Glyph name="arrowUpRight" size={11}/>
-                </button>
-              </div>
-              {mainLifts.length > 1 && (
-                <LiftSelector lifts={mainLifts} active={activeLift} onSelect={setSelectedLift}/>
-              )}
-              <div style={{paddingTop:mainLifts.length > 1 ? 4 : 14}}>
-                <LineChart series={trends[activeLift]} />
-              </div>
-            </div>
-          )}
-
-          {/* Rhythm strip — weeks, not days (rhythm doctrine). */}
-          <div className="lab-card" style={{margin:"28px 24px 0"}}>
-            <div style={{paddingBottom:8,borderBottom:`1px solid ${T.rule}`,fontSize:13,color:T.ink3}}>
-              Rhythm · last <span style={{fontFamily:T.measured}}>12</span> weeks vs <span style={{fontFamily:T.measured}}>{weeklyQuota}</span> strength day{weeklyQuota === 1 ? "" : "s"}/wk
-            </div>
-            <div style={{paddingTop:14}}>
-              <RhythmStrip weeks={rhythmWeeks} quota={weeklyQuota} muted={volumeAudit.away} />
-            </div>
-          </div>
 
           {/* Readiness breakdown — the one other place the ramp speaks. */}
           <div className="lab-card" style={{margin:"28px 24px 0"}}>
@@ -321,95 +308,86 @@ function EmptyState() {
   );
 }
 
-// ─── Lift selector — text, not pills ─────────────────────────────────────────
-function LiftSelector({ lifts, active, onSelect }) {
+// ─── Ink sparkline — §13.1's data mark: 1.5px ink, no fill, no axes ──────────
+function InkSpark({ values, width = 44, height = 12, stroke = 1.5, color = "var(--ink-2)" }) {
+  const v = (values || []).filter((x) => Number.isFinite(x));
+  if (v.length < 2) return <span style={{width}} aria-hidden="true"/>;
+  const max = Math.max(...v), min = Math.min(...v);
+  const range = max - min || 1;
+  const d = v.map((x, i) =>
+    `${i===0?"M":"L"} ${(i * (width / (v.length - 1))).toFixed(1)} ${(height - 2 - (height - 4) * ((x - min) / range)).toFixed(1)}`
+  ).join(" ");
   return (
-    <div style={{display:"flex", gap:18, overflowX:"auto", paddingTop:12, scrollbarWidth:"none"}}>
-      {lifts.map(lift => {
-        const on = lift === active;
-        return (
-          <button key={lift} onClick={() => { haptic.toggle(); onSelect(lift); }}
-            style={{...linkBtn, fontSize:13, fontWeight:on?500:400, color:on?T.ink:T.ink3, whiteSpace:"nowrap",
-              paddingBottom:5, borderBottom:`2px solid ${on?T.ink:"transparent"}`, transition:`color 180ms ${T.ease}`}}>
-            {lift}
-          </button>
-        );
-      })}
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{overflow:"visible",flexShrink:0}} aria-hidden="true">
+      <path d={d} fill="none" stroke={color} strokeWidth={stroke} strokeLinejoin="round" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+// ─── Strength rows — one per main lift on the volume-row template ────────────
+// lift · e1RM sparkline · mono current · delta vs 28 days. The old
+// one-chart-with-selector died here (§13.5: nothing gets its own card);
+// the share card survives per row.
+function StrengthRow({ lift, series }) {
+  const cur = series[series.length - 1];
+  if (!cur) return null;
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 28);
+  const cutIso = `${cutoff.getFullYear()}-${String(cutoff.getMonth()+1).padStart(2,"0")}-${String(cutoff.getDate()).padStart(2,"0")}`;
+  const base = series.find((p) => p.date >= cutIso) || series[0];
+  const delta = Math.round((cur.est1RM - base.est1RM) * 10) / 10;
+  const deltaStr = delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : "level";
+  return (
+    <div className="lab-card" style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderTop:`1px solid ${T.ruleFaint}`}}
+      aria-label={`${lift}: estimated 1RM ${cur.est1RM} kg, ${deltaStr === "level" ? "level" : `${deltaStr} kg`} vs 28 days ago`}>
+      <span style={{flex:1,minWidth:0,fontSize:15,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lift}</span>
+      <InkSpark values={series.slice(-8).map(p => p.est1RM)}/>
+      <span style={{fontFamily:T.measured,fontSize:15,color:T.ink,flexShrink:0}}>{cur.est1RM}<span style={{fontFamily:T.text,fontSize:11,color:T.ink3}}> kg</span></span>
+      <span style={{width:58,textAlign:"right",fontSize:11,color:delta > 0 ? T.heat[3] : T.ink3,flexShrink:0}}>
+        {delta !== 0 ? <><span style={{fontFamily:T.measured}}>{deltaStr}</span> kg</> : "level"}
+      </span>
+      <button
+        onClick={async ()=>{
+          const canvas = await renderShareCard({ lift, series });
+          await shareCanvas(canvas, `heatwayve-${lift.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-1rm.png`);
+        }}
+        style={{background:"none",border:"none",padding:"4px 0 4px 4px",cursor:"pointer",flexShrink:0,display:"inline-flex"}}
+        aria-label={`Share ${lift} trend`}>
+        <Glyph name="arrowUpRight" size={11} color={T.ink3}/>
+      </button>
     </div>
   );
 }
 
-// ─── Line chart (1RM trend) ──────────────────────────────────────────────────
-// Hand-rolled SVG. The stroke is a heat gradient along its own length —
-// the line heats as it climbs. Cooked sessions print hollow points.
-function LineChart({ series }) {
-  const W = 320, H = 108, PAD_X = 12, PAD_Y = 18;
-  if (!series || series.length === 0) {
-    return <div style={{padding:"24px 0", fontSize:13, color:T.ink3, textAlign:"center"}}>No data yet</div>;
-  }
-  // Single data point: show the number, no line.
-  if (series.length === 1) {
-    const p = series[0];
-    return (
-      <div style={{textAlign:"center", padding:"18px 0"}}>
-        <div style={{fontFamily:T.measured, fontSize:48, fontWeight:300, letterSpacing:"-0.04em", color:T.ink, lineHeight:1}}>{p.est1RM}<span style={{fontSize:18, color:T.ink3, marginLeft:4}}>kg</span></div>
-        <div style={{fontSize:12, color:T.ink3, marginTop:8}}>{p.date} · top set <span style={{fontFamily:T.measured}}>{p.topSet.weight}</span> kg × <span style={{fontFamily:T.measured}}>{p.topSet.reps}</span></div>
-        <div style={{fontSize:12, color:T.ink3, marginTop:6}}>Log another session to see the trend</div>
-      </div>
-    );
-  }
-
-  const values = series.map(p => p.est1RM);
-  const minV = Math.min(...values), maxV = Math.max(...values);
-  const rangeV = maxV - minV || 1;
-  const yMin = minV - rangeV * 0.2;
-  const yMax = maxV + rangeV * 0.2;
-
-  const xAt = (i) => PAD_X + (W - 2*PAD_X) * (i / (series.length - 1));
-  const yAt = (v) => PAD_Y + (H - 2*PAD_Y) * (1 - (v - yMin) / (yMax - yMin));
-
-  const pathD = series.map((p, i) => `${i===0 ? "M" : "L"} ${xAt(i)} ${yAt(p.est1RM)}`).join(" ");
-  const areaD = `${pathD} L ${xAt(series.length-1)} ${H-PAD_Y} L ${xAt(0)} ${H-PAD_Y} Z`;
-
-  const latest  = series[series.length-1];
-  const first   = series[0];
-  const delta   = latest.est1RM - first.est1RM;
-  const pctDelta= first.est1RM > 0 ? (delta / first.est1RM) * 100 : 0;
-
+// ─── Consistency — the last 8 weeks as day cells (§13.5) ─────────────────────
+// Planned sessions are hairline squares; completed ones fill with the
+// strength day key at the mark radius. Adherence reads as texture; the
+// streak prints in mono at the right.
+function ConsistencyCells({ weeks, quota }) {
+  if (!weeks || weeks.length === 0) return null;
+  const done = weeks.reduce((n, w) => n + Math.min(w.days, quota), 0);
+  const planned = weeks.length * quota;
   return (
     <div>
-      <div style={{display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:10}}>
-        <div>
-          <span style={{fontFamily:T.measured, fontSize:30, fontWeight:300, letterSpacing:"-0.03em", color:T.ink}}>{latest.est1RM}</span>
-          <span style={{fontSize:13, color:T.ink3, marginLeft:4}}>kg</span>
-        </div>
-        <div style={{fontFamily:T.measured, fontSize:12, color:T.ink2}}>
-          {delta >= 0 ? "+" : ""}{delta.toFixed(1)} kg · {pctDelta >= 0 ? "+" : ""}{pctDelta.toFixed(1)}%
-        </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",paddingBottom:8,borderBottom:`1px solid ${T.rule}`}}>
+        <span style={{fontSize:13,color:T.ink3}}>
+          Consistency · last <span style={{fontFamily:T.measured}}>{weeks.length}</span> weeks vs your week
+        </span>
+        <span style={{fontSize:12,color:T.ink2}}>
+          <span style={{fontFamily:T.measured}}>{done}</span> of <span style={{fontFamily:T.measured}}>{planned}</span> planned
+        </span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:"auto", display:"block"}}>
-        <defs>
-          <linearGradient id="hwLabTrend" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="var(--heat-1)"/>
-            <stop offset="0.6" stopColor="var(--heat-2)"/>
-            <stop offset="1" stopColor="var(--heat-3)"/>
-          </linearGradient>
-          <linearGradient id="hwLabArea" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="var(--heat-3)" stopOpacity="0.12"/>
-            <stop offset="1" stopColor="var(--heat-3)" stopOpacity="0"/>
-          </linearGradient>
-        </defs>
-        <path d={areaD} fill="url(#hwLabArea)" />
-        <path d={pathD} stroke="url(#hwLabTrend)" strokeWidth="1.6" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
-        {series.map((p, i) => (
-          <circle key={i} cx={xAt(i)} cy={yAt(p.est1RM)} r={i === series.length-1 ? 3.6 : 2.4}
-            fill={p.cooked ? "var(--heat-4)" : "var(--heat-2)"}
-            stroke="var(--ground)" strokeWidth="1.4"/>
+      <div style={{display:"flex",gap:10,paddingTop:12}} aria-label={`${done} of ${planned} planned sessions completed across ${weeks.length} weeks`}>
+        {weeks.map((w) => (
+          <div key={w.weekStart} style={{display:"flex",gap:3}}>
+            {Array.from({ length: quota }, (_, i) => (
+              <span key={i} aria-hidden="true" style={{
+                width:10,height:10,borderRadius:T.rMark,
+                background: i < w.days ? T.dayKey.strength : "transparent",
+                boxShadow: i < w.days ? "none" : `inset 0 0 0 1px ${T.rule}`,
+              }}/>
+            ))}
+          </div>
         ))}
-      </svg>
-      <div style={{display:"flex", justifyContent:"space-between", marginTop:6, fontFamily:T.measured, fontSize:10, color:T.ink3}}>
-        <span>{first.date.slice(5).replace("-","/")}</span>
-        <span>{latest.date.slice(5).replace("-","/")}</span>
       </div>
     </div>
   );
@@ -474,14 +452,25 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
         </span>
         <GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/>
       </div>
-      {groups.map(g => (
-        <div key={g.label}>
-          <div style={{padding:"12px 24px 5px",fontSize:12,color:T.ink3}}>{g.label}</div>
-          <div style={{padding:"0 24px"}}>
-            {g.rows.map(row => <MuscleRow key={row.muscle} {...row} />)}
+      {groups.map(g => {
+        const gSets = Math.round(g.rows.reduce((n, r) => n + (r.sets || 0), 0));
+        const judged = g.rows.filter(r => r.status && r.status !== "untargeted").length;
+        const inBand = g.rows.filter(r => r.status === "low" || r.status === "optimal").length;
+        return (
+          <div key={g.label}>
+            {/* §13.2 — a label that could be data is wasted ink. */}
+            <div style={{padding:"12px 24px 5px",display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+              <span style={{fontSize:12,color:T.ink3}}>{g.label}</span>
+              <span style={{fontSize:11,color:T.ink2}}>
+                <span style={{fontFamily:T.measured}}>{gSets}</span> sets · <span style={{fontFamily:T.measured}}>{inBand}</span> of <span style={{fontFamily:T.measured}}>{judged}</span> in band
+              </span>
+            </div>
+            <div style={{padding:"0 24px"}}>
+              {g.rows.map(row => <MuscleRow key={row.muscle} {...row} />)}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
       <div style={{margin:"14px 24px 0",fontSize:12,color:T.ink3,lineHeight:1.5}}>
         Sparklines are the last <span style={{fontFamily:T.measured}}>8</span> weeks · ticks mark MEV and MRV · beyond-MRV work is hatched. Read from your recent weeks, not your lifetime average.
       </div>
@@ -513,73 +502,52 @@ function MuscleRow({ muscle, sets, target, status, series, muted = false }) {
     ? wave.map((v, i) => `${i===0?"M":"L"} ${(i * (38 / (wave.length - 1))).toFixed(1)} ${(11 - 9 * (v / wMax)).toFixed(1)}`).join(" ")
     : null;
 
+  // Week-over-week trend for the right column (§13.1: "+2 vs last wk").
+  const wkDelta = series && series.length >= 2
+    ? Math.round(series[series.length - 1] - series[series.length - 2])
+    : null;
+  const emptyWithTarget = sets === 0 && target;
+
   return (
-    // lab-card: the scroll-driven arrival (view() timeline). The old Lab's
-    // CARDS wore it; when §11.2 turned cards into rows the rows came out
-    // bare and the whole list rendered at once, stranding the scroll cue
-    // (boss report, 2026-08-04). Per-row is finer-grained than the old
-    // per-card glide — each row arrives as it enters.
-    <div className="lab-card" style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:`1px solid ${T.ruleFaint}`}}
-      aria-label={`${displayName}: ${sets} sets per week${target ? `, ${label}, MEV ${target.mev}, MRV ${target.mrv}` : ""}`}>
-      <span style={{width:82,fontSize:15,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayName}</span>
-      <svg width="38" height="13" viewBox="0 0 38 13" style={{overflow:"visible",flexShrink:0}} aria-hidden="true">
-        {waveD && <path d={waveD} fill="none" stroke={colour} strokeWidth="1.4" strokeLinejoin="round"/>}
-        {wave.length > 0 && <circle cx="38" cy={(11 - 9 * (wave[wave.length-1] / wMax)).toFixed(1)} r="1.9" fill={colour}/>}
-      </svg>
-      <div style={{flex:1,position:"relative",height:8,background:T.well}} aria-hidden="true">
-        {mevPct != null && <div style={{position:"absolute",left:`${mevPct}%`,top:-3,width:1,height:14,background:T.ink,opacity:0.3}}/>}
-        {mrvPct != null && <div style={{position:"absolute",left:`${mrvPct}%`,top:-3,width:1,height:14,background:T.ink,opacity:0.3}}/>}
-        <div style={{position:"absolute",left:0,top:0,height:8,width:`${solidPct}%`,background:colour}}/>
-        {over && (
-          <div style={{position:"absolute",left:`${mrvPct}%`,top:0,height:8,width:`${fillPct - mrvPct}%`,backgroundColor:T.heatOver,backgroundImage:HATCH.auto}}/>
-        )}
+    // Two lines, seven facts, same height the old row spent on three
+    // (§13.1). lab-card = the scroll-driven arrival; per-row is finer
+    // grained than the old per-card glide.
+    <div className="lab-card" style={{padding:"8px 0",borderTop:`1px solid ${T.ruleFaint}`}}
+      aria-label={`${displayName}: ${sets} sets per week${target ? `, ${label}, MEV ${target.mev}, MRV ${target.mrv}` : ""}${wkDelta != null ? `, ${wkDelta >= 0 ? "up" : "down"} ${Math.abs(wkDelta)} versus last week` : ""}`}>
+      {/* Line one: name · sparkline (ink, no fill, no axes) · mono count.
+          Empty rows tell the programme (§13.6): the target, not a zero. */}
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{flex:1,minWidth:0,fontSize:15,color:muted?T.ink2:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayName}</span>
+        <svg width="44" height="13" viewBox="0 0 44 13" style={{overflow:"visible",flexShrink:0}} aria-hidden="true">
+          {waveD && <path d={waveD} fill="none" stroke={muted?T.ink3:"var(--ink-2)"} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>}
+          {wave.length > 0 && <circle cx="38" cy={(11 - 9 * (wave[wave.length-1] / wMax)).toFixed(1)} r="1.7" fill={muted?T.ink3:"var(--ink-2)"}/>}
+        </svg>
+        <span style={{minWidth:40,textAlign:"right",fontSize:13,color:T.ink,flexShrink:0}}>
+          {emptyWithTarget
+            ? <><span style={{fontFamily:T.measured,color:T.ink3}}>0</span><span style={{fontSize:11,color:T.ink3}}> of </span><span style={{fontFamily:T.measured,color:T.ink3}}>{target.mev}</span></>
+            : <span style={{fontFamily:T.measured}}>{sets}</span>}
+        </span>
       </div>
-      <span style={{width:26,textAlign:"right",fontFamily:T.measured,fontSize:13,color:T.ink,flexShrink:0}}>{sets}</span>
+      {/* Line two: the band rail as built · the trend, in words. */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginTop:6}}>
+        <div style={{flex:1,position:"relative",height:8,background:T.well}} aria-hidden="true">
+          {mevPct != null && <div style={{position:"absolute",left:`${mevPct}%`,top:-3,width:1,height:14,background:T.ink,opacity:0.3}}/>}
+          {mrvPct != null && <div style={{position:"absolute",left:`${mrvPct}%`,top:-3,width:1,height:14,background:T.ink,opacity:0.3}}/>}
+          <div style={{position:"absolute",left:0,top:0,height:8,width:`${solidPct}%`,background:colour}}/>
+          {over && (
+            <div style={{position:"absolute",left:`${mrvPct}%`,top:0,height:8,width:`${fillPct - mrvPct}%`,backgroundColor:T.heatOver,backgroundImage:HATCH.auto}}/>
+          )}
+        </div>
+        <span style={{minWidth:78,textAlign:"right",fontSize:11,color:T.ink3,flexShrink:0}} aria-hidden="true">
+          {wkDelta == null || muted ? "" :
+            wkDelta === 0 ? "level vs last wk" :
+            <><span style={{fontFamily:T.measured,color:wkDelta>0?T.ink2:T.ink3}}>{wkDelta>0?`+${wkDelta}`:wkDelta}</span> vs last wk</>}
+        </span>
+      </div>
     </div>
   );
 }
 
-// ─── Rhythm strip (12-week adherence) ────────────────────────────────────────
-// One cell per week, filled by distinct training days vs the user's weekly
-// quota. Adherence is ink density, not heat — effort owns the ramp, showing
-// up owns the ink. Current week gets the hairline ring (still being
-// written). Cells stay square: data marks carry no radius.
-function RhythmStrip({ weeks, quota, muted = false }) {
-  if (!weeks || weeks.length === 0) return null;
-  const CELL_H = 34, GAP = 5;
-  return (
-    <div>
-      <div style={{ display: "flex", gap: GAP, alignItems: "flex-end" }}>
-        {weeks.map((w, i) => {
-          const frac = Math.min(1, w.days / quota);
-          const current = i === weeks.length - 1;
-          return (
-            <div key={w.weekStart} title={`${w.weekStart} · ${w.days} day${w.days === 1 ? "" : "s"}`}
-              style={{
-                flex: 1, height: CELL_H, position: "relative",
-                background: T.well, overflow: "hidden",
-                boxShadow: current ? `inset 0 0 0 1px ${T.ink3}` : "none",
-              }}>
-              <div style={{
-                position: "absolute", left: 0, right: 0, bottom: 0,
-                height: `${Math.round(frac * 100)}%`,
-                background: T.ink,
-                opacity: muted ? 0.2 : 0.25 + 0.55 * frac,
-              }}/>
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 11, color: T.ink3 }}>
-        <span>12 weeks ago</span>
-        <span>this week</span>
-      </div>
-      <div style={{ marginTop: 10, fontSize: 13, color: T.ink2, lineHeight: 1.5 }}>
-        Weeks build it. No single day decides.
-      </div>
-    </div>
-  );
-}
 
 // ─── Readiness bar ────────────────────────────────────────────────────────────
 // fresh / normal / cooked on the one intensity scale — the ramp's cool,
