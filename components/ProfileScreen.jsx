@@ -928,7 +928,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 might be. The delete paths themselves are unchanged. */}
             {profileHasPasskey[confirmWipe] === false ? (
               <p style={{fontSize:13,color:T.ink2,marginBottom:22,lineHeight:1.6}}>
-                This profile lives only on this device — without a passkey nothing ever synced, so there&apos;s no copy anywhere else. Deleting it removes everything, permanently.
+                This profile lives only on this device. Without a passkey nothing ever synced, so there&apos;s no copy anywhere else. Deleting it removes everything, permanently.
               </p>
             ) : (
             <p style={{fontSize:13,color:T.ink2,marginBottom:22,lineHeight:1.6}}>

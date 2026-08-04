@@ -369,7 +369,7 @@ export default function LockerRoom() {
         <h1 className="home-headline" style={{ ...DISPLAY, fontSize: 45, color: T.ink, margin: 0, transformOrigin: "left top" }}>
           Locker room
         </h1>
-        <p style={{ fontSize: 15, color: T.ink2, margin: "10px 0 16px", lineHeight: 1.5 }}>The mirror lies day to day. The line doesn&apos;t — weigh in, shoot the photo, let the weeks argue for you.</p>
+        <p style={{ fontSize: 15, color: T.ink2, margin: "10px 0 16px", lineHeight: 1.5 }}>The mirror lies day to day; the line doesn&apos;t. Weigh in, shoot the photo, let the weeks argue for you.</p>
       </div>
 
       {/* The always-on bodyweight chart */}
@@ -378,7 +378,7 @@ export default function LockerRoom() {
 
       {!photosVisible && (
         <p style={{ fontSize: 13, color: T.ink2, marginTop: 14 }}>
-          Your photos wait behind the door — nothing shows until you ask.
+          Your photos wait behind the door. Nothing shows until you ask.
         </p>
       )}
 

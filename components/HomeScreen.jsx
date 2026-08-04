@@ -693,7 +693,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             style={{display:"flex",width:"100%",alignItems:"center",gap:12,padding:"14px 0",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,cursor:"pointer",textAlign:"left",fontFamily:T.text}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:16,fontWeight:500,color:T.ink,marginBottom:2}}>Locker room</div>
-              <div style={{fontSize:13,color:T.ink3,lineHeight:1.45}}>Weigh in, shoot the change — yours alone</div>
+              <div style={{fontSize:13,color:T.ink3,lineHeight:1.45}}>Weigh in, shoot the change. Yours alone.</div>
             </div>
             <Glyph name="arrowRight" size={14} color={T.ink3} style={{flexShrink:0}}/>
           </button>

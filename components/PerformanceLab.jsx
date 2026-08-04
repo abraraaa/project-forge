@@ -95,7 +95,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
   const guidance = isEmpty
     ? "Go train. The numbers follow."
     : volumeAudit?.away
-    ? "A lighter stretch — that's part of training."
+    ? "A lighter stretch. That's part of training."
     : underMuscles.length === 0
     ? "Every muscle is in its productive band. Keep going."
     : underMuscles.length === 1
