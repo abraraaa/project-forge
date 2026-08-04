@@ -319,13 +319,14 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
     }
   };
 
-  // Visual state for availability pip
+  // Visual state for availability pip. Glyph names, not characters — every
+  // symbol is drawn (§10.5); checking carries no glyph, the label suffices.
   const availabilityPip = () => {
-    if (availability === "checking")     return { colour: T.ink3,    icon: "…",  label: "checking" };
-    if (availability === "available")    return { colour: T.ink2,    icon: "✓",  label: existing.some(e=>e.toLowerCase()===name.trim().toLowerCase()) ? "on this device" : "available" };
-    if (availability === "taken")        return { colour: T.heat[4], icon: "✕",  label: "taken" };
-    if (availability === "invalid")      return { colour: T.heat[4], icon: "✕",  label: "invalid" };
-    if (availability === "network-err")  return { colour: T.ink2,    icon: "?",  label: "offline · try anyway" };
+    if (availability === "checking")     return { colour: T.ink3,    glyph: null,    label: "checking" };
+    if (availability === "available")    return { colour: T.ink2,    glyph: "check", label: existing.some(e=>e.toLowerCase()===name.trim().toLowerCase()) ? "on this device" : "available" };
+    if (availability === "taken")        return { colour: T.heat[4], glyph: "cross", label: "taken" };
+    if (availability === "invalid")      return { colour: T.heat[4], glyph: "cross", label: "invalid" };
+    if (availability === "network-err")  return { colour: T.ink2,    glyph: "info",  label: "offline · try anyway" };
     return null;
   };
   const pip = availabilityPip();
@@ -551,9 +552,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 // Decorative: the same state is announced in the status line
                 // below, so exposing the glyph too would read it twice.
                 <div aria-hidden="true" style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",display:"flex",alignItems:"center",gap:6,pointerEvents:"none"}}>
-                  {pip.icon === "✓" ? <Glyph name="check" size={12} color={pip.colour}/>
-                    : pip.icon === "✕" ? <Glyph name="cross" size={12} color={pip.colour}/>
-                    : <span style={{fontSize:14,color:pip.colour,fontWeight:500}}>{pip.icon}</span>}
+                  {pip.glyph && <Glyph name={pip.glyph} size={12} color={pip.colour}/>}
                 </div>
               )}
             </div>

@@ -1013,7 +1013,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
               </div>
             </div>
             <div style={{fontFamily:T.measured,fontSize:18,flexShrink:0,color:T.ink}}>
-              {n.base}{n.changed&&<span style={{color:T.heat[3]}}> → {n.current}</span>}<span style={{fontSize:12,color:T.ink3}}> kg</span>
+              {n.base}{n.changed&&<span style={{color:T.heat[3]}}> <Glyph name="arrowRight" size={11} color={T.heat[3]}/> {n.current}</span>}<span style={{fontSize:12,color:T.ink3}}> kg</span>
             </div>
           </div>
         </Fade>
