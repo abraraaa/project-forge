@@ -576,7 +576,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                     {pip.label === "taken" && "Already taken on Heatwayve"}
                     {pip.label === "invalid" && "No slashes, dots-only names, or control characters — they don't survive syncing"}
                     {pip.label === "checking" && "Checking…"}
-                    {pip.label === "offline · try anyway" && "Couldn't check online. You can still proceed"}
+                    {pip.label === "offline · try anyway" && "Couldn't check from here. Claim it and see."}
               </span>
             ) : name.trim().length === 1 ? (
               // Previously silent: one character left the button disabled with

@@ -1129,7 +1129,7 @@ export default function ForgeApp(){
         PN.snooze(activeProfile);
         setPnStage("hidden");
       } else {
-        setPnError("Couldn't register passkey. Try again later.");
+        setPnError("The passkey didn't take. Another go in a bit.");
         // Don't auto-snooze on error — let the user retry on their own terms.
       }
     } catch (e) {
