@@ -236,3 +236,27 @@ describe("the travel flag on the record", () => {
     expect(payload).not.toMatch(/:travel`/);
   });
 });
+
+describe("movement pattern decides where muscle alone is ambiguous", () => {
+  // Found by probing a rotated slot: "Single-Arm DB Row" is Lats-primary, so
+  // the muscle fallback handed it a Pull-Up — same muscle, wrong plane, and
+  // the session silently lost its horizontal pull.
+  it("a rotated row stays a horizontal pull", () => {
+    expect(travelTwin({ name: "Single-Arm DB Row" })).toBe("Inverted Row");
+    expect(travelTwin({ name: "Dumbbell Bent-Over Row" })).toBe("Inverted Row");
+    expect(travelTwin({ name: "Meadows Row" })).toBe("Inverted Row");
+  });
+
+  it("a vertical pull stays vertical", () => {
+    expect(travelTwin({ name: "Lat Pulldown" })).toBe("Pull-Up");
+  });
+
+  it("a fly stays a fly rather than becoming a press", () => {
+    expect(travelTwin({ name: "Cable Fly" })).toBe("Sliding Fly");
+  });
+
+  it("curated twins still win over the pattern layer", () => {
+    // Seated Cable Row matches /row/ but has a hand-mapped answer.
+    expect(travelTwin({ name: "Seated Cable Row" })).toBe(TRAVEL_TWINS["Seated Cable Row"]);
+  });
+});
