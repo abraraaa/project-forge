@@ -80,10 +80,34 @@ function TempoSection({ name }) {
       )}
       <p style={{ fontSize: 13, color: T.ink2, marginTop: 12, lineHeight: 1.6 }}>{t.principle}</p>
       {t.note && <p style={{ fontSize: 13, color: T.ink3, marginTop: 8, lineHeight: 1.6 }}>{t.note}</p>}
-      <p style={{ fontSize: 12, color: T.ink3, marginTop: 10, lineHeight: 1.6 }}>
-        {t.evidence === "derived" ? "Derived from tempo research on this movement class — " : ""}
-        {t.sources.map((s) => TEMPO_SOURCES[s]?.cite.split(".")[0]).filter(Boolean).join("; ")}.
-      </p>
+      {/* The evidence, in full and reachable. This used to print the first
+          sentence of each citation — authors only, no title, no journal, no
+          year, and no way to check it. A claim you can't follow is decoration;
+          the whole reason this repo is public is that the science can be
+          checked, and the same holds for the pages built from it. */}
+      <div style={{ marginTop: 12 }}>
+        <p style={{ fontSize: 12, color: T.ink3, lineHeight: 1.6, margin: 0 }}>
+          {t.evidence === "derived"
+            ? "Derived from tempo research on this movement class."
+            : "Measured directly for this movement."}
+        </p>
+        <ul style={{ listStyle: "none", padding: 0, margin: "6px 0 0" }}>
+          {t.sources.map((s) => {
+            const src = TEMPO_SOURCES[s];
+            if (!src) return null;
+            return (
+              <li key={s} style={{ fontSize: 12, color: T.ink3, lineHeight: 1.6, marginTop: 5 }}>
+                {src.url ? (
+                  <a href={src.url} target="_blank" rel="noopener noreferrer"
+                    style={{ color: T.ink2, textDecoration: "underline", textUnderlineOffset: "2px", textDecorationColor: T.rule }}>
+                    {src.cite} <Glyph name="arrowUpRight" size={10} color={T.ink3}/>
+                  </a>
+                ) : src.cite}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </section>
   );
 }
@@ -125,6 +149,17 @@ export default async function ExercisePage({ params }) {
       "@type": "PropertyValue", name: "Tempo", value: tempo.tempo,
       description: tempo.note || undefined,
     } } : {}),
+    // The sources as data, not just as links in the prose. ExercisePlan is a
+    // CreativeWork, so `citation` is the correct property — it lets a
+    // retrieval system see that the claim on this page is sourced, and to
+    // what, without parsing the footnote.
+    ...(tempo?.sources?.length ? {
+      citation: tempo.sources.map((s) => TEMPO_SOURCES[s]).filter(Boolean).map((src) => ({
+        "@type": "ScholarlyArticle",
+        name: src.cite,
+        ...(src.url ? { url: src.url } : {}),
+      })),
+    } : {}),
   };
 
   return (
