@@ -2,9 +2,12 @@
 // Only the public, state-independent routes. /session is app-state-dependent
 // (bounces without an intent/draft, and is marked noindex); /diag-* and /api
 // are excluded here and disallowed in robots.js.
-import { LIBRARY, LIBRARY_REVISED } from "@/lib/library";
+// Relative import, not the @/ alias: scripts/indexnow.mjs loads this module
+// under plain node to submit exactly the URLs we publish, and the alias only
+// resolves inside Next's bundler. One list, two consumers, no drift.
+import { LIBRARY, LIBRARY_REVISED } from "../lib/library.js";
 
-const BASE = "https://heatwayve.app";
+export const BASE = "https://heatwayve.app";
 
 // lastmod on the library URLs only, and only from LIBRARY_REVISED — the one
 // date we can state truthfully. The app routes are behind client state and
