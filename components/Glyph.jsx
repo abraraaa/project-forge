@@ -43,6 +43,12 @@ const PATHS = {
   // Moon: one open arc, aperture tilted to the top-right — the crescent
   // is the break itself, in the mark's own grammar.
   moon:        ["M13.9 3.7 A 8.1 8.1 0 1 0 20.3 12.4"],
+  // Plane, seen from above, nose up — travel mode. Three open strokes:
+  // fuselage, swept wings, tailplane. The wings and tail are the same
+  // open V at two scales, which is the aperture again. NOT a beach
+  // umbrella: an umbrella says holiday, and holiday is the breather's
+  // word (lib/breaks.js). This mark says transit — away, still training.
+  plane:       ["M12 3 L12 21", "M3.6 14.2 L12 8.6 L20.4 14.2", "M8.8 20.4 L12 17.4 L15.2 20.4"],
 };
 
 export const GLYPH_NAMES = Object.keys(PATHS);
