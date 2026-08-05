@@ -382,7 +382,7 @@ function StrengthRow({ lift, series, expanded = false, onToggle }) {
 function LineChart({ series }) {
   const W = 320, H = 108, PAD_X = 12, PAD_Y = 18;
   if (!series || series.length === 0) {
-    return <div style={{padding:"24px 0", fontSize:13, color:T.ink3, textAlign:"center"}}>No data yet</div>;
+    return <div style={{padding:"24px 0", fontSize:13, color:T.ink3, textAlign:"center"}}>Nothing to chart yet</div>;
   }
   // Single data point: show the number, no line.
   if (series.length === 1) {

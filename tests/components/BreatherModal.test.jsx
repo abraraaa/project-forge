@@ -55,7 +55,7 @@ describe("the reason is OPTIONAL and toggleable", () => {
   it("tapping the selected reason again clears it (back to null)", () => {
     const onConfirm = vi.fn();
     render(<BreatherModal onConfirm={onConfirm} onCancel={() => {}} />);
-    const chip = screen.getByRole("button", { name: "Travelling" });
+    const chip = screen.getByRole("button", { name: "Away" });
     fireEvent.click(chip);   // select
     fireEvent.click(chip);   // deselect
     fireEvent.click(screen.getByRole("button", { name: "Breathe easy" }));

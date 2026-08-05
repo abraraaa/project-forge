@@ -440,7 +440,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
                   <div style={{fontSize:13,color:T.ink3,marginTop:2}}>
                     {travel
                       ? "Same session, bodyweight. On until you turn it off."
-                      : "No gym? Train it with the room you're in."}
+                      : "No gym? Train with the room you're in."}
                   </div>
                 </div>
               </div>
