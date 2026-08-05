@@ -1,0 +1,19 @@
+# Manual trigger only — IndexNow is for URLs that CHANGED, so a human fires
+# it after bumping LIBRARY_REVISED. No schedule, no push trigger, on purpose
+# (tests/indexnow.test.js holds the no-standing-authority line for the app
+# side; this file honours the same rule).
+name: IndexNow
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/indexnow.mjs
