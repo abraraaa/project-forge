@@ -102,9 +102,35 @@ export default async function ExercisePage({ params }) {
     ],
   };
 
+  // The page's own entity, not just its position in a breadcrumb. Retrieval
+  // systems read the page as prose; this states the same facts as data, so
+  // "what muscles does a hip thrust actually train" can be answered from the
+  // structure rather than inferred from the paragraph. Only claims what the
+  // page genuinely holds: the muscles, the category, and the tempo where the
+  // dataset has one — no invented ratings or durations.
+  const tempo = getTempo(entry.name);
+  const exerciseLd = {
+    "@context": "https://schema.org",
+    "@type": "ExercisePlan",
+    name: entry.name,
+    url: `https://heatwayve.app/library/${entry.slug}`,
+    description: exerciseDescription(entry),
+    exerciseType: entry.categoryLabel,
+    isPartOf: { "@type": "WebPage", "@id": "https://heatwayve.app/library" },
+    // Primary first, then every secondary — the same weighted set the volume
+    // audit computes with, named plainly.
+    about: [entry.primary, ...entry.secondary.map((s) => s.muscle)]
+      .map((m) => ({ "@type": "Thing", name: m })),
+    ...(tempo?.tempo ? { additionalProperty: {
+      "@type": "PropertyValue", name: "Tempo", value: tempo.tempo,
+      description: tempo.note || undefined,
+    } } : {}),
+  };
+
   return (
     <div style={{ minHeight: "100vh", padding: "max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 64px", maxWidth: 640, margin: "0 auto" }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(exerciseLd) }} />
 
       <Link href="/library" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
         <Glyph name="arrowLeft" size={12} color={T.ink3}/> The library
