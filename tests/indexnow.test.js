@@ -64,6 +64,36 @@ describe("what we submit", () => {
   });
 });
 
+describe("the deployment-side route", () => {
+  const routePath = join(root, "app", "api", "indexnow", "route.js");
+  const src = readFileSync(routePath, "utf8");
+
+  it("is POST-only — a GET could be fired by a prefetcher if the URL leaked", () => {
+    expect(src).toMatch(/export async function POST/);
+    expect(src).not.toMatch(/export async function GET/);
+  });
+
+  it("fails closed when CRON_SECRET is unset, and rejects a wrong bearer", () => {
+    expect(src).toContain("CRON_SECRET not configured");
+    expect(src).toMatch(/authorization[\s\S]{0,120}Bearer \$\{cronSecret\}/);
+    expect(src).toContain("Unauthorized");
+  });
+
+  it("submits the sitemap's list, not a hand-kept copy", () => {
+    expect(src).toMatch(/from "@\/app\/sitemap"/);
+  });
+
+  it("sends the same key the site hosts", () => {
+    const [file] = readdirSync(join(root, "public")).filter((f) => KEY_RE.test(f));
+    expect(src).toContain(`const KEY = "${file.replace(/\.txt$/, "")}"`);
+  });
+
+  it("is disallowed to crawlers along with the rest of /api", () => {
+    const robots = readFileSync(join(root, "app", "robots.js"), "utf8");
+    expect(robots).toMatch(/"\/api\/"/);
+  });
+});
+
 describe("no standing authority", () => {
   it("submission is never wired into build or a cron", () => {
     // House rule: a scheduled job firing outward requests unattended is a
