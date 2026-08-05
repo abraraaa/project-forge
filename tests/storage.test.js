@@ -51,6 +51,7 @@ const INVENTORY = {
   PN:   { disposition: "device-local", keys: ["passkeyNudge"], reason: "per-device nudge cadence" },
   PQ: { disposition: "device-local", keys: ["pendingPushes"], reason: "retry queue, derived from failures on this device" },
   D:  { disposition: "device-local", keys: ["draft"], reason: "transient in-session draft, recovered locally only" },
+  TRAVEL: { disposition: "device-local", keys: ["travel"], reason: "describes where the DEVICE is, not who the user is — syncing it would put the phone left at home into travel mode" },
   // LS and SyncStatus are utilities, not stores. They don't own data.
 };
 

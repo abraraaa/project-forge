@@ -29,7 +29,10 @@ const PATHS = {
   chevronDown: ["M6 9.5 L12 15.5 L18 9.5"],
   chevronUp:   ["M6 14.5 L12 8.5 L18 14.5"],
   // Two open arrows passing — the swap. Offset lanes keep the joins open.
-  swap:        ["M5 8.5 L17 8.5", "M13.5 4.5 L17 8.5 L13.5 12.5", "M19 15.5 L7 15.5", "M10.5 11.5 L7 15.5 L10.5 19.5"],
+  // Lanes sit 9 units apart (was 7) and the heads are shorter, so the two
+  // arrows read as distinct passes rather than one tangled knot: at 16px the
+  // old heads overlapped in the middle band and the mark closed up.
+  swap:        ["M5 7.5 L17 7.5", "M13.8 4.3 L17 7.5 L13.8 10.7", "M19 16.5 L7 16.5", "M10.2 13.3 L7 16.5 L10.2 19.7"],
   // The i: a round-cap dot (zero-length stroke) over a stem. The dot is a
   // stroke artefact, not a filled shape — the grammar holds.
   info:        ["M12 7 L12 7.01", "M12 11 L12 17.5"],
@@ -43,6 +46,13 @@ const PATHS = {
   // Moon: one open arc, aperture tilted to the top-right — the crescent
   // is the break itself, in the mark's own grammar.
   moon:        ["M13.9 3.7 A 8.1 8.1 0 1 0 20.3 12.4"],
+  // Plane, seen from above, nose up — travel mode. Fuselage, wings, and a
+  // STRAIGHT tailplane: the tail was a second open V, which read as a
+  // fighter jet rather than something you'd book a seat on. Wing sweep is
+  // gentler for the same reason — an airliner, not an interceptor. NOT a
+  // beach umbrella: an umbrella says holiday, and holiday is the breather's
+  // word (lib/breaks.js). This mark says transit — away, still training.
+  plane:       ["M12 3.2 L12 20.6", "M3.8 13.6 L12 9.4 L20.2 13.6", "M9.2 19.8 L14.8 19.8"],
 };
 
 export const GLYPH_NAMES = Object.keys(PATHS);

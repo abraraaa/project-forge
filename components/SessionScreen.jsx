@@ -314,7 +314,7 @@ function RecentHistorySheet({ exerciseName, recent, onCancel }) {
   );
 }
 
-export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart,planDay=null,onHome=null}){
+export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart,planDay=null,onHome=null,travel=false,setTravel=null}){
   // Readiness rides the same one-dimensional intensity scale as everything
   // else — fresh sits at the cool end, cooked at the hot end. Colour +
   // mark height + the word: the redundancy law, again.
@@ -408,6 +408,44 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
                 );
               })}
             </div>
+          </div>
+        </Fade>
+      )}
+
+      {/* Travel mode — the second question the check-in asks, because it is
+          the other thing that reshapes the session. STICKY: a trip lasts
+          days, so it stays on until turned off. Same row grammar as the
+          readiness options above (§12.3 — selection is the card). */}
+      {setTravel && (
+        <Fade d={240}>
+          <div style={{marginTop:26,borderTop:`1px solid ${T.rule}`}}>
+            <button className="forge-press" onClick={()=>{ haptic.toggle(); setTravel(!travel); }}
+              aria-pressed={travel}
+              style={{textAlign:"left",
+                padding:travel?"17px 16px":"17px 2px",
+                margin:travel?"0 -14px":0,width:travel?"calc(100% + 28px)":"100%",
+                borderRadius:travel?T.r:0,cursor:"pointer",
+                background:travel?T.surface:"transparent",
+                border:"none",
+                borderBottom:travel?"1px solid transparent":`1px solid ${T.rule}`,
+                boxShadow:travel?T.elev:"none",
+                display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,
+                fontFamily:T.text,transition:`background 200ms ${T.ease}, box-shadow 0s`}}>
+              <div style={{display:"flex",alignItems:"center",gap:14}}>
+                <span aria-hidden="true" style={{width:24,display:"flex",justifyContent:"center",flexShrink:0}}>
+                  <Glyph name="plane" size={17} color={travel?T.commit:T.ink3}/>
+                </span>
+                <div>
+                  <div style={{fontSize:17,fontWeight:500,color:T.ink}}>Travel mode</div>
+                  <div style={{fontSize:13,color:T.ink3,marginTop:2}}>
+                    {travel
+                      ? "Same session, bodyweight. On until you turn it off."
+                      : "No gym? Train it with the room you're in."}
+                  </div>
+                </div>
+              </div>
+              {travel && <Glyph name="check" size={13} color={T.ink}/>}
+            </button>
           </div>
         </Fade>
       )}
@@ -564,6 +602,19 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             {loadTypeSubtitle}
             {loadTypeSubtitle && deloadDayTag && " · "}
             {deloadDayTag && <MonoNums>{deloadDayTag}</MonoNums>}
+          </div>
+        )}
+        {/* Travel line — what this slot is standing in for, and what to find
+            in the room. Without it the session silently becomes a different
+            workout, and the user meets the kit requirement halfway through
+            set one. */}
+        {activeEx?.travel && (activeEx?.travelFrom || activeEx?.kit) && (
+          <div style={{fontSize:13,color:T.ink3,marginTop:8,display:"flex",alignItems:"baseline",gap:7}}>
+            <Glyph name="plane" size={12} color={T.ink3}/>
+            <span>
+              {activeEx.travelFrom ? <>Standing in for {activeEx.travelFrom}</> : "Travel"}
+              {activeEx.kit && <> · {activeEx.kit}</>}
+            </span>
           </div>
         )}
         {tempoEntry?.tempo && tempoOpen && (
@@ -808,8 +859,12 @@ function VideoEmbed({vid,name}){
 // ─── Swap Overlay ────────────────────────────────────────────────────────────
 
 function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
-  const [travel,setTravel]=useState(false);
-  const options=(SWAP_DB[activeEx?.name]||[]).filter(o=>!travel||["Bodyweight","Dumbbell","Band"].includes(o.eq));
+  // The travel filter that used to live here is retired (2026-08-04). It was
+  // per-exercise and per-open, and every main lift's swap list is
+  // heavy-equivalents-only, so the anchor of every session answered "no
+  // alternatives for the current filter". Travel is a session-level mode now
+  // — see lib/travel.js and the readiness check-in.
+  const options=SWAP_DB[activeEx?.name]||[];
 
   const applySwap=(option)=>{
     // Inherit reps from the current slot — same movement pattern, same
@@ -836,17 +891,8 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
           <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>Swap exercise</div>
           <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink}}>{activeEx?.name}</div>
         </div>
-        <button style={{display:"flex",width:"100%",alignItems:"center",gap:10,margin:"14px 0",padding:"10px 14px",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,cursor:"pointer",textAlign:"left",fontFamily:T.text}} onClick={()=>setTravel(p=>!p)} aria-pressed={travel}>
-          <span style={{width:32,height:18,borderRadius:9,background:travel?T.commit:T.well,position:"relative",transition:`background 200ms ${T.ease}`,flexShrink:0}}>
-            <span style={{position:"absolute",top:2,left:travel?16:2,width:14,height:14,borderRadius:"50%",background:T.surface,boxShadow:"0 1px 2px rgba(36,28,25,0.3)",transition:`left 200ms ${T.ease}`}}/>
-          </span>
-          <span>
-            <span style={{display:"block",fontSize:13,color:T.ink,fontWeight:500}}>Travel mode</span>
-            <span style={{display:"block",fontSize:12,color:T.ink3,marginTop:1}}>Bodyweight, dumbbell &amp; band only</span>
-          </span>
-        </button>
         {options.length===0&&(
-          <div style={{padding:"20px 0",fontSize:13,color:T.ink3,textAlign:"center"}}>No alternatives for the current filter</div>
+          <div style={{marginTop:14,padding:"20px 0",fontSize:13,color:T.ink3,textAlign:"center"}}>No approved alternatives for this lift</div>
         )}
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {options.map((o,i)=>(

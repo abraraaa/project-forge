@@ -29,7 +29,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { track } from "@vercel/analytics";
 import {
-  P, H, W, PB, F, TS, BW, Days, Bk, D, SessionIntent,
+  P, H, W, PB, F, TS, BW, Days, Bk, D, SessionIntent, TRAVEL,
   newDraftLog, logSet, finaliseDraft, bumpStreak, scaleForReadiness,
   startingWeightForLift, pushNow, recordCompletion, rpeToRir,
 } from "@/lib/storage";
@@ -39,6 +39,7 @@ import {
   DEFAULT_FOCUS, WEEK,
 } from "@/lib/programme";
 import { deloadDayLabel } from "@/lib/progression";
+import { deriveTravelSession } from "@/lib/travel";
 import { applySessionToEngine } from "@/lib/session-engine";
 import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR } from "@/lib/lift-translations";
 import { pickFlashLine } from "@/lib/set-flash";
@@ -84,6 +85,14 @@ export default function SessionHost() {
   const [overviewDraftSnapshot, setOverviewDraftSnapshot] = useState(null);
   const [readiness, setReadiness]             = useState(null);
   const [readinessReason, setReadinessReason] = useState(null);
+  // Travel mode is STICKY across sessions, so it seeds from the store rather
+  // than starting false each time. Lazy init: no localStorage during SSR, and
+  // this host is ssr:false anyway.
+  const [travel, setTravelState]              = useState(() => TRAVEL.get(profile));
+  const setTravel = useCallback((on) => {
+    setTravelState(on);
+    TRAVEL.set(profile, on);
+  }, [profile]);
   const [showVid, setShowVid]       = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [awaitRpe, setAwaitRpe]     = useState(false);
@@ -187,6 +196,7 @@ export default function SessionHost() {
       setActiveSessionIdx(idx);
       setReadiness(draft.readiness);
       setReadinessReason(draft.readinessReason);
+      if (draft.travel === true) setTravelState(true);
       setBlockIdx(resumeBlockIdx);
       setSetNum(Math.min(setsOnCurrent + 1, session.blocks[resumeBlockIdx].sets));
       setPhase("A");
@@ -214,7 +224,10 @@ export default function SessionHost() {
   const rotatedSession = applyRotationToSession(rawSession, programmeBlock?.config);
   const swappedSession = applySwapsToSession(rotatedSession, sessionSwaps);
   const focusedSession = applyFocusToSession(swappedSession, userFocus, programmeBlock?.config);
-  const activeSession  = scaleForReadiness(focusedSession, readiness);
+  // Travel converts what focus finished choosing, and readiness still trims
+  // on top — a cooked day drops its finisher whether or not you're in a hotel.
+  const travelledSession = travel ? deriveTravelSession(focusedSession) : focusedSession;
+  const activeSession  = scaleForReadiness(travelledSession, readiness);
   const block   = activeSession.blocks[blockIdx];
   const isSS    = block.type === "superset" || block.type === "finisher";
   const swapKey = isSS ? `${block.id}-${phase}` : block.id;
@@ -411,6 +424,7 @@ export default function SessionHost() {
       blockNumber: programmeBlock.number,
       readiness,
       readinessReason,
+      travel,
     });
     setFlow("session");
   };
@@ -556,6 +570,7 @@ export default function SessionHost() {
           readiness={readiness} setReadiness={setReadiness}
           reason={readinessReason} setReason={setReadinessReason}
           onStart={handleReadinessStart}
+          travel={travel} setTravel={setTravel}
           planDay={focusedSession?.name} onHome={handleQuit}
         />
       )}

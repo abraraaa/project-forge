@@ -48,6 +48,18 @@ describe("exercise tempo dataset", () => {
     }
   });
 
+  it("every source carries a full citation, and a URL unless it is a general principle", () => {
+    // The library pages render these verbatim and link the URL. A citation
+    // truncated to its authors, or one with a dead field, is decoration —
+    // the point of a public repo is that the science can be followed.
+    for (const [key, src] of Object.entries(TEMPO_SOURCES)) {
+      expect(src.cite?.length, key).toBeGreaterThan(40);
+      if (src.url === null) continue;   // a stated general principle, not a paper
+      expect(src.url, key).toMatch(/^https:\/\//);
+      expect(src.cite, key).toMatch(/\d{4}/);            // a year to check it by
+    }
+  });
+
   it("getTempo resolves canonical names and rejects unknowns", () => {
     expect(getTempo("Barbell Back Squat")?.tempo).toBe("3-1-1-0");
     expect(getTempo("Not An Exercise")).toBeNull();
