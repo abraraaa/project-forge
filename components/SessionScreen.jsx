@@ -28,6 +28,7 @@ import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
 import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
+import { resolveVid } from "@/lib/exercise-videos";
 
 
 // RIR, in plain words — always printed beside the track (redundancy law:
@@ -569,11 +570,11 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           Set <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{block.sets}</span> · {block.label}{isSS?` ${phase}`:""}
         </div>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
-          <div onClick={activeEx?.vid ? ()=>setShowVid(true) : undefined}
-            style={{cursor:activeEx?.vid?"pointer":"default",flex:1,userSelect:"none"}}>
+          <div onClick={resolveVid(activeEx?.name, activeEx?.vid) ? ()=>setShowVid(true) : undefined}
+            style={{cursor:resolveVid(activeEx?.name, activeEx?.vid)?"pointer":"default",flex:1,userSelect:"none"}}>
             <h1 style={{...DISPLAY,fontSize:nameFz,color:T.ink,margin:0}}>{activeEx?.name}</h1>
             <div style={{display:"flex",alignItems:"center",gap:12,marginTop:9,flexWrap:"wrap"}}>
-              {activeEx?.vid && (
+              {resolveVid(activeEx?.name, activeEx?.vid) && (
                 <span style={{fontSize:13,color:T.ink2,fontWeight:500,display:"inline-flex",alignItems:"center",gap:5}}>Watch demo <Glyph name="arrowRight" size={11}/></span>
               )}
               <span style={{fontSize:13,color:T.ink3}}>{activeEx?.muscle}</span>
@@ -797,7 +798,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               </div>
               <button onClick={()=>setShowVid(false)} aria-label="Close video" style={{background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.rSm,padding:"8px 10px",cursor:"pointer"}}><Glyph name="cross" size={12} color={T.ink2}/></button>
             </div>
-            <VideoEmbed vid={vidEx.vid} name={vidEx.name}/>
+            <VideoEmbed vid={resolveVid(vidEx.name, vidEx.vid)} name={vidEx.name}/>
           </div>
         </div>
       )}
