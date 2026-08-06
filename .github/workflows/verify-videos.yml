@@ -1,7 +1,17 @@
 # Manual trigger only — runs when a video-sourcing batch needs vetting.
 # A report job (always green); the verdicts are read from the log.
 name: Verify videos
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "candidates (default) or all — census every id the library serves"
+        required: false
+        default: candidates
+      playlist:
+        description: "YouTube playlist id — read its entries and verify each (overrides mode)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -14,4 +24,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node scripts/verify-videos.mjs
+      - run: node scripts/verify-videos.mjs ${{ inputs.playlist != '' && format('--playlist {0}', inputs.playlist) || (inputs.mode == 'all' && '--all' || '') }}
