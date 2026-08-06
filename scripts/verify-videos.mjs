@@ -16,9 +16,19 @@
 
 import { readFileSync } from "node:fs";
 
-const candidates = JSON.parse(
-  readFileSync(new URL("./video-candidates.json", import.meta.url), "utf8"),
-);
+// --all: census mode — verify every id the library currently serves and
+// report its true title + channel. This is how we learn, with ground truth
+// rather than a model's attribution, which producers our catalogue actually
+// leans on. Default mode reads the candidates file as before.
+let candidates;
+if (process.argv.includes("--all")) {
+  const { LIBRARY } = await import("../lib/library.js");
+  candidates = LIBRARY.filter((e) => e.vid).map((e) => ({ name: e.name, vid: e.vid }));
+} else {
+  candidates = JSON.parse(
+    readFileSync(new URL("./video-candidates.json", import.meta.url), "utf8"),
+  );
+}
 
 console.log(`[verify-videos] ${candidates.length} candidate(s)`);
 let ok = 0;
