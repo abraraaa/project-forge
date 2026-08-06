@@ -75,14 +75,21 @@ async function playlistEntries(listId) {
     });
     console.log(`[verify-videos] innertube browse http ${browse.status}`);
     if (browse.ok) {
+      const readTitle = (t) =>
+        t ? (t.simpleText || t.content || (t.runs && t.runs.map((r) => r.text).join("")) || null) : null;
       const walk = (node) => {
         if (!node || typeof node !== "object") return;
         if (Array.isArray(node)) { for (const x of node) walk(x); return; }
-        const vid = node.videoId || (typeof node.contentId === "string" && /^[\w-]{11}$/.test(node.contentId) ? node.contentId : null);
-        if (vid && node.title) {
-          const t = node.title;
-          const title = t.simpleText || t.content || (t.runs && t.runs.map((r) => r.text).join("")) || null;
-          if (title) push(vid, title);
+        // Classic renderers: videoId + title on the same object.
+        if (node.videoId && node.title) {
+          const title = readTitle(node.title);
+          if (title) push(node.videoId, title);
+        }
+        // Lockup view models: contentId on the lockup, title nested under
+        // metadata.lockupMetadataViewModel.
+        if (typeof node.contentId === "string" && /^[\w-]{11}$/.test(node.contentId)) {
+          const title = readTitle(node.metadata?.lockupMetadataViewModel?.title) || readTitle(node.title);
+          if (title) push(node.contentId, title);
         }
         for (const v of Object.values(node)) walk(v);
       };
