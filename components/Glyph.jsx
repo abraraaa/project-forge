@@ -53,6 +53,9 @@ const PATHS = {
   // beach umbrella: an umbrella says holiday, and holiday is the breather's
   // word (lib/breaks.js). This mark says transit — away, still training.
   plane:       ["M12 3.2 L12 20.6", "M3.8 13.6 L12 9.4 L20.2 13.6", "M9.2 19.8 L14.8 19.8"],
+  // Play: the triangle with its back edge left open — the aperture again,
+  // pointed forward. No fill, per the grammar.
+  play:        ["M8.5 5.5 L18.5 12 L8.5 18.5"],
 };
 
 export const GLYPH_NAMES = Object.keys(PATHS);

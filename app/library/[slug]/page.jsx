@@ -15,6 +15,7 @@ import { getTempo, decodeTempo, TEMPO_SOURCES } from "@/lib/exercise-tempo";
 import { T, DISPLAY } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
 import { MonoNums } from "@/components/ui";
+import LibraryVideo from "@/components/LibraryVideo";
 
 export const dynamicParams = false;
 
@@ -198,6 +199,15 @@ export default async function ExercisePage({ params }) {
           counts as half a set for that muscle: meaningful help, not a replacement for direct work.
         </p>
       </section>
+
+      {/* After the muscles, before the tempo: "what it trains" leads into
+          "watch it done". Client component so the YouTube iframe exists only
+          after a tap — the page stays static and third-party-free. */}
+      {entry.vid && (
+        <section style={{ marginTop: 36 }}>
+          <LibraryVideo vid={entry.vid} name={entry.name} />
+        </section>
+      )}
 
       <TempoSection name={entry.name} />
 

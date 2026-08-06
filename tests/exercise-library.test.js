@@ -16,6 +16,7 @@
 import { describe, it, expect } from "vitest";
 import { SESSIONS, EXERCISE_POOLS, SWAP_DB } from "../lib/programme.js";
 import { EXERCISE_ANATOMY } from "../lib/exercise-anatomy.js";
+import { LIBRARY } from "../lib/library.js";
 import { __test__ as liftTest } from "../lib/lift-translations.js";
 
 const { PROFILES } = liftTest;
@@ -154,3 +155,22 @@ describe("exercise library — programme coverage", () => {
     }
   });
 });
+
+describe("demo videos — joined from the app's own footage, never invented", () => {
+  it("most of the catalogue carries a video (the gaps are movements with no footage yet)", () => {
+    const withVid = LIBRARY.filter((e) => e.vid);
+    expect(withVid.length).toBeGreaterThan(120);
+  });
+
+  it("every vid is a well-formed YouTube id", () => {
+    for (const e of LIBRARY) {
+      if (e.vid !== null) expect(e.vid, e.name).toMatch(/^[\w-]{11}$/);
+    }
+  });
+
+  it("travel movements without footage carry null, not a placeholder", () => {
+    const bar = LIBRARY.find((e) => e.name === "Bar Hang");
+    expect(bar?.vid ?? null).toBeNull();
+  });
+});
+
