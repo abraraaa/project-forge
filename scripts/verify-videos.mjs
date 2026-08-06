@@ -20,8 +20,42 @@ import { readFileSync } from "node:fs";
 // report its true title + channel. This is how we learn, with ground truth
 // rather than a model's attribution, which producers our catalogue actually
 // leans on. Default mode reads the candidates file as before.
+// --playlist <id>: read a YouTube playlist's entries straight off its page
+// (ytInitialData is server-rendered into the HTML — no API key), then run
+// every id through the same oEmbed check for canonical title + channel.
+// Exists because a hand-curated playlist is the boss's preferred sourcing
+// surface, and the authoring sandbox cannot reach youtube.com at all.
+// Playlists render their first 100 entries without continuation - larger
+// lists would need the continuation token dance this deliberately skips.
+async function playlistEntries(listId) {
+  const res = await fetch(`https://www.youtube.com/playlist?list=${listId}&hl=en`, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+      "Accept-Language": "en",
+    },
+  });
+  console.log(`[verify-videos] playlist page http ${res.status}`);
+  const html = await res.text();
+  const out = [];
+  const seen = new Set();
+  const re = /"playlistVideoRenderer":\{"videoId":"([\w-]{11})"[\s\S]{0,600}?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/g;
+  let m;
+  while ((m = re.exec(html))) {
+    const vid = m[1];
+    if (seen.has(vid)) continue;
+    seen.add(vid);
+    const title = JSON.parse(`"${m[2]}"`);   // unescape the JSON string body
+    out.push({ name: title, vid });
+  }
+  return out;
+}
+
 let candidates;
-if (process.argv.includes("--all")) {
+const plIdx = process.argv.indexOf("--playlist");
+if (plIdx !== -1 && process.argv[plIdx + 1]) {
+  candidates = await playlistEntries(process.argv[plIdx + 1]);
+  console.log(`[verify-videos] playlist entries found: ${candidates.length}`);
+} else if (process.argv.includes("--all")) {
   const { LIBRARY } = await import("../lib/library.js");
   candidates = LIBRARY.filter((e) => e.vid).map((e) => ({ name: e.name, vid: e.vid }));
 } else {
