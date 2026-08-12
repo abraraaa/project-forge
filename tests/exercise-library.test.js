@@ -17,6 +17,7 @@ import { describe, it, expect } from "vitest";
 import { SESSIONS, EXERCISE_POOLS, SWAP_DB } from "../lib/programme.js";
 import { EXERCISE_ANATOMY } from "../lib/exercise-anatomy.js";
 import { LIBRARY } from "../lib/library.js";
+import { resolveVid } from "../lib/exercise-videos.js";
 import { __test__ as liftTest } from "../lib/lift-translations.js";
 
 const { PROFILES } = liftTest;
@@ -157,9 +158,9 @@ describe("exercise library — programme coverage", () => {
 });
 
 describe("demo videos — joined from the app's own footage, never invented", () => {
-  it("most of the catalogue carries a video (the gaps are movements with no footage yet)", () => {
-    const withVid = LIBRARY.filter((e) => e.vid);
-    expect(withVid.length).toBeGreaterThan(120);
+  it("carries a video for every catalogue entry (2026-08-12: the orphan list hit zero)", () => {
+    const orphans = LIBRARY.filter((e) => !e.vid);
+    expect(orphans, orphans.map((e) => e.name).join(", ")).toEqual([]);
   });
 
   it("every vid is a well-formed YouTube id", () => {
@@ -168,9 +169,12 @@ describe("demo videos — joined from the app's own footage, never invented", ()
     }
   });
 
-  it("travel movements without footage carry null, not a placeholder", () => {
-    const bar = LIBRARY.find((e) => e.name === "Bar Hang");
-    expect(bar?.vid ?? null).toBeNull();
+  it("a name with no curated or programme footage resolves to null, not a placeholder", () => {
+    // Bar Hang pinned this literally until 2026-08-12, when it got footage —
+    // the invariant worth keeping is the read path itself, on a name
+    // guaranteed to stay fictional rather than one that might get sourced.
+    expect(resolveVid("Not A Real Exercise™", null)).toBeNull();
+    expect(resolveVid("Not A Real Exercise™")).toBeNull();
   });
 });
 
