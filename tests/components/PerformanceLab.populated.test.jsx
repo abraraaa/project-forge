@@ -93,7 +93,18 @@ describe("PerformanceLab — populated history", () => {
   });
 
   it("§13 sections mount on typed history: strength rows, consistency cells, group aggregates", () => {
-    const history = ["2026-07-07","2026-07-14","2026-07-21","2026-07-28"].map(buildSession);
+    // Weekly cadence, most-recent-first is fine (buildSession only reads the
+    // date). Dates MUST be relative to today, not pinned absolutes: the
+    // volume audit's group aggregate ("in band") only judges the trailing
+    // 2-week window (PerformanceLab.jsx passes { weeks: 2 }), so a hardcoded
+    // month silently ages out of that window as real time passes — this
+    // test found that the hard way, weeks after it was written and green.
+    const today = new Date();
+    const history = [0, 1, 2, 3].map((i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i * 7);
+      return buildSession(d.toISOString().slice(0, 10));
+    });
     render(<PerformanceLab history={history} onBack={() => {}} />);
     // Strength — one row per main lift, with the section kicker.
     expect(screen.getByText(/Strength · e1RM/)).toBeTruthy();
