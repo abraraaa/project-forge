@@ -16,7 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import PerformanceLab from "../../components/PerformanceLab.jsx";
 
 afterEach(() => {
@@ -113,6 +113,39 @@ describe("PerformanceLab — populated history", () => {
     expect(screen.getByText(/planned/)).toBeTruthy();
     // Group headers carry their aggregate as data.
     expect(screen.getAllByText(/in band/).length).toBeGreaterThan(0);
+  });
+
+  it("§07 drill-down: a muscle row unfolds the eight-week band terrain, one at a time", () => {
+    render(<PerformanceLab history={buildHistory()} onBack={() => {}} />);
+    const quads = screen.getByLabelText(/^Quads: .* sets per week/);
+    const glutes = screen.getByLabelText(/^Glutes: .* sets per week/);
+    expect(quads.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(quads);
+    expect(quads.getAttribute("aria-expanded")).toBe("true");
+    // The terrain names the landmarks it draws — the printed figures are
+    // half the redundancy law, so their absence is a real regression.
+    expect(screen.getByLabelText(/^Quads, last \d+ weeks:/)).toBeTruthy();
+    expect(screen.getByText(/weeks in the productive band/)).toBeTruthy();
+
+    // One open at a time: opening another closes the first.
+    fireEvent.click(glutes);
+    expect(quads.getAttribute("aria-expanded")).toBe("false");
+    expect(glutes.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.queryByLabelText(/^Quads, last \d+ weeks:/)).toBeNull();
+
+    // And it closes on a second tap of the same row.
+    fireEvent.click(glutes);
+    expect(glutes.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("§07 drill-down: keyboard opens the terrain (Enter and Space)", () => {
+    render(<PerformanceLab history={buildHistory()} onBack={() => {}} />);
+    const quads = screen.getByLabelText(/^Quads: .* sets per week/);
+    fireEvent.keyDown(quads, { key: "Enter" });
+    expect(quads.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.keyDown(quads, { key: " " });
+    expect(quads.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("away suspends judgement, never history — strength and consistency survive", () => {
