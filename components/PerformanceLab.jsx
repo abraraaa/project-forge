@@ -135,9 +135,28 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
           <span style={{fontSize:13, color:T.ink2}}>Volume · past <span style={{fontFamily:T.measured,fontSize:12}}>28</span> days</span>
           <GlossaryTrigger onOpen={openGlossary} label="Open glossary"/>
         </div>
-        <h1 className="home-headline" style={{...DISPLAY, fontSize:45, color:T.ink, margin:0, transformOrigin:"left top"}}>
-          The lab
-        </h1>
+        {/* The masthead void, earned: the display title only ever fills the
+            left half, so the travel marker lives there rather than annotating
+            every row it touched (boss ruling, 2026-08-12). Baseline-aligned
+            with the title, echoing the "N logged" count directly above it. */}
+        <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:12}}>
+          <h1 className="home-headline" style={{...DISPLAY, fontSize:45, color:T.ink, margin:0, transformOrigin:"left top"}}>
+            The lab
+          </h1>
+          {!isEmpty && counts.travel > 0 && (
+            <div style={{flexShrink:0,textAlign:"right",paddingBottom:7}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:5,fontSize:13,color:T.ink2}}>
+                <Glyph name="plane" size={13} color={T.ink3}/>
+                <span><span style={{fontFamily:T.measured}}>{counts.travel}</span> of <span style={{fontFamily:T.measured}}>{counts.total}</span> away</span>
+              </div>
+              {/* Both halves, because only stating one is the misleading half:
+                  travel volume IS counted, travel load is NOT evidence. */}
+              <div style={{fontSize:11,color:T.ink3,lineHeight:1.45,marginTop:3}}>
+                Sets counted.<br/>Weights held.
+              </div>
+            </div>
+          )}
+        </div>
         <div style={{fontSize:15, color:T.ink2, marginTop:10, lineHeight:1.45, maxWidth:"32ch"}}>
           {guidance}
         </div>

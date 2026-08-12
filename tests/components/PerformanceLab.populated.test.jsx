@@ -148,6 +148,26 @@ describe("PerformanceLab — populated history", () => {
     expect(quads.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("travel badge: fills the masthead void, and states BOTH halves", () => {
+    // Travel sessions count as volume but are refused as load evidence
+    // (lib/progression.js). Saying only one half is the misleading half.
+    const history = buildHistory();
+    history[0].travel = true;
+    history[2].travel = true;
+    render(<PerformanceLab history={history} onBack={() => {}} />);
+    expect(screen.getByText(/away/)).toBeTruthy();
+    expect(screen.getByText(/Sets counted/)).toBeTruthy();
+    expect(screen.getByText(/Weights held/)).toBeTruthy();
+    // The count echoes the "N logged" strip above it — 2 of 5.
+    const badge = screen.getByText(/away/);
+    expect(badge.textContent.replace(/\s+/g, " ")).toMatch(/2 of 5 away/);
+  });
+
+  it("travel badge stays away when no session was a travel session", () => {
+    render(<PerformanceLab history={buildHistory()} onBack={() => {}} />);
+    expect(screen.queryByText(/Sets counted/)).toBeNull();
+  });
+
   it("away suspends judgement, never history — strength and consistency survive", () => {
     // The away state mutes band verdicts and the recommendation; it must
     // NOT hide the e1RM rows or the consistency cells (regression
