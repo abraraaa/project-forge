@@ -489,6 +489,13 @@ function ConsistencyCells({ weeks, quota }) {
 
 // ─── Volume landscape — rows grouped by training day ─────────────────────────
 function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
+  // Drill-down tier (§07), same idiom as the strength rows: the row is the
+  // glance, tapping unfolds the eight-week terrain beneath it. One open at
+  // a time — the list stays a list.
+  const [expandedMuscle, setExpandedMuscle] = useState(null);
+  const toggleMuscle = (m) => setExpandedMuscle((cur) => (cur === m ? null : m));
+  const weekStarts = trend?.weeks || [];
+
   // New user — not enough logged history anywhere yet. Encourage logging
   // rather than render a wall of "under MEV" alarms for someone starting.
   if (!audit || totalSessions < 4) {
@@ -526,7 +533,11 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
           </span>
           <GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/>
         </div>
-        {historical.map(row => <MuscleRow key={row.muscle} {...row} muted />)}
+        {historical.map(row => (
+          <MuscleRow key={row.muscle} {...row} muted weeks={weekStarts}
+            expanded={expandedMuscle === row.muscle}
+            onToggle={() => toggleMuscle(row.muscle)}/>
+        ))}
       </div>
     );
   }
@@ -573,7 +584,11 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
               </span>
             </div>
             <div style={{padding:"0 24px"}}>
-              {g.rows.map(row => <MuscleRow key={row.muscle} {...row} />)}
+              {g.rows.map(row => (
+                <MuscleRow key={row.muscle} {...row} weeks={weekStarts}
+                  expanded={expandedMuscle === row.muscle}
+                  onToggle={() => toggleMuscle(row.muscle)}/>
+              ))}
             </div>
           </div>
         );
@@ -588,7 +603,7 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
 // One muscle: name · 6-week micro-wave · band bar (with MEV/MRV ticks and
 // hatched overflow) · the number. Colour never carries alone — height,
 // position and the printed figure agree with it.
-function MuscleRow({ muscle, sets, target, status, series, muted = false }) {
+function MuscleRow({ muscle, sets, target, status, series, weeks, muted = false, expanded = false, onToggle }) {
   const colour = muted ? T.ink3 : (BAND_COLOUR[status] || T.ink3);
   const label = muted ? "resting" : (BAND_LABEL[status] || "");
   const displayName = muscle.replace(" Delts", " delt").replace("Upper Back", "Upper back");
@@ -619,8 +634,13 @@ function MuscleRow({ muscle, sets, target, status, series, muted = false }) {
     // Two lines, seven facts, same height the old row spent on three
     // (§13.1). lab-card = the scroll-driven arrival; per-row is finer
     // grained than the old per-card glide.
-    <div className="lab-card" style={{padding:"8px 0",borderTop:`1px solid ${T.ruleFaint}`}}
-      aria-label={`${displayName}: ${sets} sets per week${target ? `, ${label}, MEV ${target.mev}, MRV ${target.mrv}` : ""}${wkDelta != null ? `, ${wkDelta >= 0 ? "up" : "down"} ${Math.abs(wkDelta)} versus last week` : ""}`}>
+    <div className="lab-card" style={{borderTop:`1px solid ${T.ruleFaint}`}}>
+    <div role="button" tabIndex={0} onClick={onToggle}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle?.(); } }}
+      className="forge-press forge-tint"
+      style={{padding:"8px 0",cursor:"pointer"}}
+      aria-expanded={expanded}
+      aria-label={`${displayName}: ${sets} sets per week${target ? `, ${label}, MEV ${target.mev}, MRV ${target.mrv}` : ""}${wkDelta != null ? `, ${wkDelta >= 0 ? "up" : "down"} ${Math.abs(wkDelta)} versus last week` : ""}. ${expanded ? "Hide" : "Show"} the eight-week terrain`}>
       {/* Line one: name · sparkline (ink, no fill, no axes) · mono count.
           Empty rows tell the programme (§13.6): the target, not a zero. */}
       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -650,6 +670,113 @@ function MuscleRow({ muscle, sets, target, status, series, muted = false }) {
             wkDelta === 0 ? "level vs last wk" :
             <><span style={{fontFamily:T.measured,color:wkDelta>0?T.ink2:T.ink3}}>{wkDelta>0?`+${wkDelta}`:wkDelta}</span> vs last wk</>}
         </span>
+      </div>
+    </div>
+    {/* §07's second tier — the row prints this week against the landmark;
+        the terrain prints every week against the whole band structure. */}
+    {expanded && (
+      <div style={{padding:"2px 0 14px",animation:`fadeSlide 240ms ${T.ease}`}}>
+        <BandTerrain muscle={displayName} series={series} target={target} weeks={weeks} muted={muted}/>
+      </div>
+    )}
+    </div>
+  );
+}
+
+// ─── Band terrain — the muscle row's drill-down ──────────────────────────────
+// Eight weeks of set counts laid over the landmark bands themselves, so the
+// question the row can only answer for this week ("is this enough?") gets
+// answered for the whole stretch: where the line sat, and in which band.
+// Bands are the ground, the line is the story, and every landmark prints its
+// number — colour never carries alone (§13).
+function BandTerrain({ muscle, series, target, weeks, muted = false }) {
+  const W = 320, H = 104, PAD_L = 10, PAD_R = 42, PAD_T = 10, PAD_B = 16;
+  const v = (series || []).map((n) => Number(n) || 0);
+  if (v.length < 2) {
+    return (
+      <div style={{fontSize:12,color:T.ink3,lineHeight:1.5}}>
+        Two weeks of history and the terrain draws itself.
+      </div>
+    );
+  }
+
+  // Zero is a real floor for set counts — never crop it. The ceiling is
+  // whichever is taller: the landmark roof or the biggest week logged.
+  const top = Math.max(target ? target.mrv : 0, ...v, 1) * 1.12;
+  const yAt = (n) => PAD_T + (H - PAD_T - PAD_B) * (1 - Math.min(n, top) / top);
+  const xAt = (i) => PAD_L + (W - PAD_L - PAD_R) * (i / (v.length - 1));
+  // Band divs are positioned in % of the container, which the SVG sizes —
+  // so a viewBox y maps straight to a percentage without a second scale.
+  const pct = (y) => `${((y / H) * 100).toFixed(2)}%`;
+  /** @returns {import("react").CSSProperties} */
+  const band = (lo, hi, colour, opacity, hatched = false) => ({
+    position: "absolute", left: 0, right: 0,
+    top: pct(yAt(hi)), height: pct(yAt(lo) - yAt(hi)),
+    backgroundColor: colour, opacity,
+    ...(hatched ? { backgroundImage: HATCH.auto } : null),
+  });
+
+  const pathD = v.map((n, i) => `${i===0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(n).toFixed(1)}`).join(" ");
+  const lineInk = muted ? "var(--ink-3)" : "var(--ink)";
+
+  // The header carries data, not a label (§13.2): how many of these weeks
+  // actually landed in the productive band, and the average that built it.
+  const judged = target ? v.filter((n) => n >= target.mev && n <= target.mrv).length : 0;
+  const avg = Math.round((v.reduce((s, n) => s + n, 0) / v.length) * 10) / 10;
+  const tick = (label, n) => (
+    <g key={label}>
+      <line x1={PAD_L} y1={yAt(n)} x2={W - PAD_R} y2={yAt(n)}
+        stroke="var(--ink)" strokeOpacity="0.22" strokeWidth="1" strokeDasharray="2 3"/>
+      <text x={W - 4} y={yAt(n) + 3} textAnchor="end" fontSize="9"
+        fill="var(--ink-3)" fontFamily="var(--font-spline), monospace">{label} {n}</text>
+    </g>
+  );
+
+  const first = weeks?.[weeks.length - v.length];
+  const last  = weeks?.[weeks.length - 1];
+  const fmt = (iso) => (iso ? iso.slice(5).replace("-", "/") : "");
+
+  return (
+    <div aria-label={`${muscle}, last ${v.length} weeks: ${v.join(", ")} sets${target ? `. MEV ${target.mev}, MAV ${target.mav}, MRV ${target.mrv}. ${judged} of ${v.length} weeks in the productive band` : ", no landmark"}. Average ${avg} sets per week`}>
+      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:6,fontSize:11,color:T.ink3}}>
+        <span>
+          {target
+            ? <><span style={{fontFamily:T.measured}}>{judged}</span> of <span style={{fontFamily:T.measured}}>{v.length}</span> weeks in the productive band</>
+            : "No landmark for this one — tracked, not programmed"}
+        </span>
+        <span><span style={{fontFamily:T.measured}}>{avg}</span> avg</span>
+      </div>
+      <div style={{position:"relative"}}>
+        {/* Bands, bottom-up: below MEV is the steel floor; MEV→MAV grows;
+            MAV→MRV is the sweet spot; past MRV is hatched, never just hotter. */}
+        {target && (
+          <div aria-hidden="true">
+            {target.mev > 0 && <div style={band(0, target.mev, T.under, 0.16)}/>}
+            <div style={band(target.mev, target.mav, T.heat[1], 0.20)}/>
+            <div style={band(target.mav, target.mrv, T.heat[2], 0.24)}/>
+            {top > target.mrv && <div style={band(target.mrv, top, T.heatOver, 0.30, true)}/>}
+          </div>
+        )}
+        <svg viewBox={`0 0 ${W} ${H}`} style={{position:"relative",width:"100%",height:"auto",display:"block"}} aria-hidden="true">
+          {target && (
+            <>
+              {target.mev > 0 && tick("MEV", target.mev)}
+              {tick("MAV", target.mav)}
+              {tick("MRV", target.mrv)}
+            </>
+          )}
+          <path d={pathD} fill="none" stroke={lineInk} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"/>
+          {v.map((n, i) => (
+            <circle key={i} cx={xAt(i)} cy={yAt(n)} r={i === v.length - 1 ? 3.2 : 2}
+              fill={lineInk} stroke="var(--ground)" strokeWidth="1.4"/>
+          ))}
+        </svg>
+      </div>
+      {/* The label gutter is a viewBox measure, so it has to be expressed as
+          a share of the width — the SVG scales, a px padding wouldn't. */}
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:4,paddingRight:`${((PAD_R / W) * 100).toFixed(1)}%`,fontFamily:T.measured,fontSize:10,color:T.ink3}} aria-hidden="true">
+        <span>{fmt(first)}</span>
+        <span>{fmt(last)}</span>
       </div>
     </div>
   );

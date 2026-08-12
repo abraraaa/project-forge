@@ -16,7 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import PerformanceLab from "../../components/PerformanceLab.jsx";
 
 afterEach(() => {
@@ -93,7 +93,18 @@ describe("PerformanceLab — populated history", () => {
   });
 
   it("§13 sections mount on typed history: strength rows, consistency cells, group aggregates", () => {
-    const history = ["2026-07-07","2026-07-14","2026-07-21","2026-07-28"].map(buildSession);
+    // Weekly cadence, most-recent-first is fine (buildSession only reads the
+    // date). Dates MUST be relative to today, not pinned absolutes: the
+    // volume audit's group aggregate ("in band") only judges the trailing
+    // 2-week window (PerformanceLab.jsx passes { weeks: 2 }), so a hardcoded
+    // month silently ages out of that window as real time passes — this
+    // test found that the hard way, weeks after it was written and green.
+    const today = new Date();
+    const history = [0, 1, 2, 3].map((i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i * 7);
+      return buildSession(d.toISOString().slice(0, 10));
+    });
     render(<PerformanceLab history={history} onBack={() => {}} />);
     // Strength — one row per main lift, with the section kicker.
     expect(screen.getByText(/Strength · e1RM/)).toBeTruthy();
@@ -102,6 +113,39 @@ describe("PerformanceLab — populated history", () => {
     expect(screen.getByText(/planned/)).toBeTruthy();
     // Group headers carry their aggregate as data.
     expect(screen.getAllByText(/in band/).length).toBeGreaterThan(0);
+  });
+
+  it("§07 drill-down: a muscle row unfolds the eight-week band terrain, one at a time", () => {
+    render(<PerformanceLab history={buildHistory()} onBack={() => {}} />);
+    const quads = screen.getByLabelText(/^Quads: .* sets per week/);
+    const glutes = screen.getByLabelText(/^Glutes: .* sets per week/);
+    expect(quads.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(quads);
+    expect(quads.getAttribute("aria-expanded")).toBe("true");
+    // The terrain names the landmarks it draws — the printed figures are
+    // half the redundancy law, so their absence is a real regression.
+    expect(screen.getByLabelText(/^Quads, last \d+ weeks:/)).toBeTruthy();
+    expect(screen.getByText(/weeks in the productive band/)).toBeTruthy();
+
+    // One open at a time: opening another closes the first.
+    fireEvent.click(glutes);
+    expect(quads.getAttribute("aria-expanded")).toBe("false");
+    expect(glutes.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.queryByLabelText(/^Quads, last \d+ weeks:/)).toBeNull();
+
+    // And it closes on a second tap of the same row.
+    fireEvent.click(glutes);
+    expect(glutes.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("§07 drill-down: keyboard opens the terrain (Enter and Space)", () => {
+    render(<PerformanceLab history={buildHistory()} onBack={() => {}} />);
+    const quads = screen.getByLabelText(/^Quads: .* sets per week/);
+    fireEvent.keyDown(quads, { key: "Enter" });
+    expect(quads.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.keyDown(quads, { key: " " });
+    expect(quads.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("away suspends judgement, never history — strength and consistency survive", () => {

@@ -28,24 +28,81 @@ import { readFileSync } from "node:fs";
 // Playlists render their first 100 entries without continuation - larger
 // lists would need the continuation token dance this deliberately skips.
 async function playlistEntries(listId) {
-  const res = await fetch(`https://www.youtube.com/playlist?list=${listId}&hl=en`, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-      "Accept-Language": "en",
-    },
-  });
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+    "Accept-Language": "en",
+    "Cookie": "SOCS=CAI",   // pre-accepted consent — the consent wall otherwise strips content
+  };
+  const res = await fetch(`https://www.youtube.com/playlist?list=${listId}&hl=en`, { headers });
   console.log(`[verify-videos] playlist page http ${res.status}`);
   const html = await res.text();
-  const out = [];
+
   const seen = new Set();
-  const re = /"playlistVideoRenderer":\{"videoId":"([\w-]{11})"[\s\S]{0,600}?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/g;
-  let m;
-  while ((m = re.exec(html))) {
-    const vid = m[1];
-    if (seen.has(vid)) continue;
+  const out = [];
+  const push = (vid, title) => {
+    if (!vid || seen.has(vid)) return;
     seen.add(vid);
-    const title = JSON.parse(`"${m[2]}"`);   // unescape the JSON string body
-    out.push({ name: title, vid });
+    out.push({ name: title || "(untitled)", vid });
+  };
+
+  // Strategy A — classic markup: playlistVideoRenderer objects.
+  {
+    const re = /"playlistVideoRenderer":\{"videoId":"([\w-]{11})"[\s\S]{0,600}?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/g;
+    let m;
+    while ((m = re.exec(html))) push(m[1], JSON.parse(`"${m[2]}"`));
+    if (out.length) { console.log(`[verify-videos] strategy A (playlistVideoRenderer): ${out.length}`); return out; }
+  }
+
+  // Strategy B — lockup view-model markup (the newer component system).
+  {
+    const re = /"lockupViewModel":\{"contentImage"[\s\S]{0,3000}?"contentId":"([\w-]{11})"[\s\S]{0,3000}?"title":\{"content":"((?:[^"\\]|\\.)*)"/g;
+    let m;
+    while ((m = re.exec(html))) push(m[1], JSON.parse(`"${m[2]}"`));
+    if (out.length) { console.log(`[verify-videos] strategy B (lockupViewModel): ${out.length}`); return out; }
+  }
+
+  // Strategy C — the innertube browse API the page itself uses. The key is
+  // printed in the page; the browse call returns the playlist as JSON.
+  const keyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/);
+  if (keyMatch) {
+    const browse = await fetch(`https://www.youtube.com/youtubei/v1/browse?key=${keyMatch[1]}`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        context: { client: { clientName: "WEB", clientVersion: "2.20260101.00.00", hl: "en" } },
+        browseId: `VL${listId}`,
+      }),
+    });
+    console.log(`[verify-videos] innertube browse http ${browse.status}`);
+    if (browse.ok) {
+      const readTitle = (t) =>
+        t ? (t.simpleText || t.content || (t.runs && t.runs.map((r) => r.text).join("")) || null) : null;
+      const walk = (node) => {
+        if (!node || typeof node !== "object") return;
+        if (Array.isArray(node)) { for (const x of node) walk(x); return; }
+        // Classic renderers: videoId + title on the same object.
+        if (node.videoId && node.title) {
+          const title = readTitle(node.title);
+          if (title) push(node.videoId, title);
+        }
+        // Lockup view models: contentId on the lockup, title nested under
+        // metadata.lockupMetadataViewModel.
+        if (typeof node.contentId === "string" && /^[\w-]{11}$/.test(node.contentId)) {
+          const title = readTitle(node.metadata?.lockupMetadataViewModel?.title) || readTitle(node.title);
+          if (title) push(node.contentId, title);
+        }
+        for (const v of Object.values(node)) walk(v);
+      };
+      walk(await browse.json());
+      if (out.length) { console.log(`[verify-videos] strategy C (innertube): ${out.length}`); return out; }
+    }
+  } else {
+    console.log("[verify-videos] no INNERTUBE_API_KEY in page");
+  }
+
+  // Diagnostics so a zero is explainable rather than mute.
+  for (const probe of ["playlistVideoRenderer", "lockupViewModel", "videoRenderer", "ytInitialData", "consent.youtube.com", "contentId"]) {
+    console.log(`[verify-videos] diag "${probe}": ${html.split(probe).length - 1}`);
   }
   return out;
 }
