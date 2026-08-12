@@ -80,6 +80,16 @@ describe("travelTwin — resolution order", () => {
     const claimed = new Set(TRAVEL_FALLBACK_BY_MUSCLE.Calves);
     expect(travelTwin({ name: "Standing Calf Raise" }, claimed)).toBe("Single-Leg Calf Raise");
   });
+
+  it("the hinge has a second answer — good morning takes some of the deadlift load", () => {
+    // Boss sign-off 2026-08-12: the RDL cannot carry the hinge alone. Once
+    // it is claimed, posterior slots reach a slow bodyweight good morning
+    // rather than repeating the RDL or landing on a leg curl.
+    const claimed = new Set(["Sliding Leg Curl", "Single-Leg RDL"]);
+    expect(travelTwin({ name: "Machine Hamstring Curl" }, claimed)).toBe("Good Morning");
+    // And it travels as ITSELF — barbell off, hinge intact, no twin needed.
+    expect(travelTwin({ name: "Good Morning" })).toBeNull();
+  });
 });
 
 describe("deriveTravelSession — the A/B/C shape survives", () => {
