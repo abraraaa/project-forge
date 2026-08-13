@@ -1081,3 +1081,154 @@ describe("sanitiseWorkingWeights", () => {
     expect(sanitiseWorkingWeights(empty)).toBe(empty);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Reach sets — the Fresh-day nudge (boss ruling 2026-08-12)
+//
+// A reach is a set taken BEYOND the prescription on a Fresh day: an extra set,
+// or the final prescribed set flipped heavier on the drum. The contract is
+// upside-only, and these tests are the contract. The ramp case is the one that
+// matters: an extra set falls outside `evaluableSets` and is ignored for free,
+// but a ramped FINAL set sits inside the evaluated window, where without the
+// guard a good-day reach reads as a missed session and costs the user 5%.
+// ────────────────────────────────────────────────────────────────────────────
+describe("reach sets are upside-only", () => {
+  const liftState = {
+    currentWeight: 100,
+    currentRepRange: { reps: 5, sets: 3 },
+    bestE1RM: 117,
+    consecutiveHolds: 0,
+    stallSignal: null,
+    history: [],
+  };
+  const prescribed = { sets: 3, reps: 5, weight: 100 };
+
+  it("a RAMPED final set that falls short never deloads — the whole point", () => {
+    // Two clean sets at 100, then reached to 105 and got 2 of 5. Without the
+    // guard: one missed set, shortfall 3 > ceil(5*0.4)=2 → MISSED_MODERATE →
+    // DROP_5. Punishing the reach is the exact opposite of encouraging it.
+    const lastSession = buildSession({
+      exercises: [buildExercise({
+        name: "Barbell Back Squat",
+        prescribed,
+        sets: [
+          buildSet({ weight: 100, reps: 5, rir: 2 }),
+          buildSet({ weight: 100, reps: 5, rir: 2 }),
+          { ...buildSet({ weight: 105, reps: 2, rir: 0 }), reach: true },
+        ],
+      })],
+    });
+    const result = computeNextPrescription({
+      liftName: "Barbell Back Squat", history: [lastSession], liftState,
+      muscleAnchor: null, context: { readiness: "normal", currentWeight: 100 },
+    });
+    expect(result.decision).not.toMatch(/^DROP/);
+    // And the failed reach must NOT become the new prescription.
+    expect(result.weight).toBeLessThanOrEqual(100);
+  });
+
+  it("a reach that MET the target at the heavier load is earned and kept", () => {
+    const lastSession = buildSession({
+      exercises: [buildExercise({
+        name: "Barbell Back Squat",
+        prescribed,
+        sets: [
+          buildSet({ weight: 100, reps: 5, rir: 3 }),
+          buildSet({ weight: 100, reps: 5, rir: 3 }),
+          { ...buildSet({ weight: 105, reps: 5, rir: 3 }), reach: true },
+        ],
+      })],
+    });
+    const result = computeNextPrescription({
+      liftName: "Barbell Back Squat", history: [lastSession], liftState,
+      muscleAnchor: null, context: { readiness: "normal", currentWeight: 100 },
+    });
+    // Baseline moved to the reached weight, and RIR 3 earns the next step.
+    expect(result.weight).toBeGreaterThanOrEqual(105);
+  });
+
+  it("heavier-for-fewer is a good set but not a new prescription", () => {
+    // 105 × 3 when the prescription is 5 reps: real work, real volume, but no
+    // evidence the user can hold 5 reps there next week.
+    const lastSession = buildSession({
+      exercises: [buildExercise({
+        name: "Barbell Back Squat",
+        prescribed,
+        sets: [
+          buildSet({ weight: 100, reps: 5, rir: 3 }),
+          buildSet({ weight: 100, reps: 5, rir: 3 }),
+          { ...buildSet({ weight: 105, reps: 3, rir: 1 }), reach: true },
+        ],
+      })],
+    });
+    const result = computeNextPrescription({
+      liftName: "Barbell Back Squat", history: [lastSession], liftState,
+      muscleAnchor: null, context: { readiness: "normal", currentWeight: 100 },
+    });
+    expect(result.weight).toBeLessThanOrEqual(102.5);
+    expect(result.decision).not.toMatch(/^DROP/);
+  });
+
+  it("a grinding reach holds rather than stacking another step on top", () => {
+    // Met the target at 105 but at RIR 0 — the weight is banked, the engine
+    // declines to add on top of a grinder. topSetRir still sees the reach.
+    const lastSession = buildSession({
+      exercises: [buildExercise({
+        name: "Barbell Back Squat",
+        prescribed,
+        sets: [
+          buildSet({ weight: 100, reps: 5, rir: 3 }),
+          buildSet({ weight: 100, reps: 5, rir: 3 }),
+          { ...buildSet({ weight: 105, reps: 5, rir: 0 }), reach: true },
+        ],
+      })],
+    });
+    const result = computeNextPrescription({
+      liftName: "Barbell Back Squat", history: [lastSession], liftState,
+      muscleAnchor: null, context: { readiness: "normal", currentWeight: 100 },
+    });
+    expect(result.decision).toBe("HOLD");
+    expect(result.weight).toBe(105);
+  });
+
+  it("an EXTRA reach set does not read as a genuine miss on the prescribed three", () => {
+    const lastSession = buildSession({
+      exercises: [buildExercise({
+        name: "Barbell Back Squat",
+        prescribed,
+        sets: [
+          buildSet({ weight: 100, reps: 5, rir: 3 }),
+          buildSet({ weight: 100, reps: 5, rir: 3 }),
+          buildSet({ weight: 100, reps: 5, rir: 3 }),
+          { ...buildSet({ weight: 105, reps: 1, rir: 0 }), reach: true },
+        ],
+      })],
+    });
+    const result = computeNextPrescription({
+      liftName: "Barbell Back Squat", history: [lastSession], liftState,
+      muscleAnchor: null, context: { readiness: "normal", currentWeight: 100 },
+    });
+    expect(result.decision).not.toMatch(/^DROP/);
+    expect(result.weight).toBeLessThanOrEqual(100);
+  });
+
+  it("a genuine miss still deloads — the guard is narrow, not a blanket amnesty", () => {
+    // No reach flag anywhere: the old behaviour must be untouched.
+    const lastSession = buildSession({
+      exercises: [buildExercise({
+        name: "Barbell Back Squat",
+        prescribed,
+        sets: [
+          buildSet({ weight: 100, reps: 2, rir: 0 }),
+          buildSet({ weight: 100, reps: 2, rir: 0 }),
+          buildSet({ weight: 100, reps: 1, rir: 0 }),
+        ],
+      })],
+    });
+    const result = computeNextPrescription({
+      liftName: "Barbell Back Squat", history: [lastSession], liftState,
+      muscleAnchor: null, context: { readiness: "normal", currentWeight: 100 },
+    });
+    expect(result.decision).toMatch(/^DROP/);
+  });
+});
