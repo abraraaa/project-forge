@@ -80,15 +80,31 @@ export const metadata = {
   },
   appleWebApp: {
     capable: true,
-    // black-translucent is the ONLY value that makes the status bar
-    // transparent so the page draws underneath it — i.e. the immersive
-    // "blend" we want. "default" and "black" both render an OPAQUE system
-    // bar that content cannot extend under, which reads as a detached band.
-    // Pair with viewport-fit: cover (viewport export) + an env(safe-area-
-    // inset-top) padding on the top content so it isn't hidden under the
-    // clock. NOTE: iOS reads this only at install time — you must remove and
-    // re-add the Home Screen app to see any change here.
-    statusBarStyle: "black-translucent",
+    // WAS black-translucent, for the immersive "blend": it used to be the only
+    // value that made the status bar transparent so the page drew underneath.
+    //
+    // iOS 26.1 stopped honouring it. Installed web apps no longer get
+    // transparency behind the status bar, and iOS paints its own treatment
+    // over that zone regardless — the same 26.1 change that put a tint under
+    // transparent tab bars natively, where Apple's advice was to stop
+    // configuring transparency by hand and take the default.
+    //
+    // Declaring it anyway bought us the WORST of both: the system's bar over
+    // our ground, AND a layout still positioned as though it owned that space
+    // (viewport-fit: cover + an inset-top padding). The two treatments stacked
+    // and washed out the top of every screen — reported on the session card's
+    // progress rule and Quit row, and correctly noticed as "earlier versions
+    // of the rebrand didn't do this": our code never changed, the OS did.
+    //
+    // So: take the default and let the system own the status bar. Our top
+    // padding goes back to being ours rather than compensation for a zone we
+    // no longer control. The alternative doing the rounds — a fixed div with
+    // backdrop-filter — only re-creates the effect iOS removed, cannot
+    // restore real transparency, and is on the design system's never-list.
+    //
+    // NOTE: iOS reads this ONLY at install time. Remove and re-add the Home
+    // Screen app to see any change here.
+    statusBarStyle: "default",
     title: "Heatwayve",
   },
   icons: {
@@ -136,14 +152,12 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  // viewport-fit: cover is REQUIRED for the immersive status-bar look.
-  // Without it, iOS paints the safe-area zones (top status bar + bottom
-  // home-indicator "chin") with theme-color as flat opaque bands, and —
-  // critically — every env(safe-area-inset-*) value in the app resolves
-  // to 0. The app already relies on those insets (toast top offsets,
-  // bottom-sheet home-indicator padding); cover is what makes them work.
-  // With cover, the page background extends edge-to-edge so the status
-  // bar reads as part of the app instead of a detached black band.
+  // viewport-fit: cover STAYS, even though the immersive status-bar look it
+  // was originally chosen for is gone (iOS 26.1 — see appleWebApp above).
+  // The load-bearing reason was always the second one: without cover, every
+  // env(safe-area-inset-*) in the app resolves to 0, and the bottom sheets
+  // and toasts genuinely need the home-indicator inset. Removing it to
+  // "match" the new status-bar handling would silently break the chin.
   viewportFit: "cover",
 };
 
@@ -254,11 +268,12 @@ export default function RootLayout({ children }) {
             </ViewTransition>
           </div>
         </ErrorBoundary>
-        {/* Status-bar handling lives entirely in CSS: viewport-fit: cover +
-            statusBarStyle: black-translucent let the page background flow
-            under a transparent system bar, and a standalone-only
-            env(safe-area-inset-top) padding on .forge-page keeps content
-            clear of the clock. */}
+        {/* Status-bar handling: iOS owns the bar (statusBarStyle: default,
+            since 26.1 stopped honouring black-translucent). viewport-fit:
+            cover STAYS — it is what makes every env(safe-area-inset-*)
+            resolve at all, and the bottom sheets rely on the home-indicator
+            inset. The standalone env(safe-area-inset-top) padding on
+            .forge-page keeps content clear of whatever the system reserves. */}
         <Analytics />
         <SpeedInsights />
       </body>

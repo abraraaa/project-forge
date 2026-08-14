@@ -320,7 +320,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
   // else — fresh sits at the cool end, cooked at the hot end. Colour +
   // mark height + the word: the redundancy law, again.
   const opts=[
-    {id:"fresh", rpe:6, label:"Fresh", sub:"Full programme. The good kind of heavy."},
+    {id:"fresh", rpe:6, label:"Fresh", sub:"Full programme, and a shot at more on your main lift."},
     {id:"normal",rpe:8, label:"Normal",sub:"The work, as written."},
     {id:"cooked",rpe:10,label:"Cooked",sub:"Deload weights · trimmed volume."},
   ];
@@ -485,7 +485,7 @@ function RestProgressLine({ active, remain, total }) {
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,deloadDayTag=null}){
+export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null}){
   const [swapEx,setSwapEx]=useState(null);
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
   const vidEx    =isSS?(phase==="A"?resolvedExA:resolvedExB):resolvedEx;
@@ -651,6 +651,21 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 </div>
               )}
             </>
+          ) : showWeightPicker ? (
+            /* A LOADED lift whose weight we don't know yet — a swap to
+               something never trained, with no anchor history to cold-start
+               from. It is not bodyweight and must never say so: this branch
+               used to fall through to the "Bodyweight" line below, which is
+               how a swapped-in Arnold Press announced itself as a bodyweight
+               movement (boss report, 2026-08-13). Offer the drum instead. */
+            <div style={{cursor:"pointer",userSelect:"none"}}
+              onClick={()=>{ if(activeEx?.name) setEditTarget({exName:activeEx.name,currentKg:null,currentReps:getR(activeEx),loadType}); }}>
+              <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+                <span style={{fontFamily:T.measured,fontWeight:300,fontSize:72,lineHeight:0.82,letterSpacing:"-0.055em",color:T.ink3}}>&mdash;</span>
+                <span style={{fontSize:15,color:T.ink3}}>{weightLabel}</span>
+              </div>
+              <div style={{fontSize:13,color:T.ink2,marginTop:8}}>New lift &mdash; set your weight</div>
+            </div>
           ) : (
             <div style={{fontSize:15,color:T.ink2}}>Bodyweight{bodyweight ? <> · <span style={{fontFamily:T.measured}}>{bodyweight}</span> kg</> : ""}</div>
           )}
@@ -757,6 +772,47 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           )}
           {/* Rest ring + Log — the thumb zone. The ring breathes while
               resting (±3.5%, 5.4s — felt, not seen); tap it to start/skip. */}
+          {/* The reach — offered ONCE, on the last set of the headline lift,
+              only on a day the user called fresh. Two doors, both optional;
+              declining costs nothing and never asks again. Sits above the
+              commit button, not below it: below the primary CTA the eye has
+              already left, and a nudge nobody reads is worse than none. */}
+          {canReach && !reachArmed && (
+            <Fade>
+              <div style={{margin:"14px 20px 0",paddingTop:12,borderTop:`1px solid ${T.rule}`}}>
+                <div style={{fontSize:13,color:T.ink2}}>Last set, and you came in fresh.</div>
+                <div style={{display:"flex",gap:8,marginTop:9,flexWrap:"wrap"}}>
+                  <button className="forge-press" onClick={()=>{haptic.tap();onTakeReach?.("heavier");}}
+                    style={{flex:"1 1 auto",minHeight:42,padding:"0 14px",background:"transparent",
+                      border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
+                      fontFamily:T.text,fontSize:14,color:T.ink}}>
+                    Take it up <MonoNums>{`+${reachStep}`}</MonoNums> kg
+                  </button>
+                  <button className="forge-press" onClick={()=>{haptic.tap();onTakeReach?.("bonus");}}
+                    style={{flex:"1 1 auto",minHeight:42,padding:"0 14px",background:"transparent",
+                      border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
+                      fontFamily:T.text,fontSize:14,color:T.ink}}>
+                    One more set
+                  </button>
+                  <button onClick={()=>{haptic.tap();onDeclineReach?.();}}
+                    style={{flexShrink:0,minHeight:42,padding:"0 10px",background:"none",border:"none",
+                      cursor:"pointer",fontFamily:T.text,fontSize:13,color:T.ink3}}>
+                    Not today
+                  </button>
+                </div>
+                {/* The promise that makes it safe to say yes — and it is a
+                    promise the engine actually keeps (lib/progression.js). */}
+                <div style={{fontSize:12,color:T.ink3,marginTop:9,lineHeight:1.45}}>
+                  Miss it and nothing is lost — a reach never counts against you.
+                </div>
+              </div>
+            </Fade>
+          )}
+          {reachArmed && (
+            <div style={{margin:"14px 20px 0",fontSize:13,color:T.ink3}}>
+              Reaching. Nothing to lose.
+            </div>
+          )}
           <div style={{margin:"12px 20px 0",display:"flex",gap:12,alignItems:"center"}}>
             {showRestHint&&(
               <button

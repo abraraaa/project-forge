@@ -161,15 +161,17 @@ body {
   color: var(--ink);
 }
 
-/* Installed-PWA status-bar clearance. With viewport-fit: cover +
-   black-translucent (app/layout.jsx) the page draws UNDER a transparent
-   status bar, so the top content needs exactly the safe-area inset of
-   padding to clear the clock — no more. Standalone-only so the in-browser
-   layout is untouched. On .forge-page, NOT body: body padding would start
-   the .forge-page box (substrate) BELOW the safe area, leaving a strip of
-   bare body background behind the clock. Padding the substrate itself
-   keeps the field continuous under the clock and pushes only the content
-   down. */
+/* Installed-PWA status-bar clearance: pad by exactly what the system
+   declares unsafe, whatever that turns out to be. Deliberately premise-free
+   — it was written for black-translucent (page draws under a transparent
+   bar), and it stays correct now that we take the default bar instead
+   (iOS 26.1 stopped honouring black-translucent; see app/layout.jsx). If the
+   inset reports 0 because the viewport already starts below the bar, this
+   rule simply no-ops. Standalone-only so the in-browser layout is untouched.
+   On .forge-page, NOT body: body padding would start the .forge-page box
+   (substrate) BELOW the safe area, leaving a strip of bare body background
+   behind the clock. Padding the substrate keeps the field continuous and
+   moves only the content. */
 @media (display-mode: standalone) {
   .forge-page {
     padding-top: env(safe-area-inset-top, 0px);
@@ -306,10 +308,11 @@ html[data-mode="dark"] .forge-page {
   box-shadow: 0 -10px 24px -14px rgba(36, 28, 25, 0.35);
 }
 
-/* No body::before status-bar overlay. With viewport-fit: cover +
-   statusBarStyle black-translucent (app/layout.jsx) and the standalone
-   padding-top above, the page background flows into the status-bar zone
-   and the system bar sits cleanly on top of it. */
+/* No body::before status-bar overlay, and no backdrop-filter scrim either.
+   iOS owns the status bar now (statusBarStyle: default — see app/layout.jsx),
+   so there is nothing for us to paint there. The blurred-div recipe doing
+   the rounds re-creates the transparency iOS 26.1 removed; it is a hack for
+   a mode we no longer declare, and backdrop-filter is on the never-list. */
 
 /* ─── /diag-vt diagnostic overrides ─────────────────────────────────────────
    Body classes toggled by app/diag-vt/page.jsx. The grain overlay these
