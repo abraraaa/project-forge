@@ -41,7 +41,7 @@ import {
 import { deloadDayLabel } from "@/lib/progression";
 import { deriveTravelSession } from "@/lib/travel";
 import { applySessionToEngine } from "@/lib/session-engine";
-import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR } from "@/lib/lift-translations";
+import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, coldStartFromAnchor } from "@/lib/lift-translations";
 import { pickFlashLine } from "@/lib/set-flash";
 import { todayLocalIso, daysBetween } from "@/lib/dates";
 import { T } from "@/lib/tokens";
@@ -232,14 +232,6 @@ export default function SessionHost() {
   const isSS    = block.type === "superset" || block.type === "finisher";
   const swapKey = isSS ? `${block.id}-${phase}` : block.id;
 
-  const resolveExFn = useCallback((blockId, ph, defaultEx) => {
-    const b = activeSession.blocks.find(x => x.id === blockId);
-    if (!b) return defaultEx;
-    if (ph === "A") return b.exA ?? defaultEx;
-    if (ph === "B") return b.exB ?? defaultEx;
-    return b.ex ?? defaultEx;
-  }, [activeSession]);
-
   const resolvedExA = isSS ? (block.exA ?? null) : null;
   const resolvedExB = isSS ? (block.exB ?? null) : null;
   const resolvedEx  = !isSS ? (block.ex ?? null) : null;
@@ -254,9 +246,97 @@ export default function SessionHost() {
   }, [workingWeights, bodyweight]);
   const getR = useCallback((ex) => ex ? (workingReps[ex.name] ?? ex.reps) : null, [workingReps]);
 
-  const onSwap = useCallback((key, newEx) => {
+  const onSwap = (key, newEx) => {
     setSessionSwaps(prev => ({ ...prev, [key]: newEx }));
-  }, []);
+    // Seed a cold start for a lift the user has never trained.
+    //
+    // The swap deliberately drops the old slot's weight whenever the load
+    // maths differ — 28kg of landmine press is not 28kg of Arnold press, and
+    // carrying it over would be worse than carrying nothing. But "nothing"
+    // left the drum with no number at all, and the card then fell through to
+    // its bodyweight branch and announced a dumbbell press as bodyweight
+    // (boss report, 2026-08-13). Give it the same anchor-derived start the
+    // engine computes for any first-time lift.
+    const name = newEx?.name;
+    if (!name || newEx.weight != null || workingWeights[name] !== undefined) return;
+    const prof = getLiftProfile(name);
+    if (!prof.progressesByLoad) return;          // genuinely BW — no weight to seed
+    const anchor = prof.primaryMuscle
+      ? (TS.get(profile)?.muscleAnchors?.[prof.primaryMuscle] || null)
+      : null;
+    const seed = coldStartFromAnchor(name, anchor);
+    if (seed) setWW((prev) => ({ ...prev, [name]: seed }));
+  };
+
+  // ─── The reach — a Fresh-day nudge on the headline lift ───────────────────
+  // Fresh and Normal used to produce a byte-identical session: scaleForReadiness
+  // only ever branched on "cooked", so declaring yourself fresh changed nothing
+  // and the copy promised a difference the engine never delivered.
+  //
+  // The offer lands ONCE, on the final prescribed set of the session's first
+  // main block, and only on a day that can carry it: fresh, not deloading, not
+  // travelling (a hotel room has no plates to add). Two doors, both optional —
+  // one more set, or this one heavier by the lift's own progression step. The
+  // set that follows is flagged `reach`, and lib/progression.js makes that
+  // upside-only: never a miss, and it moves the working weight only if the user
+  // actually met the target at the heavier load.
+  //
+  // ORDERING NOTE: every render-body read of an activeSession-derived value has
+  // to sit ABOVE resolveExFn. That callback closes over activeSession, and the
+  // React Compiler treats a later read as a possible mutation — it then refuses
+  // to preserve the memoization and silently skips optimising the whole
+  // component. Hence resolveExFn now lives below this block.
+  const [reachArmed, setReachArmed] = useState(false);   // next set is a reach
+  const [bonusSets, setBonusSets]   = useState(0);       // extra sets, this block
+  const [reachSpent, setReachSpent] = useState(false);   // offered once a session
+  const headlineBlockIdx = activeSession.blocks.findIndex((b) => b.type === "main");
+  const isHeadline = headlineBlockIdx >= 0 && blockIdx === headlineBlockIdx;
+  const blockSets = block.sets + (isHeadline ? bonusSets : 0);
+  const reachStep = activeEx?.name
+    ? (STEP_SIZES[getLiftProfile(activeEx.name).category] ?? 2.5)
+    : 2.5;
+  // Resolved WITHOUT calling getW: invoking a useCallback from the render body
+  // is the other thing that makes the compiler bail here.
+  const reachWeight = activeEx
+    ? (workingWeights[activeEx.name] ?? startingWeightForLift(activeEx.name, bodyweight) ?? activeEx.weight)
+    : null;
+  // Never ask before two sets are in the bank. Today every main block is 3 or
+  // 4 sets, so "last set" already lands on the 3rd or later — but that is a
+  // property of the template, not a guarantee. Stated explicitly here so a
+  // future 2-set main block can't quietly start asking after set one, when
+  // nobody yet knows what kind of day it is.
+  const REACH_EARLIEST_SET = 3;
+  const canReach =
+    readiness === "fresh" && !reachSpent && !reachArmed && !activeDeload && !travel &&
+    !isSS && isHeadline && setNum >= blockSets && setNum >= REACH_EARLIEST_SET &&
+    getLoadType(activeEx) !== "bodyweight" && Number.isFinite(reachWeight);
+
+  // Plain handlers, like commitLog/handleLog below — the React Compiler
+  // memoizes them, and hand-rolling it here made the component bail too.
+  const takeReach = (door) => {
+    setReachSpent(true);
+    setReachArmed(true);
+    if (door === "heavier") {
+      // Exactly what flipping the wheels does — no new prescription plumbing,
+      // and the engine reconciles from the logged sets at finalise regardless.
+      const name = activeEx?.name;
+      const next = Math.round(((reachWeight ?? 0) + reachStep) * 100) / 100;
+      if (name) setWW((prev) => ({ ...prev, [name]: next }));
+    } else {
+      setBonusSets(1);
+    }
+  };
+  const declineReach = () => setReachSpent(true);
+
+  const resolveExFn = useCallback((blockId, ph, defaultEx) => {
+    const b = activeSession.blocks.find(x => x.id === blockId);
+    if (!b) return defaultEx;
+    if (ph === "A") return b.exA ?? defaultEx;
+    if (ph === "B") return b.exB ?? defaultEx;
+    return b.ex ?? defaultEx;
+  }, [activeSession]);
+
+
 
   // ─── Set logging + advancement — verbatim from ForgeApp ───────────────────
   const pushSetToDraft = useCallback((ex, rpe) => {
@@ -289,6 +369,7 @@ export default function SessionHost() {
       weight: resolvedWeight,
       reps: workingReps[ex.name] ?? ex.reps,
       rpe: rpe || null,
+      reach: reachArmed,
     });
     D.save(profile, draftLogRef.current);
     // Bodyweight prompt — once per session, timed to the RPE card fade.
@@ -303,7 +384,7 @@ export default function SessionHost() {
       setBwPromptedThisSession(true);
       setTimeout(() => setBwEditOpen(true), 280);
     }
-  }, [block, isSS, phase, sessionSwaps, workingWeights, workingReps, resolveExFn, profile, bodyweight, bwPromptedThisSession]);
+  }, [block, isSS, phase, sessionSwaps, workingWeights, workingReps, resolveExFn, profile, bodyweight, bwPromptedThisSession, reachArmed]);
 
   // Final-set flash — one quiet line after rating the LAST set of an
   // exercise (lib/set-flash.js: no repeats this session, Easy falls back to
@@ -318,7 +399,7 @@ export default function SessionHost() {
   const flashTimersRef = useRef([]);
   useEffect(() => () => flashTimersRef.current.forEach(clearTimeout), []);
   const maybeFlash = (rpe) => {
-    if (setNum !== block.sets || isSS) return; // last set of a plain block only
+    if (setNum !== blockSets || isSS) return; // last set of a plain block only
     const timed  = parseTimedReps(activeEx?.reps);
     const target = timed ? timed.seconds : parseInt(activeEx?.reps, 10);
     const done   = getR(activeEx);
@@ -363,7 +444,8 @@ export default function SessionHost() {
       ? [resolveExFn(block.id, "A", block.exA), resolveExFn(block.id, "B", block.exB)]
       : [resolveExFn(block.id, null, block.ex)];
     exes.forEach(ex => pushSetToDraft(ex, rpe));
-    if (setNum >= block.sets) {
+    setReachArmed(false);            // a reach is one set, never a mode
+    if (setNum >= blockSets) {
       if (blockIdx < activeSession.blocks.length - 1) { setBlockIdx(p => p + 1); setSetNum(1); setPhase("A"); }
       else finishSession();
     } else setSetNum(p => p + 1);
@@ -387,7 +469,7 @@ export default function SessionHost() {
       setPhase("A");
       if (block.type === "superset") { setSsRoundDone(true); return; }
       pushSetToDraft(resolveExFn(block.id, "B", block.exB), null);
-      if (setNum >= block.sets) {
+      if (setNum >= blockSets) {
         if (blockIdx < activeSession.blocks.length - 1) { setBlockIdx(p => p + 1); setSetNum(1); setPhase("A"); }
         else finishSession();
       } else setSetNum(p => p + 1);
@@ -560,6 +642,7 @@ export default function SessionHost() {
       setSessionOverviewOpen(true);
     },
     bodyweight,
+    canReach, reachStep, reachArmed, onTakeReach: takeReach, onDeclineReach: declineReach,
     deloadDayTag: activeDeload ? deloadDayLabel(activeDeload) : null,
   };
 

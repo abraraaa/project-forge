@@ -45,6 +45,14 @@ const GRANDFATHERED_VH = {
   "app/library/[slug]/page.jsx": 1,
   "app/library/page.jsx": 1,
 };
+// INSTRUMENTS: not an exemption from the contract — a different activity.
+// The ratchet exists to stop SCREENS padding themselves clear of the status
+// bar. A diagnostic whose entire job is to MEASURE the inset has to name it,
+// and it pads nothing. Kept separate from the grandfather table on purpose:
+// that list is frozen legacy that may only shrink, this one is instruments.
+const INSTRUMENTS_TOP = {
+  "app/diag-safe-area/page.jsx": true,   // reads env() into a hidden probe
+};
 const GRANDFATHERED_TOP = {
   "components/HomeScreen.jsx": true,
   "components/PerformanceLab.jsx": true,
@@ -69,7 +77,8 @@ describe("viewport contract — the shell owns the viewport (ratcheted)", () => 
   it("no NEW status-bar self-clearance (env(safe-area-inset-top))", () => {
     const offenders = files.filter((rel) =>
       readFileSync(resolve(root, rel), "utf8").includes("safe-area-inset-top") &&
-      !GRANDFATHERED_TOP[rel.replace(/\\/g, "/")],
+      !GRANDFATHERED_TOP[rel.replace(/\\/g, "/")] &&
+      !INSTRUMENTS_TOP[rel.replace(/\\/g, "/")],
     );
     expect(offenders, `only .forge-page/layout may pad the status bar: ${offenders.join(", ")}`).toEqual([]);
   });

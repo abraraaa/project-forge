@@ -110,3 +110,10 @@ named as the common cause instead of shipping layout patch #31.)
   thing, at proportionate cost. A screenshot or one probe, not a battery.
 - Commit trailers stay as configured; never put model identifiers in commits,
   PRs, or code.
+- **The repo is public. Commits and PRs state what changed — nothing else.**
+  Subject plus a line or two. No investigation, no defect catalogue, no
+  lessons learned, no internal doctrine. Reasoning goes to Drive; the
+  conversation goes in chat; durable detail goes in a code comment next to
+  the code. Nobody needs the stream of thought, and a motivated reader
+  shouldn't be handed it. Squash before merge if the branch history drifted
+  wordy. (Reminded three times: 2026-08-05, and twice on 2026-08-13.)

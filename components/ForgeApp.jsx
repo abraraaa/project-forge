@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
-  WEEK, SESSIONS, deriveStrengthDaySessions,
+  WEEK, SESSIONS, projectStrengthDaySessions, nextStrengthIdx,
   rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
   dedupeRotationConfig,
   ROTATION_AUTO, DEFAULT_FOCUS, // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
@@ -302,7 +302,13 @@ export default function ForgeApp(){
   // without a reload. Falls back to the default WEEK when nothing is stored.
   const [userWeek, setUserWeek] = useState(() => W.get() || WEEK);
 
-  const strengthDaySessions = useMemo(() => deriveStrengthDaySessions(userWeek), [userWeek]);
+  // The A/B/C letters come from the CYCLE (what you last trained), not from
+  // the weekday. Anchored on today so the strip reads as the true upcoming
+  // order. See projectStrengthDaySessions in lib/programme.js.
+  const strengthDaySessions = useMemo(
+    () => projectStrengthDaySessions(userWeek, history, mondayIndex(new Date())),
+    [userWeek, history],
+  );
   // Rhythm — derived from history against the USER'S schedule (expected =
   // weekly strength days × 4), no persistence needed. Lives below userWeek
   // so the memo can read it.
@@ -757,7 +763,8 @@ export default function ForgeApp(){
 
   // Derive today's session index for HomeScreen
   const todayIdx = mondayIndex(new Date());
-  const todaySessionIdx = strengthDaySessions[todayIdx] ?? 0;
+  // Rest day but the user starts anyway → still the next in the cycle.
+  const todaySessionIdx = strengthDaySessions[todayIdx] ?? nextStrengthIdx(history);
 
   // Pure rotation preview — computes a candidate config without touching
   // state. Used by the preview sheet so users can see the proposed picks
