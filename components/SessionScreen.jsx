@@ -26,7 +26,7 @@ import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { WEEK, SWAP_DB } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
-import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, snapToImplement } from "@/lib/lift-translations";
+import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 import { resolveVid } from "@/lib/exercise-videos";
 
@@ -532,11 +532,10 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const nudgeWeight = (dir) => {
     if (!activeEx?.name || currentW == null) return;
     haptic.toggle();
-    // Snap the RESULT to the implement's grid. The drum already builds its
-    // values from zero so picking one always lands clean, but the steppers
-    // offset from wherever you are — so an off-grid working weight (18.75 on
-    // a dumbbell) would step to 19.75, 20.75, and never heal itself.
-    const next = Math.max(0, snapToImplement(currentW + dir * weightStep, loadType));
+    // Move to the next RUNG on the implement's grid, not current + step.
+    // Adding a step walks an off-grid weight along forever (18.75 -> 19.75);
+    // taking the next rung lands clean on the first press (18.75 -> 19).
+    const next = nextRung(currentW, loadType, dir);
     setWW(p => ({...p, [activeEx.name]: next}));
   };
 

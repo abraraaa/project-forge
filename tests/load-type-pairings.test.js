@@ -16,7 +16,7 @@
 
 import { describe, it, expect } from "vitest";
 import { SESSIONS, EXERCISE_POOLS, SWAP_DB } from "../lib/programme.js";
-import { getLoadType, swapLoadType, getLiftProfile, weightStepForLoadType, snapToImplement } from "../lib/lift-translations.js";
+import { getLoadType, swapLoadType, getLiftProfile, weightStepForLoadType, snapToImplement, nextRung } from "../lib/lift-translations.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { computeEffectiveLoad } from "../lib/storage.js";
@@ -220,5 +220,36 @@ describe("every load type in the library has a real increment", () => {
 
   it("an unknown implement is left alone rather than guessed at", () => {
     expect(snapToImplement(13.75, null)).toBe(13.75);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// The steppers move to the next RUNG, not current + step.
+//
+// Adding a step to an off-grid weight walks the error along forever. Taking
+// the next rung lands on the grid on the first press. Identical on a clean
+// weight, which is most of the time — the difference only shows once
+// something upstream has gone off-grid, which is exactly when it matters.
+// ────────────────────────────────────────────────────────────────────────────
+describe("weight steppers move to the next rung", () => {
+  it("an off-grid dumbbell heals on the first press, in either direction", () => {
+    expect(nextRung(18.75, "per_db", 1)).toBe(19);
+    expect(nextRung(18.75, "per_db", -1)).toBe(18);
+  });
+
+  it("a weight already on a rung still moves a full rung", () => {
+    expect(nextRung(19, "per_db", 1)).toBe(20);
+    expect(nextRung(19, "per_db", -1)).toBe(18);
+  });
+
+  it("respects each implement's own grid", () => {
+    expect(nextRung(51.25, "barbell", 1)).toBe(52.5);   // micro-plates
+    expect(nextRung(35.5, "machine", 1)).toBe(37.5);    // pin stack
+    expect(nextRung(35.5, "machine", -1)).toBe(35);
+  });
+
+  it("never goes below zero", () => {
+    expect(nextRung(0, "per_db", -1)).toBe(0);
+    expect(nextRung(0.5, "per_db", -1)).toBe(0);
   });
 });
