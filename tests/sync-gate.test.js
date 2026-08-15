@@ -185,4 +185,16 @@ describe("the nightly self-test proves the gate is live in the deployed build", 
     // header path is the only one available to it, which is the point.
     expect(s).toContain("SELFTEST_TOKEN");
   });
+
+  it("cleans up with an UNSCOPED token, because the wipe gate refuses scopes", () => {
+    // The self-test works through a sync-scoped token, but DELETE rejects any
+    // scope. Reusing the working token 401'd and left the throwaway profile
+    // behind on every nightly run. Cleanup mints its own unscoped one.
+    const s = readFileSync(resolve(root, "app/api/cron/sync-selftest/route.js"), "utf8");
+    const cleanup = s.slice(s.indexOf("SELFTEST_PROFILE_RE.test(profile)"));
+    expect(cleanup).toMatch(/mintAuthToken\(\{\s*profile,\s*ttlMs:\s*\d+\s*\}\)/);
+    // ...and that mint must not smuggle a scope back in.
+    const mintCall = cleanup.slice(cleanup.indexOf("mintAuthToken"), cleanup.indexOf("syncDELETE"));
+    expect(mintCall).not.toContain("scope");
+  });
 });

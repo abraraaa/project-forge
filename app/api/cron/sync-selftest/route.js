@@ -112,12 +112,23 @@ export async function GET(request) {
   } catch (e) {
     check(`threw: ${e?.message || e}`, false);
   } finally {
-    // Always release the throwaway profile — no passkey, so no authToken
-    // needed — but ONLY if it still matches the selftest junk pattern. A
-    // refusal here is a bug worth failing the run over, not a silent skip.
+    // Always release the throwaway profile, but ONLY if it still matches the
+    // selftest junk pattern. A refusal here is a bug worth failing the run
+    // over, not a silent skip.
+    //
+    // The wipe gate rejects ANY scoped token — deliberately, so the path-
+    // scoped J1 sync cookie can never authorise destruction. The self-test's
+    // working token is sync-scoped, so cleanup mints its own UNSCOPED one
+    // rather than reusing it: throwaway profile, two-minute TTL, inside the
+    // trust boundary. Reusing the scoped token 401'd and left the junk row
+    // behind on every nightly run.
     if (SELFTEST_PROFILE_RE.test(profile)) {
       try {
-        const res = await syncDELETE(getReq({ profile }));
+        const wipeToken = await mintAuthToken({ profile, ttlMs: 120000 });
+        const res = await syncDELETE(new Request(
+          `${BASE}?${new URLSearchParams({ profile })}`,
+          { headers: { "x-hw-auth": wipeToken } },
+        ));
         check("cleanup DELETE releases the throwaway profile", res.status === 200);
       } catch { check("cleanup DELETE threw", false); }
     } else {
