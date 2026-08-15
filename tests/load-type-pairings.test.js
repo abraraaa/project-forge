@@ -16,7 +16,7 @@
 
 import { describe, it, expect } from "vitest";
 import { SESSIONS, EXERCISE_POOLS, SWAP_DB } from "../lib/programme.js";
-import { getLoadType, swapLoadType, getLiftProfile } from "../lib/lift-translations.js";
+import { getLoadType, swapLoadType, getLiftProfile, weightStepForLoadType, snapToImplement, nextRung } from "../lib/lift-translations.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { computeEffectiveLoad } from "../lib/storage.js";
@@ -166,5 +166,90 @@ describe("a swapped-in lift arrives with a weight to stand on", () => {
     // The unknown-weight branch must come FIRST, or the bodyweight line
     // catches loaded lifts again.
     expect(idxNewLift).toBeLessThan(idxBodyweight);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Every implement declares its own grid.
+//
+// weightStepForLoadType is the single source of truth for "which weights
+// exist" — the drum steps by it and, since 2026-08-15, the engine snaps
+// prescriptions to it. A loadType that isn't listed silently inherits the
+// barbell default of 1.25kg, which is a micro-plate: that is how a pin-loaded
+// Machine Hamstring Curl came to be prescribed 35.5kg, and how a per_db lift
+// came to be prescribed 13.75.
+// ────────────────────────────────────────────────────────────────────────────
+describe("every load type in the library has a real increment", () => {
+  // The grid, stated. A new loadType must be added here deliberately rather
+  // than falling through to the default.
+  const EXPECTED_STEP = {
+    per_db: 1,        // dumbbell racks step in whole kg
+    machine: 2.5,     // pin-loaded stack
+    cable: 2.5,       // pin-loaded stack
+    total: 2.5,       // one implement, loaded like a stack
+    barbell: 1.25,    // micro-plates are real here
+    external: 1.25,
+    bodyweight: 1.25,
+    loaded_bodyweight: 1.25,
+    assisted_bodyweight: 1.25,
+  };
+
+  it("no load type the library actually uses inherits the default by accident", () => {
+    const inUse = [...new Set(ALL.map((e) => e.type))];
+    const unlisted = inUse.filter((t) => !(t in EXPECTED_STEP));
+    expect(unlisted, `unlisted load types: ${unlisted.join(", ")}`).toEqual([]);
+  });
+
+  it("each declares the increment its implement can actually express", () => {
+    for (const [type, step] of Object.entries(EXPECTED_STEP)) {
+      expect(weightStepForLoadType(type), type).toBe(step);
+    }
+  });
+
+  it("a dumbbell grid can never produce a quarter kilo", () => {
+    // The whole point: snapping per_db must land on whole kg from any input.
+    for (const raw of [13.75, 18.75, 12.4, 0.3, 47.6]) {
+      expect(snapToImplement(raw, "per_db") % 1, `${raw}`).toBe(0);
+    }
+  });
+
+  it("a pin stack lands on the pin, and a barbell keeps its micro-plates", () => {
+    expect(snapToImplement(35.5, "machine")).toBe(35);
+    expect(snapToImplement(51.25, "barbell")).toBe(51.25);
+  });
+
+  it("an unknown implement is left alone rather than guessed at", () => {
+    expect(snapToImplement(13.75, null)).toBe(13.75);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// The steppers move to the next RUNG, not current + step.
+//
+// Adding a step to an off-grid weight walks the error along forever. Taking
+// the next rung lands on the grid on the first press. Identical on a clean
+// weight, which is most of the time — the difference only shows once
+// something upstream has gone off-grid, which is exactly when it matters.
+// ────────────────────────────────────────────────────────────────────────────
+describe("weight steppers move to the next rung", () => {
+  it("an off-grid dumbbell heals on the first press, in either direction", () => {
+    expect(nextRung(18.75, "per_db", 1)).toBe(19);
+    expect(nextRung(18.75, "per_db", -1)).toBe(18);
+  });
+
+  it("a weight already on a rung still moves a full rung", () => {
+    expect(nextRung(19, "per_db", 1)).toBe(20);
+    expect(nextRung(19, "per_db", -1)).toBe(18);
+  });
+
+  it("respects each implement's own grid", () => {
+    expect(nextRung(51.25, "barbell", 1)).toBe(52.5);   // micro-plates
+    expect(nextRung(35.5, "machine", 1)).toBe(37.5);    // pin stack
+    expect(nextRung(35.5, "machine", -1)).toBe(35);
+  });
+
+  it("never goes below zero", () => {
+    expect(nextRung(0, "per_db", -1)).toBe(0);
+    expect(nextRung(0.5, "per_db", -1)).toBe(0);
   });
 });

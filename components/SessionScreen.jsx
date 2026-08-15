@@ -26,7 +26,7 @@ import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { WEEK, SWAP_DB } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
-import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS } from "@/lib/lift-translations";
+import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 import { resolveVid } from "@/lib/exercise-videos";
 
@@ -532,7 +532,10 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const nudgeWeight = (dir) => {
     if (!activeEx?.name || currentW == null) return;
     haptic.toggle();
-    const next = Math.max(0, Math.round((currentW + dir * weightStep) * 100) / 100);
+    // Move to the next RUNG on the implement's grid, not current + step.
+    // Adding a step walks an off-grid weight along forever (18.75 -> 19.75);
+    // taking the next rung lands clean on the first press (18.75 -> 19).
+    const next = nextRung(currentW, loadType, dir);
     setWW(p => ({...p, [activeEx.name]: next}));
   };
 
@@ -694,11 +697,23 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             </div>
           );
         })()}
-        <div style={{flex:2,padding:"12px 20px 12px 18px",borderLeft:`1px solid ${T.rule}`}}>
+        {/* The door to recent history sits ON the cell it expands. It used to
+            be a "Recent →" link at the very bottom of the column, where it was
+            below the fold on device and needed a scroll to reach — and
+            scrolling to reach it then mispositioned the sheet it opened. */}
+        <div role={recent.length > 0 ? "button" : undefined}
+          tabIndex={recent.length > 0 ? 0 : undefined}
+          onClick={recent.length > 0 ? () => setHistoryOpen(true) : undefined}
+          onKeyDown={recent.length > 0 ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setHistoryOpen(true); } } : undefined}
+          aria-label={recent.length > 0 ? `Recent history for ${activeEx?.name}` : undefined}
+          style={{flex:2,padding:"12px 20px 12px 18px",borderLeft:`1px solid ${T.rule}`,cursor:recent.length>0?"pointer":undefined}}>
           <div style={{fontFamily:T.measured,fontSize:22,color:lastRpe!=null?heatForRpe(lastRpe):T.ink3}}>
             {last?.topSet ? `${lastW ?? "—"}${lastW!=null?"":""} × ${last.topSet.reps ?? "—"}${lastRpe!=null?` @ ${lastRpe%1===0?lastRpe:lastRpe.toFixed(1)}`:""}` : "—"}
           </div>
-          <div style={{fontSize:12,color:T.ink3,marginTop:3}}>this lift, last time</div>
+          <div style={{fontSize:12,color:T.ink3,marginTop:3,display:"flex",alignItems:"center",gap:5}}>
+            this lift, last time
+            {recent.length > 0 && <Glyph name="arrowRight" size={10} color={T.ink3}/>}
+          </div>
         </div>
       </div>
 
@@ -864,16 +879,6 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           recent={recent}
           onCancel={()=>setHistoryOpen(false)}
         />
-      )}
-      {/* Recent → quiet door, below the fold of attention. */}
-      {recent.length > 0 && !blocking && (
-        <div style={{padding:"10px 20px 0",display:"flex",justifyContent:"center"}}>
-          <button onClick={()=>setHistoryOpen(true)}
-            aria-label={`Recent history for ${activeEx?.name}`}
-            style={{...linkBtn,fontSize:12,padding:"2px 8px"}}>
-            Recent <Glyph name="arrowRight" size={11}/>
-          </button>
-        </div>
       )}
     </div>
   );

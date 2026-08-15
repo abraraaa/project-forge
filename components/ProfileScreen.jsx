@@ -845,6 +845,21 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           </a>
         </Fade>
       )}
+      {/* Plain <a>, like its neighbours: a full navigation keeps it inside
+          the installed app's scope, which is the only way to read the
+          standalone numbers. */}
+      {current && isAdminSession(current) && (
+        <Fade d={304}>
+          <a href="/diag-safe-area"
+            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Safe-area ruler</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Status-bar clearance + live insets</div>
+            </div>
+            <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
+          </a>
+        </Fade>
+      )}
 
       {/* Bug report intake (fill-or-kill flow) — a quiet row in the admin-
           adjacent tail of the page. Open to everyone; the review wing lives

@@ -1232,3 +1232,95 @@ describe("reach sets are upside-only", () => {
     expect(result.decision).toMatch(/^DROP/);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// A prescription must land on a weight the implement can actually express.
+//
+// STEP_SIZES is keyed by progression CATEGORY, which is barbell-shaped: 1.25kg
+// is a micro-plate. A DB Shoulder Press is category upper_push AND loadType
+// per_db, so ADD produced 12.5 -> 13.75 — a dumbbell that has never existed.
+// The drum steps per_db in whole kg, so every later nudge preserved the .75
+// and the user could never reach a real rung (boss report, 2026-08-15).
+// ────────────────────────────────────────────────────────────────────────────
+describe("prescriptions land on weights the implement has", () => {
+  const dbState = {
+    currentWeight: 12.5,
+    currentRepRange: { reps: 8, sets: 3 },
+    bestE1RM: 40,
+    consecutiveHolds: 0,
+    stallSignal: null,
+    history: [],
+  };
+  const dbSession = (weight, rir) => buildSession({
+    exercises: [buildExercise({
+      name: "Dumbbell Shoulder Press",
+      prescribed: { sets: 3, reps: 8, weight },
+      sets: [
+        { ...buildSet({ weight, reps: 8, rir }), loadType: "per_db" },
+        { ...buildSet({ weight, reps: 8, rir }), loadType: "per_db" },
+        { ...buildSet({ weight, reps: 8, rir }), loadType: "per_db" },
+      ],
+    })],
+  });
+
+  it("a dumbbell ADD never prescribes a quarter or three-quarter kilo", () => {
+    const result = computeNextPrescription({
+      liftName: "Dumbbell Shoulder Press",
+      history: [dbSession(12.5, 3)],
+      liftState: dbState,
+      muscleAnchor: null,
+      context: { readiness: "normal", currentWeight: 12.5 },
+    });
+    expect(result.decision).toBe("ADD");
+    expect(result.weight % 1, `got ${result.weight}`).toBe(0);
+  });
+
+  it("a dumbbell DROP lands on a real rung too", () => {
+    const result = computeNextPrescription({
+      liftName: "Dumbbell Shoulder Press",
+      history: [dbSession(17.5, 0)].map((s) => ({
+        ...s,
+        blocks: [{ ...s.blocks[0], exercises: [{
+          ...s.blocks[0].exercises[0],
+          sets: s.blocks[0].exercises[0].sets.map((x) => ({ ...x, reps: 2 })),
+        }] }],
+      })),
+      liftState: { ...dbState, currentWeight: 17.5 },
+      muscleAnchor: null,
+      context: { readiness: "normal", currentWeight: 17.5 },
+    });
+    expect(result.decision).toMatch(/^DROP/);
+    expect(result.weight % 1, `got ${result.weight}`).toBe(0);
+  });
+
+  it("a HOLD still holds — snapping may never move a weight the user performed", () => {
+    // The invariant that has cost a real defect before: on HOLD the engine
+    // returns the performed weight untouched, even when it is off-grid.
+    const result = computeNextPrescription({
+      liftName: "Dumbbell Shoulder Press",
+      history: [dbSession(13.75, 1)],
+      liftState: { ...dbState, currentWeight: 13.75 },
+      muscleAnchor: null,
+      context: { readiness: "normal", currentWeight: 13.75 },
+    });
+    expect(result.decision).toBe("HOLD");
+    expect(result.weight).toBe(13.75);
+  });
+
+  it("the barbell keeps its micro-plates — the snap is per implement, not global", () => {
+    const result = computeNextPrescription({
+      liftName: "Barbell Overhead Press",
+      history: [buildSession({
+        exercises: [buildExercise({
+          name: "Barbell Overhead Press",
+          sets: [{ ...buildSet({ weight: 50, reps: 5, rir: 3 }), loadType: "barbell" }],
+        })],
+      })],
+      liftState: { ...dbState, currentWeight: 50, currentRepRange: { reps: 5, sets: 3 } },
+      muscleAnchor: null,
+      context: { readiness: "normal", currentWeight: 50 },
+    });
+    expect(result.decision).toBe("ADD");
+    expect(result.weight).toBe(51.25);   // 1.25 micro-plate survives
+  });
+});
