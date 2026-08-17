@@ -14,6 +14,7 @@
 // ssr:false decision untouched. It says what the site IS and links the three
 // fully server-rendered content tiers, so a non-JS crawler arriving at the
 // root has somewhere to go.
+import Link from "next/link";
 import { ForgeAppShell } from "@/components/client-shells";
 
 export default function Page() {
@@ -34,16 +35,16 @@ export default function Page() {
           </p>
           <ul>
             <li>
-              <a href="/library">The exercise library</a> — every movement, with
+              <Link href="/library">The exercise library</Link> — every movement, with
               the weighted per-muscle contributions the volume audit computes
               with, its tempo prescription and approved alternatives.
             </li>
             <li>
-              <a href="/anatomy">Explore your anatomy</a> — one page per muscle,
+              <Link href="/anatomy">Explore your anatomy</Link> — one page per muscle,
               ranking every movement by the share of a set it genuinely credits.
             </li>
             <li>
-              <a href="/volume-landmarks">Volume landmarks</a> — what MEV, MAV
+              <Link href="/volume-landmarks">Volume landmarks</Link> — what MEV, MAV
               and MRV mean, and the per-muscle weekly set targets behind them.
             </li>
           </ul>
