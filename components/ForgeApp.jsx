@@ -951,7 +951,7 @@ export default function ForgeApp(){
     // since been edited away from strength was refused here outright, and
     // one whose strength letter moved got the wrong A/B/C session.
     const retroWeek = W.getEffectiveOn(retroDate) || WEEK;
-    const meta = sessionMetaForDate(retroDate, retroWeek);
+    const meta = sessionMetaForDate(retroDate, retroWeek, history);
     if (!meta || meta.type !== "strength") return;
 
     const sessionDef = SESSIONS[meta.sessionIdx];
@@ -1172,7 +1172,7 @@ export default function ForgeApp(){
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased"}}>
       {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={()=>setAbsenceNudgeDismissed(true)}/>}
       {breatherOpen           && <BreatherModal onConfirm={handleStartBreather} onCancel={()=>setBreatherOpen(false)}/>}
-      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
+      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} history={history} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}
@@ -1216,7 +1216,11 @@ function OnboardingScreen({ onContinue }) {
     }}>
       {/* Masthead per the grammar (§14): kicker Heatwayve · title a noun ·
           the sentence lives in the support line. */}
-      <Fade d={0}>
+      {/* opaque: this is the first-run screen, and it is what a cold visitor
+          (and every crawler) actually sees. A fade from zero disqualifies it
+          as an LCP candidate in Chromium, which is why PageSpeed reported
+          NO_LCP and errored out five diagnostics that derive from it. */}
+      <Fade d={0} opaque>
         <div style={{ fontSize: 13, fontWeight: 500, color: T.ink2, marginBottom: 18 }}>
           Heatwayve
         </div>
@@ -1678,8 +1682,8 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
 // applied to all sets in an exercise.
 // effectiveWeek = the schedule in force ON `date` (resolved by the host via
 // W.getEffectiveOn) — never today's config; see handleSubmitRetro.
-function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingReps, effectiveWeek=WEEK, onCancel, onSubmit}){
-  const meta = useMemo(() => sessionMetaForDate(date, effectiveWeek), [date, effectiveWeek]);
+function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingReps, effectiveWeek=WEEK, history=[], onCancel, onSubmit}){
+  const meta = useMemo(() => sessionMetaForDate(date, effectiveWeek, history), [date, effectiveWeek, history]);
   const sessionDef = meta?.type === "strength" ? SESSIONS[meta.sessionIdx] : null;
 
   // Flatten blocks into a single exercise list, but keep a back-reference to

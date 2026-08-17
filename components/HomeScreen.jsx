@@ -223,7 +223,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       {/* Day headline — the noun that matters, in the display voice.
           className="home-headline" hooks the scroll-timeline compression in
           globals.css. The day key runs as a hairline under the name. */}
-      <Fade d={100}>
+      {/* opaque: this block is the page's largest paint. A fade from zero
+          disqualifies it as an LCP candidate in Chromium, and ships the
+          headline invisible until hydration. It still rises. */}
+      <Fade d={100} opaque>
         <div className="home-headline" style={{padding:"26px 24px 0",transformOrigin:"left top"}}>
           <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:8}}>
             <span style={{fontSize:13,color:T.ink3}}>{dayLabel}</span>

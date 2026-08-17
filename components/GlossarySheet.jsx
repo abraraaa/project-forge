@@ -34,6 +34,11 @@ const TERMS = [
           <li><strong>MRV</strong> — Maximum Recoverable Volume. The ceiling above which extra sets cost more recovery than they earn.</li>
         </ul>
         <p style={{marginTop:8}}>Heatwayve uses Israetel/Helms-derived landmarks, tuned per muscle and per delt head.</p>
+        <p style={{marginTop:8}}>
+          <a href="/volume-landmarks" style={{color:"var(--ink)",textDecoration:"underline",textUnderlineOffset:3}}>
+            The full numbers, and how a set gets split
+          </a>
+        </p>
       </>
     ),
   },
@@ -62,6 +67,14 @@ const TERMS = [
           <li><strong>Normal</strong> — ~2 reps in reserve. Working effort. Hold or progress.</li>
           <li><strong>Cooked</strong> — 0–1 reps in reserve. Near failure. Back off next time.</li>
         </ul>
+        <p style={{marginTop:8}}>
+          The RIR-anchored RPE scale was validated against bar velocity by{" "}
+          <a href="https://doi.org/10.1519/JSC.0000000000001049" rel="noopener"
+            style={{color:"var(--ink)",textDecoration:"underline",textUnderlineOffset:3}}>
+            Zourdos et al. (2016)
+          </a>
+          — the reason effort is captured this way rather than as a bare 1&ndash;10 feeling.
+        </p>
       </>
     ),
   },

@@ -8,7 +8,7 @@
 // pages it indexes (same source the sitemap draws from).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { LIBRARY, exerciseDescription } from "@/lib/library";
+import { LIBRARY, exerciseDescription, allTrainedMuscles, contributorsFor, muscleSlug } from "@/lib/library";
 
 export const dynamic = "force-static";
 
@@ -19,6 +19,28 @@ export function GET() {
     "> Evidence-based, autoregulated strength training — a 3-day A/B/C programme with",
     "> effort-responsive progression and per-muscle weekly volume held against the",
     "> MEV/MAV/MRV landmarks. Installable PWA, live at https://heatwayve.app.",
+    ">",
+    "> The reference material below is generated from the same constants the app",
+    "> computes with, so it cannot drift from the product: per-exercise muscle",
+    "> contributions, per-muscle weekly set landmarks, and the share of a set each",
+    "> movement credits to each muscle.",
+    "",
+    "## Training volume",
+    "",
+    "- [Volume landmarks](https://heatwayve.app/volume-landmarks): what MEV, MAV and",
+    "  MRV mean, the per-muscle weekly set targets Heatwayve audits against, and how a",
+    "  single set is apportioned across the muscles that did the work.",
+    "",
+    "## Anatomy — what trains each muscle",
+    "",
+    "One page per muscle, ranking every movement by the SHARE OF A SET it credits",
+    "to that muscle (1.00 = a full set, 0.30 = three-tenths). This is the question",
+    "the training literature cannot answer for you: meta-analyses give weekly set",
+    "targets, not per-exercise apportionment.",
+    "",
+    `- [Anatomy index](https://heatwayve.app/anatomy): all ${allTrainedMuscles().length} muscles`,
+    ...allTrainedMuscles().map((m) =>
+      `- [What trains ${m.toLowerCase()}](https://heatwayve.app/anatomy/${muscleSlug(m)}): ${contributorsFor(m).length} movements, ranked by contribution`),
     "",
     "## Exercise library",
     "",
@@ -30,6 +52,10 @@ export function GET() {
     ...LIBRARY.map((e) => `- [${e.name}](https://heatwayve.app/library/${e.slug}): ${exerciseDescription(e)}`),
     "",
     "## App",
+    "",
+    "These are application surfaces, not readable pages — they render client-side",
+    "from local data and serve an empty document to a crawler. Listed for context",
+    "about what the product does; the readable material is above.",
     "",
     "- [Heatwayve](https://heatwayve.app/): today's session, the week rhythm, progression",
     "- [Performance Lab](https://heatwayve.app/performance): 1RM trends, weekly volume vs landmarks, consistency",

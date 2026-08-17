@@ -20,6 +20,7 @@
 import { describe, it, expect } from "vitest";
 import {
   SESSIONS, WEEK, lastStrengthIdx, nextStrengthIdx, projectStrengthDaySessions,
+  sessionMetaForDate,
 } from "../lib/programme.js";
 
 const LETTERS = ["A", "B", "C"];
@@ -170,5 +171,56 @@ describe("the reach is never offered before the third set", () => {
         `${s.name} has no main block for the reach to attach to`,
       ).toBe(true);
     }
+  });
+});
+
+
+// ────────────────────────────────────────────────────────────────────────────
+// Retro-logging has to speak the same language as the live session.
+//
+// The live session follows the cycle; sessionMetaForDate followed the WEEKDAY.
+// So "your next session is C" could sit beside a retro picker offering the
+// same date as B, and accepting it wrote a letter the cycle never chose —
+// leaving a duplicate and a gap. Given history, the retro letter now continues
+// the cycle from whatever was trained BEFORE that date.
+// ────────────────────────────────────────────────────────────────────────────
+describe("a retro-logged session continues the cycle, not the weekday", () => {
+  // Mon/Wed/Fri of one week — the default schedule's three strength days.
+  const MON = "2026-06-15", WED = "2026-06-17", FRI = "2026-06-19";
+
+  it("takes the letter that follows the last session before that date", () => {
+    // Trained A on Monday. Wednesday's gap is B — and Wednesday's weekday map
+    // would also say B here, so the next test is the one that proves it.
+    const history = [logged(MON, "A")];
+    expect(sessionMetaForDate(WED, WEEK, history).sessionName).toBe("Strength B");
+  });
+
+  it("follows the cycle even when the weekday map disagrees", () => {
+    // Trained C on Monday. The weekday map says Wednesday is B; the cycle says
+    // A, because A is what comes after C. The cycle wins.
+    const history = [logged(MON, "C")];
+    expect(sessionMetaForDate(WED, WEEK, history).sessionName).toBe("Strength A");
+  });
+
+  it("ignores sessions logged AFTER the date being filled in", () => {
+    // Today's session must not decide what last Wednesday's gap was.
+    const history = [logged(MON, "A"), logged("2026-06-26", "C")];
+    expect(sessionMetaForDate(WED, WEEK, history).sessionName).toBe("Strength B");
+  });
+
+  it("falls back to the weekday map when no history is passed", () => {
+    // Existing callers that pass no history keep the old behaviour exactly.
+    expect(sessionMetaForDate(MON)?.sessionName).toBe("Strength A");
+    expect(sessionMetaForDate(FRI)?.sessionName).toBe("Strength C");
+  });
+
+  it("today's session still moves the cursor on — the boss's own case", () => {
+    // Cycle says C. Do C today, and tomorrow is A — regardless of a
+    // backfilled session sitting in last week.
+    const history = [logged("2026-06-01", "B"), logged("2026-06-08", "C")];
+    expect(idxToLetter(nextStrengthIdx(history))).toBe("A");
+    // ...and backfilling last week does not disturb it.
+    const withBackfill = [...history, logged("2026-06-03", "A")];
+    expect(idxToLetter(nextStrengthIdx(withBackfill))).toBe("A");
   });
 });

@@ -5,7 +5,7 @@
 // Relative import, not the @/ alias: scripts/indexnow.mjs loads this module
 // under plain node to submit exactly the URLs we publish, and the alias only
 // resolves inside Next's bundler. One list, two consumers, no drift.
-import { LIBRARY, LIBRARY_REVISED } from "../lib/library.js";
+import { LIBRARY, LIBRARY_REVISED, allTrainedMuscles, muscleSlug } from "../lib/library.js";
 
 export const BASE = "https://heatwayve.app";
 
@@ -16,9 +16,26 @@ export const BASE = "https://heatwayve.app";
 export default function sitemap() {
   return [
     { url: `${BASE}/`, changeFrequency: "monthly", priority: 1 },
-    { url: `${BASE}/performance`, changeFrequency: "monthly", priority: 0.6 },
-    { url: `${BASE}/profile`, changeFrequency: "monthly", priority: 0.4 },
+    // /performance and /profile are NOT here, and /session never was. All
+    // three are ssr:false shells: a crawler gets an empty document, so listing
+    // them asked search engines to index nothing and spent crawl budget doing
+    // it. The rule is now stated once and applied consistently — app surfaces
+    // are not content. The readable versions of what they do live on
+    // /volume-landmarks and /anatomy, which render fully on the server.
     { url: `${BASE}/library`, changeFrequency: "monthly", priority: 0.7, lastModified: LIBRARY_REVISED },
+    // The concept piece. Higher priority than a single exercise page: it is
+    // the thing the library pages cite, and the query it answers ("how many
+    // sets per week") is asked far more often than any one movement.
+    { url: `${BASE}/volume-landmarks`, changeFrequency: "yearly", priority: 0.8 },
+    // Per-muscle contribution rankings. Same lastmod as the library: they are
+    // generated from the same anatomy data, so they revise together.
+    { url: `${BASE}/anatomy`, changeFrequency: "monthly", priority: 0.7, lastModified: LIBRARY_REVISED },
+    ...allTrainedMuscles().map((m) => ({
+      url: `${BASE}/anatomy/${muscleSlug(m)}`,
+      changeFrequency: "monthly",
+      priority: 0.6,
+      lastModified: LIBRARY_REVISED,
+    })),
     ...LIBRARY.map((e) => ({
       url: `${BASE}/library/${e.slug}`,
       changeFrequency: "monthly",
