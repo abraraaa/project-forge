@@ -1274,6 +1274,37 @@ describe("findUntickedRecent — per-week strength cap", () => {
     }
   });
 
+  it("offers only the SHORTFALL when sessions landed on unscheduled days", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-21T12:00:00"));
+      // Two strength sessions, both on days the schedule does NOT name
+      // (Tue and Thu against a Mon/Wed/Fri week). Every scheduled day is
+      // therefore unlogged by date — but the week is short by ONE, not
+      // three, and the picker must not offer three (boss report,
+      // 2026-08-17: two sessions logged, three days offered, which would
+      // have written three duplicate records).
+      const history = [sx("2026-06-16"), sx("2026-06-18")];
+      const result = findUntickedRecent(history, 7, {}, { week: threeStrengthWeek });
+      expect(result.filter((r) => r.type === "strength").length).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("offers nothing when the week is short by nothing, whatever the dates", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-21T12:00:00"));
+      // Three sessions, none on a scheduled day. Quota met, nothing owed.
+      const history = [sx("2026-06-16"), sx("2026-06-18"), sx("2026-06-20")];
+      const result = findUntickedRecent(history, 7, {}, { week: threeStrengthWeek });
+      expect(result.filter((r) => r.type === "strength")).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("still surfaces 'missing' strength rows when the quota is not met", () => {
     vi.useFakeTimers();
     try {

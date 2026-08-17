@@ -248,9 +248,18 @@ html[data-mode="dark"] .forge-page {
 
 @media not (display-mode: standalone) {
   .forge-page { min-height: 100dvh; }
-  @supports (min-height: stretch) {
-    .forge-page { min-height: stretch; }
-  }
+}
+/* stretch applies in BOTH modes. Device-measured 2026-08-17, installed on
+   iOS 26.1: innerHeight 812, screen 874, safe-area-inset-top 0. So 100vh
+   reports the whole SCREEN while the viewport already excludes the status
+   bar — the shell was building a column 62px taller than the space it had,
+   and because .forge-fill cannot shrink, the surplus landed at the bottom
+   where the commit button lives. stretch means "fill the containing block",
+   which is the thing we actually wanted all along; 100vh above stays as the
+   floor for anything without it. dvh remains browser-only — the recorded
+   cold-start bug in standalone is untouched by this. */
+@supports (min-height: stretch) {
+  .forge-page { min-height: stretch; }
 }
 
 /* Flex items do NOT stretch when they carry cross-axis auto margins — and
