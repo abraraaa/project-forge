@@ -16,8 +16,12 @@ export const BASE = "https://heatwayve.app";
 export default function sitemap() {
   return [
     { url: `${BASE}/`, changeFrequency: "monthly", priority: 1 },
-    { url: `${BASE}/performance`, changeFrequency: "monthly", priority: 0.6 },
-    { url: `${BASE}/profile`, changeFrequency: "monthly", priority: 0.4 },
+    // /performance and /profile are NOT here, and /session never was. All
+    // three are ssr:false shells: a crawler gets an empty document, so listing
+    // them asked search engines to index nothing and spent crawl budget doing
+    // it. The rule is now stated once and applied consistently — app surfaces
+    // are not content. The readable versions of what they do live on
+    // /volume-landmarks and /anatomy, which render fully on the server.
     { url: `${BASE}/library`, changeFrequency: "monthly", priority: 0.7, lastModified: LIBRARY_REVISED },
     // The concept piece. Higher priority than a single exercise page: it is
     // the thing the library pages cite, and the query it answers ("how many
