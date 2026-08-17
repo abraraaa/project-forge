@@ -218,12 +218,19 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
               story. In flow, not fixed: a fixed painted bar at the bottom
               edge re-triggers Safari 26's opaque chrome slabs. */}
           {!volumeAudit?.away && counts.total >= 4 && (
-            <div className="forge-vellum lab-card" style={{margin:"14px 24px 0",borderRadius:T.r,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:14}}>
-              <span style={{fontSize:13,color:T.ink2,lineHeight:1.4}}>
+            <div className="forge-vellum lab-card" style={{margin:"14px 24px 0",borderRadius:T.r,padding:"12px 16px"}}>
+              {/* The kicker earns its ink: without it the sheet sat flush
+                  under the last muscle row and read as a comment ON that row —
+                  naming a different muscle, which is how the boss found it. */}
+              <div style={{fontSize:12,color:T.ink3,marginBottom:5}}>Next week</div>
+              <span style={{fontSize:13,color:T.ink2,lineHeight:1.45}}>
                 {plateaus.length > 0
                   ? <>Your {plateaus[0].lift} has held at <span style={{fontFamily:T.measured}}>{plateaus[0].weight}</span> kg for <span style={{fontFamily:T.measured}}>{plateaus[0].sessions}</span> sessions. A deload or a rep-range shift breaks the pattern.</>
                   : underMuscles.length > 0
-                  ? <>{underMuscles[0]} responds fastest to what it isn&rsquo;t getting — one set at a time.</>
+                  /* The masthead already names the shortfall. This says HOW —
+                     and spreading beats stacking (Schoenfeld 2016 frequency
+                     meta, cited on /volume-landmarks). */
+                  ? <>Add the {underMuscles[0].toLowerCase()} work to days you already train — a set on each of two days beats both on one.</>
                   : <>Volume is landing where it grows. The programme holds.</>}
               </span>
             </div>
