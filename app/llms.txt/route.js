@@ -8,7 +8,7 @@
 // pages it indexes (same source the sitemap draws from).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { LIBRARY, exerciseDescription } from "@/lib/library";
+import { LIBRARY, exerciseDescription, allTrainedMuscles, contributorsFor, muscleSlug } from "@/lib/library";
 
 export const dynamic = "force-static";
 
@@ -25,6 +25,17 @@ export function GET() {
     "- [Volume landmarks](https://heatwayve.app/volume-landmarks): what MEV, MAV and",
     "  MRV mean, the per-muscle weekly set targets Heatwayve audits against, and how a",
     "  single set is apportioned across the muscles that did the work.",
+    "",
+    "## Anatomy — what trains each muscle",
+    "",
+    "One page per muscle, ranking every movement by the SHARE OF A SET it credits",
+    "to that muscle (1.00 = a full set, 0.30 = three-tenths). This is the question",
+    "the training literature cannot answer for you: meta-analyses give weekly set",
+    "targets, not per-exercise apportionment.",
+    "",
+    `- [Anatomy index](https://heatwayve.app/anatomy): all ${allTrainedMuscles().length} muscles`,
+    ...allTrainedMuscles().map((m) =>
+      `- [What trains ${m.toLowerCase()}](https://heatwayve.app/anatomy/${muscleSlug(m)}): ${contributorsFor(m).length} movements, ranked by contribution`),
     "",
     "## Exercise library",
     "",
