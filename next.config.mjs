@@ -22,6 +22,13 @@ const nextConfig = {
   // and CSS degrade to no-ops.
   experimental: {
     viewTransition: true,
+    // Inline the stylesheet into the document instead of linking it.
+    // Measured on the live site 2026-08-17: the single CSS file was 140ms of
+    // render-blocking time and sat on a critical path Lighthouse costed at
+    // 633ms. The sheet is small and there is exactly one of it, so inlining
+    // trades a round trip for a few KB of document — the right way round for
+    // a first paint on slow 4G.
+    inlineCss: true,
   },
   // ── THE FLIP (docs/heatwayve-flip.md, step 3) ────────────────────────────
   // The 2026-07-22 freeze (heatwayve→theforged 307) is DELETED; the reverse
