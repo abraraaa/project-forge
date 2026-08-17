@@ -1216,7 +1216,11 @@ function OnboardingScreen({ onContinue }) {
     }}>
       {/* Masthead per the grammar (§14): kicker Heatwayve · title a noun ·
           the sentence lives in the support line. */}
-      <Fade d={0}>
+      {/* opaque: this is the first-run screen, and it is what a cold visitor
+          (and every crawler) actually sees. A fade from zero disqualifies it
+          as an LCP candidate in Chromium, which is why PageSpeed reported
+          NO_LCP and errored out five diagnostics that derive from it. */}
+      <Fade d={0} opaque>
         <div style={{ fontSize: 13, fontWeight: 500, color: T.ink2, marginBottom: 18 }}>
           Heatwayve
         </div>

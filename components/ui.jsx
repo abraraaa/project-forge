@@ -15,19 +15,33 @@ import { useState, useEffect } from "react";
 import { T } from "@/lib/tokens";
 
 // Fade-in-on-mount style hook. `d` is the stagger delay in ms.
-export function useFadeIn(d = 0) {
+// `opaque` keeps the rise but starts at full opacity — for content that must
+// be PAINTED, not merely present.
+//
+// Chromium disqualifies an element from being a Largest Contentful Paint
+// candidate if it is transparent when first painted, and never reconsiders it
+// once opacity changes. Every Fade renders opacity:0 first, so the entire page
+// was ineligible and PageSpeed reported NO_LCP — which in turn errored out
+// Total Blocking Time and four other diagnostics that derive from it.
+// Measured 2026-08-17: as shipped, zero LCP entries; with fades neutralised,
+// LCP fires at 356ms on the masthead h1.
+//
+// It is not only a metric. The opacity:0 is in the SERVER HTML, so the page
+// ships invisible and stays that way until hydration runs the effect.
+export function useFadeIn(d = 0, { opaque = false } = {}) {
   const [v, setV] = useState(false);
   useEffect(() => { const t = setTimeout(() => setV(true), d); return () => clearTimeout(t); }, [d]);
   return {
-    opacity: v ? 1 : 0,
+    opacity: opaque ? 1 : (v ? 1 : 0),
     transform: v ? "translateY(0)" : "translateY(10px)",
     transition: `opacity 260ms ${T.ease} ${d}ms,transform 260ms ${T.ease} ${d}ms`,
   };
 }
 
-// Fade — wraps children in the fade-in-on-mount transition.
-export function Fade({ children, d = 0 }) {
-  const s = useFadeIn(d);
+// Fade — wraps children in the fade-in-on-mount transition. Pass `opaque` on
+// the one block that carries the page's largest paint.
+export function Fade({ children, d = 0, opaque = false }) {
+  const s = useFadeIn(d, { opaque });
   return <div style={s}>{children}</div>;
 }
 
