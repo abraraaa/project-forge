@@ -134,9 +134,8 @@ export default function VolumeLandmarksPage() {
         </h2>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65 }}>
           Not sessions, not exercises, not hours. Sets, counted per muscle,
-          across the whole week — because a muscle has no idea which day it is.
-          Three chest sets on Monday and three on Thursday is six, and six is
-          what it responds to.
+          across the whole week. Three chest sets on Monday and three on
+          Thursday is six, and six is the number that matters.
         </p>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginTop: 12 }}>
           <strong style={{ color: T.ink, fontWeight: 500 }}>Weighted</strong> is
@@ -155,6 +154,27 @@ export default function VolumeLandmarksPage() {
           <Link href="/library" style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>
             the exercise library
           </Link>.
+        </p>
+      </section>
+
+      <section style={{ marginTop: 36 }}>
+        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
+          Weekly, but not all at once
+        </h2>
+        <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65 }}>
+          The dose is weekly. How you spread it still matters, just less than
+          people think. The meta-analytic answer is that major muscle groups
+          respond best trained{" "}
+          <strong style={{ color: T.ink, fontWeight: 500 }}>at least twice a week</strong>{" "}
+          — and that whether three beats two is, on the current evidence,
+          undetermined.
+        </p>
+        <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginTop: 12 }}>
+          Which is the useful version of the finding: hit your weekly number
+          across two or more sessions and the frequency question is answered.
+          Twelve sets of chest in one heroic Monday is not the same twelve. The
+          three-day A/B/C rotation exists for this reason — each muscle comes
+          around more than once, without anyone having to plan it.
         </p>
       </section>
 
