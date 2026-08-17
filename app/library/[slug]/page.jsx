@@ -245,8 +245,10 @@ export default async function ExercisePage({ params }) {
       )}
 
       <p style={{ marginTop: 48, fontSize: 13, color: T.ink3, fontFamily: T.text, lineHeight: 1.6 }}>
-        Train with intention. <Link href="/" style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>Open Heatwayve</Link> — it prescribes
-        the weight, watches the reps, and does this arithmetic for every set you log.
+        Knowing the numbers is one thing; hitting them for fifty weeks is another.{" "}
+        <Link href="/" style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>Open Heatwayve</Link> — it
+        prescribes the weight, holds you to the tempo, and runs this arithmetic on
+        every set you log so the week actually adds up.
       </p>
     </div>
   );

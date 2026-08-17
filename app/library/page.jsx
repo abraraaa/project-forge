@@ -54,8 +54,9 @@ export default function LibraryIndexPage() {
       ))}
 
       <p style={{ marginTop: 48, fontSize: 13, color: T.ink3, fontFamily: T.text, lineHeight: 1.6 }}>
-        Train with intention. <Link href="/" style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>Open Heatwayve</Link> — it programmes,
-        progresses, and audits all of this for you.
+        Reading about it is the easy part. <Link href="/" style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>Open Heatwayve</Link> and
+        get coached on the tempo, the load and the volume — every set, every week,
+        against a programme that adjusts to what you actually lifted.
       </p>
     </div>
   );
