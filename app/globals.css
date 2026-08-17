@@ -176,6 +176,11 @@ body {
   .forge-page {
     padding-top: env(safe-area-inset-top, 0px);
   }
+  /* The installed app launched from an OS splash a moment ago (manifest name +
+     background_color + icons). A second brand beat inside the page is noise
+     for the one cohort that has already had one, so the launch masthead is
+     browser-only and standalone keeps the deliberate empty field. */
+  .forge-launch { display: none; }
 }
 input, button, textarea, select { font: inherit; }
 
