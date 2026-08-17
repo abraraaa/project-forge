@@ -567,11 +567,16 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
 .lab-card {
   animation: lab-card-arrive linear both;
   animation-timeline: view();
-  /* Range runs into `cover` so rows near the FOLD sit part-faded on
-     first paint — a calm page that unveils detail as you scroll (boss
-     direction, 2026-08-04). Rows fully above the fold resolve complete;
-     the glide finishes a third of the way up the viewport. */
-  animation-range: entry 0% cover 35%;
+  /* Rows near the FOLD sit part-faded on first paint — a calm page that
+     unveils detail as you scroll (boss direction, 2026-08-04).
+     Completes on ENTRY, not on cover. A `cover` endpoint requires the row
+     to keep travelling up the viewport, which the LAST rows on the page
+     can never do: once you hit the document end they stop wherever they
+     got to and stay there. Measured 2026-08-17 at the foot of the Lab —
+     the readiness card sat at 0.37 opacity permanently, the sheet above
+     it at 0.71. entry 100% is reached the moment a row is fully in view,
+     which every row can always satisfy. */
+  animation-range: entry 0% entry 100%;
 }
 
 /* Scroll cue — a slow, small downward bob so the eye catches the "more
