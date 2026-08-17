@@ -20,7 +20,7 @@ import Glyph from "@/components/Glyph";
 const URL = "https://heatwayve.app/volume-landmarks";
 
 export const metadata = {
-  title: "MEV, MAV and MRV — how much training volume each muscle wants",
+  title: "MEV, MAV and MRV — how much volume each muscle wants",
   description:
     "The three weekly volume landmarks, in weighted sets per muscle: the least that grows you, the window where most growth happens, and the ceiling past which sets cost more than they earn.",
   alternates: { canonical: URL },

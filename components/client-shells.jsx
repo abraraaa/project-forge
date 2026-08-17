@@ -49,10 +49,15 @@ const LaunchMasthead = () => (
       <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 8 }}>Heatwayve</div>
       {/* Display size on purpose: LCP only supersedes a candidate when a LARGER
           one paints, so this has to be at least as big as the h1 that replaces
-          it or the metric lands on the late one anyway. */}
-      <div style={{ fontFamily: "var(--font-bodoni), serif", fontOpticalSizing: "none", fontSize: 45, lineHeight: 1.05, color: "var(--ink)" }}>
+          it or the metric lands on the late one anyway.
+
+          An <h1> because it IS one: the page's real heading, server-rendered,
+          visible, at display size. Bing reported "/" as missing an h1 after the
+          masthead shipped — the only one in the served HTML sat inside
+          <noscript> (app/page.jsx), which it does not credit. */}
+      <h1 style={{ fontFamily: "var(--font-bodoni), serif", fontOpticalSizing: "none", fontSize: 45, lineHeight: 1.05, color: "var(--ink)", margin: 0, fontWeight: 400 }}>
         Train with intention
-      </div>
+      </h1>
       <div style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 12, lineHeight: 1.45, maxWidth: "32ch" }}>
         Evidence-based strength training that adjusts to what you actually
         lifted — and keeps every muscle&rsquo;s weekly volume honest.

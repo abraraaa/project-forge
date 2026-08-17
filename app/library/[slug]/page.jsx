@@ -28,7 +28,9 @@ export async function generateMetadata({ params }) {
   const entry = getExercise(slug);
   if (!entry) return {};
   return {
-    title: `${entry.name} — muscles worked & progression`,
+    // "muscles worked" is the phrase people actually type, and the longest
+    // exercise name plus the "| Heatwayve" template has to stay under 70.
+    title: `${entry.name} — muscles worked`,
     description: exerciseDescription(entry),
     alternates: { canonical: `https://heatwayve.app/library/${entry.slug}` },
   };

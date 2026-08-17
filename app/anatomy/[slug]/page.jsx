@@ -31,7 +31,9 @@ export async function generateMetadata({ params }) {
   const n = contributorsFor(muscle).length;
   const low = muscle.toLowerCase();
   return {
-    title: `What trains ${low} — ${n} movements, ranked by contribution`,
+    // Kept under 70 with the "| Heatwayve" template applied — Bing warns past
+    // that, and the head term ("what trains X") has to survive the trim.
+    title: `What trains ${low} — ${n} movements, ranked`,
     description: `Every exercise that trains ${low}, ranked by how much of a set it actually credits — not a list of "${low} exercises", but the weighted share each movement contributes.`,
     alternates: { canonical: `https://heatwayve.app/anatomy/${slug}` },
   };
