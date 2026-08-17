@@ -34,6 +34,11 @@ const TERMS = [
           <li><strong>MRV</strong> — Maximum Recoverable Volume. The ceiling above which extra sets cost more recovery than they earn.</li>
         </ul>
         <p style={{marginTop:8}}>Heatwayve uses Israetel/Helms-derived landmarks, tuned per muscle and per delt head.</p>
+        <p style={{marginTop:8}}>
+          <a href="/volume-landmarks" style={{color:"var(--ink)",textDecoration:"underline",textUnderlineOffset:3}}>
+            The full numbers, and how a set gets split
+          </a>
+        </p>
       </>
     ),
   },

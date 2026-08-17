@@ -19,6 +19,10 @@ export default function sitemap() {
     { url: `${BASE}/performance`, changeFrequency: "monthly", priority: 0.6 },
     { url: `${BASE}/profile`, changeFrequency: "monthly", priority: 0.4 },
     { url: `${BASE}/library`, changeFrequency: "monthly", priority: 0.7, lastModified: LIBRARY_REVISED },
+    // The concept piece. Higher priority than a single exercise page: it is
+    // the thing the library pages cite, and the query it answers ("how many
+    // sets per week") is asked far more often than any one movement.
+    { url: `${BASE}/volume-landmarks`, changeFrequency: "yearly", priority: 0.8 },
     ...LIBRARY.map((e) => ({
       url: `${BASE}/library/${e.slug}`,
       changeFrequency: "monthly",
