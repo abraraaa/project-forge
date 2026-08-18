@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
 import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge, mintAuthToken, isAdminProfile } from "@/lib/auth-server";
+import { LEGACY_RP_ID, passkeyNudgeUrgent, daysUntilPasskeySunset } from "@/lib/origin";
 
 // Verify WebAuthn authentication and mint a short-lived auth token.
 // POST /api/auth/login-verify
@@ -72,14 +73,16 @@ export async function POST(request) {
     }
 
     // Really verify the assertion signature.
-    const { rpId, expectedOrigin } = rpConfigFromRequest(request);
+    const { acceptedRpIds, expectedOrigin } = rpConfigFromRequest(request);
     let verification;
     try {
       verification = await verifyAuthenticationResponse({
         response: { ...credential, clientExtensionResults: credential.clientExtensionResults || {} },
         expectedChallenge,
         expectedOrigin,
-        expectedRPID: rpId,
+        // Both rpIds while the window is open. Which one this credential is
+        // actually bound to is the library's answer, not our assumption.
+        expectedRPID: acceptedRpIds,
         requireUserVerification: true,
         credential: {
           id: matchingCred.id,
@@ -100,11 +103,26 @@ export async function POST(request) {
     // accepts; a hardware authenticator that ever regresses its counter would
     // have been rejected above.
     const newCounter = verification.authenticationInfo.newCounter;
-    if (typeof newCounter === "number" && newCounter !== matchingCred.counter) {
+    // rpId BACKFILL. Credentials written before per-credential rpId storage
+    // carry no rpId field, and a successful assertion is the one moment we
+    // learn the answer authoritatively — the library reports the rpId it
+    // matched. Stamping it here is what lets login-options later offer the
+    // right single-rpId pool without inferring anything. It rides the counter
+    // write rather than adding a second one.
+    const verifiedRpId = verification.authenticationInfo.rpID || null;
+    const counterChanged = typeof newCounter === "number" && newCounter !== matchingCred.counter;
+    const rpIdChanged = !!verifiedRpId && matchingCred.rpId !== verifiedRpId;
+    if (counterChanged || rpIdChanged) {
       try {
         const updated = {
           credentials: credData.credentials.map((c) =>
-            c.id === matchingCred.id ? { ...c, counter: newCounter } : c,
+            c.id === matchingCred.id
+              ? {
+                  ...c,
+                  ...(counterChanged ? { counter: newCounter } : null),
+                  ...(verifiedRpId ? { rpId: verifiedRpId } : null),
+                }
+              : c,
           ),
         };
         // Write-first, sweep-after — see audit #6 / writeJsonReplacingPrefix.
@@ -142,11 +160,26 @@ export async function POST(request) {
     // hw_photos: any active day rotates it, so a device in use never re-auths.
     const syncToken = await mintAuthToken({ profile, ttlMs: 30 * 86400000, scope: "sync" });
 
+    // Upgrade signal. A login that verified against the LEGACY rpId is a
+    // credential that stops working at the sunset, so the client is told once,
+    // at the only moment it is certain — the client decides how loudly to say
+    // it (quiet on the profile page, insistent in the closing stretch).
+    const onLegacyCredential = verifiedRpId === LEGACY_RP_ID;
+
     const res = NextResponse.json({
       ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600,
       // Single-admin recognition: a UI hint only — every admin surface
       // re-verifies the token's profile server-side.
       admin: isAdminProfile(profile),
+      ...(onLegacyCredential
+        ? {
+            passkeyUpgrade: {
+              needed: true,
+              urgent: passkeyNudgeUrgent(),
+              daysLeft: daysUntilPasskeySunset(),
+            },
+          }
+        : null),
     });
     res.cookies.set("hw_photos", photoToken, {
       httpOnly: true, secure: true, sameSite: "strict", path: "/api/photos", maxAge: 7 * 86400,

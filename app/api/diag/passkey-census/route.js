@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { list } from "@vercel/blob";
 import { readJsonDirect } from "@/lib/blob-utils";
-import { censusPasskeys } from "@/lib/passkey-census";
+import { censusPasskeys, photosAtRisk } from "@/lib/passkey-census";
 
 // PASSKEY CENSUS — READ ONLY, by design and by protocol.
 // GET /api/diag/passkey-census   (Authorization: Bearer <CRON_SECRET>)
@@ -41,22 +41,30 @@ export async function GET(request) {
   // matched on the credentials filename the auth routes write. Nothing else
   // in the namespace is touched or reported.
   const found = [];
+  const photos = [];
   let cursor;
   try {
     do {
       const page = await list({ prefix: "forge/profiles/", cursor, limit: 1000 });
       for (const b of page.blobs) {
         const m = b.pathname.match(/^forge\/profiles\/([^/]+)\/credentials[^/]*\.json$/);
-        if (!m) continue;
-        found.push({
-          profile: decode(m[1]),
-          pathname: b.pathname,
-          // The SDK hands back a Date; the census works in ISO strings so the
-          // report is JSON-stable and the pure function stays string-only.
-          uploadedAt: b.uploadedAt ? new Date(b.uploadedAt).toISOString() : "",
-          size: b.size || 0,
-          doc: null,
-        });
+        if (m) {
+          found.push({
+            profile: decode(m[1]),
+            pathname: b.pathname,
+            // The SDK hands back a Date; the census works in ISO strings so the
+            // report is JSON-stable and the pure function stays string-only.
+            uploadedAt: b.uploadedAt ? new Date(b.uploadedAt).toISOString() : "",
+            size: b.size || 0,
+            doc: null,
+          });
+          continue;
+        }
+        // Progress photos, for the sunset kill list. Enumerated here because
+        // this pass is already walking the namespace — no extra listing, and
+        // no read: a photo's bytes are never opened, only counted.
+        const ph = b.pathname.match(/^forge\/profiles\/([^/]+)\/photos\/[^/]+$/);
+        if (ph) photos.push({ profile: decode(ph[1]), pathname: b.pathname, size: b.size || 0 });
       }
       cursor = page.cursor;
     } while (cursor);
@@ -79,10 +87,15 @@ export async function GET(request) {
     f.doc = await readJsonDirect(f.pathname);
   }
 
+  const census = censusPasskeys(found);
   return NextResponse.json({
     dryRun: true,
     writes: "none — enumeration and reads only",
-    scanned: { prefix: "forge/profiles/", matched: "credentials*.json" },
-    ...censusPasskeys(found),
+    scanned: { prefix: "forge/profiles/", matched: ["credentials*.json", "photos/*"] },
+    ...census,
+    // What a sunset photo wipe WOULD remove. Reported, never executed: no
+    // delete path exists yet, and per protocol it does not get written until
+    // these numbers have been read off the real store.
+    photoExposure: photosAtRisk(census, photos),
   });
 }

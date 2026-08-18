@@ -21,7 +21,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { censusPasskeys, IMPLICIT_RP_ID } from "../lib/passkey-census.js";
+import { censusPasskeys, photosAtRisk, IMPLICIT_RP_ID } from "../lib/passkey-census.js";
+import { NATIVE_RP_ID } from "../lib/origin.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const routeSrc = readFileSync(resolve(root, "app/api/diag/passkey-census/route.js"), "utf8");
@@ -163,5 +164,73 @@ describe("passkey census — counting", () => {
     expect(dumped).not.toContain("CREDENTIAL-ID-SECRET");
     expect(dumped).not.toContain("PUBLIC-KEY-SECRET");
     expect(dumped).not.toContain("internal");
+  });
+});
+
+describe("photo exposure — the kill list, and nothing more", () => {
+  const photo = (profile, date, size = 1000) => ({
+    profile, pathname: `forge/profiles/${profile}/photos/${date}.jpg`, size,
+  });
+  const withCreds = (profile, creds) =>
+    blob(profile, "credentials.json", "2026-08-01T00:00:00Z", { credentials: creds });
+
+  it("lists a legacy-only profile's photos as at risk at the sunset", () => {
+    const census = censusPasskeys([withCreds("sam", [{ id: "a", publicKey: "k" }])]);
+    const r = photosAtRisk(census, [photo("sam", "2026-08-01"), photo("sam", "2026-08-02")]);
+    expect(r.atSunset.profiles).toBe(1);
+    expect(r.atSunset.photos).toBe(2);
+    expect(r.atSunset.rows[0].prefix).toBe("forge/profiles/sam/photos/");
+  });
+
+  it("spares a profile that already holds a native passkey", () => {
+    const census = censusPasskeys([
+      withCreds("ada", [{ id: "a", publicKey: "k" }, { id: "b", publicKey: "k", rpId: NATIVE_RP_ID }]),
+    ]);
+    const r = photosAtRisk(census, [photo("ada", "2026-08-01")]);
+    expect(r.atSunset.profiles).toBe(0);
+    expect(r.totals.photos).toBe(1);
+  });
+
+  it("keeps already-claimable profiles in a SEPARATE bucket", () => {
+    // A profile with only keyless credentials is exposed today, not at the
+    // sunset. Merging the two would misdate the risk.
+    const census = censusPasskeys([withCreds("kit", [{ id: "a" }])]);
+    const r = photosAtRisk(census, [photo("kit", "2026-08-01")]);
+    expect(r.atSunset.profiles).toBe(0);
+    expect(r.alreadyOpen.profiles).toBe(1);
+  });
+
+  it("catches photos under a profile with no credential document at all", () => {
+    const r = photosAtRisk(censusPasskeys([]), [photo("ghost", "2026-08-01")]);
+    expect(r.alreadyOpen.profiles).toBe(1);
+    expect(r.atSunset.profiles).toBe(0);
+  });
+
+  it("scopes every proposed prefix with a trailing slash", () => {
+    // "sam" must never reach "sammy". The trailing slash is the whole defence.
+    const census = censusPasskeys([
+      withCreds("sam", [{ id: "a", publicKey: "k" }]),
+      withCreds("sammy", [{ id: "b", publicKey: "k" }]),
+    ]);
+    const r = photosAtRisk(census, [photo("sam", "2026-08-01"), photo("sammy", "2026-08-01")]);
+    for (const row of r.atSunset.rows) expect(row.prefix).toMatch(/\/photos\/$/);
+    const sam = r.atSunset.rows.find((x) => x.profile === "sam");
+    expect(r.atSunset.rows.find((x) => x.profile === "sammy").paths)
+      .not.toContain(sam.paths[0]);
+  });
+
+  it("never truncates a path list silently", () => {
+    const many = Array.from({ length: 25 }, (_, i) => photo("sam", `2026-08-${String(i + 1).padStart(2, "0")}`));
+    const census = censusPasskeys([withCreds("sam", [{ id: "a", publicKey: "k" }])]);
+    const row = photosAtRisk(census, many).atSunset.rows[0];
+    expect(row.photos).toBe(25);
+    expect(row.paths).toHaveLength(20);
+    expect(row.pathsOmitted).toBe(5);
+  });
+
+  it("announces itself as a dry run that deletes nothing", () => {
+    const r = photosAtRisk(censusPasskeys([]), []);
+    expect(r.dryRun).toBe(true);
+    expect(r.deletes).toMatch(/none/i);
   });
 });

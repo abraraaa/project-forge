@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { list } from "@vercel/blob";
 import crypto from "crypto";
-import { hasChallengeSecret, issueChallenge } from "@/lib/auth-server";
+import { hasChallengeSecret, issueChallenge, rpConfigFromRequest } from "@/lib/auth-server";
 
 // Generate registration options for WebAuthn
 // POST /api/auth/register-options
@@ -50,10 +50,11 @@ export async function POST(request) {
       });
     }
 
-    // RP ID must be consistent between registration and authentication
-    // Use the actual domain in production, localhost in dev
-    const host = request.headers.get("host") || "";
-    const rpId = host.includes("localhost") ? "localhost" : "theforged.fit";
+    // RP ID must be consistent between registration and authentication, and
+    // is now decided in one place (lib/auth-server.js) so options and verify
+    // can never drift. From a heatwayve origin this mints a NATIVE credential;
+    // the legacy rpId is only used by a ceremony genuinely on the old domain.
+    const { rpId } = rpConfigFromRequest(request);
 
     return NextResponse.json({
       challenge,
