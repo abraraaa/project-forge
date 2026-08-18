@@ -11,7 +11,7 @@ export const metadata = {
 // Server component by design — no client JS needed to get someone home.
 export default function NotFound() {
   return (
-    <main style={{
+    <div style={{
       color: T.ink, fontFamily: T.text,
       padding: "88px 24px 24px",
       display: "flex", flexDirection: "column", alignItems: "flex-start",
@@ -39,6 +39,6 @@ export default function NotFound() {
       >
         Take me home <Glyph name="arrowRight" size={13} />
       </Link>
-    </main>
+    </div>
   );
 }

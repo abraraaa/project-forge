@@ -65,7 +65,7 @@ export default function BugReportSheet({ profileName = null, onClose }) {
             maxLength={2000}
             rows={5}
             placeholder={COPY.placeholder}
-            style={{ width: "100%", background: T.well, border: "none", borderRadius: T.r, padding: "14px 16px", fontSize: 14, lineHeight: 1.5, color: T.ink, fontFamily: T.text, resize: "none", outline: "none", marginBottom: 8 }}
+            style={{ width: "100%", background: T.well, border: "none", borderRadius: T.r, padding: "14px 16px", fontSize: 16, lineHeight: 1.5, color: T.ink, fontFamily: T.text, resize: "none", outline: "none", marginBottom: 8 }}
           />
         )}
         {state === "failed" && (

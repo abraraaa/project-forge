@@ -150,8 +150,18 @@ export const viewport = {
   colorScheme: "light dark",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // NO maximumScale / userScalable lock. It arrived with this file's first
+  // commit as PWA boilerplate and never earned a reason of its own, while it
+  // cost pinch-zoom to anyone who magnifies to read (Lighthouse flags it).
+  // iOS has ignored the lock for user-initiated zoom since iOS 10, so it only
+  // ever bound Android.
+  //
+  // The one thing it plausibly still bought was suppressing iOS's
+  // zoom-on-focus, which fires on focusable inputs under 16px. That is now
+  // fixed at the cause instead: every focusable input in the app is >= 16px
+  // (BugReportSheet's textarea was the last one at 14px). Keep new inputs at
+  // 16px or larger and the lock stays unnecessary.
+  //
   // viewport-fit: cover STAYS, even though the immersive status-bar look it
   // was originally chosen for is gone (iOS 26.1 — see appleWebApp above).
   // The load-bearing reason was always the second one: without cover, every
@@ -240,7 +250,12 @@ export default function RootLayout({ children }) {
       <body>
         <ServiceWorkerRegistrar />
         <ErrorBoundary>
-          {/* .forge-page (globals.css): document-height wrapper that paints
+          {/* <main> because this wrapper IS the document's dominant content:
+              every route renders through it and the layout has no nav or
+              footer landmark outside it. Routes must NOT render their own
+              <main> — it would nest, and a document gets one.
+
+              .forge-page (globals.css): document-height wrapper that paints
               the ground substrate (bone/ash + the baked-in paper texture)
               across the FULL scrollable document. Texture lives in the
               ground's own background — substrate, never overlay — so it
@@ -250,7 +265,7 @@ export default function RootLayout({ children }) {
               whenever a fixed/sticky element borders a viewport edge
               (WebKit bug 301756), which suppresses the translucent
               scroll-under treatment at both the status bar and URL bar. */}
-          <div className="forge-page">
+          <main className="forge-page">
             {/* The ONE transition boundary: route navigations and in-shell
                 screen swaps both update this subtree inside a React
                 transition, so both animate through the same class-mapped
@@ -266,7 +281,7 @@ export default function RootLayout({ children }) {
             >
               {children}
             </ViewTransition>
-          </div>
+          </main>
         </ErrorBoundary>
         {/* Status-bar handling: iOS owns the bar (statusBarStyle: default,
             since 26.1 stopped honouring black-translucent). viewport-fit:
