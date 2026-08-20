@@ -28,8 +28,12 @@ import { snoozePrompt } from "@/lib/passkey-upgrade";
 
 const HEADLINE = "A new passkey, when you have a moment";
 const BODY =
-  "We’re improving security. Your current passkey will become redundant — setting up a new one keeps you signed in on every device.";
-const TWO_PROMPTS = "You’ll be asked twice: once to confirm it’s you, then once to create the new key.";
+  "We’re moving to a more robust system. Your current passkey will become redundant — setting up a new one keeps you signed in on every device.";
+// Named as two scans, in order, with what each one is FOR. "You'll be asked
+// twice" tells someone a number; this tells them why the second prompt is not
+// the first one having failed.
+const TWO_PROMPTS =
+  "Two scans: the first confirms you own this account, the second registers you on the new system.";
 
 /** Shared action. Returns true when a native credential was minted. */
 async function runUpgrade(profile) {
