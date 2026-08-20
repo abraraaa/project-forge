@@ -3,7 +3,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import crypto from "crypto";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
-import { rpConfigFromRequest, verifyAuthToken, hasRealPasskey, hasChallengeSecret, verifyChallenge, mintAuthToken } from "@/lib/auth-server";
+import { rpConfigFromRequest, verifyAuthToken, hasUsablePasskey, hasChallengeSecret, verifyChallenge, mintAuthToken } from "@/lib/auth-server";
 
 // Verify WebAuthn registration and store the credential's PUBLIC KEY.
 // POST /api/auth/register-verify
@@ -64,7 +64,11 @@ export async function POST(request) {
     // legacy credentials do not count as protection (see lib/auth-server.js),
     // so a legacy user can re-register freely and heal into a real credential.
     const existing = (await readJsonByPrefix(credentialsPrefix(profile))) || { credentials: [] };
-    if (hasRealPasskey(existing)) {
+    // hasUsablePasskey, not hasRealPasskey: once the legacy rpId retires, a
+    // legacy-only profile has no ceremony left to prove control with, so
+    // demanding one would strand its owner. It reverts to the bootstrap claim
+    // — the same posture as a profile that never had a passkey.
+    if (hasUsablePasskey(existing)) {
       const ok = await verifyAuthToken(profile, authToken);
       if (!ok) {
         return NextResponse.json(
@@ -134,7 +138,9 @@ export async function POST(request) {
     // it" — two ceremonies back to back for one intent. The user just proved
     // control of this profile with an authenticator; that IS the ceremony.
     const syncToken = await mintAuthToken({ profile, ttlMs: 30 * 86400000, scope: "sync" });
-    const res = NextResponse.json({ ok: true, credentialId: vc.id });
+    // rpId is reported back so the client can tell a native mint from a legacy
+    // one and only then retire its upgrade prompt.
+    const res = NextResponse.json({ ok: true, credentialId: vc.id, rpId: newCredential.rpId });
     res.cookies.set("hw_sync", syncToken, {
       // 30 days, matching the token TTL and the gate's sliding refresh —
       // the photos cookie deliberately stays at 7.

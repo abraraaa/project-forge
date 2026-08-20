@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { readJsonByPrefix } from "@/lib/blob-utils";
-import { hasRealPasskey } from "@/lib/auth-server";
+import { hasUsablePasskey, credentialRpId } from "@/lib/auth-server";
+import { acceptedRpIds } from "@/lib/origin";
 
 // Check whether a profile has a VERIFIABLE passkey registered.
 // GET /api/auth/check?profile=Name
@@ -25,11 +26,18 @@ export async function GET(request) {
     }
 
     const credData = await readJsonByPrefix(credentialsPrefix(profile));
-    const has = hasRealPasskey(credData);
+    // "Can this person still get in", not "is there a record". A credential
+    // bound to a retired rpId can no longer complete a ceremony, so reporting
+    // it as a passkey would make the UI demand one that cannot work.
+    const accepted = acceptedRpIds();
+    const has = hasUsablePasskey(credData, accepted);
+    const usable = new Set([...accepted, "localhost"]);
 
     return NextResponse.json({
       hasPasskey: has,
-      credentialCount: has ? credData.credentials.filter((c) => c.publicKey).length : 0,
+      credentialCount: has
+        ? credData.credentials.filter((c) => c.publicKey && usable.has(credentialRpId(c))).length
+        : 0,
     });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
