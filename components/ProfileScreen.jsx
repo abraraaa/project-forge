@@ -28,6 +28,8 @@ import { PROFILE_SUFFIXES, LEGACY_PROFILE_KEY_PREFIXES } from "@/lib/store-healt
 import { Fade } from "@/components/ui";
 import { getThemePreference, applyThemePreference } from "@/lib/theme";
 import Glyph from "@/components/Glyph";
+import { PasskeyUpgradeCard, PasskeyUpgradeModal } from "@/components/PasskeyUpgrade";
+import { readUpgradeNeed, shouldInterrupt } from "@/lib/passkey-upgrade";
 import Link from "next/link";
 import { SyncStatusCard, SyncNowRow } from "@/components/sync-cards";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
@@ -120,6 +122,19 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const [profileHasPasskey, setProfileHasPasskey] = useState({});
   const [authToken, setAuthToken] = useState(null); // For authenticated destructive ops
   const [needsPasskeyAuth, setNeedsPasskeyAuth] = useState(null); // Profile name requiring auth
+  // Passkey re-enrolment (theforged.fit → heatwayve.app). Recorded at login by
+  // lib/webauthn.js from the rpId the server cryptographically matched, so it
+  // is READ here, never probed. Same profile-guarded derive as themeState
+  // above — no effect, so it is correct on first paint.
+  const [upgradeState, setUpgradeState] = useState(() => ({
+    profile: current,
+    value: typeof window === "undefined" ? null : readUpgradeNeed(current),
+  }));
+  if (upgradeState.profile !== current) {
+    setUpgradeState({ profile: current, value: readUpgradeNeed(current) });
+  }
+  const upgrade = upgradeState.value;
+  const refreshUpgrade = () => setUpgradeState({ profile: current, value: readUpgradeNeed(current) });
   const [bugSheetOpen, setBugSheetOpen] = useState(false);
   // The install walkthrough, findable on purpose: the home-screen nudge fires
   // once and "Maybe later" is remembered forever, so this row is the only way
@@ -776,8 +791,19 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
+      {/* Re-enrolment notice. Takes the "Passkey enabled" slot rather than
+          sitting alongside it: telling someone their profile is secured AND
+          that their key is about to stop working, in two adjacent rows, reads
+          as a contradiction. While an upgrade is pending, this IS the passkey
+          row. */}
+      {current && upgrade?.needed && (
+        <Fade d={280}>
+          <PasskeyUpgradeCard profile={current} state={upgrade} onDone={refreshUpgrade} />
+        </Fade>
+      )}
+
       {/* Passkey enabled row */}
-      {current && profileHasPasskey[current] && (
+      {current && profileHasPasskey[current] && !upgrade?.needed && (
         <Fade d={280}>
           <div style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
@@ -1050,6 +1076,17 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             </button>
           </div>
         </div>
+      )}
+
+      {/* Only in the closing stretch, and it snoozes on dismissal — see
+          lib/passkey-upgrade.js for why it is not a wall on every launch. */}
+      {current && shouldInterrupt(upgrade) && (
+        <PasskeyUpgradeModal
+          profile={current}
+          state={upgrade}
+          onDone={refreshUpgrade}
+          onSnooze={refreshUpgrade}
+        />
       )}
 
       {/* Taken name → passkey sign-in or fallback explainer */}

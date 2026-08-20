@@ -8,7 +8,7 @@ function serverError(e, { status = 500, label = "photos" } = {}) {
 import { rateLimit } from "@/lib/rate-limit";
 import { put, get, list, del } from "@vercel/blob";
 import { isTokenValid, readTokenData, mintAuthToken } from "@/lib/auth-server";
-import { hasDb, dbUpsertPhoto, dbListPhotos, dbDeletePhoto } from "@/lib/db";
+import { hasDb, dbUpsertPhoto, dbListPhotos, dbDeletePhoto, dbGetPhoto, dbHasRetiredPhotos } from "@/lib/db";
 import { isJpegBytes, PHOTO_MAX_UPLOAD_BYTES } from "@/lib/photos";
 
 // Progress photos (P1) — the ONE gated data surface in Forge.
@@ -152,10 +152,22 @@ export async function GET(request) {
       const rows = await dbListPhotos(g.profile);
       return withCookie(NextResponse.json({
         photos: rows.map((r) => ({ date: r.date, bodyweightAt: r.bodyweight_at, takenAt: r.taken_at })),
+        // A previous holder of this name left photos behind. Says only THAT,
+        // never how many or when — enough for a returning owner to know to ask,
+        // nothing a stranger can act on.
+        heldPhotos: await dbHasRetiredPhotos(g.profile),
       }), g);
     }
 
-    const result = await get(photoPath(g.profile, g.date), { access: "private" });
+    // The INDEX decides what is fetchable, not the path formula. Recomputing
+    // photoPath(profile, date) made every photo reachable by guessing a date,
+    // which meant an empty gallery was not the same as no access — the gap
+    // that lets a re-claimed name reach its predecessor's photos.
+    const row = await dbGetPhoto(g.profile, g.date);
+    if (!row?.blob_path) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    const result = await get(row.blob_path, { access: "private" });
     if (!result || result.statusCode !== 200 || !result.stream) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -185,7 +197,15 @@ export async function DELETE(request) {
     if (g.fail) return g.fail;
     if (!g.date) return NextResponse.json({ error: "Date required" }, { status: 400 });
 
-    const path = photoPath(g.profile, g.date);
+    // Resolve through the INDEX, never the path formula. Deleting a computed
+    // path let a caller destroy a blob their own index does not point at —
+    // which, once a lapsed name is re-claimed, means the previous owner's
+    // held photos. STRICTLY narrower than before: no row, nothing to delete.
+    const row = await dbGetPhoto(g.profile, g.date);
+    if (!row?.blob_path) {
+      return withCookie(NextResponse.json({ ok: true, deleted: null }), g);
+    }
+    const path = row.blob_path;
     // Index row FIRST (same asymmetry as the profile wipe): a surviving blob
     // with no index row is invisible and overwritable; a surviving index row
     // with no blob would 404 in the scrubber forever.

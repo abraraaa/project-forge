@@ -151,6 +151,12 @@ export default function LockerRoom() {
     }
   }, [mintUrl]);
 
+  // An earlier holder of this name left photos behind (server reports the
+  // bare fact — no count, no dates). Shown so a returning owner knows there is
+  // something to ask about; a stranger learns only that something exists,
+  // which they can neither see nor reach.
+  const [held, setHeld] = useState(false);
+
   const reveal = async () => {
     setBusy(true); setErr(null);
     try {
@@ -159,6 +165,7 @@ export default function LockerRoom() {
       if (!idx?.ok) { setErr(idx?.requiresAuth ? "No bother — the chart's still here." : "The door stuck. Pull it again?"); return; }
       setToken(t);
       setPhotos(idx.photos);
+      setHeld(!!idx.heldPhotos);
       setPos(Math.max(0, idx.photos.length - 1));
       // Window loading is driven by the effect below (keyed on the centre
       // frame) — no eager all-photos fetch here.
@@ -408,9 +415,26 @@ export default function LockerRoom() {
 
       {photosVisible && photos.length === 0 && (
         <div style={{ marginTop: 18 }}>
-          <p style={{ fontSize: 13, color: T.ink3, marginBottom: 12 }}>No photos yet. The first one's the hardest.</p>
+          <p style={{ fontSize: 13, color: T.ink3, marginBottom: 12 }}>No photos yet. The first one&apos;s the hardest.</p>
           <label htmlFor={PICK_ID} role="button" style={{ ...commitBtn, display: "inline-block" }}>Add your first photo</label>
         </div>
+      )}
+
+      {/* Deliberately says only THAT photos are held — never how many, whose,
+          or when. Enough for someone returning to their own name to know to
+          ask; nothing a stranger can act on. */}
+      {photosVisible && held && (
+        <p style={{ marginTop: 14, fontSize: 12, color: T.ink3, lineHeight: 1.6 }}>
+          Earlier photos from a previous sign-in on this name are held, and are
+          not shown here. If they&rsquo;re yours,{" "}
+          <a
+            href="mailto:ab@heatwayve.app?subject=Held%20photos"
+            style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}
+          >
+            get in touch
+          </a>{" "}
+          and we&rsquo;ll sort it out.
+        </p>
       )}
 
       {photosVisible && photos.length > 0 && (<>

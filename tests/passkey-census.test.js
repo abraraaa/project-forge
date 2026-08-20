@@ -21,7 +21,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { censusPasskeys, photosAtRisk, IMPLICIT_RP_ID } from "../lib/passkey-census.js";
+import { censusPasskeys, photosAtRisk, censusLogLine, IMPLICIT_RP_ID } from "../lib/passkey-census.js";
 import { NATIVE_RP_ID } from "../lib/origin.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -232,5 +232,48 @@ describe("photo exposure — the kill list, and nothing more", () => {
     const r = photosAtRisk(censusPasskeys([]), []);
     expect(r.dryRun).toBe(true);
     expect(r.deletes).toMatch(/none/i);
+  });
+});
+
+describe("the daily log line — aggregates, never identities", () => {
+  const blobFor = (profile, creds) =>
+    blob(profile, "credentials.json", "2026-08-01T00:00:00Z", { credentials: creds });
+
+  it("carries no profile name, path or credential material", () => {
+    // Profile name IS the identity here, and a log is retained, searched and
+    // rendered in dashboards. The detailed report stays behind the
+    // authenticated response; this string goes somewhere much less private.
+    const census = censusPasskeys([
+      blobFor("verydistinctivename", [{ id: "CRED-ID", publicKey: "PUB-KEY", rpId: NATIVE_RP_ID }]),
+    ]);
+    const photos = photosAtRisk(census, [{
+      profile: "verydistinctivename",
+      pathname: "forge/profiles/verydistinctivename/photos/2026-08-01.jpg",
+      size: 10,
+    }]);
+    const line = censusLogLine(census, photos);
+    for (const secret of ["verydistinctivename", "CRED-ID", "PUB-KEY", "forge/profiles"]) {
+      expect(line).not.toContain(secret);
+    }
+  });
+
+  it("reports the migration split, which is the number worth watching", () => {
+    const census = censusPasskeys([
+      blobFor("a", [{ id: "1", publicKey: "k" }]),
+      blobFor("b", [{ id: "2", publicKey: "k", rpId: NATIVE_RP_ID }]),
+    ]);
+    const line = censusLogLine(census, null, new Date("2026-08-20T12:00:00").getTime());
+    expect(line).toContain("native=1");
+    expect(line).toContain("legacy=1");
+    expect(line).toContain("sunsetInDays=88");
+  });
+
+  it("is a single greppable line and survives an empty store", () => {
+    const line = censusLogLine(censusPasskeys([]), null);
+    expect(line).not.toContain("\n");
+    expect(line.startsWith("[forge:passkey-census] ")).toBe(true);
+    expect(line).toContain("profiles=0");
+    // Missing sections must read as zero, never "undefined".
+    expect(line).not.toContain("undefined");
   });
 });
