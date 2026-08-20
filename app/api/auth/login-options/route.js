@@ -3,7 +3,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { put } from "@vercel/blob";
 import crypto from "crypto";
 import { readJsonByPrefix } from "@/lib/blob-utils";
-import { hasChallengeSecret, issueChallenge } from "@/lib/auth-server";
+import { hasChallengeSecret, issueChallenge, rpConfigFromRequest, planLoginCeremony } from "@/lib/auth-server";
 
 // Generate authentication options for WebAuthn
 // POST /api/auth/login-options
@@ -25,10 +25,21 @@ export async function POST(request) {
 
     // Find credentials for this profile
     const credData = await readJsonByPrefix(credentialsPrefix(profile));
-    
-    if (!credData?.credentials?.length) {
+
+    // Plan the ceremony BEFORE issuing a challenge. A ceremony is single-rpId,
+    // so this picks one pool — native whenever the profile has one — and
+    // offers only credentials from it. Offering the other pool's credentials
+    // would spend a Face ID prompt on something the authenticator cannot use.
+    //
+    // Null means nothing usable is left: no verifiable credential, or the only
+    // ones are bound to an rpId that no longer completes a ceremony. Both read
+    // as "no passkey" to the client, which re-offers setup — the same path a
+    // keyless legacy credential has always taken.
+    const config = rpConfigFromRequest(request);
+    const plan = planLoginCeremony(credData, config);
+    if (!plan) {
       return NextResponse.json(
-        { error: "No passkey registered for this profile" },
+        { error: "No passkey registered for this profile", needsRegister: true },
         { status: 404 }
       );
     }
@@ -55,18 +66,16 @@ export async function POST(request) {
       });
     }
 
-    // RP ID must be consistent between registration and authentication
-    const host = request.headers.get("host") || "";
-    const rpId = host.includes("localhost") ? "localhost" : "theforged.fit";
-
     return NextResponse.json({
       challenge,
-      rpId,
+      // Both from the plan, so the declared rpId and the offered credentials
+      // can never disagree.
+      rpId: plan.rpId,
       timeout: 60000,
-      allowCredentials: credData.credentials.map(cred => ({
+      allowCredentials: plan.credentials.map(cred => ({
         id: cred.id, // Use credential id, not rawId
         type: "public-key",
-        transports: ["internal", "hybrid"],
+        transports: cred.transports?.length ? cred.transports : ["internal", "hybrid"],
       })),
       userVerification: "required",
     });

@@ -51,7 +51,7 @@ export default function DiagBugs() {
   };
 
   return (
-    <main style={{ maxWidth: 560, margin: "0 auto", padding: "52px 20px 40px", color: C.text, fontFamily: "system-ui, sans-serif" }}>
+    <div style={{ maxWidth: 560, margin: "0 auto", padding: "52px 20px 40px", color: C.text, fontFamily: "system-ui, sans-serif" }}>
       <div style={{ fontSize: 10, fontWeight: 600, color: C.faint, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 6 }}>
         Fill or kill
       </div>
@@ -89,6 +89,6 @@ export default function DiagBugs() {
           </div>
         </div>
       ))}
-    </main>
+    </div>
   );
 }

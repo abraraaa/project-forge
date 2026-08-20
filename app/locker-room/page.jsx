@@ -348,7 +348,7 @@ export default function LockerRoom() {
     );
   };
 
-  if (!profile) return <main style={page}><p style={{ color: T.ink3 }}>No active profile — sign in first, then come back to the Locker Room.</p></main>;
+  if (!profile) return <div style={page}><p style={{ color: T.ink3 }}>No active profile — sign in first, then come back to the Locker Room.</p></div>;
 
   // ── Chart-first layout: ungated bodyweight on top, photos behind the toggle ──
   const photosVisible = shown && photos !== null;
@@ -367,7 +367,7 @@ export default function LockerRoom() {
   const markerX = !photos?.length ? 0 : photos.length === 1 ? curveW / 2 : (pos / (photos.length - 1)) * curveW;
 
   return (
-    <main style={page}>
+    <div style={page}>
       {picker}
       {/* Header anatomy mirrors the Performance Lab (#73c/d): safe-area-aware
           back-nav row with the photos toggle right-aligned, then eyebrow +
@@ -479,6 +479,6 @@ export default function LockerRoom() {
           )}
         </div>
       </>)}
-    </main>
+    </div>
   );
 }

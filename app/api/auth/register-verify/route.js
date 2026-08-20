@@ -78,14 +78,18 @@ export async function POST(request) {
     }
 
     // Really verify the attestation and extract the public key.
-    const { rpId, expectedOrigin } = rpConfigFromRequest(request);
+    const { acceptedRpIds, expectedOrigin } = rpConfigFromRequest(request);
     let verification;
     try {
       verification = await verifyRegistrationResponse({
         response: { ...credential, clientExtensionResults: credential.clientExtensionResults || {} },
         expectedChallenge,
         expectedOrigin,
-        expectedRPID: rpId,
+        // Both rpIds during the migration window. A credential minted from a
+        // heatwayve origin is native; one minted on the old domain is legacy.
+        // The library reports which matched, so it is recorded rather than
+        // assumed.
+        expectedRPID: acceptedRpIds,
         requireUserVerification: true,
       });
     } catch (e) {
@@ -103,6 +107,12 @@ export async function POST(request) {
       counter: vc.counter,
       transports: vc.transports || credential.response?.transports || [],
       createdAt: new Date().toISOString(),
+      // The rpId this credential is bound to, as VERIFIED — not as requested.
+      // It is immutable for the life of the credential and decides which
+      // ceremony can ever use it, so it comes from the library's match rather
+      // than from what we asked for. Falls back to the requested rpId only if
+      // a future library version stops reporting it.
+      rpId: verification.registrationInfo.rpID || rpConfigFromRequest(request).rpId,
     };
 
     // Keep other REAL credentials (minus any id collision), DROP keyless legacy

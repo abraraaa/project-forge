@@ -13,20 +13,28 @@ import { rpConfigFromRequest, isTokenValid, hasRealPasskey, issueChallenge, veri
 const reqWithHost = (host) => ({ headers: { get: (k) => (k === "host" ? host : null) } });
 
 describe("rpConfigFromRequest", () => {
-  it("prod host → theforged.fit rpId + https origin", () => {
+  // These once pinned "every credential is theforged.fit". That contract was
+  // retired by the 2026-08-18 ruling — new credentials are minted native and
+  // the old domain is not being renewed — so the expectations move with it.
+  // The SECURITY properties they were guarding do not move: localhost stays
+  // isolated, preview hosts get no rpId of their own, and an unrecognised host
+  // is handed an origin it cannot match.
+  it("the legacy origin still mints legacy while the window is open", () => {
+    // A ceremony genuinely on theforged.fit cannot declare the native rpId:
+    // no reverse Related Origin Requests document is served at heatwayve.app.
     expect(rpConfigFromRequest(reqWithHost("theforged.fit")))
-      .toEqual({ rpId: "theforged.fit", expectedOrigin: "https://theforged.fit" });
+      .toMatchObject({ rpId: "theforged.fit", expectedOrigin: "https://theforged.fit" });
   });
 
   it("localhost keeps its port and uses http", () => {
     expect(rpConfigFromRequest(reqWithHost("localhost:3123")))
-      .toEqual({ rpId: "localhost", expectedOrigin: "http://localhost:3123" });
+      .toMatchObject({ rpId: "localhost", expectedOrigin: "http://localhost:3123" });
   });
 
   it("an unknown/preview host resolves to the prod RP (passkeys scoped to the real domain)", () => {
     // Preview *.vercel.app hosts intentionally don't get their own rpId.
     expect(rpConfigFromRequest(reqWithHost("project-forge-git-x.vercel.app")).rpId)
-      .toBe("theforged.fit");
+      .toBe("heatwayve.app");
   });
 });
 
@@ -118,16 +126,24 @@ describe("stateless challenges (signed, no blob round-trip)", () => {
   });
 });
 
-describe("Heatwayve migration — two origins, one rpId (challenge 1)", () => {
+describe("Heatwayve migration — two origins, and now two rpIds", () => {
   const req = (host) => ({ headers: { get: (k) => (k === "host" ? host : null) } });
-  it("heatwayve.app is an allowed ORIGIN but rpId stays theforged.fit", () => {
+  it("a heatwayve origin now mints a NATIVE credential", () => {
+    // Was "allowed origin, but rpId stays theforged.fit" — the single-rpId
+    // arrangement that the 90-day window exists to unwind.
     expect(rpConfigFromRequest(req("heatwayve.app")))
-      .toEqual({ rpId: "theforged.fit", expectedOrigin: "https://heatwayve.app" });
+      .toMatchObject({ rpId: "heatwayve.app", expectedOrigin: "https://heatwayve.app" });
     expect(rpConfigFromRequest(req("www.heatwayve.app")).expectedOrigin).toBe("https://www.heatwayve.app");
   });
-  it("allow-list is exact-match — lookalike hosts fail toward the legacy origin", () => {
-    expect(rpConfigFromRequest(req("evil-heatwayve.app")).expectedOrigin).toBe("https://theforged.fit");
-    expect(rpConfigFromRequest(req("heatwayve.app.evil.com")).expectedOrigin).toBe("https://theforged.fit");
+  it("allow-list is exact-match — lookalike hosts get an origin they cannot match", () => {
+    // The property under test is fail-closed, not the particular domain: a
+    // host we do not recognise is handed an expectedOrigin that can never
+    // equal its clientDataJSON.origin, so verification rejects it.
+    for (const host of ["evil-heatwayve.app", "heatwayve.app.evil.com", "theforged.fit.evil.com"]) {
+      const { expectedOrigin } = rpConfigFromRequest(req(host));
+      expect(expectedOrigin).toBe("https://heatwayve.app");
+      expect(expectedOrigin).not.toBe(`https://${host}`);
+    }
   });
   it("the ROR well-known lists both domains and stays a static literal", async () => {
     const { readFileSync } = await import("node:fs");
