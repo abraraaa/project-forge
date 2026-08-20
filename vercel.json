@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/sync-snapshot",
       "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/diag/passkey-census",
+      "schedule": "0 5 * * *"
     }
   ],
   "headers": [

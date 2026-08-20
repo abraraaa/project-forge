@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { list } from "@vercel/blob";
 import { readJsonDirect } from "@/lib/blob-utils";
-import { censusPasskeys, photosAtRisk } from "@/lib/passkey-census";
+import { censusPasskeys, photosAtRisk, censusLogLine } from "@/lib/passkey-census";
 
 // PASSKEY CENSUS — READ ONLY, by design and by protocol.
 // GET /api/diag/passkey-census   (Authorization: Bearer <CRON_SECRET>)
@@ -88,6 +88,11 @@ export async function GET(request) {
   }
 
   const census = censusPasskeys(found);
+  const photoExposure = photosAtRisk(census, photos);
+  // Aggregates to the runtime log on every run, so the daily cron leaves a
+  // readable time series without anyone opening a dashboard. Names never go
+  // here — see censusLogLine.
+  console.log(censusLogLine(census, photoExposure));
   return NextResponse.json({
     dryRun: true,
     writes: "none — enumeration and reads only",
@@ -96,6 +101,6 @@ export async function GET(request) {
     // What a sunset photo wipe WOULD remove. Reported, never executed: no
     // delete path exists yet, and per protocol it does not get written until
     // these numbers have been read off the real store.
-    photoExposure: photosAtRisk(census, photos),
+    photoExposure,
   });
 }
