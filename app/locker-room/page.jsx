@@ -426,8 +426,14 @@ export default function LockerRoom() {
       {photosVisible && held && (
         <p style={{ marginTop: 14, fontSize: 12, color: T.ink3, lineHeight: 1.6 }}>
           Earlier photos from a previous sign-in on this name are held, and are
-          not shown here. If they&rsquo;re yours, report it through the app and
-          we&rsquo;ll sort it out.
+          not shown here. If they&rsquo;re yours,{" "}
+          <a
+            href="mailto:ab@heatwayve.app?subject=Held%20photos"
+            style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}
+          >
+            get in touch
+          </a>{" "}
+          and we&rsquo;ll sort it out.
         </p>
       )}
 

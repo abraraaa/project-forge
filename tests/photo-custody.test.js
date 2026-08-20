@@ -142,6 +142,15 @@ describe("the index is the authority, not the path formula", () => {
     expect(del).not.toContain("photoPath(g.profile, g.date)");
   });
 
+  it("the held-photos line offers a real way to reach a human", () => {
+    // Recovery is manual by design, so the notice is the whole recovery path.
+    // If this ever silently loses its contact route, a returning owner is told
+    // their photos exist and given nowhere to ask.
+    const s = src("app/locker-room/page.jsx");
+    expect(s).toContain("Earlier photos from a previous sign-in");
+    expect(s).toMatch(/mailto:[^"']+@[^"']+/);
+  });
+
   it("the held-photos signal carries no count, dates or paths", () => {
     const s = src("app/api/photos/route.js");
     expect(s).toContain("heldPhotos: await dbHasRetiredPhotos(g.profile)");
