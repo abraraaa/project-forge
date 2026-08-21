@@ -80,6 +80,28 @@ export default function SafeAreaDiagPage() {
       dpr: String(window.devicePixelRatio),
       inner: `${window.innerWidth} x ${window.innerHeight}`,
       screen: `${window.screen.width} x ${window.screen.height}`,
+      // WHICH RUNG OF THE HEIGHT LADDER IS ACTUALLY LIVE.
+      // .forge-page climbs 100vh → 100dvh (browser only) → stretch, the last
+      // behind an @supports. stretch is late-Safari, so on an older OS the
+      // query simply fails and the shell silently falls back to 100vh — which
+      // reports the whole SCREEN while the viewport already excludes the
+      // status bar. That is a shell taller than the space it has, and no
+      // amount of reading the stylesheet reveals which branch a device took.
+      supportsStretch: String(
+        typeof CSS !== "undefined" && CSS.supports?.("min-height", "stretch"),
+      ),
+      supportsFillAvailable: String(
+        typeof CSS !== "undefined" && CSS.supports?.("min-height", "-webkit-fill-available"),
+      ),
+      // The consequence, measured rather than inferred: the shell's real box
+      // against the viewport it is meant to fill. Any positive overflow here
+      // IS the scroll the session screen shows.
+      shell: (() => {
+        const el = document.querySelector(".forge-page");
+        if (!el) return "no .forge-page on this route";
+        const h = Math.round(el.getBoundingClientRect().height);
+        return `${h} vs innerHeight ${window.innerHeight} (overflow ${h - window.innerHeight})`;
+      })(),
       ua: navigator.userAgent.slice(0, 120),
     });
   }, []);
@@ -151,6 +173,9 @@ export default function SafeAreaDiagPage() {
                 ["devicePixelRatio", env.dpr],
                 ["innerWidth x innerHeight", env.inner],
                 ["screen", env.screen],
+                ["supports min-height: stretch", env.supportsStretch],
+                ["supports -webkit-fill-available", env.supportsFillAvailable],
+                [".forge-page height", env.shell],
               ].map(([k, v]) => (
                 <tr key={k} style={{ borderBottom: "1px solid #E0D2C9" }}>
                   <td style={{ padding: "7px 0", color: "#6A5B54" }}>{k}</td>
