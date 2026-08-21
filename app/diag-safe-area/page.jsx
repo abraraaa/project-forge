@@ -96,6 +96,34 @@ export default function SafeAreaDiagPage() {
       // The consequence, measured rather than inferred: the shell's real box
       // against the viewport it is meant to fill. Any positive overflow here
       // IS the scroll the session screen shows.
+      // THE HEIGHT LADDER, MEASURED. The shell resolves against body, and
+      // body is height:100vh — so whatever 100vh reports here is what every
+      // rung below it inherits, stretch included. Printing all four units
+      // side by side against innerHeight is the one measurement that says
+      // which of them is the viewport and which is the screen.
+      //
+      // Units are composed at runtime rather than written as style literals:
+      // this file is an instrument, not a screen, and it should not read as a
+      // new viewport-height owner to tests/viewport-contract.test.js. (The
+      // first draft of this very comment spelled the literal out and tripped
+      // the ratchet, which is the ratchet working.)
+      rungs: (() => {
+        const probe = document.createElement("div");
+        probe.style.position = "absolute";
+        probe.style.visibility = "hidden";
+        probe.style.pointerEvents = "none";
+        probe.style.top = "0";
+        document.body.appendChild(probe);
+        const measure = (value) => {
+          probe.style.height = value;
+          return Math.round(probe.getBoundingClientRect().height);
+        };
+        const out = ["vh", "svh", "lvh", "dvh"]
+          .map((u) => `${u}:${measure(`100${u}`)}`)
+          .join("  ");
+        probe.remove();
+        return out;
+      })(),
       shell: (() => {
         const el = document.querySelector(".forge-page");
         if (!el) return "no .forge-page on this route";
@@ -173,6 +201,7 @@ export default function SafeAreaDiagPage() {
                 ["devicePixelRatio", env.dpr],
                 ["innerWidth x innerHeight", env.inner],
                 ["screen", env.screen],
+                ["100vh / svh / lvh / dvh", env.rungs],
                 ["supports min-height: stretch", env.supportsStretch],
                 ["supports -webkit-fill-available", env.supportsFillAvailable],
                 [".forge-page height", env.shell],
