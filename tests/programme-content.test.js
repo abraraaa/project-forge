@@ -166,3 +166,39 @@ describe("#61 — content nits", () => {
     expect([...new Set(shadows)]).toEqual([]);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Block labels carry no "N of M" ordinal (boss report, 2026-08-21).
+//
+// The label sits directly beside a set/round count in identical grammar, in
+// both surfaces that render it:
+//   masthead   "Set 1 of 4 · Superset · 2 of 3"
+//   overview   "Superset · 2 of 3"  above  "0/4 rounds"
+// The ordinal meant "the 2nd of 3 supersets in this session", but read as
+// progress — it was reported as "I'm on 2 of 3 of a 4-set exercise". Two
+// different quantities cannot share one grammar on one card, so the position
+// is carried by list order and the block's exercise names instead.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("block labels never restate position as an N-of-M ordinal", () => {
+  it("no session block label contains one", () => {
+    const offenders = [];
+    for (const [key, session] of Object.entries(SESSIONS)) {
+      for (const b of session.blocks || []) {
+        if (/\d+\s*of\s*\d+/i.test(b.label || "")) offenders.push(`${key}/${b.id}: "${b.label}"`);
+      }
+    }
+    expect(
+      offenders,
+      `renders next to the set/round count and reads as progress: ${offenders.join(" | ")}`,
+    ).toEqual([]);
+  });
+
+  it("every block still has a label, and supersets are still named as such", () => {
+    for (const session of Object.values(SESSIONS)) {
+      for (const b of session.blocks || []) {
+        expect(b.label, `${b.id} lost its label`).toBeTruthy();
+        if (b.type === "superset") expect(b.label).toContain("Superset");
+      }
+    }
+  });
+});

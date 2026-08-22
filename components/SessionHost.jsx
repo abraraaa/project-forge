@@ -198,7 +198,9 @@ export default function SessionHost() {
       setReadinessReason(draft.readinessReason);
       if (draft.travel === true) setTravelState(true);
       setBlockIdx(resumeBlockIdx);
-      setSetNum(Math.min(setsOnCurrent + 1, session.blocks[resumeBlockIdx].sets));
+      // Unclamped for the same reason as handleJumpToBlock: resuming onto a
+      // finished block should present it as finished.
+      setSetNum(setsOnCurrent + 1);
       setPhase("A");
       setFlow("session");
     };
@@ -308,7 +310,7 @@ export default function SessionHost() {
   const REACH_EARLIEST_SET = 3;
   const canReach =
     readiness === "fresh" && !reachSpent && !reachArmed && !activeDeload && !travel &&
-    !isSS && isHeadline && setNum >= blockSets && setNum >= REACH_EARLIEST_SET &&
+    !isSS && isHeadline && setNum === blockSets && setNum >= REACH_EARLIEST_SET &&
     getLoadType(activeEx) !== "bodyweight" && Number.isFinite(reachWeight);
 
   // Plain handlers, like commitLog/handleLog below — the React Compiler
@@ -489,7 +491,12 @@ export default function SessionHost() {
       ? Math.max(0, ...Object.values(saved.exercises).map(ex => (ex.sets || []).length))
       : 0;
     setBlockIdx(targetIdx);
-    setSetNum(Math.min(pairs + 1, targetBlock.sets));
+    // NOT clamped to targetBlock.sets. Clamping put you back on the final set
+    // of a finished block, which reads as "one still to do" while the overview
+    // calls the same block Done. Landing past the end lets the screen say what
+    // is true; adding a further set is an explicit choice there (boss ruling,
+    // 2026-08-21 — flipping back is for revisiting the numbers you put up).
+    setSetNum(pairs + 1);
     setPhase("A");
     setAwaitRpe(false);
     setSsRoundDone(false);
