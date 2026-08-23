@@ -490,6 +490,17 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
   const vidEx    =isSS?(phase==="A"?resolvedExA:resolvedExB):resolvedEx;
   const progress =((blockIdx+(setNum-1)/block.sets)/totalBlocks)*100;
+  // Revisiting a finished block. setNum runs one past the prescribed count
+  // (SessionHost no longer clamps), so this is the block's own truth rather
+  // than a flag threaded through the flow. The set pips already read correctly
+  // from it — i<setNum-1 fills them all.
+  const blockDone = setNum > block.sets;
+  // Adding a further set is deliberate, never the default: you came back here
+  // to look at what you lifted. Keyed so it resets on any block/set change.
+  const [addKey,setAddKey]=useState(null);
+  const thisKey=`${block.id}|${setNum}`;
+  if(addKey&&addKey!==thisKey) setAddKey(null);
+  const adding=addKey===thisKey;
   // Display face fence: never below 28px. Long names wrap rather than
   // shrinking under the fence.
   const nameFz   =Math.min(42,Math.max(28,340/(activeEx?.name?.length||10)));
@@ -570,7 +581,9 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
       <div style={{padding:"18px 20px 0"}}>
         {/* Kicker — the room's live state: set count + slot. Never a sentence. */}
         <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
-          Set <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{block.sets}</span> · {block.label}{isSS?` ${phase}`:""}
+          {blockDone
+            ? <>All <span style={{fontFamily:T.measured}}>{block.sets}</span> {isSS?"rounds":"sets"} logged · {block.label}</>
+            : <>Set <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{block.sets}</span> · {block.label}{isSS?` ${phase}`:""}</>}
         </div>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
           <div onClick={resolveVid(activeEx?.name, activeEx?.vid) ? ()=>setShowVid(true) : undefined}
@@ -829,7 +842,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             </div>
           )}
           <div style={{margin:"12px 20px 0",display:"flex",gap:12,alignItems:"center"}}>
-            {showRestHint&&(
+            {showRestHint&&!(blockDone&&!adding)&&(
               <button
                 onClick={()=>{if(restActive){setRestActive(false);setRestRemain(block.rest);}else{setRestRemain(block.rest);setRestActive(true);}}}
                 aria-label={restActive?`Resting, ${restStr} left — tap to skip`:"Start rest timer"}
@@ -843,12 +856,23 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 {restActive?restStr:`${Math.round(block.rest/60)}:00`}
               </button>
             )}
-            <button className="forge-press" onClick={()=>{haptic.tap();onLog();}}
-              style={{flex:1,height:56,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",
-                display:"flex",alignItems:"center",justifyContent:"center",
-                fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
-              {isSS?(phase==="A"?"Log A — into B":"Log B — round done"):"Log set"}
-            </button>
+            {blockDone&&!adding?(
+              /* Revisiting: the ledger above is the point, so the thumb zone
+                 offers a quiet way onward rather than a primed commit. */
+              <button className="forge-press" onClick={()=>{haptic.tap();setAddKey(thisKey);}}
+                style={{flex:1,height:56,background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink2}}>
+                Add another set
+              </button>
+            ):(
+              <button className="forge-press" onClick={()=>{haptic.tap();onLog();}}
+                style={{flex:1,height:56,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
+                {isSS?(phase==="A"?"Log A — into B":"Log B — round done"):(blockDone?`Log set ${setNum}`:"Log set")}
+              </button>
+            )}
           </div>
           {showRestHint&&restActive&&(
             <div style={{padding:"0 20px"}}>
