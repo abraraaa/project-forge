@@ -198,8 +198,7 @@ export default function SessionHost() {
       setReadinessReason(draft.readinessReason);
       if (draft.travel === true) setTravelState(true);
       setBlockIdx(resumeBlockIdx);
-      // Unclamped for the same reason as handleJumpToBlock: resuming onto a
-      // finished block should present it as finished.
+      // Unclamped, as in handleJumpToBlock.
       setSetNum(setsOnCurrent + 1);
       setPhase("A");
       setFlow("session");
@@ -491,11 +490,8 @@ export default function SessionHost() {
       ? Math.max(0, ...Object.values(saved.exercises).map(ex => (ex.sets || []).length))
       : 0;
     setBlockIdx(targetIdx);
-    // NOT clamped to targetBlock.sets. Clamping put you back on the final set
-    // of a finished block, which reads as "one still to do" while the overview
-    // calls the same block Done. Landing past the end lets the screen say what
-    // is true; adding a further set is an explicit choice there (boss ruling,
-    // 2026-08-21 — flipping back is for revisiting the numbers you put up).
+    // Unclamped: clamping landed you on the last set of a finished block,
+    // reading as "one still to do" while the overview called it Done.
     setSetNum(pairs + 1);
     setPhase("A");
     setAwaitRpe(false);

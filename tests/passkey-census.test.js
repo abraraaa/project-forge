@@ -1,21 +1,4 @@
-// tests/passkey-census.test.js
-// ─────────────────────────────────────────────────────────────────────────────
-// The passkey census. Two things are pinned here, and the second matters more
-// than the first.
-//
-//   1. The counting is right — in particular it tallies only the AUTHORITATIVE
-//      document per profile, the one a real ceremony resolves. A stray sibling
-//      left by a failed sweep must never inflate the count.
-//
-//   2. The route stays READ ONLY. The 2026-07-09 incident was a job that read
-//      like a caretaker and shipped with delete authority; it sat unarmed for
-//      weeks and then removed every user's passkey on its first real run. A
-//      census is the exact shape of thing that acquires a "while we're here"
-//      cleanup later. It does not get to. This test is the lock.
-//
-//   3. Nothing identifying leaves the process. A census needs counts, not
-//      credential ids or public keys.
-// ─────────────────────────────────────────────────────────────────────────────
+// The passkey census: counting, and the read-only lock on the route.
 
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -58,9 +41,6 @@ describe("passkey census — the route can never delete", () => {
 
   it("scopes its listing to the credentials it owns, never the whole store", () => {
     expect(routeSrc).toContain('prefix: "forge/profiles/"');
-    // A trailing slash on the prefix and a filename match: the census cannot
-    // wander into a sibling namespace or a profile whose name merely shares a
-    // stem with another.
     expect(routeSrc).toMatch(/\^forge\\\/profiles\\\/\(\[\^\/\]\+\)\\\/credentials/);
   });
 });
@@ -71,7 +51,7 @@ describe("passkey census — counting", () => {
       blob("sam", "credentials-new.json", "2026-08-01T00:00:00Z", {
         credentials: [{ id: "A", publicKey: "k", createdAt: "2026-08-01T00:00:00Z" }],
       }),
-      // Older sibling from a sweep that failed — invisible to a ceremony.
+      // Older sibling from a failed sweep; no ceremony can see it.
       blob("sam", "credentials-old.json", "2026-06-01T00:00:00Z", {
         credentials: [{ id: "B", publicKey: "k" }, { id: "C", publicKey: "k" }],
       }),
@@ -93,7 +73,6 @@ describe("passkey census — counting", () => {
     ]);
     expect(r.totals.verifiable).toBe(1);
     expect(r.totals.keylessLegacy).toBe(2);
-    // Mirrors hasRealPasskey: one verifiable credential is protection.
     expect(r.totals.profilesProtected).toBe(1);
   });
 
@@ -106,8 +85,7 @@ describe("passkey census — counting", () => {
   });
 
   it("treats an unlabelled credential as bound to the legacy domain", () => {
-    // The honest reading: nothing ever wrote an rpId field, and every ceremony
-    // declares theforged.fit — so absent is not unknown.
+    // Nothing ever wrote an rpId field, so absent means legacy.
     const r = censusPasskeys([
       blob("sam", "credentials.json", "2026-08-01T00:00:00Z", {
         credentials: [{ id: "A", publicKey: "k" }, { id: "B", publicKey: "k", rpId: "heatwayve.app" }],
@@ -192,8 +170,7 @@ describe("photo exposure — the kill list, and nothing more", () => {
   });
 
   it("keeps already-claimable profiles in a SEPARATE bucket", () => {
-    // A profile with only keyless credentials is exposed today, not at the
-    // sunset. Merging the two would misdate the risk.
+    // Keyless-only profiles are exposed today, not at the sunset.
     const census = censusPasskeys([withCreds("kit", [{ id: "a" }])]);
     const r = photosAtRisk(census, [photo("kit", "2026-08-01")]);
     expect(r.atSunset.profiles).toBe(0);
@@ -207,7 +184,7 @@ describe("photo exposure — the kill list, and nothing more", () => {
   });
 
   it("scopes every proposed prefix with a trailing slash", () => {
-    // "sam" must never reach "sammy". The trailing slash is the whole defence.
+    // "sam" must not reach "sammy".
     const census = censusPasskeys([
       withCreds("sam", [{ id: "a", publicKey: "k" }]),
       withCreds("sammy", [{ id: "b", publicKey: "k" }]),
@@ -240,9 +217,7 @@ describe("the daily log line — aggregates, never identities", () => {
     blob(profile, "credentials.json", "2026-08-01T00:00:00Z", { credentials: creds });
 
   it("carries no profile name, path or credential material", () => {
-    // Profile name IS the identity here, and a log is retained, searched and
-    // rendered in dashboards. The detailed report stays behind the
-    // authenticated response; this string goes somewhere much less private.
+    // Logs are retained and searchable; the detailed report is gated instead.
     const census = censusPasskeys([
       blobFor("verydistinctivename", [{ id: "CRED-ID", publicKey: "PUB-KEY", rpId: NATIVE_RP_ID }]),
     ]);
@@ -273,7 +248,6 @@ describe("the daily log line — aggregates, never identities", () => {
     expect(line).not.toContain("\n");
     expect(line.startsWith("[forge:passkey-census] ")).toBe(true);
     expect(line).toContain("profiles=0");
-    // Missing sections must read as zero, never "undefined".
     expect(line).not.toContain("undefined");
   });
 });

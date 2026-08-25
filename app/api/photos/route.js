@@ -152,17 +152,13 @@ export async function GET(request) {
       const rows = await dbListPhotos(g.profile);
       return withCookie(NextResponse.json({
         photos: rows.map((r) => ({ date: r.date, bodyweightAt: r.bodyweight_at, takenAt: r.taken_at })),
-        // A previous holder of this name left photos behind. Says only THAT,
-        // never how many or when — enough for a returning owner to know to ask,
-        // nothing a stranger can act on.
+        // Says only THAT photos are held — no count, no dates.
         heldPhotos: await dbHasRetiredPhotos(g.profile),
       }), g);
     }
 
-    // The INDEX decides what is fetchable, not the path formula. Recomputing
-    // photoPath(profile, date) made every photo reachable by guessing a date,
-    // which meant an empty gallery was not the same as no access — the gap
-    // that lets a re-claimed name reach its predecessor's photos.
+    // The index decides what is fetchable, not the path formula: a recomputed
+    // path is guessable a date at a time.
     const row = await dbGetPhoto(g.profile, g.date);
     if (!row?.blob_path) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -197,10 +193,8 @@ export async function DELETE(request) {
     if (g.fail) return g.fail;
     if (!g.date) return NextResponse.json({ error: "Date required" }, { status: 400 });
 
-    // Resolve through the INDEX, never the path formula. Deleting a computed
-    // path let a caller destroy a blob their own index does not point at —
-    // which, once a lapsed name is re-claimed, means the previous owner's
-    // held photos. STRICTLY narrower than before: no row, nothing to delete.
+    // Through the index, never the path formula: a computed path let a caller
+    // delete a blob their own index does not point at. No row, nothing to delete.
     const row = await dbGetPhoto(g.profile, g.date);
     if (!row?.blob_path) {
       return withCookie(NextResponse.json({ ok: true, deleted: null }), g);

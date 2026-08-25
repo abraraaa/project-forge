@@ -1,19 +1,5 @@
-// tests/a11y-contract.test.js
-// ─────────────────────────────────────────────────────────────────────────────
-// Two landmark/zoom invariants that used to live only in comments.
-//
-// 1. ONE <main>. app/layout.jsx marks .forge-page as the document's main
-//    landmark, so every route inherits one. A route rendering its own nests a
-//    second inside the first, which is a landmark error rather than a
-//    duplicate — /locker-room, /not-found and /diag-bugs each did before the
-//    layout took the job.
-//
-// 2. NO focusable input below 16px. app/layout.jsx deliberately ships no
-//    maximumScale/userScalable lock so people who magnify can pinch-zoom. The
-//    one thing that lock plausibly still bought was suppressing iOS's
-//    zoom-on-focus, which fires on inputs under 16px — so the floor is the
-//    thing keeping the lock unnecessary. BugReportSheet's textarea sat at 14px.
-// ─────────────────────────────────────────────────────────────────────────────
+// One <main> per document, and no focusable input below 16px (iOS zooms on
+// focus below that, which is why the viewport carries no zoom lock).
 
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";

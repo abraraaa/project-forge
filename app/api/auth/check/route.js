@@ -26,9 +26,7 @@ export async function GET(request) {
     }
 
     const credData = await readJsonByPrefix(credentialsPrefix(profile));
-    // "Can this person still get in", not "is there a record". A credential
-    // bound to a retired rpId can no longer complete a ceremony, so reporting
-    // it as a passkey would make the UI demand one that cannot work.
+    // "Can they still get in", not "is there a record".
     const accepted = acceptedRpIds();
     const has = hasUsablePasskey(credData, accepted);
     const usable = new Set([...accepted, "localhost"]);

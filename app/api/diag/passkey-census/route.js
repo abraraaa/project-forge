@@ -4,28 +4,17 @@ import { list } from "@vercel/blob";
 import { readJsonDirect } from "@/lib/blob-utils";
 import { censusPasskeys, photosAtRisk, censusLogLine } from "@/lib/passkey-census";
 
-// PASSKEY CENSUS — READ ONLY, by design and by protocol.
+// PASSKEY CENSUS — READ ONLY.
 // GET /api/diag/passkey-census   (Authorization: Bearer <CRON_SECRET>)
 //
-// Wipe-protocol step 2 for the credential store: before any re-enrolment or
-// cleanup work is designed, read the REAL store and report what is actually
-// there. This route lists and reads. It imports no writer — no put, no del —
-// and that absence is asserted by tests/passkey-census.test.js, because the
-// 2026-07-09 incident was a read-shaped job that had grown teeth.
-//
-// Gated exactly as /api/diag/db-import is, and for the same reason: this is a
-// WHOLE-NAMESPACE enumeration, and profile name IS the identity here, so an
-// open census would hand over every user's key at once. Fails closed when
-// CRON_SECRET is unset.
-//
-// The counting lives in lib/passkey-census.js (pure, tested). This file is
-// only the gate and the I/O.
+// Imports no writer; asserted by tests/passkey-census.test.js. Gated as
+// /api/diag/db-import is — a whole-namespace enumeration, and profile name is
+// the identity. Fails closed when CRON_SECRET is unset.
 
 const decode = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
 
 export async function GET(request) {
-  // Whole-store enumeration plus a read per profile — the most expensive
-  // request in the app. Throttle harder than the blob census.
+  // Whole-store enumeration plus a read per profile.
   const limited = rateLimit(request, "diag-passkey-census", 3);
   if (limited) return limited;
 
@@ -60,9 +49,7 @@ export async function GET(request) {
           });
           continue;
         }
-        // Progress photos, for the sunset kill list. Enumerated here because
-        // this pass is already walking the namespace — no extra listing, and
-        // no read: a photo's bytes are never opened, only counted.
+        // Photos, counted not read — this pass already walks the namespace.
         const ph = b.pathname.match(/^forge\/profiles\/([^/]+)\/photos\/[^/]+$/);
         if (ph) photos.push({ profile: decode(ph[1]), pathname: b.pathname, size: b.size || 0 });
       }
@@ -72,11 +59,7 @@ export async function GET(request) {
     return NextResponse.json({ error: `credential census failed: ${e.message}` }, { status: 500 });
   }
 
-  // Read ONLY the authoritative document per profile — the newest, which is
-  // the one readJsonByPrefix resolves for a real ceremony. Older siblings are
-  // counted as strays without being read: they are invisible to auth, so
-  // reading them would cost a request per stray to report a number that means
-  // nothing.
+  // Only the newest doc per profile — the one a real ceremony resolves.
   const newest = new Map();
   for (const f of found) {
     const t = Date.parse(f.uploadedAt || "") || 0;
@@ -89,18 +72,12 @@ export async function GET(request) {
 
   const census = censusPasskeys(found);
   const photoExposure = photosAtRisk(census, photos);
-  // Aggregates to the runtime log on every run, so the daily cron leaves a
-  // readable time series without anyone opening a dashboard. Names never go
-  // here — see censusLogLine.
   console.log(censusLogLine(census, photoExposure));
   return NextResponse.json({
     dryRun: true,
     writes: "none — enumeration and reads only",
     scanned: { prefix: "forge/profiles/", matched: ["credentials*.json", "photos/*"] },
     ...census,
-    // What a sunset photo wipe WOULD remove. Reported, never executed: no
-    // delete path exists yet, and per protocol it does not get written until
-    // these numbers have been read off the real store.
     photoExposure,
   });
 }

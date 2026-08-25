@@ -8,15 +8,9 @@
 // empty document, which is why the repo's GitHub page outranked the site for
 // its own name.
 //
-// The <noscript> below is the designed mechanism for exactly this, not a
-// workaround: content for agents that do not run scripts. It costs nothing at
-// runtime, cannot flash (browsers with JS never render it), and leaves the
-// ssr:false decision untouched.
-//
-// It carries no heading and no pitch: the launch masthead in ForgeAppShell's
-// loading state is plain HTML too, so a non-JS reader already has both, and a
-// second copy would mean two h1s on one document. What is left is the part
-// only this block does — the links onward to the three server-rendered tiers.
+// The <noscript> below carries no heading and no pitch: the launch masthead is
+// plain HTML too, so a second copy would mean two h1s. What is left is the
+// links onward to the three server-rendered tiers.
 import Link from "next/link";
 import { ForgeAppShell } from "@/components/client-shells";
 

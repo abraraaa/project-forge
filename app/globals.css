@@ -120,11 +120,16 @@ body {
 }
 
 html, body {
-  /* 100vh, not 100%. 100% breaks viewport-fit: cover on iOS PWAs (Safari
-     silently falls back to default layout); 100dvh reports wrong values
-     on PWA cold start until the device rotates. 100vh works correctly
-     from launch on iOS 26.2+, the only target our baseline supports. */
+  /* NOT 100%: it breaks viewport-fit: cover on iOS PWAs, so this must be a
+     viewport unit. Measured installed on iOS 27, cold and warm: innerHeight
+     812, screen 874, vh/lvh 874, svh/dvh 812. vh reports the SCREEN, so
+     height:100vh made body 62px taller than the viewport — document scroll
+     before .forge-page is consulted. svh is the small viewport and cannot
+     overshoot in either display mode. 100vh is the pre-svh floor. */
   height: 100vh;
+}
+@supports (height: 100svh) {
+  html, body { height: 100svh; }
 }
 html {
   /* DIRECT light-dark, not var(--ground): the tokens are declared on body
@@ -210,15 +215,11 @@ input, button, textarea, select { font: inherit; }
      fill (.forge-fill below — occupies exactly the remaining viewport).
      No screen may use vh/dvh or env(safe-area-inset-*) for height maths.
 
-     Height ladder, constrained by two device-recorded facts:
-     - 100dvh reports wrong values on PWA cold start until the device
-       rotates (see html/body comment above) → 100vh is the floor.
-     - 100vh overshoots in browser under the dynamic toolbar → dvh only
-       in non-standalone.
-     - stretch (Safari 27) is correct by construction IN BROWSER —
-       device-verified. In standalone it is NOT layered on: whether
-       stretch shares dvh's cold-start bug is unverified, and the 100vh
-       floor is already exactly right there (no toolbar exists). */
+     Height ladder (numbers in the html/body comment):
+     - 100vh is the SCREEN. Pre-svh floor only.
+     - 100dvh follows the browser toolbar; non-standalone only.
+     - 100svh is the small viewport and cannot overshoot. The right rung.
+     - stretch fills body, so it is correct only because body is on svh. */
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -254,15 +255,13 @@ html[data-mode="dark"] .forge-page {
 @media not (display-mode: standalone) {
   .forge-page { min-height: 100dvh; }
 }
-/* stretch applies in BOTH modes. Device-measured 2026-08-17, installed on
-   iOS 26.1: innerHeight 812, screen 874, safe-area-inset-top 0. So 100vh
-   reports the whole SCREEN while the viewport already excludes the status
-   bar — the shell was building a column 62px taller than the space it had,
-   and because .forge-fill cannot shrink, the surplus landed at the bottom
-   where the commit button lives. stretch means "fill the containing block",
-   which is the thing we actually wanted all along; 100vh above stays as the
-   floor for anything without it. dvh remains browser-only — the recorded
-   cold-start bug in standalone is untouched by this. */
+/* svh first, then stretch. stretch fills the containing block, which is body
+   — correct only because body is on svh above. Naming svh here too keeps the
+   shell right on engines with svh but not stretch, and states its own height
+   rather than inheriting one from a rule ninety lines away. */
+@supports (min-height: 100svh) {
+  .forge-page { min-height: 100svh; }
+}
 @supports (min-height: stretch) {
   .forge-page { min-height: stretch; }
 }

@@ -15,6 +15,11 @@ const eslintConfig = [
       "react-hooks/rules-of-hooks": "error",
       // We use apostrophes in copy freely; escaping them hurts readability.
       "react/no-unescaped-entities": "off",
+      // eslint-config-next does not extend eslint:recommended, so this was
+      // off. A duplicate currentRepRange key sat in the lift-state literal
+      // where the later one silently won — the kind of thing that reads fine
+      // and quietly discards the value above it. Turned on after it bit.
+      "no-dupe-keys": "error",
     },
   },
   {

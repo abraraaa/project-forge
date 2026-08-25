@@ -1,20 +1,5 @@
-// tests/passkey-upgrade.test.js
-// ─────────────────────────────────────────────────────────────────────────────
-// The sunset predicate and the re-enrolment prompt.
-//
-// The load-bearing distinction, and the reason two predicates exist:
-//
-//   hasUsablePasskey — "can this person still get in?" Goes stale at the
-//     sunset, because a credential bound to a retired rpId cannot complete a
-//     ceremony. Auth surfaces must use it or they demand a key that can never
-//     work.
-//
-//   hasRealPasskey — "was this profile ever protected?" Does NOT go stale, and
-//     the WIPE GATE keeps using it. Loosening the claim path is the ruling;
-//     loosening the delete path is not, and must never fall out of it by
-//     accident. That is asserted here against the route source, because it is
-//     the kind of thing a later refactor tidies into consistency.
-// ─────────────────────────────────────────────────────────────────────────────
+// hasUsablePasskey gates the auth surfaces; the wipe gate keeps hasRealPasskey.
+// Plus the re-enrolment prompt's record/clear/snooze rules.
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
@@ -63,8 +48,7 @@ describe("hasUsablePasskey — can they still get in", () => {
 
 describe("hasRealPasskey — was it ever protected (unchanged, and stays that way)", () => {
   it("still counts a legacy credential after the sunset", () => {
-    // If this ever tracked the sunset, a stranger could delete a profile whose
-    // lock had merely expired.
+    // Tracking the sunset here would open the delete path on expiry.
     expect(hasRealPasskey({ credentials: [legacy] })).toBe(true);
   });
 });
@@ -106,8 +90,7 @@ describe("the prompt records what the server matched, and clears only on a nativ
   });
 
   it("does NOT clear when the registration minted another legacy credential", () => {
-    // Registering from the old origin still produces a legacy key. Nothing has
-    // been solved, so the prompt stands.
+    // The old origin still mints legacy, so the prompt stands.
     recordUpgradeNeed("sam", { needed: true, urgent: true, daysLeft: 10 });
     clearUpgradeNeed("sam", LEGACY_RP_ID);
     expect(readUpgradeNeed("sam")).not.toBeNull();
@@ -149,8 +132,7 @@ describe("interrupting is rationed", () => {
 
 describe("the prompt is wired where it cannot be forgotten", () => {
   it("recording happens inside authenticatePasskey, not at each call site", () => {
-    // Four surfaces authenticate; a prompt that depends on which one you came
-    // through is a prompt that silently misses people.
+    // Four surfaces authenticate; recording at one of them misses the rest.
     const s = src("lib/webauthn.js");
     expect(s).toContain("recordUpgradeNeed");
     expect(s).toContain("clearUpgradeNeed");

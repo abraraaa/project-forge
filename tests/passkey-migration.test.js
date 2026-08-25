@@ -1,19 +1,5 @@
-// tests/passkey-migration.test.js
-// ─────────────────────────────────────────────────────────────────────────────
-// The theforged.fit → heatwayve.app passkey migration (boss ruling, 2026-08-18:
-// a 90-day window, then the old domain is not renewed).
-//
-// The invariant that matters most is the one WebAuthn enforces and we cannot
-// see fail in a unit test: A CEREMONY IS SINGLE-rpId. Offer a credential bound
-// to a different rpId than the one declared and the authenticator cannot
-// satisfy the prompt — the user spends a Face ID and gets an error. So every
-// test below that touches planLoginCeremony checks BOTH halves of the answer
-// agree, not just that it returned something.
-//
-// The second invariant: an rpId is never inferred. It is read back from what
-// the library cryptographically matched, because guessing it is precisely the
-// class of bold assumption that has cost us before.
-// ─────────────────────────────────────────────────────────────────────────────
+// theforged.fit -> heatwayve.app rpId migration. A ceremony is single-rpId,
+// so a plan's declared rpId and its offered credentials must always agree.
 
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -50,7 +36,6 @@ describe("migration timeline", () => {
     expect(passkeyNudgeUrgent(at("2026-10-16"))).toBe(false);
     expect(passkeyNudgeUrgent(at("2026-10-18"))).toBe(true);
     expect(passkeyNudgeUrgent(at("2026-11-15"))).toBe(true);
-    // Past the sunset there is nothing left to nudge about.
     expect(passkeyNudgeUrgent(at("2026-11-17"))).toBe(false);
   });
 
@@ -75,8 +60,7 @@ describe("rp config — which rpId a NEW credential is minted under", () => {
   });
 
   it("mints legacy from the legacy origin — the browser would reject native there", () => {
-    // No reverse Related Origin Requests document is served at heatwayve.app,
-    // so a ceremony genuinely on theforged.fit cannot claim the native rpId.
+    // No reverse ROR document at heatwayve.app.
     const c = rpConfigFromRequest(req(LEGACY_RP_ID), at("2026-08-18"));
     expect(c.rpId).toBe(LEGACY_RP_ID);
   });
@@ -92,8 +76,7 @@ describe("rp config — which rpId a NEW credential is minted under", () => {
   });
 
   it("pins expectedOrigin to one exact string even though the library allows a list", () => {
-    // Only the rpId dimension is widened: the credential's rpId is unknown
-    // until verification matches it, but the origin is known exactly.
+    // Only the rpId dimension is widened; the origin is known exactly.
     expect(typeof rpConfigFromRequest(req("heatwayve.app")).expectedOrigin).toBe("string");
   });
 
@@ -116,7 +99,7 @@ describe("credentialRpId — absent means legacy, not unknown", () => {
 describe("planLoginCeremony — one rpId, and only its own credentials", () => {
   const cfgNative = (now = at("2026-08-18")) => rpConfigFromRequest(req("heatwayve.app"), now);
 
-  // The load-bearing assertion, applied to every plan this suite produces.
+  // Applied to every plan below.
   const assertCoherent = (plan) => {
     expect(plan).not.toBeNull();
     const ids = new Set(plan.credentials.map((c) => credentialRpId(c)));
@@ -154,8 +137,7 @@ describe("planLoginCeremony — one rpId, and only its own credentials", () => {
   });
 
   it("returns null for a legacy-only profile once the domain is retired", () => {
-    // Not an error state — the client reads it as "no passkey" and re-offers
-    // setup, which is how the holder mints a native one.
+    // Client reads null as "no passkey" and re-offers setup.
     const now = at("2026-12-01");
     expect(planLoginCeremony({ credentials: [cred("l1")] }, cfgNative(now))).toBeNull();
   });
@@ -171,8 +153,7 @@ describe("planLoginCeremony — one rpId, and only its own credentials", () => {
   });
 
   it("never offers a keyless credential", () => {
-    // No signature can be checked against one, so a ceremony using it fails
-    // AFTER costing the user a prompt.
+    // Unverifiable, so the ceremony fails after costing a prompt.
     const plan = planLoginCeremony(
       { credentials: [{ id: "keyless" }, cred("n1", NATIVE_RP_ID)] },
       cfgNative(),
@@ -206,7 +187,7 @@ describe("the routes read the rpId back rather than assuming it", () => {
   it("login-verify backfills from the verified assertion, not from config", () => {
     const s = src("app/api/auth/login-verify/route.js");
     expect(s).toContain("verification.authenticationInfo.rpID");
-    // The backfill rides the existing counter write — one write, not two.
+    // Backfill rides the counter write.
     expect(s.match(/writeJsonReplacingPrefix\(/g) || []).toHaveLength(1);
   });
 
@@ -225,7 +206,6 @@ describe("the routes read the rpId back rather than assuming it", () => {
     const s = src("app/api/auth/login-options/route.js");
     expect(s).toContain("rpId: plan.rpId");
     expect(s).toContain("plan.credentials.map");
-    // The old shape offered every stored credential regardless of rpId.
     expect(s).not.toContain("credData.credentials.map");
   });
 });
