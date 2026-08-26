@@ -29,32 +29,17 @@ import dynamic from "next/dynamic";
 
 const FieldBeat = () => <div style={{ minHeight: "100vh" }} aria-hidden="true" />;
 
-// The home shell gets a masthead the OTHER shells do not, and only OUTSIDE the
-// installed app (.forge-launch, app/globals.css).
-//
-// Why at all: the LCP breakdown measured TTFB at 0ms and element render delay
-// at 5,320ms — every millisecond of it waiting for the bundle to execute before
-// anything could paint. A skeleton would not have helped; LCP counts only text
-// and images, so a grey block is invisible to it. This is real text, at display
-// size, in the server HTML.
-//
-// Why browser-only: an installed app already showed a splash on launch — the
-// manifest carries name, background_color and five icons — so a second brand
-// beat inside the page is redundant for exactly the people who see it most.
-// They keep the deliberate empty field. Web visitors, who have had no splash
-// and are the ones deciding whether to stay, get something to read.
+// Masthead on the home shell only, and only outside the installed app
+// (.forge-launch, globals.css). LCP measured element render delay at 5,320ms
+// waiting on the bundle; LCP counts text and images, so a skeleton would not
+// have helped. Installed users already get the manifest splash.
 const LaunchMasthead = () => (
   <div className="forge-launch">
     <div style={{ padding: "52px 24px 0", maxWidth: 430, margin: "0 auto" }}>
       <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 8 }}>Heatwayve</div>
-      {/* Display size on purpose: LCP only supersedes a candidate when a LARGER
-          one paints, so this has to be at least as big as the h1 that replaces
-          it or the metric lands on the late one anyway.
-
-          An <h1> because it IS one: the page's real heading, server-rendered,
-          visible, at display size. Bing reported "/" as missing an h1 after the
-          masthead shipped — the only one in the served HTML sat inside
-          <noscript> (app/page.jsx), which it does not credit. */}
+      {/* Display size: LCP only supersedes when a LARGER element paints, so
+          this must be at least as big as the h1 that replaces it. Bing does not
+          credit an h1 inside <noscript>, which is where the only one was. */}
       <h1 style={{ fontFamily: "var(--font-bodoni), serif", fontOpticalSizing: "none", fontSize: 45, lineHeight: 1.05, color: "var(--ink)", margin: 0, fontWeight: 400 }}>
         Train with intention
       </h1>

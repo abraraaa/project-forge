@@ -80,33 +80,19 @@ export default function SafeAreaDiagPage() {
       dpr: String(window.devicePixelRatio),
       inner: `${window.innerWidth} x ${window.innerHeight}`,
       screen: `${window.screen.width} x ${window.screen.height}`,
-      // WHICH RUNG OF THE HEIGHT LADDER IS ACTUALLY LIVE.
-      // .forge-page climbs 100vh → 100dvh (browser only) → stretch, the last
-      // behind an @supports. stretch is late-Safari, so on an older OS the
-      // query simply fails and the shell silently falls back to 100vh — which
-      // reports the whole SCREEN while the viewport already excludes the
-      // status bar. That is a shell taller than the space it has, and no
-      // amount of reading the stylesheet reveals which branch a device took.
+      // Which rung of the height ladder is live. Reading the stylesheet
+      // cannot tell you which branch a device took.
       supportsStretch: String(
         typeof CSS !== "undefined" && CSS.supports?.("min-height", "stretch"),
       ),
       supportsFillAvailable: String(
         typeof CSS !== "undefined" && CSS.supports?.("min-height", "-webkit-fill-available"),
       ),
-      // The consequence, measured rather than inferred: the shell's real box
-      // against the viewport it is meant to fill. Any positive overflow here
-      // IS the scroll the session screen shows.
-      // THE HEIGHT LADDER, MEASURED. The shell resolves against body, and
-      // body is height:100vh — so whatever 100vh reports here is what every
-      // rung below it inherits, stretch included. Printing all four units
-      // side by side against innerHeight is the one measurement that says
-      // which of them is the viewport and which is the screen.
-      //
-      // Units are composed at runtime rather than written as style literals:
-      // this file is an instrument, not a screen, and it should not read as a
-      // new viewport-height owner to tests/viewport-contract.test.js. (The
-      // first draft of this very comment spelled the literal out and tripped
-      // the ratchet, which is the ratchet working.)
+      // The shell's real box against the viewport. Overflow here is the scroll.
+      // All four units against innerHeight: which is the viewport, which is
+      // the screen.
+      // Units composed at runtime, not written as style literals: this file
+      // must not read as a viewport-height owner to the contract test.
       rungs: (() => {
         const probe = document.createElement("div");
         probe.style.position = "absolute";

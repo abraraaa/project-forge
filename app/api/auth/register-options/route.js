@@ -50,10 +50,7 @@ export async function POST(request) {
       });
     }
 
-    // RP ID must be consistent between registration and authentication, and
-    // is now decided in one place (lib/auth-server.js) so options and verify
-    // can never drift. From a heatwayve origin this mints a NATIVE credential;
-    // the legacy rpId is only used by a ceremony genuinely on the old domain.
+    // Decided in lib/auth-server.js so options and verify cannot drift.
     const { rpId } = rpConfigFromRequest(request);
 
     return NextResponse.json({

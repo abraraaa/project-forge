@@ -26,7 +26,7 @@ import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { WEEK, SWAP_DB } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
-import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung } from "@/lib/lift-translations";
+import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 import { resolveVid } from "@/lib/exercise-videos";
 
@@ -490,13 +490,9 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
   const vidEx    =isSS?(phase==="A"?resolvedExA:resolvedExB):resolvedEx;
   const progress =((blockIdx+(setNum-1)/block.sets)/totalBlocks)*100;
-  // Revisiting a finished block. setNum runs one past the prescribed count
-  // (SessionHost no longer clamps), so this is the block's own truth rather
-  // than a flag threaded through the flow. The set pips already read correctly
-  // from it — i<setNum-1 fills them all.
+  // setNum runs one past the prescribed count on a finished block.
   const blockDone = setNum > block.sets;
-  // Adding a further set is deliberate, never the default: you came back here
-  // to look at what you lifted. Keyed so it resets on any block/set change.
+  // Adding a set is deliberate. Keyed so it resets on any block/set change.
   const [addKey,setAddKey]=useState(null);
   const thisKey=`${block.id}|${setNum}`;
   if(addKey&&addKey!==thisKey) setAddKey(null);
@@ -527,7 +523,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
 
   // Load type handling for bodyweight movements
   const loadType = getLoadType(activeEx);
-  const showWeightPicker = loadType !== "bodyweight";
+  // Shared with DrumEditOverlay so the two cannot derive it differently.
+  const showWeightPicker = acceptsAddedWeight(loadType);
   const weightLabel = loadType === "loaded_bodyweight" || loadType === "loaded_bw" ? "+ kg"
                     : loadType === "assisted_bodyweight" ? "− kg"
                     : "kg";
@@ -666,6 +663,19 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                   <span style={{fontFamily:T.measured,color:T.heat[3]}}>{delta>0?"+":""}{delta}</span> on last time
                 </div>
               )}
+            </>
+          ) : isBodyweightMovement(loadType) ? (
+            /* Bodyweight is the answer here, not a blank. Adding is opt-in. */
+            <>
+              <div style={{fontSize:15,color:T.ink2}}>
+                Bodyweight{bodyweight ? <> &middot; <span style={{fontFamily:T.measured}}>{bodyweight}</span> kg</> : ""}
+              </div>
+              <button
+                onClick={()=>{ if(activeEx?.name) setEditTarget({exName:activeEx.name,currentKg:null,currentReps:getR(activeEx),loadType}); }}
+                style={{marginTop:10,padding:"7px 12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,
+                  cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
+                {loadType === "assisted_bodyweight" ? "Set assistance" : "Add weight"}
+              </button>
             </>
           ) : showWeightPicker ? (
             /* A LOADED lift whose weight we don't know yet — a swap to
@@ -857,8 +867,6 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               </button>
             )}
             {blockDone&&!adding?(
-              /* Revisiting: the ledger above is the point, so the thumb zone
-                 offers a quiet way onward rather than a primed commit. */
               <button className="forge-press" onClick={()=>{haptic.tap();setAddKey(thisKey);}}
                 style={{flex:1,height:56,background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
                   display:"flex",alignItems:"center",justifyContent:"center",
@@ -1015,7 +1023,8 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
     : (rawReps ?? timedSeed ?? 8);
   const [kg,setKg]    =useState(initKg);
   const [reps,setReps]=useState(initReps);
-  const hasWeight=ex?.weight!==null&&ex?.weight!==undefined;
+  // Load type, not ex.weight: null means no prescribed load, not unloadable.
+  const hasWeight=acceptsAddedWeight(target?.loadType ?? getLoadType(ex));
   const { containerRef, onKeyDown } = useModalA11y(onClose);
   const titleId = "drum-edit-title";
   // Step size honours real-world implement increments: dumbbells come in

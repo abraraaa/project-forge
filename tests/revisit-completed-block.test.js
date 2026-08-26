@@ -1,19 +1,5 @@
-// tests/revisit-completed-block.test.js
-// ─────────────────────────────────────────────────────────────────────────────
-// Flipping back to a finished block (boss ruling, 2026-08-21: "someone
-// flipping back might just be revisiting what numbers they put up. Adding an
-// extra set would need to be an explicit choice").
-//
-// The old maths clamped the set number onto the block's last set:
-//   Math.min(pairs + 1, sets)  →  4 of 4 logged gives 4
-// so the screen showed "Set 4 of 4" with one pip unfilled and a primed Log
-// button, while the overview sheet called the same block "Done · 4/4". Two
-// surfaces, one draft, opposite claims.
-//
-// Unclamping is what lets the screen tell the truth, so these pin the maths
-// and the two flow conditions that read it — the advancement threshold and
-// the reach offer, both of which key off setNum vs blockSets.
-// ─────────────────────────────────────────────────────────────────────────────
+// Flipping back to a finished block. The set number is no longer clamped onto
+// its last set, so advancement and the reach offer are re-pinned here.
 
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -42,7 +28,7 @@ describe("landing set number", () => {
   });
 
   it("a finished block is never mistaken for one set short", () => {
-    // The exact defect: min(4+1, 4) = 4, indistinguishable from 3 logged.
+    // min(4+1, 4) = 4, indistinguishable from 3 logged.
     for (const sets of [2, 3, 4]) {
       expect(Math.min(landOn(sets), sets)).toBe(sets);   // what it used to give
       expect(landOn(sets)).toBeGreaterThan(sets);        // what it gives now
@@ -64,14 +50,12 @@ describe("the host no longer clamps", () => {
   });
 
   it("advancement still fires at or past the last set", () => {
-    // Logging an extra set on a revisited block must still move the session
-    // on, not strand it — the threshold stays >=, not ===.
+    // An extra set must still advance, so the threshold stays >=.
     expect(host).toMatch(/if \(setNum >= blockSets\)/);
   });
 
   it("the reach is offered ON the last set, never past it", () => {
-    // >= would now fire while revisiting a finished block, offering a heavier
-    // set to someone who came back to read their numbers.
+    // >= would now fire while revisiting a finished block.
     expect(host).toContain("setNum === blockSets && setNum >= REACH_EARLIEST_SET");
   });
 });
@@ -87,7 +71,6 @@ describe("the screen presents a finished block as finished", () => {
 
   it("offers adding a set as a deliberate act, not a primed commit", () => {
     expect(screen).toContain("Add another set");
-    // The commit button only appears once that choice is made.
     expect(screen).toContain("blockDone&&!adding");
   });
 

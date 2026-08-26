@@ -65,16 +65,10 @@ export async function POST(request) {
     // legacy credentials do not count as protection (see lib/auth-server.js),
     // so a legacy user can re-register freely and heal into a real credential.
     const existing = (await readJsonByPrefix(credentialsPrefix(profile))) || { credentials: [] };
-    // Decided BEFORE this registration changes anything, from the credentials
-    // as they stand. See lib/auth-server.js — false for a first claim, for
-    // adding a second passkey, and for the rpId upgrade, all of which prove
-    // control. True only when a lapsed name is being taken by someone who
-    // could not.
+    // From the credentials as they stand, before this registration.
     const reclaim = isReclaimOfLapsedProfile(existing);
-    // hasUsablePasskey, not hasRealPasskey: once the legacy rpId retires, a
-    // legacy-only profile has no ceremony left to prove control with, so
-    // demanding one would strand its owner. It reverts to the bootstrap claim
-    // — the same posture as a profile that never had a passkey.
+    // hasUsablePasskey: a legacy-only profile has no ceremony left to prove
+    // control with once the rpId retires, so it reverts to the bootstrap claim.
     if (hasUsablePasskey(existing)) {
       const ok = await verifyAuthToken(profile, authToken);
       if (!ok) {
@@ -96,10 +90,7 @@ export async function POST(request) {
         response: { ...credential, clientExtensionResults: credential.clientExtensionResults || {} },
         expectedChallenge,
         expectedOrigin,
-        // Both rpIds during the migration window. A credential minted from a
-        // heatwayve origin is native; one minted on the old domain is legacy.
-        // The library reports which matched, so it is recorded rather than
-        // assumed.
+        // Both rpIds during the window; the library reports which matched.
         expectedRPID: acceptedRpIds,
         requireUserVerification: true,
       });
@@ -118,11 +109,7 @@ export async function POST(request) {
       counter: vc.counter,
       transports: vc.transports || credential.response?.transports || [],
       createdAt: new Date().toISOString(),
-      // The rpId this credential is bound to, as VERIFIED — not as requested.
-      // It is immutable for the life of the credential and decides which
-      // ceremony can ever use it, so it comes from the library's match rather
-      // than from what we asked for. Falls back to the requested rpId only if
-      // a future library version stops reporting it.
+      // As VERIFIED, not as requested. Immutable for the credential's life.
       rpId: verification.registrationInfo.rpID || rpConfigFromRequest(request).rpId,
     };
 
@@ -137,15 +124,9 @@ export async function POST(request) {
     // the old delete-then-write order could destroy every passkey).
     await writeJsonReplacingPrefix(credentialsPrefix(profile), credentialsPath(profile), updated);
 
-    // A lapsed name has changed hands. Retire the previous holder's photo
-    // index rows so the new holder can neither list nor fetch them.
-    //
-    // AN UPDATE, NOT A DELETE: every row and every blob survives, under a key
-    // containing "/" that no profile name can hold. If this person turns out
-    // to be the original owner returning late, recovery is the same statement
-    // in reverse. Runs only AFTER the credential write above has succeeded, so
-    // a failed registration never moves anything, and never blocks a
-    // successful one.
+    // Retire the previous holder's photo rows. An UPDATE, not a delete —
+    // recovery is the same statement in reverse. After the credential write,
+    // so a failed registration never moves anything.
     if (reclaim) {
       try {
         await dbRetirePhotos(normalise(profile), new Date().toISOString());
@@ -160,8 +141,6 @@ export async function POST(request) {
     // it" — two ceremonies back to back for one intent. The user just proved
     // control of this profile with an authenticator; that IS the ceremony.
     const syncToken = await mintAuthToken({ profile, ttlMs: 30 * 86400000, scope: "sync" });
-    // rpId is reported back so the client can tell a native mint from a legacy
-    // one and only then retire its upgrade prompt.
     const res = NextResponse.json({ ok: true, credentialId: vc.id, rpId: newCredential.rpId });
     res.cookies.set("hw_sync", syncToken, {
       // 30 days, matching the token TTL and the gate's sliding refresh —

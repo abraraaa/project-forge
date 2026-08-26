@@ -62,6 +62,53 @@ const GRANDFATHERED_TOP = {
   "app/layout.jsx": true, // the shell's own wiring — legitimate forever
 };
 
+// The ratchet above walks components/ and app/ for .jsx ONLY, so globals.css
+// — the one file that actually owns the viewport — has never been scanned by
+// the contract policing it. That is how `html, body { height: 100vh }` sat
+// ninety lines above `.forge-page`'s ladder, each with its own essay, neither
+// citing the other, while three fixes were applied below it and none worked.
+//
+// Measured on device (installed, iOS 27, cold and warm): innerHeight 812,
+// screen 874, vh/lvh 874, svh/dvh 812. vh is the screen. A definite vh height
+// on body IS document scroll, before the shell is consulted at all.
+describe("globals.css — the viewport is named once, and correctly", () => {
+  const css = readFileSync(resolve(root, "app/globals.css"), "utf8");
+  // Declarations only — the file is full of prose about these units.
+  const decls = css
+    .split("\n")
+    .filter((l) => !l.trim().startsWith("*") && !l.trim().startsWith("/*"))
+    .join("\n");
+
+  it("body's height is svh, with vh only as the pre-svh floor", () => {
+    expect(decls).toMatch(/html,\s*body\s*\{\s*height:\s*100svh/);
+    const bodyVh = decls.match(/html,\s*body\s*\{[^}]*height:\s*100vh/g) || [];
+    expect(bodyVh.length, "the vh floor may exist once, inside no @supports").toBeLessThanOrEqual(1);
+  });
+
+  it("the shell states an svh rung of its own rather than only inheriting", () => {
+    // stretch fills the containing block. If body is ever wrong again, a
+    // shell that only says `stretch` inherits the mistake silently.
+    expect(decls).toMatch(/\.forge-page\s*\{\s*min-height:\s*100svh/);
+  });
+
+  it("no element other than html/body/.forge-page sets a viewport height", () => {
+    const offenders = [];
+    // [^{}]* on BOTH sides so this matches only innermost blocks — otherwise
+    // an @supports prelude is read as the selector of the rule it wraps.
+    for (const m of decls.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const [, selector, body] = m;
+      if (!/(?:^|[^-])height:\s*[^;]*\d(?:s|l|d)?vh/.test(body)) continue;
+      const sel = selector.trim().split("\n").pop().trim();
+      if (/^(html,\s*body|html|body|\.forge-page)$/.test(sel)) continue;
+      offenders.push(`${sel} → ${body.trim().slice(0, 60)}`);
+    }
+    expect(
+      offenders,
+      `only the shell may name viewport height: ${offenders.join(" | ")}`,
+    ).toEqual([]);
+  });
+});
+
 describe("viewport contract — the shell owns the viewport (ratcheted)", () => {
   it("no NEW viewport-height ownership; grandfathered counts only shrink", () => {
     const overages = [];

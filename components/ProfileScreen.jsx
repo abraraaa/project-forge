@@ -122,10 +122,8 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const [profileHasPasskey, setProfileHasPasskey] = useState({});
   const [authToken, setAuthToken] = useState(null); // For authenticated destructive ops
   const [needsPasskeyAuth, setNeedsPasskeyAuth] = useState(null); // Profile name requiring auth
-  // Passkey re-enrolment (theforged.fit → heatwayve.app). Recorded at login by
-  // lib/webauthn.js from the rpId the server cryptographically matched, so it
-  // is READ here, never probed. Same profile-guarded derive as themeState
-  // above — no effect, so it is correct on first paint.
+  // Recorded at login by lib/webauthn.js; read here, never probed. Same
+  // profile-guarded derive as themeState above, so it is right on first paint.
   const [upgradeState, setUpgradeState] = useState(() => ({
     profile: current,
     value: typeof window === "undefined" ? null : readUpgradeNeed(current),
@@ -791,11 +789,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
-      {/* Re-enrolment notice. Takes the "Passkey enabled" slot rather than
-          sitting alongside it: telling someone their profile is secured AND
-          that their key is about to stop working, in two adjacent rows, reads
-          as a contradiction. While an upgrade is pending, this IS the passkey
-          row. */}
+      {/* Takes the "Passkey enabled" slot rather than sitting beside it. */}
       {current && upgrade?.needed && (
         <Fade d={280}>
           <PasskeyUpgradeCard profile={current} state={upgrade} onDone={refreshUpgrade} />
@@ -1078,8 +1072,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </div>
       )}
 
-      {/* Only in the closing stretch, and it snoozes on dismissal — see
-          lib/passkey-upgrade.js for why it is not a wall on every launch. */}
+      {/* Closing stretch only; snoozes on dismissal. */}
       {current && shouldInterrupt(upgrade) && (
         <PasskeyUpgradeModal
           profile={current}

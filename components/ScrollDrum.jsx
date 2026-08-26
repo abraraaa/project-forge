@@ -104,10 +104,12 @@ export default function ScrollDrum({ value, onChange, step = 1.25, min = 0, max 
   );
 }
 
-// Decimal options an equipment increment actually offers. The wheel shows
-// only reachable fractions — 0.25 plates give four detents, a 5 kg stack
-// gives one. (Integers stay a free wheel either way, so any whole number
-// composes with any listed fraction.)
+// The fine wheel is always these four, whatever the equipment increment.
+// snapToImplement constrains what the ENGINE may prescribe; the drum is where
+// the user REPORTS what a rack actually held, including one converted from lb.
+export const WHEEL_DECIMALS = [0, 0.25, 0.5, 0.75];
+
+/** The equipment's reachable fractions — a different question from the wheel. */
 export function decimalsForStep(step) {
   if (!Number.isFinite(step) || step >= 1 && Number.isInteger(step)) return [0];
   const frac = Math.round((step % 1) * 100) / 100;
@@ -119,7 +121,7 @@ export function decimalsForStep(step) {
 // The split drum. `value` is a plain kg number; the wheels decompose and
 // recompose it (integer part + fractional part), all in exact hundredths.
 export function SplitWeightDrum({ value, onChange, step = 1.25, min = 0, max = 400, label = "kg" }) {
-  const decs = useMemo(() => decimalsForStep(step), [step]);
+  const decs = WHEEL_DECIMALS;
   const v = Math.min(max, Math.max(min, parseFloat(value) || 0));
   const whole = Math.floor(v);
   // Snap the fractional part to the nearest offered decimal.
@@ -139,15 +141,7 @@ export function SplitWeightDrum({ value, onChange, step = 1.25, min = 0, max = 4
       {wheelLabel(label)}
       <div style={{ display: "flex", alignItems: "flex-start", gap: 2, width: "100%" }}>
         <Wheel values={ints} value={whole} onChange={(w) => onChange(Math.round((w + frac) * 100) / 100)} width="58%" />
-        {decs.length > 1 ? (
-          <Wheel values={decs} value={frac} onChange={(d) => onChange(Math.round((whole + d) * 100) / 100)} fmt={fmtDec} width="42%" />
-        ) : (
-          /* Single-detent equipment (5 kg stacks, whole-kg dumbbells):
-             no decimal wheel to spin — print the fixed .0 on the band. */
-          <div aria-hidden style={{ width: "42%", height: ITEM_H * VISIBLE, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontFamily: T.measured, fontSize: 30, fontWeight: 400, color: T.ink3 }}>.0</span>
-          </div>
-        )}
+        <Wheel values={decs} value={frac} onChange={(d) => onChange(Math.round((whole + d) * 100) / 100)} fmt={fmtDec} width="42%" />
       </div>
       <div style={{ fontSize: 12, color: T.ink3, marginTop: 8 }}>
         steps of <span style={{ fontFamily: T.measured }}>{step}</span>

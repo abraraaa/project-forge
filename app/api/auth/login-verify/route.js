@@ -80,8 +80,7 @@ export async function POST(request) {
         response: { ...credential, clientExtensionResults: credential.clientExtensionResults || {} },
         expectedChallenge,
         expectedOrigin,
-        // Both rpIds while the window is open. Which one this credential is
-        // actually bound to is the library's answer, not our assumption.
+        // Both rpIds while the window is open; the library reports the match.
         expectedRPID: acceptedRpIds,
         requireUserVerification: true,
         credential: {
@@ -103,12 +102,7 @@ export async function POST(request) {
     // accepts; a hardware authenticator that ever regresses its counter would
     // have been rejected above.
     const newCounter = verification.authenticationInfo.newCounter;
-    // rpId BACKFILL. Credentials written before per-credential rpId storage
-    // carry no rpId field, and a successful assertion is the one moment we
-    // learn the answer authoritatively — the library reports the rpId it
-    // matched. Stamping it here is what lets login-options later offer the
-    // right single-rpId pool without inferring anything. It rides the counter
-    // write rather than adding a second one.
+    // Backfill the rpId the library matched, riding the counter write.
     const verifiedRpId = verification.authenticationInfo.rpID || null;
     const counterChanged = typeof newCounter === "number" && newCounter !== matchingCred.counter;
     const rpIdChanged = !!verifiedRpId && matchingCred.rpId !== verifiedRpId;
@@ -160,10 +154,7 @@ export async function POST(request) {
     // hw_photos: any active day rotates it, so a device in use never re-auths.
     const syncToken = await mintAuthToken({ profile, ttlMs: 30 * 86400000, scope: "sync" });
 
-    // Upgrade signal. A login that verified against the LEGACY rpId is a
-    // credential that stops working at the sunset, so the client is told once,
-    // at the only moment it is certain — the client decides how loudly to say
-    // it (quiet on the profile page, insistent in the closing stretch).
+    // A legacy-rpId login is a credential that stops working at the sunset.
     const onLegacyCredential = verifiedRpId === LEGACY_RP_ID;
 
     const res = NextResponse.json({

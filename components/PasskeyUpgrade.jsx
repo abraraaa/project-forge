@@ -1,22 +1,9 @@
 "use client";
 
-// components/PasskeyUpgrade.jsx
-// ─────────────────────────────────────────────────────────────────────────────
-// The re-enrolment prompt for passkeys bound to the retiring domain.
-//
-// Two surfaces, deliberately different in weight:
-//   · PasskeyUpgradeCard  — a standing notice on the profile page. Never
-//     snoozes, never interrupts; it is there when you go looking.
-//   · PasskeyUpgradeModal — only in the closing stretch, and it rests for a
-//     few days after each dismissal. A wall on every launch teaches people to
-//     tap past without reading, which is how a real warning gets missed.
-//
-// The upgrade costs TWO authenticator prompts and the copy says so up front:
-// one to prove control of the profile (the server refuses to staple a passkey
-// onto a protected profile without it — that is the credential-stuffing
-// defence), then one to create the new key. A user who is not warned reads the
-// second prompt as a bug.
-// ─────────────────────────────────────────────────────────────────────────────
+// Re-enrolment prompt for passkeys on the retiring rpId.
+// Card: standing notice, never snoozes. Modal: closing stretch only, snoozes.
+// The upgrade costs two authenticator prompts (prove control, then create), so
+// the copy says so.
 
 import { useState } from "react";
 import { T } from "@/lib/tokens";
@@ -37,9 +24,8 @@ const TWO_PROMPTS =
 
 /** Shared action. Returns true when a native credential was minted. */
 async function runUpgrade(profile) {
-  // Proving control first is required by the server whenever the profile still
-  // holds a usable passkey. getAuthTokenWithCeremony reuses a cached token when
-  // one is live, so a user who just signed in often sees only one prompt.
+  // getAuthTokenWithCeremony reuses a live cached token, so a user who just
+  // signed in often sees only one prompt.
   const token = await getAuthTokenWithCeremony(profile);
   const result = await registerPasskey(profile, token);
   return !!result?.ok;

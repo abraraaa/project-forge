@@ -26,15 +26,8 @@ export async function POST(request) {
     // Find credentials for this profile
     const credData = await readJsonByPrefix(credentialsPrefix(profile));
 
-    // Plan the ceremony BEFORE issuing a challenge. A ceremony is single-rpId,
-    // so this picks one pool — native whenever the profile has one — and
-    // offers only credentials from it. Offering the other pool's credentials
-    // would spend a Face ID prompt on something the authenticator cannot use.
-    //
-    // Null means nothing usable is left: no verifiable credential, or the only
-    // ones are bound to an rpId that no longer completes a ceremony. Both read
-    // as "no passkey" to the client, which re-offers setup — the same path a
-    // keyless legacy credential has always taken.
+    // Planned before the challenge. A ceremony is single-rpId, so this picks
+    // one pool and offers only its credentials. Null reads as "no passkey".
     const config = rpConfigFromRequest(request);
     const plan = planLoginCeremony(credData, config);
     if (!plan) {
@@ -68,8 +61,6 @@ export async function POST(request) {
 
     return NextResponse.json({
       challenge,
-      // Both from the plan, so the declared rpId and the offered credentials
-      // can never disagree.
       rpId: plan.rpId,
       timeout: 60000,
       allowCredentials: plan.credentials.map(cred => ({
