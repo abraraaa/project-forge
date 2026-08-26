@@ -881,6 +881,19 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
+      {current && isAdminSession(current) && (
+        <Fade d={306}>
+          <a href="/diag-hdr"
+            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Touch bloom</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>HDR candidates on the commit surface</div>
+            </div>
+            <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
+          </a>
+        </Fade>
+      )}
+
       {/* Bug report intake (fill-or-kill flow) — a quiet row in the admin-
           adjacent tail of the page. Open to everyone; the review wing lives
           at /diag-bugs. */}
