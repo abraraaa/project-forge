@@ -21,6 +21,7 @@ import { T, DISPLAY, heatForRpe, onHeatForRpe, heatMarkHeight, rpeForEffort, rpe
 import { Fade, Card, MonoNums } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import { useModalA11y, haptic } from "@/lib/a11y";
+import { pressLiftHandlers } from "@/lib/press-lift";
 import { todayLocalIso, daysBetween, mondayIndex } from "@/lib/dates";
 import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { WEEK, SWAP_DB } from "@/lib/programme";
@@ -874,7 +875,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 Add another set
               </button>
             ):(
-              <button className="forge-press" onClick={()=>{haptic.tap();onLog();}}
+              <button className="forge-press forge-lift" {...pressLiftHandlers} onClick={()=>{haptic.tap();onLog();}}
                 style={{flex:1,height:56,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",
                   display:"flex",alignItems:"center",justifyContent:"center",
                   fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
