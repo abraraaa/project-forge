@@ -15,10 +15,11 @@ const PROBES = [
   ["dynamic-range-limit: no-limit", "dynamic-range-limit", "no-limit"],
 ];
 
-// Blooms push the oxide hotter rather than toward white.
+// Two SDR candidates: up the heat ramp, and a neutral lift off it.
 const PANELS = [
   { id: "control", label: "Log set", note: "Control — exactly what ships. Scale only, no light." },
-  { id: "sdr",     label: "Log set", note: "SDR — the oxide pushed up its own ramp. No HDR at all, so this is the honest baseline: if the shape is wrong here, brightness will not save it." },
+  { id: "sdr",     label: "Log set", note: "SDR, up the heat ramp — blooms toward heat-1, which encodes \u2018easy\u2019 elsewhere. What was first built." },
+  { id: "lift",    label: "Log set", note: "SDR, neutral lift — --commit raised 12% toward white, off the ramp. What ships. Should read the same, and borrows no meaning." },
   { id: "hlg-low", label: "Log set", note: "HDR restrained — same hue, just past diffuse white." },
   { id: "hlg-high",label: "Log set", note: "HDR assertive — the LinkedIn end of the dial, here so the bad option is on screen beside the good one." },
   { id: "vellum",  label: "Log set", note: "Torch behind vellum — the light sits UNDER the surface rather than on it. Lit, not emitting." },
@@ -108,9 +109,10 @@ export default function DiagHdrPage() {
         )}
 
         <p style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.6, marginTop: 22 }}>
-          If the rec2100 rows read <code>false</code>, the HDR buttons are
-          quietly falling back to ordinary colour and only the SDR one means
-          anything — worth knowing before judging them.
+          Measured 2026-08-30 on iOS 27: both rec2100 rows read{" "}
+          <code>false</code> in browser AND standalone, so Safari exposes no HDR
+          colour to CSS. The HDR panels above fall back to ordinary colour. HDR
+          images and video go through a different pipeline entirely.
         </p>
       </div>
     </div>
@@ -159,6 +161,13 @@ const CSS_TEXT = `
 .bloom-sdr::before {
   background: radial-gradient(120px circle at var(--x) var(--y),
     #D3A492, transparent 72%);
+}
+
+/* What ships: same rule as .forge-lift in globals.css. 12% is the lift that
+   stays furthest from any heat step in both modes. */
+.bloom-lift::before {
+  background: radial-gradient(120px circle at var(--x) var(--y),
+    color-mix(in oklab, var(--commit) 88%, white), transparent 70%);
 }
 
 .bloom-hlg-low::before {

@@ -34,7 +34,7 @@ any commercial use — a separate, paid commercial license is available.
 Terms are negotiated case-by-case (per-seat, revenue share, or flat fee
 depending on scope).
 
-**Contact:** `abrar.a@outlook.com`
+**Contact:** `ab@heatwayve.app`
 
 ## What is "Forge"?
 
@@ -100,7 +100,7 @@ of "Forge" and are not licensed for reuse. (The published research they
 cite is, of course, yours to read at the source.)
 
 **Can I use any of this commercially?** Only with a commercial license —
-`abrar.a@outlook.com`.
+`ab@heatwayve.app`.
 
 **Why not MIT/Apache — or AGPL like before?** Permissive licenses let
 competitors lift the engine and content wholesale. AGPL closed the SaaS

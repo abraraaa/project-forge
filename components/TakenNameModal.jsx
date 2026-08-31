@@ -148,7 +148,11 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
             </button>
 
             <p style={{fontSize:12,color:T.ink3,textAlign:"center",lineHeight:1.5}}>
-              Lost access to your passkey? Contact support to recover your account.
+              Lost access to your passkey?{" "}
+              <a href="mailto:ab@heatwayve.app?subject=Passkey%20recovery"
+                style={{color:T.ink2,textDecoration:"underline",textUnderlineOffset:3}}>
+                ab@heatwayve.app
+              </a>
             </p>
             {/* House pattern (2026-07-21): bottom-row cancel, no corner ✕ */}
             <button onClick={onClose} style={{width:"100%",padding:"12px",background:"none",border:"none",cursor:"pointer",fontSize:13,color:T.ink3,fontFamily:T.text,marginTop:4}}>Cancel</button>

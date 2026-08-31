@@ -61,6 +61,6 @@ The repo name and the `forge:`/`forge/` storage prefixes keep their old spelling
 
 ## License
 
-Heatwayve is **source-available, not open-source**. The default terms are **PolyForm Strict 1.0.0** (read, study, run privately; no redistribution, no derivatives, no reuse of code or content) — see [LICENSE](./LICENSE) for the binding text and [LICENSING.md](./LICENSING.md) for what it means in practice. Commercial licences (SaaS, white-label, integrations, any commercial use) are available — contact `abrar.a@outlook.com`.
+Heatwayve is **source-available, not open-source**. The default terms are **PolyForm Strict 1.0.0** (read, study, run privately; no redistribution, no derivatives, no reuse of code or content) — see [LICENSE](./LICENSE) for the binding text and [LICENSING.md](./LICENSING.md) for what it means in practice. Commercial licences (SaaS, white-label, integrations, any commercial use) are available — contact `ab@heatwayve.app`.
 
 Conduct: [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md). What belongs in this repo and what doesn't: [docs/internal-notes.md](./docs/internal-notes.md).
