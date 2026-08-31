@@ -285,7 +285,15 @@ html[data-mode="dark"] .forge-page {
    than crushing content. Everything else defaults to scroll shape — plain
    flex items sizing to content. */
 .forge-fill {
-  flex: 1 0 auto;
+  /* 1 1 auto, not 1 0 auto. With shrink 0 the screen could only ever be AT
+     LEAST its content height, so anything that grew it — a long ledger, a
+     wrapped title — pushed the pinned action zone off the bottom instead of
+     compressing the middle. min-height: 0 is what actually lets a flex item
+     go below its content size; without it the shrink is nominal.
+     The middle must own a scroller for this to be safe (the session ledger
+     does), or surplus clips instead of scrolling. */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* ─── Modal scrims (Safari 26 chrome-safe) ─────────────────────────────────

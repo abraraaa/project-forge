@@ -755,7 +755,11 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           mono, words in the text face, heat mark riding each row. Set one
           simply shows empty ground. */}
       {loggedSets.length > 0 && (
-        <div style={{margin:"0 20px"}}>
+        /* The shrink point. Does not grow — the spacers still do the pushing
+           when content is short — but it can go below its content height and
+           scroll, so a long ledger compresses here rather than ejecting the
+           action zone. */
+        <div style={{margin:"0 20px",minHeight:0,overflowY:"auto"}}>
           {loggedSets.map((s, i) => {
             const rpe = rpeValue(s.rpe);
             return { s, rpe, n: i + 1 };
