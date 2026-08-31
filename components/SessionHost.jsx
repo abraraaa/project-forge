@@ -42,6 +42,7 @@ import { deloadDayLabel } from "@/lib/progression";
 import { deriveTravelSession } from "@/lib/travel";
 import { applySessionToEngine } from "@/lib/session-engine";
 import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, coldStartFromAnchor } from "@/lib/lift-translations";
+import { restRemaining, restDeadline } from "@/lib/rest-clock";
 import { pickFlashLine } from "@/lib/set-flash";
 import { todayLocalIso, daysBetween } from "@/lib/dates";
 import { T } from "@/lib/tokens";
@@ -123,25 +124,39 @@ export default function SessionHost() {
     });
   }, [profile]);
 
-  // Rest timer tick — moved from ForgeApp with the timer state. The
-  // reached-zero transition happens inside the timeout callback (an event,
-  // not a render-synchronous effect write).
+  // Rest timer. A DEADLINE against the wall clock, not a decrementing tally:
+  // iOS suspends timers when the phone locks, so the old counter simply stopped
+  // and a four-minute break read as 2:10 on return.
+  //
+  // The anchor is set when rest STARTS rather than by each caller, because
+  // SessionScreen also starts and skips rest through the same setters.
+  const restEndsAtRef = useRef(null);
+  useEffect(() => {
+    restEndsAtRef.current = restActive ? restDeadline(restRemain) : null;
+    // restRemain deliberately absent: re-anchoring on every tick would make
+    // the deadline chase itself and never arrive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restActive]);
+
   useEffect(() => {
     if (!restActive) return;
-    const t = setTimeout(() => {
-      setRestRemain(p => {
-        if (p <= 1) {
-          setRestActive(false);
-          // Haptic: Android fires; iOS Safari silently no-ops. Defensive
-          // wrap — timer started from a button tap, so gesture rules allow.
-          haptic.alert();
-          return 0;
-        }
-        return p - 1;
-      });
-    }, 1000);
-    return () => clearTimeout(t);
-  }, [restActive, restRemain]);
+    const sync = () => {
+      const left = restRemaining(restEndsAtRef.current);
+      setRestRemain(left);
+      if (left === 0) {
+        setRestActive(false);
+        // Android fires; iOS Safari silently no-ops. Started from a tap, so
+        // gesture rules allow it.
+        haptic.alert();
+      }
+    };
+    const t = setInterval(sync, 1000);
+    // Resume is the whole point: catch up the instant the screen comes back
+    // rather than waiting up to a second for the next tick.
+    const onVisible = () => { if (document.visibilityState === "visible") sync(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVisible); };
+  }, [restActive]);
 
   const updateBodyweight = useCallback((kg) => {
     if (!profile || !kg) return;
