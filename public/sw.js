@@ -32,9 +32,8 @@ try {
 }
 
 // Precache list — must stay tiny. Anything else is added at runtime.
-// Bumped to the Liquid Glass icon set; the legacy /icon-192.png and
-// /icon-512.png paths still exist (as flat fallbacks) for any installed
-// PWA that references them before the new manifest takes effect.
+// The pre-rebrand icon paths were retired 2026-08-31; the migration window
+// has closed and nothing referenced them.
 const PRECACHE_URLS = [
   "/manifest.json",
   "/heatwayve/heatwayve-glass-192.png",
