@@ -7,7 +7,7 @@ import {
   rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
   dedupeRotationConfig,
   ROTATION_AUTO, DEFAULT_FOCUS, // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
-  sessionMetaForDate, findUntickedRecent, } from "@/lib/programme";
+  sessionMetaForDate, findUntickedRecent, isValidMainLiftChoice, } from "@/lib/programme";
 import {
   SessionIntent,
   LS, P, PB, W, F, H, BW, PN, Days, Bk, bumpStreak, recordCompletion,
@@ -140,6 +140,17 @@ export default function ForgeApp(){
   const [breatherOpen,setBreatherOpen]=useState(false);
   const [absenceNudgeDismissed,setAbsenceNudgeDismissed]=useState(false);
   const [userFocus,setUserFocus]=useState(DEFAULT_FOCUS);
+  const [mainLifts,setMainLifts]=useState({});
+  // Durable per-profile choice. Validation lives in lib/programme.js so an
+  // unlisted movement can never reach the anchor slot.
+  const handleChangeMainLift = (canonical, choice) => {
+    if (!activeProfile || !isValidMainLiftChoice(canonical, choice)) return;
+    const next = { ...mainLifts };
+    if (!choice || choice === canonical) delete next[canonical];
+    else next[canonical] = choice;
+    setMainLifts(next);
+    P.saveMainLifts(activeProfile, next);
+  };
   const [focusPickerOpen,setFocusPickerOpen]=useState(false);
   // Session overview — lets users jump between blocks when gym constraints
   // dictate a different order than the prescribed flow. Auto-advance still
@@ -428,6 +439,7 @@ export default function ForgeApp(){
       setDayDone(Days.manualTickDates(activeProfile));
     }
     setUserFocus(F.get(activeProfile));
+    setMainLifts(P.getMainLifts(activeProfile));
     setBreaks(Bk.getAll(activeProfile));
     setHistory(local.history || []);
 
@@ -474,6 +486,7 @@ export default function ForgeApp(){
       if (Array.isArray(remoteHistory)) setHistory(remoteHistory);
       setUserWeek(W.get() || WEEK);
       setUserFocus(F.get(activeProfile));
+      setMainLifts(P.getMainLifts(activeProfile));
       setBreaks(Bk.getAll(activeProfile));
       const proj = Days.projectCurrentWeek(activeProfile);
       setWeekDone(proj.complete);
@@ -743,7 +756,7 @@ export default function ForgeApp(){
   if(!activeProfile){
   return (
     <>
-      <ProfileScreen existing={P.list()} current={activeProfile} onActivate={activateProfile} onCancel={null} bodyweight={bodyweight} bwEditOpen={bwEditOpen} setBwEditOpen={setBwEditOpen} updateBodyweight={updateBodyweight} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)}/>
+      <ProfileScreen existing={P.list()} current={activeProfile} onActivate={activateProfile} onCancel={null} bodyweight={bodyweight} bwEditOpen={bwEditOpen} setBwEditOpen={setBwEditOpen} updateBodyweight={updateBodyweight} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onChangeMainLift={handleChangeMainLift}/>
       {/* Modals triggerable from ProfileScreen must mount here too — the
           early return above bypasses the main JSX where these live, so
           without this Fragment, tapping "Edit focus" in Profile sets state
@@ -1170,7 +1183,7 @@ export default function ForgeApp(){
 
   return (
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={()=>setAbsenceNudgeDismissed(true)}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={userWeek} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={()=>setAbsenceNudgeDismissed(true)}/>}
       {breatherOpen           && <BreatherModal onConfirm={handleStartBreather} onCancel={()=>setBreatherOpen(false)}/>}
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} history={history} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}

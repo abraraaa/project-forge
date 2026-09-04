@@ -17,7 +17,7 @@ import { LS, P, BW, blobDelete, checkProfileExists } from "@/lib/storage";
 import {
   hasPasskey, registerPasskey, authenticatePasskey, isPlatformAuthenticatorAvailable,
 } from "@/lib/webauthn";
-import { FOCUS_SUMMARIES } from "@/lib/programme";
+import { FOCUS_SUMMARIES, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS, mainLiftOptions } from "@/lib/programme";
 import { reasonLabel } from "@/lib/breaks";
 import BugReportSheet from "@/components/BugReportSheet";
 import InstallWalkthrough, { canWalkthroughInstall } from "@/components/InstallWalkthrough";
@@ -81,7 +81,7 @@ function ThemeSwitch({ value, onChange }) {
   );
 }
 
-export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,onOpenBreather=null,resting=false,restingReason=null,onEndBreather=null}){
+export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,mainLifts={},onChangeMainLift,onOpenBreather=null,resting=false,restingReason=null,onEndBreather=null}){
   const [name,setName]=useState("");
   // Per-profile preference. State carries the profile it was read for and
   // adjusts DURING render when the shown profile changes (the derived-state
@@ -736,6 +736,50 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               </div>
             </div>
             <ThemeSwitch value={themePref} onChange={handleThemeChange}/>
+          </div>
+        </Fade>
+      )}
+
+      {/* Main lifts. The five anchor slots are the one place the template was
+          not negotiable, and the place a trained lifter has the strongest
+          opinion. Options are curated equivalents only — an arbitrary movement
+          here silently un-programmes the user. */}
+      {current && onChangeMainLift && (
+        <Fade d={292}>
+          <div style={{marginTop:28}}>
+            <div style={{fontSize:13,color:T.ink3,marginBottom:2}}>Main lifts</div>
+            <p style={{fontSize:12,color:T.ink3,lineHeight:1.5,marginBottom:10}}>
+              Swap an anchor for an equivalent that loads the same way. Your
+              weights carry over and settle after a set or two.
+            </p>
+            {Object.keys(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS).map((canonical) => {
+              const chosen = mainLifts[canonical] || canonical;
+              return (
+                <div key={canonical} style={{padding:"12px 2px",borderBottom:`1px solid ${T.rule}`}}>
+                  <div style={{fontSize:12,color:T.ink3,marginBottom:7}}>{canonical}</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {mainLiftOptions(canonical).map((opt) => {
+                      const sel = opt === chosen;
+                      return (
+                        <button key={opt} onClick={()=>onChangeMainLift(canonical, opt)}
+                          aria-pressed={sel}
+                          style={{
+                            padding:"7px 11px",borderRadius:T.rSm,cursor:"pointer",
+                            fontFamily:T.text,fontSize:13,
+                            border:"none",
+                            background:sel?T.surface:"transparent",
+                            boxShadow:sel?T.elev:"none",
+                            color:sel?T.ink:T.ink3,
+                            transition:`background 180ms ${T.ease}, color 180ms ${T.ease}`,
+                          }}>
+                          {opt === canonical ? "Programme" : opt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </Fade>
       )}
