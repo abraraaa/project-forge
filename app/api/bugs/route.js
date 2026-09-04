@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverError } from "@/lib/api-errors";
 import { rateLimit } from "@/lib/rate-limit";
 import { readTokenData, isAdminProfile } from "@/lib/auth-server";
 import { hasDb, dbInsertBug, dbListBugs, dbUpdateBugStatus, BUG_STATUSES } from "@/lib/db";
@@ -77,7 +78,7 @@ export async function POST(request) {
     await dbInsertBug({ profile, message, context });
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e, { label: "bugs" });
   }
 }
 
@@ -90,7 +91,7 @@ export async function GET(request) {
     const rows = await dbListBugs();
     return NextResponse.json({ reports: rows });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e, { label: "bugs" });
   }
 }
 
@@ -109,6 +110,6 @@ export async function PATCH(request) {
     await dbUpdateBugStatus(id, status);
     return NextResponse.json({ ok: true, id, status });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e, { label: "bugs" });
   }
 }

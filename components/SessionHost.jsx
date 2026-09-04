@@ -35,7 +35,7 @@ import {
 } from "@/lib/storage";
 import {
   SESSIONS, EXERCISE_POOLS,
-  applyRotationToSession, applySwapsToSession, applyFocusToSession,
+  applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
   DEFAULT_FOCUS, WEEK,
 } from "@/lib/programme";
 import { deloadDayLabel } from "@/lib/progression";
@@ -67,6 +67,7 @@ export default function SessionHost() {
   const [bodyweight, setBodyweight]  = useState(() => (profile ? BW.getKg(profile) : null));
   const [programmeBlock]             = useState(() => PB.get());
   const [userFocus]                  = useState(() => (profile ? F.get(profile) || DEFAULT_FOCUS : DEFAULT_FOCUS));
+  const [mainLifts]                  = useState(() => (profile ? P.getMainLifts(profile) : {}));
   const [userWeek]                   = useState(() => W.get());
   const [activeDeload, setActiveDeload] = useState(() => {
     if (!profile) return null;
@@ -238,7 +239,9 @@ export default function SessionHost() {
   // diagnostic, and the compiler's own caching is the project default).
   const rawSession     = SESSIONS[activeSessionIdx];
   const rotatedSession = applyRotationToSession(rawSession, programmeBlock?.config);
-  const swappedSession = applySwapsToSession(rotatedSession, sessionSwaps);
+  // Durable main-lift choice first, so a one-off session swap still wins.
+  const mainSession    = applyMainLiftsToSession(rotatedSession, mainLifts);
+  const swappedSession = applySwapsToSession(mainSession, sessionSwaps);
   const focusedSession = applyFocusToSession(swappedSession, userFocus, programmeBlock?.config);
   // Travel converts what focus finished choosing, and readiness still trims
   // on top — a cooked day drops its finisher whether or not you're in a hotel.

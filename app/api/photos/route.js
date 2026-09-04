@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
+import { serverError as apiError } from "@/lib/api-errors";
 
-function serverError(e, { status = 500, label = "photos" } = {}) {
-  // Generic to the client, full detail to the server log (audit 2026-07-26).
-  console.error(`[forge:${label}]`, e?.stack || e?.message || e);
-  return NextResponse.json({ error: "Something went wrong. Try again." }, { status });
-}
+const serverError = (e, opts = {}) => apiError(e, { label: "photos", ...opts });
 import { rateLimit } from "@/lib/rate-limit";
 import { put, get, list, del } from "@vercel/blob";
 import { isTokenValid, readTokenData, mintAuthToken } from "@/lib/auth-server";

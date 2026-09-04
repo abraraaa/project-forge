@@ -15,7 +15,7 @@ goes for review findings, which double as a map of where to push.
 |---|---|
 | Audit findings, review notes, threat/trust analysis | Google Drive — **Heatwayve — Internal Notes** |
 | Design rationale, "why we built it this way" essays | Same |
-| Architecture / sync / platform-research docs | Same (moved 2026-08-04 — the repo history holds the pre-move versions) |
+| Architecture / sync / platform-research docs | Same (moved 2026-08-04; the repo copy of frontend-audit.md was finally deleted 2026-09-04 — git history holds both) |
 | The live to-do / parking list, roadmap | Same |
 | Code-level intent | Comments at the site, stating the *invariant* being protected — not the failure mode that motivated it |
 

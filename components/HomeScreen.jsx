@@ -20,7 +20,7 @@ import { mondayIndex, addDaysIso } from "@/lib/dates";
 import { Fade, Card, Tag, MonoNums } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import { useModalA11y } from "@/lib/a11y";
-import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession } from "@/lib/programme";
+import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
 import { deloadCardCopy } from "@/lib/progression";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
 
@@ -50,7 +50,7 @@ const linkBtn = {
 };
 
 export default
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,mainLifts={},onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -117,7 +117,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // Chain rotation → focus so the home preview shows the user's actual
   // accessories (not the template defaults).
   const rotatedViewSession = rawViewSession ? applyRotationToSession(rawViewSession, programmeBlock?.config) : null;
-  const viewSession    = rotatedViewSession ? applyFocusToSession(rotatedViewSession, userFocus, programmeBlock?.config) : null;
+  // Same order as SessionHost: durable main-lift choice, then focus.
+  const viewSession    = rotatedViewSession
+    ? applyFocusToSession(applyMainLiftsToSession(rotatedViewSession, mainLifts), userFocus, programmeBlock?.config)
+    : null;
 
   // Guidance line under the display name. Strength days lead with the
   // session's own noun; non-strength days keep their modality detail.

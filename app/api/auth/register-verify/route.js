@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverError } from "@/lib/api-errors";
 import { rateLimit } from "@/lib/rate-limit";
 import crypto from "crypto";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
@@ -149,6 +150,6 @@ export async function POST(request) {
     });
     return res;
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e, { label: "auth-register-verify" });
   }
 }
