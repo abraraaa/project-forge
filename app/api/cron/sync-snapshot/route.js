@@ -22,6 +22,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextResponse } from "next/server";
+import { serverError } from "@/lib/api-errors";
 import { put, list } from "@vercel/blob";
 import { readJsonDirect } from "@/lib/blob-utils";
 import { hasDb, sql, ensureSchema, dbReadProfile } from "@/lib/db";
@@ -116,6 +117,6 @@ export async function GET(request) {
     );
   } catch (e) {
     console.error("[forge:cron-snapshot] FAILED:", e?.message || e);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e, { label: "cron-snapshot" });
   }
 }

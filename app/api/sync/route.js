@@ -5,6 +5,7 @@ import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasRealPasskey, readTokenData, isTokenValid, mintAuthToken } from "@/lib/auth-server";
 import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbDeleteToken, dbReadProfileSince, dbReadMetaFields, dbCursorNow } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { serverError as apiError } from "@/lib/api-errors";
 
 // Generic client error + full server-side log. Raw exception text (Neon/blob
 // driver detail, query fragments, schema names) must not reach the client —
@@ -28,10 +29,7 @@ import { NextResponse } from "next/server";
 // leaves ~70ms per round-trip inside a 10s budget. Raise only with numbers.
 const MAX_INLINE_BACKFILL = 100;
 
-function serverError(e, { status = 500, label = "sync" } = {}) {
-  console.error(`[forge:${label}]`, e?.stack || e?.message || e);
-  return NextResponse.json({ error: "Something went wrong. Try again." }, { status });
-}
+const serverError = (e, opts = {}) => apiError(e, { label: "sync", ...opts });
 
 // Blob layout (case-insensitive — path uses lowercase, display name lives in meta):
 //   forge/profiles/{lowerName}/meta.json    — weights, reps, streak, programmeBlock, displayName

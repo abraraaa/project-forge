@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverError } from "@/lib/api-errors";
 import { rateLimit } from "@/lib/rate-limit";
 import { list } from "@vercel/blob";
 import crypto from "crypto";
@@ -77,6 +78,6 @@ export async function POST(request) {
       attestation: "none",
     });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e, { label: "auth-register-options" });
   }
 }

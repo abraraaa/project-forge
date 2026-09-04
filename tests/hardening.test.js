@@ -178,7 +178,10 @@ describe("raw exception text never reaches the client", () => {
   for (const f of ["app/api/sync/route.js", "app/api/photos/route.js"]) {
     it(`${f} funnels errors through serverError, not raw e.message`, () => {
       const s = read(f);
-      expect(s).toContain("function serverError(");
+      // Defined locally or imported from lib/api-errors — the invariant is
+      // that the route USES it. tests/api-errors.test.js sweeps every route.
+      expect(s).toMatch(/function serverError\(|from "@\/lib\/api-errors"/);
+      expect(s).toContain("serverError(");
       expect(s, "raw message must not be returned to the client")
         .not.toMatch(/error:\s*`?[^`\n]*\$\{?e\.message/);
       expect(s).not.toContain("error: e.message");

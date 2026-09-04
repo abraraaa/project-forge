@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverError } from "@/lib/api-errors";
 import { rateLimit } from "@/lib/rate-limit";
 import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasUsablePasskey, credentialRpId } from "@/lib/auth-server";
@@ -38,6 +39,6 @@ export async function GET(request) {
         : 0,
     });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return serverError(e, { label: "auth-check" });
   }
 }
