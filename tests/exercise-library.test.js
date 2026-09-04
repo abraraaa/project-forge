@@ -107,12 +107,9 @@ const PATTERN_MATCHED_ALLOWLIST = new Set([
   "Rope Tricep Pushdown",
   "Single-Arm Pushdown",
   "Smith Calf Raise",
-  // Front Squat resolves via the pattern matcher (squat → standard
-  // primaries). Incline BB Press and Weighted Dips USED to sit here on the
-  // assumption they pattern-matched too — but they actually fell back to
-  // their raw label and dropped their volume; they now have exact anatomy
+  // Front Squat, Incline BB Press and Weighted Dips used to sit here on the
+  // assumption they pattern-matched; all three now have exact anatomy
   // entries, so they're gone from this list.
-  "Front Squat",
 ]);
 
 describe("exercise library — programme coverage", () => {

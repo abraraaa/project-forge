@@ -70,18 +70,16 @@ describe("the rotation solver solves the chosen week", () => {
 });
 
 describe("anatomy coverage for choosable anchors", () => {
-  it("reports which options lack contribution data", () => {
+  it("covers every choosable anchor", () => {
     // A movement with no EXERCISE_ANATOMY entry falls back to the block's
-    // coarse muscle label, so its volume is credited bluntly. Front Squat is
-    // the known gap (2026-09-04) — this test names the set rather than
-    // asserting it is empty, so the gap is visible and closing it is a
-    // deliberate act with the boss's numbers, not a silent fill-in.
+    // coarse muscle label, so its volume is credited bluntly. Every choosable
+    // anchor needs an entry before it reaches the picker.
     const missing = [];
     for (const [main, alts] of Object.entries(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS)) {
       for (const name of [main, ...alts]) {
         if (!EXERCISE_ANATOMY[name]) missing.push(name);
       }
     }
-    expect(missing).toEqual(["Front Squat"]);
+    expect(missing).toEqual([]);
   });
 });
