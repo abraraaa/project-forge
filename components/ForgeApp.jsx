@@ -795,6 +795,7 @@ export default function ForgeApp(){
     const { config: newConfig, report } = solveRotation({
       history: updatedHistory,
       focus: userFocus,
+      mainLifts,
     });
     return {
       oldConfig,
