@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import { computeWeeklyVolume, auditVolume } from "../lib/volume-audit.js";
 import { MAIN_LIFT_FUNCTIONAL_EQUIVALENTS } from "../lib/programme.js";
 import { EXERCISE_ANATOMY } from "../lib/exercise-anatomy.js";
+import { solveRotation, FOCUS_VOLUME_PROFILES } from "../lib/rotation-solver.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -81,5 +82,30 @@ describe("anatomy coverage for choosable anchors", () => {
       }
     }
     expect(missing).toEqual([]);
+  });
+});
+
+// Every anchor choice must leave a week the solver can still balance. Swapping
+// away from Hex Bar DL or Power Clean drops their indirect calf work, and with
+// one calf slot in the programme there is nothing to recover it with — so the
+// floor has to hold in the template, not in the solve.
+describe("no anchor choice starves a muscle", () => {
+  it("keeps every muscle at or above MEV for each single swap", () => {
+    const seeded = (n) => () => { n = (n * 1103515245 + 12345) % 2147483648; return n / 2147483648; };
+    const short = [];
+    for (const focus of ["Forged", "Strong", "Sculpt"]) {
+      const exempt = FOCUS_VOLUME_PROFILES[focus].floorExempt;
+      for (const [canonical, alts] of Object.entries(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS)) {
+        for (const alt of alts) {
+          const { report } = solveRotation({
+            focus, mainLifts: { [canonical]: alt }, rng: seeded(11),
+          });
+          for (const m of report.outOfBand) {
+            if (!exempt.has(m)) short.push(`${focus}/${alt}: ${m} ${report.volume[m].toFixed(1)}`);
+          }
+        }
+      }
+    }
+    expect(short).toEqual([]);
   });
 });
