@@ -795,6 +795,7 @@ export default function ForgeApp(){
     const { config: newConfig, report } = solveRotation({
       history: updatedHistory,
       focus: userFocus,
+      mainLifts,
     });
     return {
       oldConfig,
@@ -829,6 +830,10 @@ export default function ForgeApp(){
         blockNumber: next.number,
         changes: preview.changes,
         stimulusDelta: preview.stimulusDelta,
+        // The modal only claims the block is tuned when the solver says every
+        // muscle landed in band. Dropping the report here made that claim
+        // unreachable on this path while saveFocusCore carried it.
+        report: preview.report,
       });
     }
     return next;
