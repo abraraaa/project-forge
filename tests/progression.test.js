@@ -36,6 +36,7 @@ import {
   __test_p3__,
 } from "../lib/progression.js";
 import { startingWeightForLift, roundToHalfPlate } from "../lib/storage.js";
+import { mondayOfWeekIso, addDaysIso } from "../lib/dates.js";
 import {
   coldStartFromAnchor, sanitiseWorkingWeights, CATEGORY_COLD_START_MAX_KG,
 } from "../lib/lift-translations.js";
@@ -548,13 +549,24 @@ describe("Phase 3 — shouldOfferDeload cooldowns", () => {
     expect(shouldOfferDeload(ts, [])).toBe(null);
   });
 
-  it("returns signal when cooldowns expired AND signals present", () => {
+  it("returns signal when cooldowns expired AND signals present AND training is regular", () => {
     const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const ts = {
       lifts: { "Squat": { stallSignal: "stall" }, "Bench": { stallSignal: "stall" } },
       mesocycle: { deloadSignals: { lastDeloadCompletedAt: old } },
     };
-    expect(shouldOfferDeload(ts, [])).not.toBe(null);
+    // Three strength days a week for the whole trailing window.
+    const monday = mondayOfWeekIso(new Date());
+    const history = [];
+    for (let w = 11; w >= 0; w--) {
+      for (const off of [0, 2, 4]) {
+        const date = addDaysIso(monday, -w * 7 + off);
+        history.push({ id: `${date}T10:00:00`, date, session: "strength-a", readiness: "normal", blocks: [] });
+      }
+    }
+    expect(shouldOfferDeload(ts, history)).not.toBe(null);
+    // The same signals with no training behind them stay quiet.
+    expect(shouldOfferDeload(ts, [])).toBe(null);
   });
 });
 

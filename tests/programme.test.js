@@ -13,6 +13,7 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { EXERCISE_ANATOMY } from "../lib/exercise-anatomy.js";
 import {
   SESSIONS,
   EXERCISE_POOLS,
@@ -182,6 +183,26 @@ describe("EXERCISE_POOLS loadProfile invariants", () => {
       expect(slot.loadProfile, `${key} missing loadProfile`).toBeTruthy();
       expect(VALID_PROFILES.has(slot.loadProfile), `${key}.loadProfile invalid: ${slot.loadProfile}`).toBe(true);
     }
+  });
+
+  it("no accessory leg slot defaults to a barbell movement", () => {
+    // The de-load contract: an accessory should load more gently than the main
+    // lift it follows. Day A used to break it — Back Squat, then a barbell
+    // lunge, then a barbell hip thrust, three spine-loaded lower movements in
+    // one session where B and C have one each. You cannot empty the tank on
+    // the main lift while saving something for a loaded accessory after it.
+    // Scoped to slot DEFAULTS: the pools may still offer a bar (front rack
+    // lunge is anterior load, not spinal compression), rotation just must not
+    // hand you one as the baseline.
+    const LOWER = new Set(["Quads", "Glutes", "Hamstrings", "Calves", "Erectors"]);
+    const offenders = [];
+    for (const [key, slot] of Object.entries(EXERCISE_POOLS)) {
+      const head = slot.pool[0];
+      const anatomy = EXERCISE_ANATOMY[head?.name];
+      if (!anatomy || !LOWER.has(anatomy.primary)) continue;
+      if (head.loadType === "barbell") offenders.push(`${key}: ${head.name}`);
+    }
+    expect(offenders).toEqual([]);
   });
 
   it("every pool entry's loadProfile matches its slot's loadProfile", () => {
