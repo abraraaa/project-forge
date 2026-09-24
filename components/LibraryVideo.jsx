@@ -34,7 +34,7 @@ export default function LibraryVideo({ vid, name }) {
   return (
     <iframe
       title={`${name} — demonstration`}
-      src={`https://www.youtube.com/embed/${vid}?autoplay=0&modestbranding=1&rel=0`}
+      src={`https://www.youtube-nocookie.com/embed/${vid}?autoplay=0&modestbranding=1&rel=0`}
       style={{width:"100%",aspectRatio:"16/9",border:"none",borderRadius:T.r,background:T.ground,display:"block"}}
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
       allowFullScreen

@@ -39,6 +39,9 @@ export default function Page() {
               <Link href="/volume-landmarks">Volume landmarks</Link> — what MEV, MAV
               and MRV mean, and the per-muscle weekly set targets behind them.
             </li>
+            <li>
+              <Link href="/privacy">Privacy</Link> — what we hold, and how to delete it.
+            </li>
           </ul>
         </div>
       </noscript>

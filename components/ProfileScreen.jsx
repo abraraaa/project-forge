@@ -996,6 +996,19 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
+      {current && (
+        <Fade d={309}>
+          <Link href="/privacy"
+            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Privacy</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>What we hold, and how to make it go away.</div>
+            </div>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
+          </Link>
+        </Fade>
+      )}
+
       {bugSheetOpen && <BugReportSheet profileName={current} onClose={() => setBugSheetOpen(false)} />}
       {installOpen && <InstallWalkthrough cta="Close" onDismiss={() => setInstallOpen(false)} />}
 

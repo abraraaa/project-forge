@@ -27,6 +27,7 @@ export default function sitemap() {
     // the thing the library pages cite, and the query it answers ("how many
     // sets per week") is asked far more often than any one movement.
     { url: `${BASE}/volume-landmarks`, changeFrequency: "yearly", priority: 0.8 },
+    { url: `${BASE}/privacy`, changeFrequency: "yearly", priority: 0.2 },
     // Per-muscle contribution rankings. Same lastmod as the library: they are
     // generated from the same anatomy data, so they revise together.
     { url: `${BASE}/anatomy`, changeFrequency: "monthly", priority: 0.7, lastModified: LIBRARY_REVISED },
