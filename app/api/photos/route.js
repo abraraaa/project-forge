@@ -20,7 +20,8 @@ export const preferredRegion = "lhr1";
 // (#20/#21) named. EXIF never reaches this route — the client re-encode
 // strips it; we still validate magic bytes + size server-side.
 //
-//   POST /api/photos?profile=N&date=YYYY-MM-DD[&bw=76.2]   body: image/jpeg
+//   POST /api/photos?profile=N&date=YYYY-MM-DD   body: image/jpeg
+//        [X-HW-Bodyweight: 76.2] — a header, so it stays out of access logs
 //   GET  /api/photos?profile=N                -> { photos: [{date, bodyweightAt, takenAt}] }
 //   GET  /api/photos?profile=N&date=...       -> image/jpeg bytes
 
@@ -123,7 +124,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "Not a JPEG" }, { status: 415 });
     }
 
-    const bwRaw = g.url.searchParams.get("bw");
+    const bwRaw = request.headers.get("x-hw-bodyweight");
     const bodyweightAt = bwRaw !== null && Number.isFinite(Number(bwRaw)) ? Number(bwRaw) : null;
 
     const path = photoPath(g.profile, g.date);

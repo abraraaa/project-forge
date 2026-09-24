@@ -14,7 +14,7 @@ describe("privacy notice stays true", () => {
   });
 
   it("server functions run in London, as stated", () => {
-    expect(page).toMatch(/server functions in London/);
+    expect(page).toMatch(/server functions that handle your data run in London/);
     expect(read("app/api/sync/route.js")).toContain('preferredRegion = "lhr1"');
   });
 
@@ -28,10 +28,23 @@ describe("privacy notice stays true", () => {
   });
 
   it("cookie lifetimes match the notice (sync 30 days, photos 7)", () => {
-    expect(page).toMatch(/up to 30 days/);
-    expect(page).toMatch(/up to 7/);
+    expect(page).toMatch(/30 days \(sync\)/);
+    expect(page).toMatch(/7 days \(photos\)/);
     expect(read("app/api/photos/route.js")).toContain("maxAge: 7 * 86400");
     expect(read("app/api/sync/route.js")).toContain("maxAge: 30 * 86400");
+  });
+
+  it("analytics carry no health data, as stated", () => {
+    for (const f of ["components/SessionHost.jsx", "components/ForgeApp.jsx"]) {
+      const calls = read(f).match(/track\("session_complete"[^)]*\)/g) || [];
+      expect(calls.length).toBeGreaterThan(0);
+      for (const c of calls) expect(c).not.toMatch(/readiness|bodyweight/i);
+    }
+  });
+
+  it("bodyweight stays out of the photo upload URL", () => {
+    expect(read("lib/photos.js")).not.toMatch(/params\.set\("bw"/);
+    expect(read("app/api/photos/route.js")).toContain('request.headers.get("x-hw-bodyweight")');
   });
 
   it("is linked from the sitemap", () => {

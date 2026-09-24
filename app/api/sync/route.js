@@ -820,7 +820,11 @@ export async function DELETE(request) {
         `forge/snapshots/daily/${enc}.json`,
         `forge/snapshots/weekly/${enc}.json`,
       ]);
-    } catch { /* nonexistent snapshots — nothing to remove */ }
+    } catch (e) {
+      // Not fatal (the SDK doesn't document whether a missing path throws),
+      // but never silent: a failure here orphans a backup nothing rewrites.
+      console.error(`[forge:sync-delete] snapshot delete failed: ${e?.message || e}`);
+    }
 
     const { blobs } = await list({ prefix: legacyPrefix(profile) });
     if (!blobs.length) {

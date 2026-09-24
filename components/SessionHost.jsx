@@ -624,10 +624,10 @@ export default function SessionHost() {
       }
 
       try {
+        // No readiness here: how a session felt is health data, and it
+        // stays with the user (see /privacy).
         track("session_complete", {
           session: sessionRecord?.session || "strength",
-          readiness: readiness || "normal",
-          readinessReason: readinessReason || "unspecified",
           block: String(programmeBlock?.number ?? 1),
         });
       } catch {}
