@@ -185,22 +185,23 @@ describe("EXERCISE_POOLS loadProfile invariants", () => {
     }
   });
 
-  it("no accessory leg slot defaults to a barbell movement", () => {
+  it("no accessory leg slot defaults to a spine-loaded barbell movement", () => {
     // The de-load contract: an accessory should load more gently than the main
     // lift it follows. Day A used to break it — Back Squat, then a barbell
-    // lunge, then a barbell hip thrust, three spine-loaded lower movements in
-    // one session where B and C have one each. You cannot empty the tank on
-    // the main lift while saving something for a loaded accessory after it.
-    // Scoped to slot DEFAULTS: the pools may still offer a bar (front rack
-    // lunge is anterior load, not spinal compression), rotation just must not
-    // hand you one as the baseline.
+    // lunge on the back, two spine-loaded lower movements stacked where B and
+    // C have one. You cannot empty the tank on the main lift while saving
+    // something for a loaded accessory after it. The hip thrust is exempt by
+    // shape: bar on the hips, supine, nothing on the spine. Scoped to slot
+    // DEFAULTS: the pools may still offer a bar, rotation just must not hand
+    // you one as the baseline.
     const LOWER = new Set(["Quads", "Glutes", "Hamstrings", "Calves", "Erectors"]);
+    const SUPINE = /hip thrust|glute bridge/i;
     const offenders = [];
     for (const [key, slot] of Object.entries(EXERCISE_POOLS)) {
       const head = slot.pool[0];
       const anatomy = EXERCISE_ANATOMY[head?.name];
       if (!anatomy || !LOWER.has(anatomy.primary)) continue;
-      if (head.loadType === "barbell") offenders.push(`${key}: ${head.name}`);
+      if (head.loadType === "barbell" && !SUPINE.test(head.name)) offenders.push(`${key}: ${head.name}`);
     }
     expect(offenders).toEqual([]);
   });
@@ -861,8 +862,11 @@ describe("applyFocusToSession", () => {
       ]));
     });
 
-    it("bumps Day A ass2 (Hip Thrust + Landmine Press — both aligned) by +1 set", () => {
-      const out = applyFocusToSession(SESSIONS[0], "Sculpt", defaultConfig);
+    it("ass2 (Hip Thrust + Landmine Press — both aligned) is bumped when glutes have headroom", () => {
+      // Push Press in the clean slot drops the week's indirect glute work, so
+      // the +1 fits under the ceiling. On the template anchors it does not —
+      // see tests/sculpt-ceiling.test.js.
+      const out = applyFocusToSession(SESSIONS[0], "Sculpt", defaultConfig, { "Power Clean": "Push Press" });
       const ass2Before = SESSIONS[0].blocks.find(b => b.id === "ass2");
       const ass2After  = out.blocks.find(b => b.id === "ass2");
       expect(ass2After.sets).toBe(ass2Before.sets + 1);

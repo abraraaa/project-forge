@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { rpeToRir, newDraftLog, logSet, finaliseDraft } from "../lib/storage.js";
 import { rpeValue, rpeForEffort, effortForRpe } from "../lib/tokens.js";
-import { pickFlashLine } from "../lib/set-flash.js";
+import { pickFlashLine, isPullMovement } from "../lib/set-flash.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -131,5 +131,32 @@ describe("code shape — the capture point cannot quietly re-band", () => {
   it("no surface reconstructs a set's RPE from its band — rpeValue is the read path", () => {
     const s = readFileSync(resolve(root, "components/SessionScreen.jsx"), "utf8");
     expect(s).not.toMatch(/rpeForEffort\(s\.rpe\)/);
+  });
+});
+
+describe("pull-specific copy stays on pulls", () => {
+  it("isPullMovement reads the anatomy primary first, the name second", () => {
+    expect(isPullMovement("Barbell Bench Press", "Chest")).toBe(false);
+    expect(isPullMovement("Barbell Back Squat", "Quads")).toBe(false);
+    expect(isPullMovement("Chest-Supported DB Row", "Upper Back")).toBe(true);
+    expect(isPullMovement("Hex Bar Deadlift", "Quads")).toBe(true);   // name carries it
+    expect(isPullMovement("Power Clean", null)).toBe(true);
+    expect(isPullMovement("Overhead Press", null)).toBe(false);
+  });
+
+  it("never hands 'Clean pull, clean release' to a press", () => {
+    const seen = new Set();
+    for (let i = 0; i < 200; i++) {
+      const line = pickFlashLine("normal", { pullMovement: false, used: new Set() });
+      seen.add(line);
+    }
+    expect(seen.has("Clean pull, clean release.")).toBe(false);
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it("still offers it on a pull", () => {
+    const seen = new Set();
+    for (let i = 0; i < 200; i++) seen.add(pickFlashLine("normal", { pullMovement: true, used: new Set() }));
+    expect(seen.has("Clean pull, clean release.")).toBe(true);
   });
 });

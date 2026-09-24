@@ -24,7 +24,7 @@ import { useRouter } from "next/navigation";
 import { P, BW, F, Bk, pushNow } from "@/lib/storage";
 import { withNavTransition } from "@/lib/nav-transitions";
 import { activateProfileCore, saveFocusCore, stashRotationSummary } from "@/lib/profile-actions";
-import { DEFAULT_FOCUS, isValidMainLiftChoice } from "@/lib/programme";
+import { DEFAULT_FOCUS } from "@/lib/programme";
 import ProfileScreen from "@/components/ProfileScreen";
 import FocusPickerSheet from "@/components/FocusPickerSheet";
 import BreatherModal from "@/components/BreatherModal";
@@ -36,7 +36,7 @@ export default function ProfileView() {
   // useState runs once on mount, sidestepping the purity rule.
   const [current] = useState(() => (typeof window === "undefined" ? null : P.getActive()));
   const [existing] = useState(() => (typeof window === "undefined" ? [] : P.list()));
-  const [mainLifts, setMainLifts] = useState(() =>
+  const [mainLifts] = useState(() =>
     (typeof window === "undefined" ? {} : P.getMainLifts(P.getActive())));
   const [bodyweight, setBodyweight] = useState(() =>
     typeof window === "undefined" || !P.getActive() ? null : BW.getKg(P.getActive()),
@@ -105,17 +105,6 @@ export default function ProfileView() {
     setFocusPickerOpen(false);
   }, [current]);
 
-  // Validation lives in lib/programme.js so an unlisted movement can never
-  // reach the anchor slot, whichever surface calls this.
-  const handleChangeMainLift = (canonical, choice) => {
-    if (!current || !isValidMainLiftChoice(canonical, choice)) return;
-    const next = { ...mainLifts };
-    if (!choice || choice === canonical) delete next[canonical];
-    else next[canonical] = choice;
-    setMainLifts(next);
-    P.saveMainLifts(current, next);
-  };
-
   if (!current) return null;
 
   return (
@@ -132,7 +121,6 @@ export default function ProfileView() {
         userFocus={userFocus}
         onEditFocus={() => setFocusPickerOpen(true)}
         mainLifts={mainLifts}
-        onChangeMainLift={handleChangeMainLift}
         onOpenBreather={() => setBreatherOpen(true)}
         resting={!!activeBreather}
         restingReason={activeBreather?.reason || null}

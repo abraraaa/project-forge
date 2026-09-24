@@ -17,7 +17,7 @@ import { LS, P, BW, blobDelete, checkProfileExists } from "@/lib/storage";
 import {
   hasPasskey, registerPasskey, authenticatePasskey, isPlatformAuthenticatorAvailable,
 } from "@/lib/webauthn";
-import { FOCUS_SUMMARIES, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS, mainLiftOptions } from "@/lib/programme";
+import { FOCUS_SUMMARIES, mainLiftSummary } from "@/lib/programme";
 import { reasonLabel } from "@/lib/breaks";
 import BugReportSheet from "@/components/BugReportSheet";
 import InstallWalkthrough, { canWalkthroughInstall } from "@/components/InstallWalkthrough";
@@ -81,7 +81,7 @@ function ThemeSwitch({ value, onChange }) {
   );
 }
 
-export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,mainLifts={},onChangeMainLift,onOpenBreather=null,resting=false,restingReason=null,onEndBreather=null}){
+export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,mainLifts={},onOpenBreather=null,resting=false,restingReason=null,onEndBreather=null}){
   const [name,setName]=useState("");
   // Per-profile preference. State carries the profile it was read for and
   // adjusts DURING render when the shown profile changes (the derived-state
@@ -649,40 +649,43 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </div>
       </Fade>}
 
-      {/* Breather row — context-aware. When resting, it's the "Back to it"
-          resume affordance (assurance: undo a pause any time, no need to
-          train to clear it — Bk.end). Otherwise it's the manual entry to
-          declare a pause. Same modal the Home nudge opens. */}
-      {/* §11.2 — settings are ROWS between hairlines on the ground, not a
-          stack of surface cards. Each row: title + state left, drawn arrow
-          right, hairline under. */}
-      {current && resting && onEndBreather ? (
-        <Fade d={240}>
-          <div style={{marginTop:36,padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+      {current && (
+        <Fade d={236}>
+          <div style={{marginTop:36,marginBottom:2,fontSize:13,color:T.ink3}}>Training</div>
+        </Fade>
+      )}
+
+      {/* Training focus row — tappable to open the focus picker. Biases
+          accessory rotation toward the chosen goal. Default = Forged (balanced). */}
+      {current && onEditFocus && (
+        <Fade d={270}>
+          <div onClick={onEditFocus}
+            className="forge-press forge-tint" style={{padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>On a breather</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Training focus</div>
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
-                {restingReason ? `${reasonLabel(restingReason)} · your rhythm's paused` : "Your rhythm's paused"}
+                {userFocus} · {FOCUS_SUMMARIES[userFocus] || FOCUS_SUMMARIES.Forged}
               </div>
             </div>
-            <button className="forge-press" onClick={onEndBreather}
-              style={{flexShrink:0,padding:"10px 16px",background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,fontWeight:500,color:T.ink}}>
-              Back to it
-            </button>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </div>
         </Fade>
-      ) : current && onOpenBreather ? (
-        <Fade d={240}>
-          <button onClick={onOpenBreather}
-            className="forge-press forge-tint" style={{width:"100%",textAlign:"left",marginTop:36,padding:"15px 2px",background:"none",border:"none",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",fontFamily:T.text}}>
+      )}
+
+      {/* Main lifts. The editor is its own page (/profile/main-lifts); this
+          row says what is set. */}
+      {current && (
+        <Fade d={265}>
+          <Link href="/profile/main-lifts"
+            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
-              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Need a breather?</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Pause your rhythm while life happens</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Main lifts</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{mainLiftSummary(mainLifts)}</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
-          </button>
+          </Link>
         </Fade>
-      ) : null}
+      )}
 
       {/* Bodyweight row — tappable to edit */}
       {current && setBwEditOpen && (
@@ -707,80 +710,44 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
-      {/* Training focus row — tappable to open the focus picker. Biases
-          accessory rotation toward the chosen goal. Default = Forged (balanced). */}
-      {current && onEditFocus && (
-        <Fade d={270}>
-          <div onClick={onEditFocus}
-            className="forge-press forge-tint" style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div>
-              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Training focus</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
-                {userFocus} · {FOCUS_SUMMARIES[userFocus] || FOCUS_SUMMARIES.Forged}
-              </div>
-            </div>
-            <Glyph name="arrowRight" size={13} color={T.ink3}/>
-          </div>
-        </Fade>
-      )}
-
-      {/* Appearance row — device-level, not per-profile (lib/theme.js).
-          The switch is the control; the row itself doesn't tap. */}
-      {current && (
-        <Fade d={275}>
+      {/* Breather row — context-aware. When resting, it's the "Back to it"
+          resume affordance (assurance: undo a pause any time, no need to
+          train to clear it — Bk.end). Otherwise it's the manual entry to
+          declare a pause. Same modal the Home nudge opens. */}
+      {/* §11.2 — settings are ROWS between hairlines on the ground, not a
+          stack of surface cards. Each row: title + state left, drawn arrow
+          right, hairline under. */}
+      {current && resting && onEndBreather ? (
+        <Fade d={240}>
           <div style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
             <div>
-              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Appearance</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>On a breather</div>
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
-                {themePref === "light" ? "Always light" : themePref === "dark" ? "Always dark" : "Follows your device"}
+                {restingReason ? `${reasonLabel(restingReason)} · your rhythm's paused` : "Your rhythm's paused"}
               </div>
             </div>
-            <ThemeSwitch value={themePref} onChange={handleThemeChange}/>
+            <button className="forge-press" onClick={onEndBreather}
+              style={{flexShrink:0,padding:"10px 16px",background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,fontWeight:500,color:T.ink}}>
+              Back to it
+            </button>
           </div>
         </Fade>
-      )}
+      ) : current && onOpenBreather ? (
+        <Fade d={240}>
+          <button onClick={onOpenBreather}
+            className="forge-press forge-tint" style={{width:"100%",textAlign:"left",padding:"15px 2px",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",fontFamily:T.text}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Need a breather?</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Pause your rhythm while life happens</div>
+            </div>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
+          </button>
+        </Fade>
+      ) : null}
 
-      {/* Main lifts. The five anchor slots are the one place the template was
-          not negotiable, and the place a trained lifter has the strongest
-          opinion. Options are curated equivalents only — an arbitrary movement
-          here silently un-programmes the user. */}
-      {current && onChangeMainLift && (
-        <Fade d={292}>
-          <div style={{marginTop:28}}>
-            <div style={{fontSize:13,color:T.ink3,marginBottom:2}}>Main lifts</div>
-            <p style={{fontSize:12,color:T.ink3,lineHeight:1.5,marginBottom:10}}>
-              Swap an anchor for an equivalent that loads the same way. Your
-              weights carry over and settle after a set or two.
-            </p>
-            {Object.keys(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS).map((canonical) => {
-              const chosen = mainLifts[canonical] || canonical;
-              return (
-                <div key={canonical} style={{padding:"12px 2px",borderBottom:`1px solid ${T.rule}`}}>
-                  <div style={{fontSize:12,color:T.ink3,marginBottom:7}}>{canonical}</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                    {mainLiftOptions(canonical).map((opt) => {
-                      const sel = opt === chosen;
-                      return (
-                        <button key={opt} onClick={()=>onChangeMainLift(canonical, opt)}
-                          aria-pressed={sel}
-                          style={{
-                            padding:"7px 11px",borderRadius:T.rSm,cursor:"pointer",
-                            fontFamily:T.text,fontSize:13,
-                            border:"none",
-                            background:sel?T.surface:"transparent",
-                            boxShadow:sel?T.elev:"none",
-                            color:sel?T.ink:T.ink3,
-                            transition:`background 180ms ${T.ease}, color 180ms ${T.ease}`,
-                          }}>
-                          {opt === canonical ? "Programme" : opt}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      {current && (
+        <Fade d={278}>
+          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>Account</div>
         </Fade>
       )}
 
@@ -843,7 +810,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {/* Passkey enabled row */}
       {current && profileHasPasskey[current] && !upgrade?.needed && (
         <Fade d={280}>
-          <div style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{borderTop:`1px solid ${T.rule}`,padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Passkey enabled</div>
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Your profile is secured with biometric auth</div>
@@ -853,12 +820,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
-      {/* ── Sync group — dropped to the bottom so the user-configurable rows
-          (breather, bodyweight, focus, passkey) lead. Status kept (liked),
-          just no longer top of the stack; Sync now + diagnostics follow. ── */}
+      {/* ── Sync group — under Account, after the passkey state. ── */}
       {current && (
         <Fade d={290}>
-          <div style={{marginTop:36}}>
+          <div style={{marginTop:16}}>
             <SyncStatusCard profile={current} hasPasskey={profileHasPasskey[current]} />
           </div>
         </Fade>
@@ -867,6 +832,43 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && (
         <Fade d={295}>
           <SyncNowRow profile={current} hasPasskey={profileHasPasskey[current]} />
+        </Fade>
+      )}
+
+      {current && (
+        <Fade d={296}>
+          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>Device</div>
+        </Fade>
+      )}
+
+      {/* Appearance row — device-level, not per-profile (lib/theme.js).
+          The switch is the control; the row itself doesn't tap. */}
+      {current && (
+        <Fade d={275}>
+          <div style={{borderTop:`1px solid ${T.rule}`,padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Appearance</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
+                {themePref === "light" ? "Always light" : themePref === "dark" ? "Always dark" : "Follows your device"}
+              </div>
+            </div>
+            <ThemeSwitch value={themePref} onChange={handleThemeChange}/>
+          </div>
+        </Fade>
+      )}
+
+      {/* Add-to-home-screen, on demand — only where it applies (iOS browser,
+          not already installed). Same quiet-row grammar as its neighbours. */}
+      {current && canInstall && (
+        <Fade d={308}>
+          <button onClick={() => setInstallOpen(true)}
+            style={{width:"100%",padding:"15px 2px",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",textAlign:"left",fontFamily:T.text}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Add to home screen</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>One tap to open. Fullscreen, offline, yours.</div>
+            </div>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
+          </button>
         </Fade>
       )}
 
@@ -938,31 +940,22 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
+      {current && (
+        <Fade d={304}>
+          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>More</div>
+        </Fade>
+      )}
+
       {/* Bug report intake (fill-or-kill flow) — a quiet row in the admin-
           adjacent tail of the page. Open to everyone; the review wing lives
           at /diag-bugs. */}
       {current && (
         <Fade d={305}>
           <button onClick={() => setBugSheetOpen(true)}
-            style={{width:"100%",padding:"15px 2px",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",textAlign:"left",fontFamily:T.text}}>
+            style={{width:"100%",padding:"15px 2px",background:"none",border:"none",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",textAlign:"left",fontFamily:T.text}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Report a bug</div>
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Something off? Tell me where it hurts.</div>
-            </div>
-            <Glyph name="arrowRight" size={13} color={T.ink3}/>
-          </button>
-        </Fade>
-      )}
-
-      {/* Add-to-home-screen, on demand — only where it applies (iOS browser,
-          not already installed). Same quiet-row grammar as its neighbours. */}
-      {current && canInstall && (
-        <Fade d={308}>
-          <button onClick={() => setInstallOpen(true)}
-            style={{width:"100%",padding:"15px 2px",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",textAlign:"left",fontFamily:T.text}}>
-            <div>
-              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Add to home screen</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>One tap to open. Fullscreen, offline, yours.</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </button>

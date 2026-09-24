@@ -43,7 +43,8 @@ import { deriveTravelSession } from "@/lib/travel";
 import { applySessionToEngine } from "@/lib/session-engine";
 import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, coldStartFromAnchor } from "@/lib/lift-translations";
 import { restRemaining, restDeadline } from "@/lib/rest-clock";
-import { pickFlashLine } from "@/lib/set-flash";
+import { pickFlashLine, isPullMovement } from "@/lib/set-flash";
+import { EXERCISE_ANATOMY } from "@/lib/exercise-anatomy";
 import { todayLocalIso, daysBetween } from "@/lib/dates";
 import { T } from "@/lib/tokens";
 import { haptic } from "@/lib/a11y";
@@ -102,6 +103,10 @@ export default function SessionHost() {
   const [restActive, setRestActive]   = useState(false);
   const [restRemain, setRestRemain]   = useState(180);
   const draftLogRef = useRef(null);
+  // Screen-reader channel for moments that are otherwise only visual (or a
+  // haptic iOS ignores). Cleared first so a repeated message is re-announced.
+  const [srMsg, setSrMsg] = useState("");
+  const announce = (msg) => { setSrMsg(""); setTimeout(() => setSrMsg(msg), 60); };
   const [sessionStartWeights, setSessionStartWeights] = useState({});
   const [showDeloadComplete, setShowDeloadComplete] = useState(false);
   const [returnGapDays, setReturnGapDays] = useState(null);
@@ -149,6 +154,7 @@ export default function SessionHost() {
         // Android fires; iOS Safari silently no-ops. Started from a tap, so
         // gesture rules allow it.
         haptic.alert();
+        announce("Rest over");
       }
     };
     const t = setInterval(sync, 1000);
@@ -242,7 +248,7 @@ export default function SessionHost() {
   // Durable main-lift choice first, so a one-off session swap still wins.
   const mainSession    = applyMainLiftsToSession(rotatedSession, mainLifts);
   const swappedSession = applySwapsToSession(mainSession, sessionSwaps);
-  const focusedSession = applyFocusToSession(swappedSession, userFocus, programmeBlock?.config);
+  const focusedSession = applyFocusToSession(swappedSession, userFocus, programmeBlock?.config, mainLifts);
   // Travel converts what focus finished choosing, and readiness still trims
   // on top — a cooked day drops its finisher whether or not you're in a hotel.
   const travelledSession = travel ? deriveTravelSession(focusedSession) : focusedSession;
@@ -329,6 +335,15 @@ export default function SessionHost() {
     readiness === "fresh" && !reachSpent && !reachArmed && !activeDeload && !travel &&
     !isSS && isHeadline && setNum === blockSets && setNum >= REACH_EARLIEST_SET &&
     getLoadType(activeEx) !== "bodyweight" && Number.isFinite(reachWeight);
+
+  // Announce the reach offer once, when it appears.
+  const reachAnnounced = useRef(false);
+  useEffect(() => {
+    if (canReach && !reachAnnounced.current) {
+      reachAnnounced.current = true;
+      announce("Last set, and you came in fresh.");
+    }
+  }, [canReach]);
 
   // Plain handlers, like commitLog/handleLog below — the React Compiler
   // memoizes them, and hand-rolling it here made the component bail too.
@@ -442,6 +457,7 @@ export default function SessionHost() {
     const line = pickFlashLine(rpe, {
       fullReps,
       barLoaded: getLoadType(activeEx) !== "bodyweight",
+      pullMovement: isPullMovement(activeEx?.name, EXERCISE_ANATOMY[activeEx?.name]?.primary ?? null),
       used: usedFlashRef.current,
       addLikely,
     });
@@ -451,7 +467,7 @@ export default function SessionHost() {
     setFlashLeaving(false);
     setSetFlash(null);
     flashTimersRef.current = [
-      setTimeout(() => setSetFlash(line), 450),  // let the screen swap settle
+      setTimeout(() => { setSetFlash(line); announce(line); }, 450),  // let the screen swap settle
       setTimeout(() => setFlashLeaving(true), 3200),
       setTimeout(() => { setSetFlash(null); setFlashLeaving(false); }, 3800),
     ];
@@ -705,6 +721,9 @@ export default function SessionHost() {
           viewport edge, so the sheet/chin constraint doesn't apply. */}
       {/* bottom offset clears the thumb-pinned action zone (partner card +
           Log button) now the session layout anchors actions at the fold. */}
+      {/* Always mounted: a live region inserted with its content is often
+          not announced. */}
+      <div role="status" aria-live="polite" style={{ position: "absolute", width: 1, height: 1, margin: -1, padding: 0, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0 }}>{srMsg}</div>
       {setFlash && (
         <div style={{ position: "fixed", left: 0, right: 0, margin: "0 auto", width: "calc(100% - 64px)", maxWidth: 366, bottom: "calc(env(safe-area-inset-bottom,0px) + 190px)", pointerEvents: "none", zIndex: 60, textAlign: "center", opacity: flashLeaving ? 0 : 1, transition: "opacity 600ms ease" }}>
           {/* Vellum chip — the toast material. Sensation lives in the copy

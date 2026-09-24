@@ -119,7 +119,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const rotatedViewSession = rawViewSession ? applyRotationToSession(rawViewSession, programmeBlock?.config) : null;
   // Same order as SessionHost: durable main-lift choice, then focus.
   const viewSession    = rotatedViewSession
-    ? applyFocusToSession(applyMainLiftsToSession(rotatedViewSession, mainLifts), userFocus, programmeBlock?.config)
+    ? applyFocusToSession(applyMainLiftsToSession(rotatedViewSession, mainLifts), userFocus, programmeBlock?.config, mainLifts)
     : null;
 
   // Guidance line under the display name. Strength days lead with the
