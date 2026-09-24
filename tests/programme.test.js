@@ -1444,3 +1444,52 @@ describe("weekFor — past days keep the meaning they had when they happened", (
     }
   });
 });
+
+describe("missed workouts are judged against what was due so far", () => {
+  const S = (t) => ({ type: t, s: t, label: t });
+  const MWF = ["strength","rest","strength","rest","strength","rest","rest"].map(S);
+  const rec = (date) => ({ id: `${date}T10`, date, session: "strength-a" });
+  const offered = (today, history) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(`${today}T12:00:00`));
+    try {
+      return findUntickedRecent(history, 7, {}, { week: MWF, weekFor: () => MWF })
+        .filter((r) => r.date >= "2026-09-21").map((r) => r.date);
+    } finally { vi.useRealTimers(); }
+  };
+  // 2026-09-21 is a Monday.
+  it("a session a day late covers the day it replaced", () => {
+    expect(offered("2026-09-23", [rec("2026-09-22")])).toEqual([]);
+    expect(offered("2026-09-25", [rec("2026-09-22"), rec("2026-09-24")])).toEqual([]);
+  });
+  it("a genuine miss is still offered", () => {
+    expect(offered("2026-09-25", [])).toEqual(["2026-09-23", "2026-09-21"]);
+    expect(offered("2026-09-25", [rec("2026-09-21")])).toEqual(["2026-09-23"]);
+  });
+  it("training today's own session does not excuse an earlier miss", () => {
+    expect(offered("2026-09-23", [rec("2026-09-23")])).toEqual(["2026-09-21"]);
+  });
+  it("an off-schedule session today can stand in for yesterday's", () => {
+    expect(offered("2026-09-22", [rec("2026-09-22")])).toEqual([]);
+  });
+});
+
+describe("rhythm judges each day by the schedule in force on it", () => {
+  it("expected counts scheduled strength days across the window, not today's quota × 4", async () => {
+    const { computeRhythm } = await import("../lib/storage.js");
+    const S = (t) => ({ type: t });
+    const threeDay = ["strength","rest","strength","rest","strength","rest","rest"].map(S);
+    const twoDay = ["rest","strength","rest","rest","rest","strength","rest"].map(S);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-27T12:00:00")); // a Sunday
+    try {
+      // Two weeks ago the user switched from 3/week to 2/week.
+      const weekFor = (d) => (d >= "2026-09-14" ? twoDay : threeDay);
+      const r = computeRhythm([], { weeklyStrengthDays: 2, weekFor });
+      // 28 days back from Sun 27 Sep: Mon 31 Aug – Sun 27 Sep.
+      // 2 weeks at 3 (31 Aug–13 Sep) + 2 weeks at 2 (14–27 Sep) = 10.
+      expect(r.expected).toBe(10);
+      expect(computeRhythm([], { weeklyStrengthDays: 2 }).expected).toBe(8);
+    } finally { vi.useRealTimers(); }
+  });
+});
