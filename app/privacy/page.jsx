@@ -41,6 +41,7 @@ const SECTIONS = [
       "Bug reports you send — your message, profile name, the page you were on, your browser and device details, and when you sent it — so we can fix things.",
       "Usage and performance — page views, load times, and an anonymous count of finished sessions, through Vercel Web Analytics and Speed Insights. No name attached, no cookies, nothing that follows you across other sites.",
       "Your IP address — briefly, to stop abuse, and in our hosting provider's logs.",
+      "An AI you connect, if you do — which app, which passkey approved it, and when it last read. It reads your training (never photos) only when you ask it to.",
       "Anything you email us, if you do.",
     ],
   },
@@ -66,6 +67,7 @@ const SECTIONS = [
       "Vercel Blob — private file storage in London for passkey public keys, progress photos, backups, and older copies of some profiles' training.",
       "YouTube — demo videos embed in privacy-enhanced mode. Opening one connects your browser to Google, under its own privacy policy. Some links open YouTube itself, where its usual terms and cookies apply.",
       "Buy Me a Coffee — if you tip, that happens on their site under their policy. They may pass us your supporter name and message.",
+      "An AI you connect — what it reads is handled under that AI's own terms. Removing the passkey that approved it ends the connection; email us to end it sooner.",
     ],
     p: [
       "Our providers are US companies and may access data from outside the UK. Where they do, it's under UK-approved safeguards, such as the UK Extension to the EU–US Data Privacy Framework or the UK International Data Transfer Addendum.",
