@@ -82,3 +82,17 @@ describe("the never-list records the amendment", () => {
     expect(tokens).not.toContain("the template test, enforced");
   });
 });
+
+describe(".forge-lift sits under the thumb", () => {
+  // Without lib/press-lift.js feeding --x/--y the lift silently centres —
+  // how the coaching and connect buttons shipped.
+  it("every lift spreads pressLiftHandlers", () => {
+    const offenders = [];
+    for (const f of files.filter((p) => !p.includes("diag-") && /className="[^"]*forge-lift/.test(src(p)))) {
+      for (const tag of src(f).match(/<[a-zA-Z][^>]*className="[^"]*forge-lift[^"]*"[^>]*>/g) || []) {
+        if (!tag.includes("{...pressLiftHandlers}")) offenders.push(f);
+      }
+    }
+    expect(offenders, `forge-lift without pressLiftHandlers: ${offenders.join(", ")}`).toEqual([]);
+  });
+});

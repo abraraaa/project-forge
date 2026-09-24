@@ -6,6 +6,7 @@
 // consented; this page only relays the ceremony token.
 import { useState } from "react";
 import { T, DISPLAY } from "@/lib/tokens";
+import { pressLiftHandlers } from "@/lib/press-lift";
 import { P } from "@/lib/storage";
 import { authenticatePasskey } from "@/lib/webauthn";
 import { fetchWithTimeout } from "@/lib/net";
@@ -62,7 +63,7 @@ export default function ConnectView({ clientName, host, params }) {
         autoComplete="username webauthn" autoCapitalize="none" spellCheck={false} disabled={busy}
         style={{width:"100%",boxSizing:"border-box",height:48,padding:"0 14px",fontFamily:T.text,fontSize:16,color:T.ink,background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,marginBottom:20}}/>
 
-      <button type="button" onClick={onAllow} disabled={!name.trim() || busy} className="forge-press forge-lift"
+      <button type="button" onClick={onAllow} disabled={!name.trim() || busy} className="forge-press forge-lift" {...pressLiftHandlers}
         style={{width:"100%",height:52,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,opacity:!name.trim()||busy?0.6:1}}>
         {busy ? "One moment" : "Let it in"}
       </button>

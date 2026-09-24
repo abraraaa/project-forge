@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { T, DISPLAY } from "@/lib/tokens";
+import { pressLiftHandlers } from "@/lib/press-lift";
 import { Fade } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -59,7 +60,7 @@ export default function CoachView() {
             <div style={{fontSize:12,color:T.ink3,marginTop:4,lineHeight:1.5,marginBottom:14}}>
               Lifts, volume, rhythm — in one copy. A snapshot: it sees today, not tomorrow.
             </div>
-            <button type="button" onClick={onCopy} className="forge-press forge-lift"
+            <button type="button" onClick={onCopy} className="forge-press forge-lift" {...pressLiftHandlers}
               style={{width:"100%",height:52,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
               {copied === "ok" ? "Copied" : "Copy your training"}
             </button>
