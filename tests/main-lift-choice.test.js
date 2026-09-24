@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import {
   SESSIONS, SWAP_DB, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS,
-  mainLiftOptions, isValidMainLiftChoice, applyMainLiftsToSession,
+  mainLiftOptions, isValidMainLiftChoice, applyMainLiftsToSession, mainLiftSummary,
 } from "../lib/programme.js";
 
 const mainBlocks = SESSIONS.flatMap((s) => (s.blocks || []).filter((b) => b.type === "main"));
@@ -114,5 +114,38 @@ describe("applying a choice", () => {
     const session = sessionWith("Barbell Back Squat");
     expect(applyMainLiftsToSession(session, {})).toBe(session);
     expect(applyMainLiftsToSession(session)).toBe(session);
+  });
+});
+
+describe("the profile row", () => {
+  it("summarises the choice in one line", () => {
+    expect(mainLiftSummary({})).toBe("Programme defaults");
+    expect(mainLiftSummary({ "Barbell Back Squat": "Barbell Back Squat" })).toBe("Programme defaults");
+    expect(mainLiftSummary({ "Barbell Back Squat": "Front Squat" })).toBe("Front Squat · 1 of 5 changed");
+    expect(mainLiftSummary({ "Barbell Back Squat": "Front Squat", "Power Clean": "Push Press" }))
+      .toBe("Front Squat, Push Press · 2 of 5 changed");
+    expect(mainLiftSummary(undefined)).toBe("Programme defaults");
+    // Push Press can fill both the press and the clean slot.
+    expect(mainLiftSummary({ "Barbell Overhead Press": "Push Press", "Power Clean": "Push Press" }))
+      .toBe("Push Press · 2 of 5 changed");
+  });
+
+  it("links to its own page and no longer renders the chips inline", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const screen = readFileSync(resolve(root, "components/ProfileScreen.jsx"), "utf8");
+    expect(screen).toContain('href="/profile/main-lifts"');
+    expect(screen).not.toContain("mainLiftOptions(");
+    const view = readFileSync(resolve(root, "components/MainLiftsView.jsx"), "utf8");
+    // Back must pop history: a pushed /profile leaves this page behind it and
+    // Profile's own back then returns here instead of home.
+    expect(view).not.toContain('href="/profile"');
+    expect(view).toContain("router.back()");
+    expect(view).toContain("isValidMainLiftChoice(");
+    expect(view).toContain("P.saveMainLifts(");
+    const routes = readFileSync(resolve(root, "scripts/generate-sw-precache.mjs"), "utf8");
+    expect(routes).toContain('"/profile/main-lifts"');
   });
 });

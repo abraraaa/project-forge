@@ -17,7 +17,7 @@
 
 import { describe, it, expect } from "vitest";
 import { solveRotation, volumeObjective, FOCUS_VOLUME_PROFILES } from "../lib/rotation-solver.js";
-import { EXERCISE_POOLS, FOCUS_OPTIONS } from "../lib/programme.js";
+import { EXERCISE_POOLS, FOCUS_OPTIONS, pushHistoryBlock } from "../lib/programme.js";
 
 // mulberry32 — tiny seeded PRNG, good enough for sampling tests.
 function seeded(seed) {
@@ -41,6 +41,39 @@ describe("band contract — rotations stay inside every landmark band", () => {
       }
     });
   }
+
+  // From empty history every focus was already clean; the failures lived
+  // three and four rotations deep, where the recency memory had excluded
+  // every in-band candidate. This chains rotations so the test can see it.
+  for (const focus of FOCUS_OPTIONS) {
+    it(`${focus}: 5 chained rotations, memory carried, zero out-of-band`, () => {
+      for (let i = 0; i < RUNS; i++) {
+        const rng = seeded(5000 + i);
+        let history = {}, config = null;
+        for (let block = 0; block < 5; block++) {
+          if (config) history = pushHistoryBlock(history, config);
+          const r = solveRotation({ history, focus, rng });
+          config = r.config;
+          expect(r.report.outOfBand, `${focus} seed ${5000 + i} block ${block + 1}: ${r.report.outOfBand}`).toEqual([]);
+        }
+      }
+    });
+  }
+
+  it("memory yields to the band: Forged seed 5020, fourth chained rotation", () => {
+    // The one seed family where the remembered week breaks a band. Remove the
+    // relaxed second solve and this goes red; the loop above cannot tell.
+    const rng = seeded(5020);
+    let history = {}, config = null, r;
+    for (let block = 0; block < 4; block++) {
+      if (config) history = pushHistoryBlock(history, config);
+      r = solveRotation({ history, focus: "Forged", rng });
+      config = r.config;
+      if (block < 3) expect(r.report.memoryRelaxed).toBe(false);
+    }
+    expect(r.report.memoryRelaxed).toBe(true);
+    expect(r.report.outOfBand).toEqual([]);
+  });
 
   it("Strong's floor-exempt arms may sit under MEV without counting as failure", () => {
     // The exemption is a stated trade, not an accident — lock that the

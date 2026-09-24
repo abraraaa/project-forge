@@ -273,7 +273,7 @@ describe("computeWeeklyVolume / auditVolume — focus parameter", () => {
     expect(b).toEqual(a);
   });
 
-  it("Strong reduces total accessory volume — Biceps + Triceps drop under MEV", () => {
+  it("Strong reduces total accessory volume — Biceps drops under MEV, Triceps holds the floor", () => {
     const baseAudit   = auditVolume(SESSIONS, { focus: "Forged" });
     const strongAudit = auditVolume(SESSIONS, { focus: "Strong" });
     // Glutes drop (Hip Thrust gone via ass2)
@@ -281,10 +281,14 @@ describe("computeWeeklyVolume / auditVolume — focus parameter", () => {
     // Biceps + Triceps drop substantially (css3 = DB Curl + Skullcrusher dropped)
     expect(strongAudit.perMuscle.Biceps.sets).toBeLessThan(baseAudit.perMuscle.Biceps.sets);
     expect(strongAudit.perMuscle.Triceps.sets).toBeLessThan(baseAudit.perMuscle.Triceps.sets);
-    // The trade-off the user explicitly accepts: arm volume goes under MEV
-    const armFlags = strongAudit.flags.filter(f => f.muscle === "Biceps" || f.muscle === "Triceps");
-    expect(armFlags.length).toBe(2);
-    expect(armFlags.every(f => f.status === "under_mev")).toBe(true);
+    // The trade-off the user explicitly accepts: arms ride at or below the
+    // floor. Biceps sits under MEV; Triceps is lifted onto it by the
+    // side-delt finisher's third set (bfin-A is its superset partner), so it
+    // is held to the floor rather than under it.
+    const biceps = strongAudit.flags.find(f => f.muscle === "Biceps");
+    expect(biceps?.status).toBe("under_mev");
+    expect(strongAudit.perMuscle.Triceps.sets).toBeGreaterThanOrEqual(VOLUME_TARGETS.Triceps.mev);
+    expect(strongAudit.perMuscle.Triceps.sets).toBeLessThanOrEqual(VOLUME_TARGETS.Triceps.mev + 1);
   });
 
   it("Sculpt with default config raises visible-muscle volume above baseline", () => {
@@ -299,17 +303,12 @@ describe("computeWeeklyVolume / auditVolume — focus parameter", () => {
     expect(sculptAudit.perMuscle.Glutes.sets).toBeGreaterThan(baseAudit.perMuscle.Glutes.sets);
   });
 
-  it("Sculpt keeps the programme inside MEV..MRV (one documented exception)", () => {
+  it("Sculpt keeps the programme inside MEV..MRV", () => {
+    // The glute overage this used to except (16.6 vs 16 after Power Clean
+    // went 4×3) is gone: the +1 set is now checked against the week's
+    // ceiling and withheld where it would breach it.
     const sculptAudit = auditVolume(SESSIONS, { focus: "Sculpt", config: defaultConfig });
-    // KNOWN + ACCEPTED (boss call 2026-07-24): Power Clean moved to 4×3 —
-    // the extra set nudges Sculpt-mode glutes marginally past MRV (16.6 vs
-    // 16), since Sculpt also +1s a glute-aligned slot. Deliberate trade for
-    // bar speed on the clean; anything OTHER than this marginal glute
-    // overage is a real regression and must fail here.
-    const unexpected = sculptAudit.flags.filter(
-      (f) => !(f.muscle === "Glutes" && f.status === "over_mrv" && f.sets <= f.target.mrv + 1),
-    );
-    expect(unexpected).toEqual([]);
+    expect(sculptAudit.flags).toEqual([]);
   });
 
   it("Sculpt with empty config = no slots aligned = no bumps = Forged-equivalent", () => {

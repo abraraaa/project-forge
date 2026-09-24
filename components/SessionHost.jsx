@@ -43,7 +43,8 @@ import { deriveTravelSession } from "@/lib/travel";
 import { applySessionToEngine } from "@/lib/session-engine";
 import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, coldStartFromAnchor } from "@/lib/lift-translations";
 import { restRemaining, restDeadline } from "@/lib/rest-clock";
-import { pickFlashLine } from "@/lib/set-flash";
+import { pickFlashLine, isPullMovement } from "@/lib/set-flash";
+import { EXERCISE_ANATOMY } from "@/lib/exercise-anatomy";
 import { todayLocalIso, daysBetween } from "@/lib/dates";
 import { T } from "@/lib/tokens";
 import { haptic } from "@/lib/a11y";
@@ -242,7 +243,7 @@ export default function SessionHost() {
   // Durable main-lift choice first, so a one-off session swap still wins.
   const mainSession    = applyMainLiftsToSession(rotatedSession, mainLifts);
   const swappedSession = applySwapsToSession(mainSession, sessionSwaps);
-  const focusedSession = applyFocusToSession(swappedSession, userFocus, programmeBlock?.config);
+  const focusedSession = applyFocusToSession(swappedSession, userFocus, programmeBlock?.config, mainLifts);
   // Travel converts what focus finished choosing, and readiness still trims
   // on top — a cooked day drops its finisher whether or not you're in a hotel.
   const travelledSession = travel ? deriveTravelSession(focusedSession) : focusedSession;
@@ -442,6 +443,7 @@ export default function SessionHost() {
     const line = pickFlashLine(rpe, {
       fullReps,
       barLoaded: getLoadType(activeEx) !== "bodyweight",
+      pullMovement: isPullMovement(activeEx?.name, EXERCISE_ANATOMY[activeEx?.name]?.primary ?? null),
       used: usedFlashRef.current,
       addLikely,
     });

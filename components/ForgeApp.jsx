@@ -141,16 +141,6 @@ export default function ForgeApp(){
   const [absenceNudgeDismissed,setAbsenceNudgeDismissed]=useState(false);
   const [userFocus,setUserFocus]=useState(DEFAULT_FOCUS);
   const [mainLifts,setMainLifts]=useState({});
-  // Durable per-profile choice. Validation lives in lib/programme.js so an
-  // unlisted movement can never reach the anchor slot.
-  const handleChangeMainLift = (canonical, choice) => {
-    if (!activeProfile || !isValidMainLiftChoice(canonical, choice)) return;
-    const next = { ...mainLifts };
-    if (!choice || choice === canonical) delete next[canonical];
-    else next[canonical] = choice;
-    setMainLifts(next);
-    P.saveMainLifts(activeProfile, next);
-  };
   const [focusPickerOpen,setFocusPickerOpen]=useState(false);
   // Session overview — lets users jump between blocks when gym constraints
   // dictate a different order than the prescribed flow. Auto-advance still
@@ -756,7 +746,7 @@ export default function ForgeApp(){
   if(!activeProfile){
   return (
     <>
-      <ProfileScreen existing={P.list()} current={activeProfile} onActivate={activateProfile} onCancel={null} bodyweight={bodyweight} bwEditOpen={bwEditOpen} setBwEditOpen={setBwEditOpen} updateBodyweight={updateBodyweight} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onChangeMainLift={handleChangeMainLift}/>
+      <ProfileScreen existing={P.list()} current={activeProfile} onActivate={activateProfile} onCancel={null} bodyweight={bodyweight} bwEditOpen={bwEditOpen} setBwEditOpen={setBwEditOpen} updateBodyweight={updateBodyweight} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts}/>
       {/* Modals triggerable from ProfileScreen must mount here too — the
           early return above bypasses the main JSX where these live, so
           without this Fragment, tapping "Edit focus" in Profile sets state
