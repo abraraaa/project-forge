@@ -28,7 +28,7 @@ const SECTIONS = [
   },
   {
     h: "Who we are",
-    p: [`Heatwayve is responsible for your personal data (the "controller"). Questions, requests or complaints: ${CONTACT}.`],
+    p: [`Heatwayve is run by Abrar Ahmed, who is responsible for your personal data (the "controller"). Questions, requests or complaints: ${CONTACT}.`],
   },
   {
     h: "What we collect, and why",
