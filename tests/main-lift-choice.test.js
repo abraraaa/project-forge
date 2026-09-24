@@ -144,7 +144,8 @@ describe("the profile row", () => {
     expect(view).not.toContain('href="/profile"');
     expect(view).toContain("router.back()");
     expect(view).toContain("isValidMainLiftChoice(");
-    expect(view).toContain("P.saveMainLifts(");
+    expect(view).toContain("P.setMainLift(");
+    expect(view).toContain("pushNow(current)");
     const routes = readFileSync(resolve(root, "scripts/generate-sw-precache.mjs"), "utf8");
     expect(routes).toContain('"/profile/main-lifts"');
   });

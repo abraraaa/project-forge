@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { handleMcp, runTool, weekOn, PROTOCOL_VERSIONS } from "../lib/mcp-server.js";
+import { handleMcp, runTool, weekOn, validMainLifts, PROTOCOL_VERSIONS } from "../lib/mcp-server.js";
+import { SESSIONS, applyRotationToSession, applyMainLiftsToSession, applyFocusToSession } from "../lib/programme.js";
 
 const rec = (date, name, weight, reps, rpe) => ({
   id: date, date, session: "strength_a", readiness: "fresh",
@@ -28,9 +29,9 @@ describe("MCP handshake", () => {
     await call({ id: 3, method: "tools/list" }, async () => { loads++; return data; });
     expect(loads).toBe(0);
   });
-  it("lists four read-only tools", async () => {
+  it("lists five read-only tools", async () => {
     const r = await call({ id: 4, method: "tools/list" });
-    expect(r.result.tools.map((t) => t.name)).toEqual(["training_snapshot", "recent_sessions", "current_loads", "lift_history"]);
+    expect(r.result.tools.map((t) => t.name)).toEqual(["training_snapshot", "recent_sessions", "programme", "current_loads", "lift_history"]);
     for (const t of r.result.tools) expect(t.annotations.readOnlyHint).toBe(true);
   });
   it("rejects unknown methods, unknown tools and malformed messages", async () => {
@@ -100,5 +101,48 @@ describe("/mcp route", () => {
   });
   it("rate-limits per connection", () => {
     expect(src).toContain("rateLimit(request, `mcp:${who.grantId}`, 60)");
+  });
+});
+
+describe("programme tool", () => {
+  const SQ = "Barbell Back Squat";
+  const meta = {
+    userFocus: "Sculpt",
+    programmeBlock: { number: 3, startDate: "2026-09-01", config: {} },
+    mainLifts: { [SQ]: "Front Squat", "Barbell Bench Press": "Barbell Bench Press" },
+    weights: { "Front Squat": 60 },
+    reps: {},
+  };
+  const text = runTool("programme", {}, { meta, history: [] }, now).text;
+
+  it("lists every exercise the app would show, in the app's composition order", () => {
+    for (const template of SESSIONS) {
+      const s = applyFocusToSession(applyMainLiftsToSession(applyRotationToSession(template, {}), meta.mainLifts), "Sculpt", {}, meta.mainLifts);
+      expect(text).toContain(`## ${s.name}`);
+      for (const b of s.blocks) for (const ex of [b.ex, b.exA, b.exB].filter(Boolean)) expect(text).toContain(ex.name);
+    }
+  });
+  it("shows main-lift choices, the working weight, and what's next", () => {
+    expect(text).toContain("Main lifts: Front Squat (for Barbell Back Squat).");
+    expect(text).toContain("Front Squat 3 × 5 @ 60 kg");
+    expect(text).not.toMatch(/Barbell Back Squat \d/);
+    expect(text).toContain("Next up: Strength A.");
+    expect(text).toContain("block 3, started 2026-09-01 · Sculpt focus");
+  });
+  it("marks template weights as a suggested start", () => {
+    expect(text).toMatch(/Barbell Bench Press 3 × 5 @ \d+ kg \(suggested start\)/);
+  });
+  it("says so when main lifts were never synced, rather than guessing defaults", () => {
+    const t = runTool("programme", {}, { meta: { ...meta, mainLifts: undefined }, history: [] }, now).text;
+    expect(t).toContain("not synced from this user's app yet");
+  });
+  it("drops choices that aren't listed equivalents", () => {
+    expect(validMainLifts({ mainLifts: { [SQ]: "Leg Press", "Barbell Bench Press": "Dumbbell Bench Press" } }))
+      .toEqual({ "Barbell Bench Press": "Dumbbell Bench Press" });
+    expect(validMainLifts({})).toBeNull();
+  });
+  it("the snapshot names main lifts once they sync", () => {
+    const t = runTool("training_snapshot", {}, { meta, history: data.history }, now).text;
+    expect(t).toContain("Main lifts: Front Squat (for Barbell Back Squat)");
   });
 });
