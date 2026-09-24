@@ -157,3 +157,11 @@ describe("editor headings", () => {
     expect(Object.keys(MAIN_LIFT_GROUPS).sort()).toEqual(Object.keys(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS).sort());
   });
 });
+
+describe("main-lift validation ignores inherited keys", () => {
+  it("constructor / toString are never a main lift", async () => {
+    const { isValidMainLiftChoice } = await import("../lib/programme.js");
+    expect(isValidMainLiftChoice("constructor", "Front Squat")).toBe(false);
+    expect(isValidMainLiftChoice("toString", "x")).toBe(false);
+  });
+});

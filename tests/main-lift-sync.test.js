@@ -62,3 +62,30 @@ describe("store", () => {
     expect(meta.mainLiftStamps[BP]).toMatch(/^\d{4}-/);
   });
 });
+
+describe("review fixes", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("re-tapping the selected lift does not mint a newer stamp", () => {
+    P.setMainLift("sam", SQ, "Front Squat");
+    const before = P.getMainLiftStamps("sam")[SQ];
+    P.setMainLift("sam", SQ, "Front Squat");
+    expect(P.getMainLiftStamps("sam")[SQ]).toBe(before);
+  });
+
+  it("an app that predates the field can't turn 'never synced' into an empty map", () => {
+    const m = mergeMeta({ weights: { a: 1 } }, { weights: { a: 2 } });
+    expect("mainLifts" in m).toBe(false);
+    expect("mainLiftStamps" in m).toBe(false);
+    expect(mergeMeta({ mainLifts: {} }, {}).mainLifts).toEqual({});
+  });
+
+  it("delta pushes and delta pulls keep value and stamp maps together", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const storage = readFileSync(resolve(__dirname, "../lib/storage.js"), "utf8");
+    expect(storage).toContain("for (const f of fieldClosure(Object.keys(dirty)))");
+    const db = readFileSync(resolve(__dirname, "../lib/db.js"), "utf8");
+    expect(db).toContain("[...fieldClosure(Object.keys(meta))].filter((f) => !(f in meta))");
+  });
+});

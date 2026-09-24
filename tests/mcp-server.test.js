@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { handleMcp, runTool, weekOn, validMainLifts, PROTOCOL_VERSIONS } from "../lib/mcp-server.js";
-import { SESSIONS, applyRotationToSession, applyMainLiftsToSession, applyFocusToSession } from "../lib/programme.js";
+import { SESSIONS, EXERCISE_POOLS, applyRotationToSession, applyMainLiftsToSession, applyFocusToSession } from "../lib/programme.js";
 
 const rec = (date, name, weight, reps, rpe) => ({
   id: date, date, session: "strength_a", readiness: "fresh",
@@ -76,13 +76,16 @@ describe("tools", () => {
   it("an empty profile reads as empty, not an error", () => {
     expect(runTool("recent_sessions", {}, null, now).text).toBe("No sessions logged yet.");
   });
-  it("weekOn picks the latest schedule in force", () => {
+  it("weekOn picks the latest schedule in force, and reads the legacy bare-array shape", () => {
+    const wk = (strengthIdx) => Array.from({ length: 7 }, (_, i) => ({ type: i === strengthIdx ? "strength" : "rest" }));
     const h = [
-      { effectiveFrom: "2026-01-01", editedAt: 1, week: ["old"] },
-      { effectiveFrom: "2026-09-01", editedAt: 2, week: ["current"] },
-      { effectiveFrom: "2026-12-01", editedAt: 3, week: ["future"] },
+      { effectiveFrom: "2026-01-01", editedAt: "2026-01-01T00:00:00Z", week: wk(0) },
+      { effectiveFrom: "2026-09-01", editedAt: "2026-09-01T00:00:00Z", week: wk(2) },
+      { effectiveFrom: "2026-12-01", editedAt: "2026-12-01T00:00:00Z", week: wk(4) },
     ];
-    expect(weekOn(h, "2026-09-24")).toEqual(["current"]);
+    expect(weekOn(h, "2026-09-24").findIndex((d) => d.type === "strength")).toBe(2);
+    expect(weekOn(wk(1), "2026-09-24").findIndex((d) => d.type === "strength")).toBe(1);
+    expect(weekOn("garbage", "2026-09-24")).toHaveLength(7); // falls back to the default week
   });
 });
 
@@ -144,5 +147,42 @@ describe("programme tool", () => {
   it("the snapshot names main lifts once they sync", () => {
     const t = runTool("training_snapshot", {}, { meta, history: data.history }, now).text;
     expect(t).toContain("Main lifts: Front Squat (for Barbell Back Squat)");
+  });
+});
+
+describe("programme loads read the way the session screen reads them", () => {
+  const base = { programmeBlock: { number: 1, config: {} }, userFocus: "Forged", reps: {} };
+  const run = (meta) => runTool("programme", {}, { meta: { ...base, ...meta }, history: [] }, now).text;
+
+  it("a chosen main lift with no weight yet is a new lift, not bodyweight", () => {
+    const t = run({ mainLifts: { "Barbell Back Squat": "Front Squat" }, weights: {} });
+    expect(t).toContain("Front Squat 3 × 5 @ weight not set yet (new lift)");
+    expect(t).not.toContain("Front Squat 3 × 5 @ bodyweight");
+  });
+  it("main-lift starts are seeded from bodyweight, as the app does", () => {
+    const t = run({ mainLifts: {}, weights: {}, bodyweight: { kg: 90 } });
+    expect(t).toContain("Barbell Back Squat 3 × 5 @ 67.5 kg (suggested start)");
+  });
+  it("a stored working weight is used as-is", () => {
+    expect(run({ mainLifts: {}, weights: { "Barbell Back Squat": 100 } })).toContain("Barbell Back Squat 3 × 5 @ 100 kg");
+  });
+  it("dumbbells read per hand", () => {
+    expect(run({ mainLifts: {}, weights: { "DB Reverse Lunge": 20 } })).toContain("DB Reverse Lunge 3 × 8/leg @ 20 kg each");
+  });
+  it("an edited timed hold reads in seconds", () => {
+    const lsit = EXERCISE_POOLS["afin-A"].pool.find((e) => e.name === "L-Sit Hold");
+    expect(lsit).toBeTruthy();
+    const t = runTool("programme", {}, {
+      meta: { ...base, programmeBlock: { number: 1, config: { "afin-A": lsit } }, mainLifts: {}, weights: {}, reps: { "L-Sit Hold": 30 } },
+      history: [],
+    }, now).text;
+    expect(t).toContain("L-Sit Hold 4 × 30s hold");
+  });
+  it("malformed synced data is a tool error, never a thrown request", async () => {
+    const r = await handleMcp(
+      { jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "recent_sessions" } },
+      { load: async () => ({ meta: {}, history: [{ date: "x", blocks: "abc" }] }), now },
+    );
+    expect(r.result.isError).toBe(true);
   });
 });
