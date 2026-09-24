@@ -8,7 +8,7 @@ import { censusNameKeys } from "@/lib/name-census";
 export const preferredRegion = "lhr1";
 
 // NAME-KEY CENSUS — READ ONLY.
-// GET /api/diag/name-census   (Authorization: Bearer <CRON_SECRET>)
+// GET /api/diag/name-census   (Authorization: Bearer <CRON_SECRET>; Vercel Cron, daily)
 //
 // Lists stored profile keys whose NFKC form differs from the key itself —
 // the keys a shared name normaliser would move. Blob directory names under
@@ -66,6 +66,9 @@ export async function GET(request) {
   }
 
   const census = censusNameKeys(entries);
-  console.log(`[forge:name-census] scanned=${census.scanned} distinct=${census.distinct} divergent=${census.divergent.length}`);
+  // Vercel Cron calls this daily with the secret, so the log line is the
+  // report: counts, plus the divergent keys only (usually none).
+  console.log(`[forge:name-census] scanned=${census.scanned} distinct=${census.distinct} divergent=${census.divergent.length}` +
+    census.divergent.map((d) => ` | ${JSON.stringify(d.key)}→${JSON.stringify(d.canonical)} [${d.sources.join(",")}]`).join(""));
   return NextResponse.json({ dryRun: true, writes: "none — enumeration and SELECTs only", db: !!q, ...census });
 }
