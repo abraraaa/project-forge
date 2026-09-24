@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { withNavTransition } from "@/lib/nav-transitions";
 import { T, DISPLAY } from "@/lib/tokens";
-import { P } from "@/lib/storage";
+import { P, pushNow } from "@/lib/storage";
 import { isValidMainLiftChoice } from "@/lib/programme";
 import { Fade } from "@/components/ui";
 import Glyph from "@/components/Glyph";
@@ -27,11 +27,9 @@ export default function MainLiftsView() {
   // reach the anchor slot, whichever surface calls this.
   const handleChange = (canonical, choice) => {
     if (!current || !isValidMainLiftChoice(canonical, choice)) return;
-    const next = { ...mainLifts };
-    if (!choice || choice === canonical) delete next[canonical];
-    else next[canonical] = choice;
-    setMainLifts(next);
-    P.saveMainLifts(current, next);
+    // Stamped per lift and synced; default is stored explicitly (see P).
+    setMainLifts(P.setMainLift(current, canonical, choice));
+    pushNow(current).catch(() => {});
   };
 
   if (!current) return null;

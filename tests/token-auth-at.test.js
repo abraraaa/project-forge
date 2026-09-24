@@ -12,11 +12,11 @@ describe("auth_at survives the token table", () => {
     expect(db).toContain("ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS auth_at TIMESTAMPTZ");
   });
   it("writes authAt on insert", () => {
-    expect(db).toMatch(/dbInsertToken\(token, \{[^}]*authAt = null \}\)/);
-    expect(db).toMatch(/INSERT INTO auth_tokens \([^)]*auth_at\)[\s\S]{0,200}\$\{authAt\}\)/);
+    expect(db).toMatch(/dbInsertToken\(token, \{[^}]*authAt = null[^}]*\}\)/);
+    expect(db).toMatch(/INSERT INTO auth_tokens \([^)]*auth_at[^)]*\)[\s\S]{0,200}\$\{authAt\}/);
   });
   it("reads authAt back", () => {
-    expect(db).toMatch(/SELECT profile, expires, scope, created_at, auth_at FROM auth_tokens/);
+    expect(db).toMatch(/SELECT profile, expires, scope, created_at, auth_at[^\n]*FROM auth_tokens/);
     expect(db).toMatch(/authAt: r\.auth_at/);
   });
   it("both rotation paths carry it forward and measure the cap from it", () => {

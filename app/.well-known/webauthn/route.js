@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // WebAuthn Related Origin Requests (migration challenge 1, 2026-07-22).
 // Served for theforged.fit (the rpId domain): browsers consult
 // https://theforged.fit/.well-known/webauthn before allowing a ceremony for

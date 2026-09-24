@@ -144,7 +144,8 @@ describe("the profile row", () => {
     expect(view).not.toContain('href="/profile"');
     expect(view).toContain("router.back()");
     expect(view).toContain("isValidMainLiftChoice(");
-    expect(view).toContain("P.saveMainLifts(");
+    expect(view).toContain("P.setMainLift(");
+    expect(view).toContain("pushNow(current)");
     const routes = readFileSync(resolve(root, "scripts/generate-sw-precache.mjs"), "utf8");
     expect(routes).toContain('"/profile/main-lifts"');
   });
@@ -154,5 +155,13 @@ describe("editor headings", () => {
   it("every anchor slot is labelled by what it trains", async () => {
     const { MAIN_LIFT_GROUPS, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS } = await import("../lib/programme.js");
     expect(Object.keys(MAIN_LIFT_GROUPS).sort()).toEqual(Object.keys(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS).sort());
+  });
+});
+
+describe("main-lift validation ignores inherited keys", () => {
+  it("constructor / toString are never a main lift", async () => {
+    const { isValidMainLiftChoice } = await import("../lib/programme.js");
+    expect(isValidMainLiftChoice("constructor", "Front Squat")).toBe(false);
+    expect(isValidMainLiftChoice("toString", "x")).toBe(false);
   });
 });
