@@ -24,6 +24,9 @@ import { NextResponse } from "next/server";
 import { GET as syncGET, PUT as syncPUT, POST as syncPOST, DELETE as syncDELETE } from "@/app/api/sync/route";
 import { mintAuthToken } from "@/lib/auth-server";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // Host is irrelevant — the handlers only parse the URL's search params.
 // Requests here are direct handler invocations, never HTTP, so the flip's
 // 301 cannot apply.

@@ -29,6 +29,9 @@ import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import sitemap, { BASE } from "@/app/sitemap";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 export const dynamic = "force-dynamic";
 
 const KEY = "b918388220f54edba64cc5d31103d35e";

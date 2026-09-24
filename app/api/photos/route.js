@@ -8,6 +8,9 @@ import { isTokenValid, readTokenData, mintAuthToken } from "@/lib/auth-server";
 import { hasDb, dbUpsertPhoto, dbListPhotos, dbDeletePhoto, dbGetPhoto, dbHasRetiredPhotos } from "@/lib/db";
 import { isJpegBytes, PHOTO_MAX_UPLOAD_BYTES } from "@/lib/photos";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // Progress photos (P1) — the ONE gated data surface in Forge.
 // Every verb requires a live authToken (minted by login-verify after a real
 // passkey ceremony) in the X-HW-Auth HEADER — never a query param, per

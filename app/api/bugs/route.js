@@ -4,6 +4,9 @@ import { rateLimit } from "@/lib/rate-limit";
 import { readTokenData, isAdminProfile } from "@/lib/auth-server";
 import { hasDb, dbInsertBug, dbListBugs, dbUpdateBugStatus, BUG_STATUSES } from "@/lib/db";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // Bug reports — the boss's fill-or-kill flow (parked 2026-07-24, built for
 // the flip window: live intake BEFORE the domain moves means flip breakage
 // arrives through the app, not the void).

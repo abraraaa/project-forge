@@ -4,6 +4,9 @@ import { list } from "@vercel/blob";
 import { readJsonDirect } from "@/lib/blob-utils";
 import { probeDb } from "@/lib/db";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // DRY-RUN import report — READ ONLY, by design and by protocol.
 // GET /api/diag/db-import   (Authorization: Bearer <CRON_SECRET>)
 //

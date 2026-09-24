@@ -7,6 +7,9 @@ import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPre
 import { rpConfigFromRequest, verifyAuthToken, hasUsablePasskey, isReclaimOfLapsedProfile, hasChallengeSecret, verifyChallenge, mintAuthToken } from "@/lib/auth-server";
 import { dbRetirePhotos } from "@/lib/db";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // Verify WebAuthn registration and store the credential's PUBLIC KEY.
 // POST /api/auth/register-verify
 // Body: { profile, credential: { id, rawId, type, response: { clientDataJSON, attestationObject } }, authToken? }

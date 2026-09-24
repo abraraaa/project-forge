@@ -6,6 +6,9 @@ import crypto from "crypto";
 import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasChallengeSecret, issueChallenge, rpConfigFromRequest, planLoginCeremony } from "@/lib/auth-server";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // Generate authentication options for WebAuthn
 // POST /api/auth/login-options
 // Body: { profile: string }

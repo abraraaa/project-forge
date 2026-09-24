@@ -8,6 +8,9 @@ import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPre
 import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge, mintAuthToken, isAdminProfile } from "@/lib/auth-server";
 import { LEGACY_RP_ID, passkeyNudgeUrgent, daysUntilPasskeySunset } from "@/lib/origin";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // Verify WebAuthn authentication and mint a short-lived auth token.
 // POST /api/auth/login-verify
 // Body: { profile, credential: { id, rawId, type, response: { clientDataJSON, authenticatorData, signature, userHandle } } }

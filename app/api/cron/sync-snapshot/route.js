@@ -27,6 +27,9 @@ import { put, list } from "@vercel/blob";
 import { readJsonDirect } from "@/lib/blob-utils";
 import { hasDb, sql, ensureSchema, dbReadProfile } from "@/lib/db";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // Shrink guard (boss conversation, 2026-07-26): a snapshot's job is to
 // survive the disaster, not memorialise it. If the DB is wiped shortly
 // before this cron fires, a naive overwrite replaces the restore point with

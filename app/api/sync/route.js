@@ -7,6 +7,9 @@ import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbDeleteToken, 
 import { NextResponse } from "next/server";
 import { serverError as apiError } from "@/lib/api-errors";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // Generic client error + full server-side log. Raw exception text (Neon/blob
 // driver detail, query fragments, schema names) must not reach the client —
 // audit 2026-07-26, P3 info-disclosure. Detail stays in the server log.

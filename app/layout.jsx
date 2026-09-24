@@ -73,6 +73,9 @@ export const metadata = {
     type: "website",
     url: "/",
   },
+  // fb:app_id — Facebook's share debugger asks for it. Emitted only when the
+  // Meta app ID is configured (NEXT_PUBLIC_FB_APP_ID in Vercel env).
+  ...(process.env.NEXT_PUBLIC_FB_APP_ID ? { facebook: { appId: process.env.NEXT_PUBLIC_FB_APP_ID } } : {}),
   twitter: {
     card: "summary_large_image",
     title: "Heatwayve — Train with intention",
