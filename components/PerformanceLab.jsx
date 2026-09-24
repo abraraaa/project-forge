@@ -15,13 +15,14 @@ import {
 } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER, VOLUME_TARGETS } from "@/lib/volume-audit";
 import Glyph from "@/components/Glyph";
-import { W } from "@/lib/storage";
 import { WEEK } from "@/lib/programme";
 import { T, DISPLAY, HATCH } from "@/lib/tokens";
 import { addDaysIso } from "@/lib/dates";
 import { haptic } from "@/lib/a11y";
 import GlossarySheet, { GlossaryTrigger } from "@/components/GlossarySheet";
 import { renderShareCard, shareCanvas } from "@/lib/share-card";
+import { W, P } from "@/lib/storage";
+import { coachConnected, copyCoachContext } from "@/lib/coach-share";
 
 // Training-day grouping for the volume list — the Lab reads like the week
 // trains: push, pull, legs, trunk. (Display grouping only; the audit
@@ -75,6 +76,11 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
   // Drill-down tier (§07): the row is the glance; tapping unfolds the
   // full trend chart beneath it. One open at a time.
   const [expandedLift, setExpandedLift] = useState(null);
+  const [talk, setTalk] = useState(null);
+  const onTalk = async () => {
+    if (coachConnected()) return; // opens the connected AI once OAuth lands
+    setTalk(await copyCoachContext(P.getActive()));
+  };
 
   // Glossary sheet — opened by ⓘ triggers throughout the lab.
   const [glossaryAnchor, setGlossaryAnchor] = useState(null);
@@ -160,6 +166,14 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
         <div style={{fontSize:15, color:T.ink2, marginTop:10, lineHeight:1.45, maxWidth:"32ch"}}>
           {guidance}
         </div>
+        {/* Talk it through: the connected AI when there is one; until then,
+            the same snapshot the coaching page copies. */}
+        {!isEmpty && (
+          <button type="button" onClick={onTalk} style={{...linkBtn,color:T.ink,marginTop:14}}>
+            {talk === "ok" ? "Copied — paste it into your AI" : talk === "fail" ? "Couldn't reach the clipboard" : "Talk it through"}
+            {talk === null && <Glyph name="arrowRight" size={11} color={T.ink3}/>}
+          </button>
+        )}
       </div>
 
       {/* §13.3 — the glance strip: one hairline-bounded line, the whole

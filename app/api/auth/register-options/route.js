@@ -5,6 +5,9 @@ import { list } from "@vercel/blob";
 import crypto from "crypto";
 import { hasChallengeSecret, issueChallenge, rpConfigFromRequest } from "@/lib/auth-server";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // Generate registration options for WebAuthn
 // POST /api/auth/register-options
 // Body: { profile: string }

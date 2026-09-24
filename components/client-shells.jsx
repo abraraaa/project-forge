@@ -71,6 +71,11 @@ export const MainLiftsShell = dynamic(() => import("@/components/MainLiftsView")
   loading: FieldBeat,
 });
 
+export const CoachShell = dynamic(() => import("@/components/CoachView"), {
+  ssr: false,
+  loading: FieldBeat,
+});
+
 export const SessionShell = dynamic(() => import("@/components/SessionHost"), {
   ssr: false,
   loading: FieldBeat,

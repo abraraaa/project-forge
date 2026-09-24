@@ -5,6 +5,9 @@ import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasUsablePasskey, credentialRpId } from "@/lib/auth-server";
 import { acceptedRpIds } from "@/lib/origin";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // Check whether a profile has a VERIFIABLE passkey registered.
 // GET /api/auth/check?profile=Name
 //

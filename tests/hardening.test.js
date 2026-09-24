@@ -27,10 +27,10 @@ describe("CSP — a real allow-list, not a framing-only gesture", () => {
     // The exercise embeds are the ONLY external resource in the app. If a
     // second host ever appears here it should be a deliberate decision, not
     // a copy-paste from a template.
-    expect(cfg).toContain("frame-src https://www.youtube.com");
+    expect(cfg).toContain("frame-src https://www.youtube-nocookie.com");
     const frameSrc = cfg.match(/"frame-src ([^"]+)"/)?.[1] || "";
     expect(frameSrc.split(/\s+/).filter((t) => t.startsWith("http")))
-      .toEqual(["https://www.youtube.com"]);
+      .toEqual(["https://www.youtube-nocookie.com"]);
   });
 
   it("keeps the classic escapes shut", () => {

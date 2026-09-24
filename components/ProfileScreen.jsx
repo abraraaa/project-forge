@@ -746,6 +746,24 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       ) : null}
 
       {current && (
+        <Fade d={277}>
+          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>AI coaching</div>
+        </Fade>
+      )}
+      {current && (
+        <Fade d={277}>
+          <Link href="/profile/coach"
+            style={{padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Talk it through</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Your numbers, your AI</div>
+            </div>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
+          </Link>
+        </Fade>
+      )}
+
+      {current && (
         <Fade d={278}>
           <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>Account</div>
         </Fade>
@@ -974,6 +992,19 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Every lift, laid bare. Bedtime reading for the committed.</div>
             </div>
             <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
+          </Link>
+        </Fade>
+      )}
+
+      {current && (
+        <Fade d={309}>
+          <Link href="/privacy"
+            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Privacy</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>What we hold, and how to make it go away.</div>
+            </div>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
         </Fade>
       )}

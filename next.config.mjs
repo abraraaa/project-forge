@@ -71,7 +71,7 @@ const nextConfig = {
       "media-src 'self' blob:",
       "connect-src 'self'",
       "worker-src 'self'",
-      "frame-src https://www.youtube.com",
+      "frame-src https://www.youtube-nocookie.com",
       "frame-ancestors 'none'",
       "object-src 'none'",
       "base-uri 'self'",

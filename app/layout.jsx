@@ -73,6 +73,9 @@ export const metadata = {
     type: "website",
     url: "/",
   },
+  // fb:app_id for Facebook's share debugger. Public by design (it's in every
+  // page's source).
+  facebook: { appId: "2297070577363823" },
   twitter: {
     card: "summary_large_image",
     title: "Heatwayve — Train with intention",

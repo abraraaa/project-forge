@@ -4,6 +4,9 @@ import { list } from "@vercel/blob";
 import { readJsonDirect } from "@/lib/blob-utils";
 import { censusPasskeys, photosAtRisk, censusLogLine } from "@/lib/passkey-census";
 
+// Run beside Neon and Blob (London); see tests/regions.test.js.
+export const preferredRegion = "lhr1";
+
 // PASSKEY CENSUS — READ ONLY.
 // GET /api/diag/passkey-census   (Authorization: Bearer <CRON_SECRET>)
 //
