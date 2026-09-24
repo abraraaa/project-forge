@@ -644,7 +644,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             We don&apos;t want your starsign either.
           </div>
           <p style={{fontSize:13,color:T.ink2,lineHeight:1.6}}>
-            Heatwayve keeps your data yours. A name is all we need — it syncs your streak and weights across your devices. Nothing more.
+            Heatwayve keeps your data yours. A name is all we need. Add a passkey and your streak and weights follow you to every device. Nothing more.
           </p>
         </div>
       </Fade>}

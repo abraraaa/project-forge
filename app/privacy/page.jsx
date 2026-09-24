@@ -39,7 +39,7 @@ const SECTIONS = [
       "Bodyweight, and a dated log of it — to set loads and show your progress. It's also noted on each progress photo.",
       "Progress photos, only if you add them — stored privately and shown only to you after passkey sign-in. Location and camera data are stripped before upload.",
       "Bug reports you send — your message, profile name, the page you were on, your browser and device details, and when you sent it — so we can fix things.",
-      "Usage and performance — page views, load times, and an anonymous event when you finish a session (its type, programme block and readiness check-in), through Vercel Web Analytics and Speed Insights. No name attached, no cookies, nothing that follows you across other sites.",
+      "Usage and performance — page views, load times, and an anonymous count of finished sessions, through Vercel Web Analytics and Speed Insights. No name attached, no cookies, nothing that follows you across other sites.",
       "Your IP address — briefly, to stop abuse, and in our hosting provider's logs.",
       "Anything you email us, if you do.",
     ],
@@ -47,7 +47,7 @@ const SECTIONS = [
   {
     h: "Health information",
     p: [
-      "Readiness and its reasons, breaks (including \"injured or ill\"), bodyweight, training and photos can say something about your health, which UK law treats as special category data. We only use it with your explicit consent, which you give by entering it, to run Heatwayve for you — and, with no name attached, in the session event above. Withdraw consent any time by deleting it or your profile.",
+      "Readiness and its reasons, breaks (including \"injured or ill\"), bodyweight, training and photos can say something about your health, which UK law treats as special category data. We only use it with your explicit consent, which you give by entering it, and only to run Heatwayve for you. Withdraw consent any time by deleting it or your profile.",
     ],
   },
   {

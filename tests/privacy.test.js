@@ -34,11 +34,17 @@ describe("privacy notice stays true", () => {
     expect(read("app/api/sync/route.js")).toContain("maxAge: 30 * 86400");
   });
 
-  it("names the session analytics event while it carries readiness", () => {
-    const host = read("components/SessionHost.jsx");
-    if (/track\("session_complete"[\s\S]{0,200}readiness/.test(host)) {
-      expect(page).toMatch(/readiness check-in\), through Vercel Web Analytics/);
+  it("analytics carry no health data, as stated", () => {
+    for (const f of ["components/SessionHost.jsx", "components/ForgeApp.jsx"]) {
+      const calls = read(f).match(/track\("session_complete"[^)]*\)/g) || [];
+      expect(calls.length).toBeGreaterThan(0);
+      for (const c of calls) expect(c).not.toMatch(/readiness|bodyweight/i);
     }
+  });
+
+  it("bodyweight stays out of the photo upload URL", () => {
+    expect(read("lib/photos.js")).not.toMatch(/params\.set\("bw"/);
+    expect(read("app/api/photos/route.js")).toContain('request.headers.get("x-hw-bodyweight")');
   });
 
   it("is linked from the sitemap", () => {
