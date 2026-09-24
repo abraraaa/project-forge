@@ -149,3 +149,10 @@ describe("the profile row", () => {
     expect(routes).toContain('"/profile/main-lifts"');
   });
 });
+
+describe("editor headings", () => {
+  it("every anchor slot is labelled by what it trains", async () => {
+    const { MAIN_LIFT_GROUPS, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS } = await import("../lib/programme.js");
+    expect(Object.keys(MAIN_LIFT_GROUPS).sort()).toEqual(Object.keys(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS).sort());
+  });
+});

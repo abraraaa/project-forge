@@ -19,16 +19,12 @@ const PROBES = [
 const PANELS = [
   { id: "control", label: "Log set", note: "Control — exactly what ships. Scale only, no light." },
   { id: "sdr",     label: "Log set", note: "SDR, up the heat ramp — blooms toward heat-1, which encodes \u2018easy\u2019 elsewhere. What was first built." },
-  { id: "lift",    label: "Log set", note: "SDR, neutral lift — --commit raised 12% toward white, off the ramp. What ships. Should read the same, and borrows no meaning." },
-  { id: "hlg-low", label: "Log set", note: "HDR restrained — same hue, just past diffuse white." },
-  { id: "hlg-high",label: "Log set", note: "HDR assertive — the LinkedIn end of the dial, here so the bad option is on screen beside the good one." },
-  { id: "vellum",  label: "Log set", note: "Torch behind vellum — the light sits UNDER the surface rather than on it. Lit, not emitting." },
-  { id: "quiet",   label: "A quiet touchable", note: "The other case: a bone surface, where today only a tint is allowed." },
+  { id: "lift",    label: "Log set", note: "SDR neutral lift — --commit raised 12% toward white. The fallback where the panel has no P3." },
   // Wide gamut, not high range. Standalone has no headroom above SDR white
   // (confirmed on release iOS 27, 2026-09-22), so these probe the ceiling
   // that IS reachable: chroma past sRGB on a P3 panel. Each has an sRGB
   // fallback so it renders everywhere; the P3 form wins where supported.
-  { id: "p3-oxide", label: "Log set", note: "P3 oxide — the commit hue, chroma pushed past what sRGB can hold. Compare against \u2018lift\u2019 above: same shape, more colour, no more light." },
+  { id: "p3-oxide", label: "Log set", note: "P3 oxide — what ships (--press-lift) on a wide-gamut panel. Compare against \u2018lift\u2019 above: same shape, more colour, no more light." },
   { id: "p3-warm",  label: "Log set", note: "P3 warm lift — --commit mixed toward a P3 warm white instead of sRGB white. Should read richer, not brighter." },
   { id: "oklch",    label: "Log set", note: "oklch, chroma out of sRGB — no P3 keyword, just a colour sRGB cannot express. Safari gamut-maps it to the panel." },
   { id: "p3-ring",  label: "Log set", note: "P3 edge — the light on the rim, not under the thumb. The one shape a bloom has not tried." },
@@ -180,32 +176,8 @@ const CSS_TEXT = `
     color-mix(in oklab, var(--commit) 88%, white), transparent 70%);
 }
 
-.bloom-hlg-low::before {
-  dynamic-range-limit: no-limit;
-  background: radial-gradient(120px circle at var(--x) var(--y),
-    color(rec2100-hlg 0.84 0.52 0.40), transparent 72%);
-}
 
-.bloom-hlg-high::before {
-  dynamic-range-limit: no-limit;
-  background: radial-gradient(140px circle at var(--x) var(--y),
-    color(rec2100-hlg 1 0.72 0.55), transparent 76%);
-}
 
-/* Light underneath, surface over the top: lit rather than emitting. */
-.bloom-vellum::before {
-  dynamic-range-limit: no-limit;
-  background: radial-gradient(140px circle at var(--x) var(--y),
-    color(rec2100-hlg 0.96 0.66 0.50), transparent 74%);
-}
-.bloom-vellum::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: color-mix(in srgb, var(--commit) 82%, transparent);
-}
 
 /* ── Wide gamut. Fallback first, P3 form inside @supports. ── */
 .bloom-p3-oxide::before {
@@ -249,15 +221,4 @@ const CSS_TEXT = `
   }
 }
 
-/* The quiet case: bone, tint only today. */
-.bloom-quiet {
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: 0 1px 2px rgba(36,28,25,0.10), 0 6px 18px rgba(36,28,25,0.06);
-}
-.bloom-quiet::before {
-  dynamic-range-limit: no-limit;
-  background: radial-gradient(120px circle at var(--x) var(--y),
-    color(rec2100-hlg 0.90 0.86 0.80), transparent 74%);
-}
 `;

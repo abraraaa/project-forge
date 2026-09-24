@@ -24,6 +24,7 @@ import { useModalA11y, haptic } from "@/lib/a11y";
 import { pressLiftHandlers } from "@/lib/press-lift";
 import { todayLocalIso, daysBetween, mondayIndex } from "@/lib/dates";
 import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
+import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
 import { WEEK, SWAP_DB } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
@@ -1037,6 +1038,10 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
   // fixed-stack increments.
   const lt = getLoadType(ex);
   const weightStep = weightStepForLoadType(lt);
+  // The programme's range gets a dot; counts outside the effective band dim.
+  const rec = recommendedReps(ex?.reps);
+  const repTone = (v) => (rec && v >= rec.min && v <= rec.max) ? "rec"
+    : (v < EFFECTIVE_REP_BAND.min || v > EFFECTIVE_REP_BAND.max) ? "out" : null;
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"24px 24px 32px",width:"100%",animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
@@ -1046,7 +1051,7 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
         </div>
         <div style={{display:"flex",gap:16,justifyContent:hasWeight?"space-between":"center"}}>
           {hasWeight&&<SplitWeightDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
-          <ScrollDrum value={reps} onChange={setReps} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined}/>
+          <ScrollDrum value={reps} onChange={setReps} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined} tone={target.timed?null:repTone}/>
         </div>
         {/* House pattern: Cancel/Confirm on the bottom row, no corner ✕.
             Drum edits are LOCAL state — Cancel is a true discard. */}

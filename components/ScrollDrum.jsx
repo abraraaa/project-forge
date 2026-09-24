@@ -25,7 +25,9 @@ const ITEM_H = 52, VISIBLE = 5, HALF = Math.floor(VISIBLE / 2);
 // One wheel over an explicit value list. Internal — the exports below
 // compose it. Behaviour (snap maths, settle haptic, programmatic scroll
 // guard, scroll-anchoring opt-out) is preserved from the original drum.
-function Wheel({ values, value, onChange, fmt = (v) => String(v), eq = (a, b) => a === b, width = "100%" }) {
+// tone(v): "rec" marks the programme's recommended values with a small dot;
+// "out" dims values outside the effective band. No labels on the wheel.
+function Wheel({ values, value, onChange, fmt = (v) => String(v), eq = (a, b) => a === b, width = "100%", tone = null }) {
   const selectedIdx = Math.max(0, values.findIndex(v => eq(v, value)));
   const ref = useRef(null);
   const scrolling = useRef(false);
@@ -69,7 +71,12 @@ function Wheel({ values, value, onChange, fmt = (v) => String(v), eq = (a, b) =>
         <style>{`*::-webkit-scrollbar{display:none}`}</style>
         {values.map((v, i) => (
           <div key={i} onClick={() => onChange(v)} style={{ height: ITEM_H, scrollSnapAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-            <span className="drum-item" style={{ fontFamily: T.measured, fontSize: 30, fontWeight: 400, letterSpacing: "-0.03em", color: T.ink, userSelect: "none" }}>{fmt(v)}</span>
+            <span className="drum-item" style={{ position: "relative", fontFamily: T.measured, fontSize: 30, fontWeight: 400, letterSpacing: "-0.03em", color: tone?.(v) === "out" ? T.ink3 : T.ink, userSelect: "none" }}>
+              {fmt(v)}
+              {tone?.(v) === "rec" && (
+                <span aria-hidden="true" style={{ position: "absolute", right: -12, top: "50%", width: 5, height: 5, marginTop: -2.5, borderRadius: "50%", background: T.commit }} />
+              )}
+            </span>
           </div>
         ))}
       </div>
@@ -81,7 +88,7 @@ function wheelLabel(text) {
   return text ? <div style={{ fontSize: 12, fontWeight: 500, color: T.ink3, marginBottom: 8 }}>{text}</div> : null;
 }
 
-export default function ScrollDrum({ value, onChange, step = 1.25, min = 0, max = 500, integer = false, label = "", unit = null }) {
+export default function ScrollDrum({ value, onChange, step = 1.25, min = 0, max = 500, integer = false, label = "", unit = null, tone = null }) {
   const values = useMemo(() => {
     const arr = [];
     if (integer) { for (let v = Math.max(min, 1); v <= max; v++) arr.push(v); }
@@ -97,7 +104,7 @@ export default function ScrollDrum({ value, onChange, step = 1.25, min = 0, max 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
       {wheelLabel(label)}
-      <Wheel values={values} value={current} onChange={onChange} fmt={fmt}
+      <Wheel values={values} value={current} onChange={onChange} fmt={fmt} tone={tone}
         eq={(a, b) => Math.abs(a - b) < (integer ? 0.5 : step * 0.5)} />
       <div style={{ fontSize: 12, color: T.ink3, marginTop: 8 }}>{unit ?? (integer ? "reps" : "kg")}</div>
     </div>
