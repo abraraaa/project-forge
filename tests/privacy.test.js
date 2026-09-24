@@ -14,7 +14,7 @@ describe("privacy notice stays true", () => {
   });
 
   it("server functions run in London, as stated", () => {
-    expect(page).toMatch(/server functions in London/);
+    expect(page).toMatch(/server functions that handle your data run in London/);
     expect(read("app/api/sync/route.js")).toContain('preferredRegion = "lhr1"');
   });
 
@@ -28,10 +28,17 @@ describe("privacy notice stays true", () => {
   });
 
   it("cookie lifetimes match the notice (sync 30 days, photos 7)", () => {
-    expect(page).toMatch(/up to 30 days/);
-    expect(page).toMatch(/up to 7/);
+    expect(page).toMatch(/30 days \(sync\)/);
+    expect(page).toMatch(/7 days \(photos\)/);
     expect(read("app/api/photos/route.js")).toContain("maxAge: 7 * 86400");
     expect(read("app/api/sync/route.js")).toContain("maxAge: 30 * 86400");
+  });
+
+  it("names the session analytics event while it carries readiness", () => {
+    const host = read("components/SessionHost.jsx");
+    if (/track\("session_complete"[\s\S]{0,200}readiness/.test(host)) {
+      expect(page).toMatch(/readiness check-in\), through Vercel Web Analytics/);
+    }
   });
 
   it("is linked from the sitemap", () => {

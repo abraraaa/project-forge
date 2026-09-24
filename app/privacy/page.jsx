@@ -20,10 +20,10 @@ const SECTIONS = [
   {
     h: "The short version",
     list: [
-      "We ask for a name, never an email or phone number.",
-      "Your training lives on your device first. Add a passkey and it syncs to our servers in London so it can follow you.",
-      "No ads, no ad trackers, and we don't sell or share your data for marketing.",
-      "Delete your profile and it's gone from our servers — photos included.",
+      "We ask for a name. Never an email or phone number.",
+      "Your training lives on your device. We keep your name on our servers so no one else can take it; add a passkey and your training syncs to London so it can follow you.",
+      "No ads, no ad trackers. We don't sell or share your data for marketing.",
+      "Delete your profile and its training, photos and passkey go from our servers.",
     ],
   },
   {
@@ -33,36 +33,39 @@ const SECTIONS = [
   {
     h: "What we collect, and why",
     list: [
-      "The profile name you choose — to identify your profile.",
-      "A passkey's public key, if you add one — to sign you in. Face ID, Touch ID and your device PIN never leave your device; we only hold a public key.",
-      "Your training: sessions, sets, weights, reps, effort ratings, readiness, schedule, focus and main-lift choices — to run and adapt your programme.",
-      "Bodyweight — to load bodyweight exercises correctly and show your progress.",
-      "Progress photos, only if you add them — stored privately and shown only to you after passkey sign-in. We strip location and camera data before upload.",
-      "Bug reports you choose to send — your message, profile name, the page you were on and your browser type, so we can fix things.",
-      "Usage and performance measurements — page views and load times through Vercel Web Analytics and Speed Insights. These use no cookies and don't follow you across other sites.",
+      "The name you choose — held on our servers from the moment you create a profile, so it stays yours. Names are checked against ours as you type.",
+      "A passkey, if you add one — to sign you in. We keep its public key and a few technical details (an ID, a sign-in counter, when it was made). Face ID, Touch ID and your device PIN never leave your device; your password manager keeps the passkey under your profile name.",
+      "Your training, once you add a passkey: sessions (when they started, how long they took, your time zone), sets, weights, reps, effort ratings, readiness and its reason, breaks and their reason, schedule, focus, streak and the programme's working estimates — to run and adapt your programme.",
+      "Bodyweight, and a dated log of it — to set loads and show your progress. It's also noted on each progress photo.",
+      "Progress photos, only if you add them — stored privately and shown only to you after passkey sign-in. Location and camera data are stripped before upload.",
+      "Bug reports you send — your message, profile name, the page you were on, your browser and device details, and when you sent it — so we can fix things.",
+      "Usage and performance — page views, load times, and an anonymous event when you finish a session (its type, programme block and readiness check-in), through Vercel Web Analytics and Speed Insights. No name attached, no cookies, nothing that follows you across other sites.",
+      "Your IP address — briefly, to stop abuse, and in our hosting provider's logs.",
+      "Anything you email us, if you do.",
     ],
   },
   {
     h: "Health information",
     p: [
-      "Training, readiness, bodyweight and photos can say something about your health, which UK law treats as special category data. We only use it with your explicit consent, which you give by entering it, and only to provide Heatwayve to you. You can withdraw that consent at any time by deleting it or your profile.",
+      "Readiness and its reasons, breaks (including \"injured or ill\"), bodyweight, training and photos can say something about your health, which UK law treats as special category data. We only use it with your explicit consent, which you give by entering it, to run Heatwayve for you — and, with no name attached, in the session event above. Withdraw consent any time by deleting it or your profile.",
     ],
   },
   {
     h: "Our lawful bases",
     list: [
-      "Providing the app you asked for (contract) — your profile, passkey and training data.",
+      "Providing the app you asked for (contract) — your name, passkey and training.",
       "Explicit consent — health information and progress photos.",
-      "Legitimate interests — keeping the service secure and working (rate limiting, error logs), measuring performance, and handling bug reports and questions.",
+      "Legitimate interests — keeping the service secure and working (rate limiting, logs), measuring performance, and handling bug reports and emails.",
     ],
   },
   {
     h: "Where it lives, and who helps us",
     list: [
-      "Vercel — hosts the app and runs its server functions in London; provides the analytics above.",
+      "Vercel — delivers the app worldwide; the server functions that handle your data run in London. Also runs the analytics above.",
       "Neon — our database, in London.",
-      "Vercel Blob — private storage for photos and backups, in London.",
-      "YouTube — exercise demo videos are embedded in privacy-enhanced mode. When you play one, Google processes that under its own privacy policy.",
+      "Vercel Blob — private file storage in London for passkey public keys, progress photos, backups, and older copies of some profiles' training.",
+      "YouTube — demo videos embed in privacy-enhanced mode. Opening one connects your browser to Google, under its own privacy policy. Some links open YouTube itself, where its usual terms and cookies apply.",
+      "Buy Me a Coffee — if you tip, that happens on their site under their policy. They may pass us your supporter name and message.",
     ],
     p: [
       "Our providers are US companies and may access data from outside the UK. Where they do, it's under UK-approved safeguards, such as the UK Extension to the EU–US Data Privacy Framework or the UK International Data Transfer Addendum.",
@@ -72,26 +75,28 @@ const SECTIONS = [
   {
     h: "Cookies and on-device storage",
     list: [
-      "One strictly necessary cookie keeps your sync signed in for up to 30 days, and a second keeps your photos unlocked for up to 7. Neither tracks you.",
-      "Your training is kept in your browser's local storage on your device.",
-      "No advertising or tracking cookies.",
+      "One strictly necessary cookie keeps sync signed in; a second keeps photos unlocked. Each renews while you use the app and lapses after 30 days (sync) or 7 days (photos) unused. Neither tracks you.",
+      "Your training is kept in your browser's storage on your device. Photos you view may sit briefly in your browser's cache.",
+      "No advertising or tracking cookies. If you open a demo video, YouTube may set its own.",
     ],
   },
   {
     h: "How long we keep it",
     list: [
-      "Profile, training data and photos — until you delete them or your profile.",
-      "Server backups of your profile — overwritten daily and weekly, and removed when you delete your profile.",
-      "Sign-in tokens — up to 30 days.",
-      "Bug reports — kept so fixes can be tracked. Ask and we'll delete yours.",
-      "Server logs — kept briefly by our hosting provider.",
-      "Data only on your device — until you clear it or remove the app.",
+      "Your name and training — until you delete your profile. Training can't be removed one session at a time on our servers.",
+      "Photos — until you delete them or your profile.",
+      "Backups — refreshed daily and weekly, deleted with your profile. Our database provider keeps a short restore history that expires on its own.",
+      "Sign-in records — each works for 30 days at most. The records (your profile name and dates) stay until you delete your profile.",
+      "Bug reports — not removed when you delete your profile. Ask and we'll delete yours.",
+      "Server logs, which can include your profile name — kept briefly by our hosting provider.",
+      "No passkey? Your name (and anything synced before 27 July 2026) stays until you add one and delete your profile, or email us.",
+      "Data on your device — until you clear it or remove the app.",
     ],
   },
   {
     h: "Your rights",
     p: [
-      "You can ask to access, correct, delete, restrict or move your data, object to how we use it, or withdraw consent. Much of it you can do yourself: delete photos in the Locker Room, remove your profile and its server data from the profile page, or copy your training out from AI coaching. For anything else, email us — we'll reply within a month.",
+      "You can ask to access, correct, delete, restrict or move your data, object to how we use it, or withdraw consent. Much of it you can do yourself: delete photos in the Locker Room, delete your profile and its server data from the profile page (your passkey proves it's you), or copy a summary of your recent training from AI coaching. For a full copy, or anything else, email us — we'll reply within a month.",
     ],
   },
   {
@@ -101,7 +106,7 @@ const SECTIONS = [
   {
     h: "Complaints",
     p: [
-      `Tell us first at ${CONTACT}. If you're still unhappy, you can complain to the Information Commissioner's Office: Wycliffe House, Water Lane, Wilmslow, Cheshire SK9 5AF · 0303 123 1113 · ico.org.uk/make-a-complaint.`,
+      `Tell us first at ${CONTACT} — we'll acknowledge it within 30 days. If you're still unhappy, you can complain to the ICO, the UK's data protection regulator: Wycliffe House, Water Lane, Wilmslow, Cheshire SK9 5AF · 0303 123 1113 · ico.org.uk/make-a-complaint.`,
     ],
   },
   {
