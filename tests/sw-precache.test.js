@@ -145,3 +145,11 @@ describe("#39 — update UX: waiting worker, safe promotion (code shape)", () =>
     expect(reg).toContain("reloadIfHidden");
   });
 });
+
+describe("update checks bypass the HTTP cache", () => {
+  it("registers with updateViaCache none", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../components/ServiceWorkerRegistrar.jsx", import.meta.url), "utf8");
+    expect(src).toContain('updateViaCache: "none"');
+  });
+});

@@ -263,13 +263,6 @@ export default function ForgeApp(){
   // script already applied is a no-op.
   useEffect(() => {
     stampTheme(getThemePreference(activeProfile));
-    // Auto mode: a live OS flip (sunset) re-resolves colours by itself via
-    // light-dark(), but data-mode (the substrate's image key) needs the
-    // re-stamp. Manual prefs ignore the event by construction.
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onFlip = () => stampTheme(getThemePreference(activeProfile));
-    mq.addEventListener("change", onFlip);
-    return () => mq.removeEventListener("change", onFlip);
   }, [activeProfile]);
 
   // Lifetime-tonnage milestone. Recomputes on every history change (cheap — O(n)
