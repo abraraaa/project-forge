@@ -614,6 +614,9 @@ export default function SessionHost() {
         if (Object.keys(engine.wwUpdates).length) {
           setWW(p => ({ ...p, ...engine.wwUpdates }));
         }
+        if (Object.keys(engine.wrUpdates || {}).length) {
+          setWR(p => ({ ...p, ...engine.wrUpdates }));
+        }
         if (engine.justCompletedDeload) {
           setActiveDeload(null);
           setShowDeloadComplete(true);
