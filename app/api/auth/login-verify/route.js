@@ -7,6 +7,7 @@ import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
 import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge, mintAuthToken, isAdminProfile } from "@/lib/auth-server";
 import { LEGACY_RP_ID, passkeyNudgeUrgent, daysUntilPasskeySunset } from "@/lib/origin";
+import { normaliseProfile } from "@/lib/profile-name";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -24,7 +25,7 @@ export const preferredRegion = "lhr1";
 // That token is the sole gate on destructive DELETE, so the padlock was
 // decorative. It isn't anymore.
 
-const normalise = (name) => String(name || "").trim().toLowerCase();
+const normalise = normaliseProfile;
 const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
 const credentialsPath = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials.json`;
 

@@ -39,3 +39,19 @@ describe("censusNameKeys", () => {
     expect(canonicalName(" KelvinK ")).toBe("kelvink");
   });
 });
+
+describe("one name rule everywhere", () => {
+  it("every route that keys on profile name uses the shared normaliser", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    for (const f of [
+      "app/api/sync/route.js", "app/api/photos/route.js", "lib/auth-server.js",
+      "app/api/auth/check/route.js", "app/api/auth/login-options/route.js", "app/api/auth/login-verify/route.js",
+      "app/api/auth/register-options/route.js", "app/api/auth/register-verify/route.js",
+    ]) {
+      const src = readFileSync(resolve(__dirname, "..", f), "utf8");
+      expect(src, f).toContain("const normalise = normaliseProfile;");
+      expect(src, f).not.toMatch(/String\(name \|\| ""\)\.trim\(\)\.toLowerCase\(\)/);
+    }
+  });
+});
