@@ -31,6 +31,41 @@ const PANELS = [
   { id: "p3-quiet", label: "A quiet touchable", note: "Bone surface, P3 warm tint. Does a wider gamut buy the quiet case anything at all." },
 ];
 
+// A plausible 8-week e1RM run, flat patch included.
+const SPARK_SERIES = [100, 102.5, 102.5, 105, 104, 107.5, 110, 112.5];
+const SPARKS = [
+  { id: "ship", note: "What ships — ink line, heat dots." },
+  { id: "p3-line", note: "P3 line — the stroke carries the colour; dots stay as they are." },
+  { id: "p3-dot", note: "P3 latest point — ink line, only today's dot is wide gamut. The most restrained." },
+  { id: "p3-ramp", note: "P3 ramp — the drill-down's heat gradient with its chroma raised." },
+];
+
+function SparkSample({ variant }) {
+  const W = 320, H = 64, n = SPARK_SERIES.length;
+  const min = Math.min(...SPARK_SERIES), max = Math.max(...SPARK_SERIES);
+  const x = (i) => 6 + (i * (W - 12)) / (n - 1);
+  const y = (v) => H - 8 - ((H - 16) * (v - min)) / (max - min);
+  const d = SPARK_SERIES.map((v, i) => `${i ? "L" : "M"} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  const gid = `ramp-${variant}`;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} className={`spark spark-${variant}`}>
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" className="ramp-1" />
+          <stop offset="0.6" className="ramp-2" />
+          <stop offset="1" className="ramp-3" />
+        </linearGradient>
+      </defs>
+      <path d={d} fill="none" className="spark-line" style={variant === "p3-ramp" ? { stroke: `url(#${gid})` } : undefined}
+        strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
+      {SPARK_SERIES.map((v, i) => (
+        <circle key={i} cx={x(i)} cy={y(v)} r={i === n - 1 ? 3.6 : 2.4}
+          className={i === n - 1 ? "spark-last" : "spark-dot"} stroke="var(--ground)" strokeWidth="1.4" />
+      ))}
+    </svg>
+  );
+}
+
 export default function DiagHdrPage() {
   const [env, setEnv] = useState(null);
   const [down, setDown] = useState(null);
@@ -91,6 +126,19 @@ export default function DiagHdrPage() {
           </div>
         ))}
 
+        <h2 style={{ fontSize: 15, margin: "36px 0 6px" }}>Sparklines in wide gamut</h2>
+        <p style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55, margin: "0 0 14px" }}>
+          Richer colour, same brightness — and light mode only: in dark mode every
+          variant falls back to what ships, so the bed-time scroll stays quiet.
+          Flip Appearance to compare.
+        </p>
+        {SPARKS.map((v) => (
+          <div key={v.id} style={{ marginBottom: 22 }}>
+            <SparkSample variant={v.id} />
+            <p style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.55, margin: "6px 2px 0" }}>{v.note}</p>
+          </div>
+        ))}
+
         <h2 style={{ fontSize: 15, margin: "36px 0 10px" }}>What this device reports</h2>
         {!env ? (
           <p style={{ fontSize: 13, color: "var(--ink-3)" }}>Reading…</p>
@@ -127,6 +175,25 @@ export default function DiagHdrPage() {
 
 // Plain CSS: a style-object serialiser drops these properties silently.
 const CSS_TEXT = `
+/* Sparklines. --spark-* hold what ships; the P3 block below raises chroma in
+   LIGHT mode only (light-dark's dark half is the shipped colour). */
+.spark { --spark-line: var(--ink-2); --spark-dot: var(--heat-2); --spark-last: var(--heat-2);
+  --ramp-1: var(--heat-1); --ramp-2: var(--heat-2); --ramp-3: var(--heat-3); }
+.spark-line { stroke: var(--spark-line); }
+.spark-dot { fill: var(--spark-dot); }
+.spark-last { fill: var(--spark-last); }
+.ramp-1 { stop-color: var(--ramp-1); } .ramp-2 { stop-color: var(--ramp-2); } .ramp-3 { stop-color: var(--ramp-3); }
+.spark-p3-ramp .spark-dot, .spark-p3-ramp .spark-last { fill: var(--ramp-2); }
+@supports (color: color(display-p3 1 1 1)) {
+  .spark-p3-line { --spark-line: light-dark(oklch(64% 0.15 38), var(--ink-2)); }
+  .spark-p3-dot  { --spark-last: light-dark(oklch(60% 0.19 36), var(--heat-2)); }
+  .spark-p3-ramp {
+    --ramp-1: light-dark(oklch(75% 0.11 40), var(--heat-1));
+    --ramp-2: light-dark(oklch(64% 0.15 38), var(--heat-2));
+    --ramp-3: light-dark(oklch(53% 0.18 34), var(--heat-3));
+  }
+}
+
 .bloom {
   position: relative;
   display: flex;
