@@ -66,6 +66,11 @@ export const ProfileShell = dynamic(() => import("@/components/ProfileView"), {
   loading: FieldBeat,
 });
 
+export const MainLiftsShell = dynamic(() => import("@/components/MainLiftsView"), {
+  ssr: false,
+  loading: FieldBeat,
+});
+
 export const SessionShell = dynamic(() => import("@/components/SessionHost"), {
   ssr: false,
   loading: FieldBeat,

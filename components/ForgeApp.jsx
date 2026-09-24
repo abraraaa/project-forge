@@ -141,16 +141,6 @@ export default function ForgeApp(){
   const [absenceNudgeDismissed,setAbsenceNudgeDismissed]=useState(false);
   const [userFocus,setUserFocus]=useState(DEFAULT_FOCUS);
   const [mainLifts,setMainLifts]=useState({});
-  // Durable per-profile choice. Validation lives in lib/programme.js so an
-  // unlisted movement can never reach the anchor slot.
-  const handleChangeMainLift = (canonical, choice) => {
-    if (!activeProfile || !isValidMainLiftChoice(canonical, choice)) return;
-    const next = { ...mainLifts };
-    if (!choice || choice === canonical) delete next[canonical];
-    else next[canonical] = choice;
-    setMainLifts(next);
-    P.saveMainLifts(activeProfile, next);
-  };
   const [focusPickerOpen,setFocusPickerOpen]=useState(false);
   // Session overview — lets users jump between blocks when gym constraints
   // dictate a different order than the prescribed flow. Auto-advance still
@@ -273,13 +263,6 @@ export default function ForgeApp(){
   // script already applied is a no-op.
   useEffect(() => {
     stampTheme(getThemePreference(activeProfile));
-    // Auto mode: a live OS flip (sunset) re-resolves colours by itself via
-    // light-dark(), but data-mode (the substrate's image key) needs the
-    // re-stamp. Manual prefs ignore the event by construction.
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onFlip = () => stampTheme(getThemePreference(activeProfile));
-    mq.addEventListener("change", onFlip);
-    return () => mq.removeEventListener("change", onFlip);
   }, [activeProfile]);
 
   // Lifetime-tonnage milestone. Recomputes on every history change (cheap — O(n)
@@ -756,7 +739,7 @@ export default function ForgeApp(){
   if(!activeProfile){
   return (
     <>
-      <ProfileScreen existing={P.list()} current={activeProfile} onActivate={activateProfile} onCancel={null} bodyweight={bodyweight} bwEditOpen={bwEditOpen} setBwEditOpen={setBwEditOpen} updateBodyweight={updateBodyweight} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onChangeMainLift={handleChangeMainLift}/>
+      <ProfileScreen existing={P.list()} current={activeProfile} onActivate={activateProfile} onCancel={null} bodyweight={bodyweight} bwEditOpen={bwEditOpen} setBwEditOpen={setBwEditOpen} updateBodyweight={updateBodyweight} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts}/>
       {/* Modals triggerable from ProfileScreen must mount here too — the
           early return above bypasses the main JSX where these live, so
           without this Fragment, tapping "Edit focus" in Profile sets state

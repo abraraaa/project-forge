@@ -24,6 +24,15 @@ const PANELS = [
   { id: "hlg-high",label: "Log set", note: "HDR assertive — the LinkedIn end of the dial, here so the bad option is on screen beside the good one." },
   { id: "vellum",  label: "Log set", note: "Torch behind vellum — the light sits UNDER the surface rather than on it. Lit, not emitting." },
   { id: "quiet",   label: "A quiet touchable", note: "The other case: a bone surface, where today only a tint is allowed." },
+  // Wide gamut, not high range. Standalone has no headroom above SDR white
+  // (confirmed on release iOS 27, 2026-09-22), so these probe the ceiling
+  // that IS reachable: chroma past sRGB on a P3 panel. Each has an sRGB
+  // fallback so it renders everywhere; the P3 form wins where supported.
+  { id: "p3-oxide", label: "Log set", note: "P3 oxide — the commit hue, chroma pushed past what sRGB can hold. Compare against \u2018lift\u2019 above: same shape, more colour, no more light." },
+  { id: "p3-warm",  label: "Log set", note: "P3 warm lift — --commit mixed toward a P3 warm white instead of sRGB white. Should read richer, not brighter." },
+  { id: "oklch",    label: "Log set", note: "oklch, chroma out of sRGB — no P3 keyword, just a colour sRGB cannot express. Safari gamut-maps it to the panel." },
+  { id: "p3-ring",  label: "Log set", note: "P3 edge — the light on the rim, not under the thumb. The one shape a bloom has not tried." },
+  { id: "p3-quiet", label: "A quiet touchable", note: "Bone surface, P3 warm tint. Does a wider gamut buy the quiet case anything at all." },
 ];
 
 export default function DiagHdrPage() {
@@ -111,8 +120,9 @@ export default function DiagHdrPage() {
         <p style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.6, marginTop: 22 }}>
           Measured 2026-08-30 on iOS 27: both rec2100 rows read{" "}
           <code>false</code> in browser AND standalone, so Safari exposes no HDR
-          colour to CSS. The HDR panels above fall back to ordinary colour. HDR
-          images and video go through a different pipeline entirely.
+          colour to CSS. Confirmed on release 27 (2026-09-22): only the SDR
+          panels light up in standalone. The P3 panels test the other axis —
+          gamut, not range — which standalone does reach.
         </p>
       </div>
     </div>
@@ -195,6 +205,48 @@ const CSS_TEXT = `
   z-index: 1;
   pointer-events: none;
   background: color-mix(in srgb, var(--commit) 82%, transparent);
+}
+
+/* ── Wide gamut. Fallback first, P3 form inside @supports. ── */
+.bloom-p3-oxide::before {
+  background: radial-gradient(120px circle at var(--x) var(--y), #E8A98F, transparent 72%);
+}
+.bloom-p3-warm::before {
+  background: radial-gradient(120px circle at var(--x) var(--y),
+    color-mix(in oklab, var(--commit) 84%, #FFF3E8), transparent 70%);
+}
+.bloom-oklch::before {
+  background: radial-gradient(120px circle at var(--x) var(--y), #F0A27F, transparent 72%);
+  background: radial-gradient(120px circle at var(--x) var(--y), oklch(80% 0.19 45), transparent 72%);
+}
+.bloom-p3-ring { box-shadow: inset 0 0 0 1px transparent, 0 1px 2px rgba(36,28,25,0.12), 0 8px 22px rgba(36,28,25,0.10); transition: transform 380ms cubic-bezier(0.22,1,0.36,1), box-shadow 380ms cubic-bezier(0.22,1,0.36,1); }
+.bloom-p3-ring::before { background: none; }
+.bloom-p3-ring.is-down { box-shadow: inset 0 0 0 2px #F2B394, inset 0 0 18px rgba(242,179,148,0.55), 0 1px 2px rgba(36,28,25,0.12), 0 8px 22px rgba(36,28,25,0.10); transition-duration: 90ms; }
+.bloom-p3-quiet {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(36,28,25,0.10), 0 6px 18px rgba(36,28,25,0.06);
+}
+.bloom-p3-quiet::before {
+  background: radial-gradient(120px circle at var(--x) var(--y), #F4E4D6, transparent 74%);
+}
+@supports (color: color(display-p3 1 1 1)) {
+  .bloom-p3-oxide::before {
+    background: radial-gradient(120px circle at var(--x) var(--y),
+      color(display-p3 0.98 0.60 0.44), transparent 72%);
+  }
+  .bloom-p3-warm::before {
+    background: radial-gradient(120px circle at var(--x) var(--y),
+      color-mix(in oklab, var(--commit) 84%, color(display-p3 1 0.95 0.88)), transparent 70%);
+  }
+  .bloom-p3-ring.is-down {
+    box-shadow: inset 0 0 0 2px color(display-p3 1 0.68 0.50), inset 0 0 18px color(display-p3 1 0.68 0.50 / 0.55),
+      0 1px 2px rgba(36,28,25,0.12), 0 8px 22px rgba(36,28,25,0.10);
+  }
+  .bloom-p3-quiet::before {
+    background: radial-gradient(120px circle at var(--x) var(--y),
+      color(display-p3 0.99 0.90 0.80), transparent 74%);
+  }
 }
 
 /* The quiet case: bone, tint only today. */

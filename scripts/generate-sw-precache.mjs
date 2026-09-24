@@ -16,7 +16,7 @@ import { resolve } from "node:path";
 
 // The statically-prerendered routes that make up the offline shell.
 // /library/[slug] pages are deliberately excluded (see design note).
-export const SHELL_ROUTES = ["/", "/session", "/profile", "/performance", "/library"];
+export const SHELL_ROUTES = ["/", "/session", "/profile", "/profile/main-lifts", "/performance", "/library"];
 
 // "/" → index.html, "/session" → session.html, …
 export const htmlFileFor = (route) => (route === "/" ? "index.html" : `${route.slice(1)}.html`);

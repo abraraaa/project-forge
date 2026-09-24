@@ -116,7 +116,10 @@ export default function ServiceWorkerRegistrar() {
     document.addEventListener("visibilitychange", onVisibility);
 
     navigator.serviceWorker
-      .register(SW_PATH, { scope: "/" })
+      // updateViaCache "none": a new build is detected by the bytes of the
+      // imported sw-precache.js, so update checks must never read it from HTTP
+      // cache, whatever headers public/ files later get.
+      .register(SW_PATH, { scope: "/", updateViaCache: "none" })
       .then((reg) => {
         registration = reg;
         // A worker may already be parked in waiting from a previous visit.
