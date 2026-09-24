@@ -7,6 +7,7 @@ import { put, get, list, del } from "@vercel/blob";
 import { isTokenValid, readTokenData, mintAuthToken } from "@/lib/auth-server";
 import { hasDb, dbUpsertPhoto, dbListPhotos, dbDeletePhoto, dbGetPhoto, dbHasRetiredPhotos } from "@/lib/db";
 import { isJpegBytes, PHOTO_MAX_UPLOAD_BYTES } from "@/lib/photos";
+import { normaliseProfile } from "@/lib/profile-name";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -25,7 +26,7 @@ export const preferredRegion = "lhr1";
 //   GET  /api/photos?profile=N                -> { photos: [{date, bodyweightAt, takenAt}] }
 //   GET  /api/photos?profile=N&date=...       -> image/jpeg bytes
 
-const normalise = (name) => String(name || "").trim().toLowerCase();
+const normalise = normaliseProfile;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Same character rules as validateProfile in the sync route: control chars

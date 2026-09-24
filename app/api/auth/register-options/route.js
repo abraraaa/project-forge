@@ -4,6 +4,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { list } from "@vercel/blob";
 import crypto from "crypto";
 import { hasChallengeSecret, issueChallenge, rpConfigFromRequest } from "@/lib/auth-server";
+import { normaliseProfile } from "@/lib/profile-name";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -12,7 +13,7 @@ export const preferredRegion = "lhr1";
 // POST /api/auth/register-options
 // Body: { profile: string }
 
-const normalise = (name) => String(name || "").trim().toLowerCase();
+const normalise = normaliseProfile;
 const legacyPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/`;
 
 export async function POST(request) {

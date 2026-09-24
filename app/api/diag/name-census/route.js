@@ -8,7 +8,7 @@ import { censusNameKeys } from "@/lib/name-census";
 export const preferredRegion = "lhr1";
 
 // NAME-KEY CENSUS — READ ONLY.
-// GET /api/diag/name-census   (Authorization: Bearer <CRON_SECRET>; Vercel Cron, daily)
+// GET /api/diag/name-census   (Authorization: Bearer <CRON_SECRET>; run 2026-09-24: divergent=0)
 //
 // Lists stored profile keys whose NFKC form differs from the key itself —
 // the keys a shared name normaliser would move. Blob directory names under

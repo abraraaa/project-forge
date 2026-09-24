@@ -6,6 +6,7 @@ import { hasRealPasskey, readTokenData, isTokenValid, mintAuthToken } from "@/li
 import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbDeleteToken, dbReadProfileSince, dbReadMetaFields, dbCursorNow } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { serverError as apiError } from "@/lib/api-errors";
+import { normaliseProfile } from "@/lib/profile-name";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -50,7 +51,7 @@ const serverError = (e, opts = {}) => apiError(e, { label: "sync", ...opts });
 // "k") collapse onto one path while visually identical composed/decomposed
 // forms (café NFC vs NFD) resolve to DIFFERENT profiles — a squatting and
 // impersonation surface on a namespace where the NAME is the identity.
-const normalise    = (name) => String(name || "").normalize("NFKC").trim().toLowerCase();
+const normalise = normaliseProfile;
 const metaPath     = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/meta.json`;
 const historyPath  = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/history.json`;
 // Trailing slash is load-bearing — without it, list() does a prefix match that

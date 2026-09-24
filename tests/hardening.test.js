@@ -140,7 +140,8 @@ describe("profile names cannot be path fragments or homoglyph collisions", () =>
   it("NFKC-normalises before lowercasing", () => {
     // One visible name must resolve to exactly one profile, and two
     // different profiles must never collapse onto one path.
-    expect(route).toContain('.normalize("NFKC")');
+    expect(route).toContain("const normalise = normaliseProfile;");
+    expect(readFileSync(resolve(root, "lib/profile-name.js"), "utf8")).toContain('.normalize("NFKC")');
   });
 
   it("rejects dot-only names", () => {

@@ -5,6 +5,7 @@ import { put } from "@vercel/blob";
 import crypto from "crypto";
 import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasChallengeSecret, issueChallenge, rpConfigFromRequest, planLoginCeremony } from "@/lib/auth-server";
+import { normaliseProfile } from "@/lib/profile-name";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -13,7 +14,7 @@ export const preferredRegion = "lhr1";
 // POST /api/auth/login-options
 // Body: { profile: string }
 
-const normalise = (name) => String(name || "").trim().toLowerCase();
+const normalise = normaliseProfile;
 // Note: Vercel Blob addRandomSuffix inserts BEFORE extension
 // So credentials.json becomes credentials-ABC123.json
 const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;

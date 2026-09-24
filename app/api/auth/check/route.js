@@ -4,6 +4,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasUsablePasskey, credentialRpId } from "@/lib/auth-server";
 import { acceptedRpIds } from "@/lib/origin";
+import { normaliseProfile } from "@/lib/profile-name";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -16,7 +17,7 @@ export const preferredRegion = "lhr1";
 // the UI re-offers setup — re-registration heals it into a real credential.
 // See lib/auth-server.js for the doctrine.
 
-const normalise = (name) => String(name || "").trim().toLowerCase();
+const normalise = normaliseProfile;
 const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
 
 export async function GET(request) {

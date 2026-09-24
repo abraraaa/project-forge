@@ -6,6 +6,7 @@ import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
 import { rpConfigFromRequest, verifyAuthToken, hasUsablePasskey, isReclaimOfLapsedProfile, hasChallengeSecret, verifyChallenge, mintAuthToken } from "@/lib/auth-server";
 import { dbRetirePhotos } from "@/lib/db";
+import { normaliseProfile } from "@/lib/profile-name";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -28,7 +29,7 @@ export const preferredRegion = "lhr1";
 //      grants an attacker no delete power they didn't already have on an
 //      unprotected profile.
 
-const normalise = (name) => String(name || "").trim().toLowerCase();
+const normalise = normaliseProfile;
 const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
 // addRandomSuffix inserts BEFORE the extension, so this is the write path.
 const credentialsPath = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials.json`;

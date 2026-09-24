@@ -12,10 +12,6 @@
     {
       "path": "/api/diag/passkey-census",
       "schedule": "0 5 * * *"
-    },
-    {
-      "path": "/api/diag/name-census",
-      "schedule": "15 5 * * *"
     }
   ],
   "headers": [
