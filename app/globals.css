@@ -119,6 +119,8 @@ body {
      would animate through positions that mean something elsewhere. 12% is
      the lift that stays furthest from any ramp step in both modes. */
   --press-lift: color-mix(in oklab, var(--commit) 88%, white);
+  /* Wide gamut where the panel has it — chosen on device over oklch as the
+     more intentional of the two. The sRGB lift above is the fallback. */
 
   /* Recessed well — the RPE track's unfilled bed, drum troughs. Slightly
      below the ground; the one "inset" tone. */
@@ -495,6 +497,9 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
    surface itself stays matte and nothing composites that did not before.
    --x/--y come from lib/press-lift.js; without them it centres, which is a
    degraded but correct default. */
+@supports (color: color(display-p3 1 1 1)) {
+  :root { --press-lift: color(display-p3 0.98 0.60 0.44); }
+}
 .forge-lift {
   position: relative;
   overflow: hidden;

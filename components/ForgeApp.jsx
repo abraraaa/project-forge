@@ -1069,6 +1069,9 @@ export default function ForgeApp(){
         if (Object.keys(engine.wwUpdates).length) {
           setWW(p => ({ ...p, ...engine.wwUpdates }));
         }
+        if (Object.keys(engine.wrUpdates || {}).length) {
+          setWR(p => ({ ...p, ...engine.wrUpdates }));
+        }
         // Phase 3 — refresh offer state from the post-engine snapshot.
         const finalState = TS.get(activeProfile);
         setDeloadOffer(shouldOfferDeload(finalState, H.get(activeProfile)));
