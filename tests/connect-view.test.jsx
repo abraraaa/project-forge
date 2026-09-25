@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// The Face ID button must work when iOS autofills the name without telling
-// React (2026-09-25: a filled field sat under a disabled button).
+// The Face ID button must work whatever filled the name: a post-hydration
+// prefill or autofill that never fires an event (2026-09-25: a filled field
+// sat under a button still disabled from the server render).
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";

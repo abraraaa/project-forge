@@ -12,10 +12,12 @@ import { authenticatePasskey } from "@/lib/webauthn";
 import { fetchWithTimeout } from "@/lib/net";
 
 export default function ConnectView({ clientName, host, params }) {
-  // The field is the truth. iOS can autofill it (username + passkey) without
-  // telling React, so the name is read from the input at tap time, and the
-  // button never disables on an empty-looking state — it did, and a filled
-  // field sat under a dead button (2026-09-25).
+  // The field is the truth. The name used to seed from localStorage during
+  // render: the server rendered an empty name and a disabled button, the
+  // browser rendered "Abrar", and hydration synced the input but kept the
+  // server's disabled button — a filled field over a dead button
+  // (2026-09-25). Now the name is read from the input at tap time (autofill
+  // can also fill it without an event) and the button never disables on it.
   const [name, setName] = useState("");
   const inputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   // Prefill after mount, not in the initial state: the server renders this
