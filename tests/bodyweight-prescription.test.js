@@ -42,7 +42,8 @@ describe("the reported bug", () => {
 
   it("never prescribes bodyweight as added weight", () => {
     const r = run([bwSet({ reps: 8, rir: 2 })]);
-    expect(r.weight).toBeNull();
+    // 0 added, not null: null left a stale stored value in place (2026-09-25).
+    expect(r.weight).toBe(0);
     expect(r.weight).not.toBe(BW);
   });
 
@@ -50,7 +51,7 @@ describe("the reported bug", () => {
     // The exact failure: 82 -> 83.25 landing in workingWeights.
     const r = run([bwSet({ reps: 8, rir: 3 })]);
     expect(r.weight).not.toBeCloseTo(BW + 1.25);
-    expect(r.weight).toBeNull();
+    expect(r.weight).toBe(0);
   });
 
   it("progresses reps instead, since that is how an unloaded pull-up moves", () => {
@@ -64,7 +65,7 @@ describe("the reported bug", () => {
     const r = run([bwSet({ reps: 8, rir: 0 })]);
     expect(r.decision).toBe("HOLD");
     expect(r.reps).toBe(8);
-    expect(r.weight).toBeNull();
+    expect(r.weight).toBe(0);
   });
 });
 
@@ -101,5 +102,28 @@ describe("ordinary loaded lifts are untouched", () => {
     });
     expect(r.decision).toBe("ADD");
     expect(r.weight).toBeGreaterThan(100);
+  });
+});
+
+// The 2026-08-30 fix guarded one reader. The writers disagreed on units:
+// reconcileLiftStateWithSession recorded effectiveLoad (BW + added) as the
+// lift's currentWeight, and an unloaded session prescribed null, so a stored
+// "79.8 kg added" (= bodyweight) never healed (2026-09-25).
+describe("one unit for bodyweight lifts: added load", () => {
+  it("reconcile records added load, not bodyweight", async () => {
+    const { reconcileLiftStateWithSession } = await import("../lib/progression.js");
+    const ex = session([bwSet({}), bwSet({})]).blocks[0].exercises[0];
+    expect(reconcileLiftStateWithSession({ currentWeight: 79.8 }, ex).currentWeight).toBe(0);
+    const belted = session([bwSet({ weight: 10 })]).blocks[0].exercises[0];
+    expect(reconcileLiftStateWithSession({ currentWeight: 92 }, belted).currentWeight).toBe(10);
+  });
+  it("a stale total in lift state can't leak into the next prescription", () => {
+    const r = computeNextPrescription({
+      liftName: "Pull-Up",
+      history: [session([bwSet({ reps: 8, rir: 2 })])],
+      liftState: { currentWeight: 79.8, sessionsCount: 4, consecutiveAdds: 0, consecutiveHolds: 0, stallSignal: null, currentRepRange: null },
+      context: { readiness: "normal", loadType: "loaded_bodyweight" },
+    });
+    expect(r.weight).toBe(0);
   });
 });
