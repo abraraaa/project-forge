@@ -10,18 +10,19 @@
 
 import { useMemo, useState, useEffect } from "react";
 import {
-  mainLiftTrend, weeklyVolumeByMuscle, weeklyRhythm,
+  mainLiftTrend, weeklyVolumeByMuscle,
   readinessBreakdown, sessionCount, detectPlateaus,
 } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER, VOLUME_TARGETS } from "@/lib/volume-audit";
 import Glyph from "@/components/Glyph";
-import { WEEK } from "@/lib/programme";
 import { T, DISPLAY, HATCH } from "@/lib/tokens";
 import { addDaysIso } from "@/lib/dates";
 import { haptic } from "@/lib/a11y";
 import GlossarySheet, { GlossaryTrigger } from "@/components/GlossarySheet";
 import { renderShareCard, shareCanvas } from "@/lib/share-card";
 import { W, P } from "@/lib/storage";
+import { makeDayContext, weeklyStrength } from "@/lib/day-state";
+import { useTodayIso } from "@/lib/use-today-iso";
 import { coachConnected, copyCoachContext } from "@/lib/coach-share";
 
 // Training-day grouping for the volume list — the Lab reads like the week
@@ -58,15 +59,18 @@ const linkBtn = {
   display: "inline-flex", alignItems: "center", gap: 5,
 };
 
+const EMPTY = [];
+
 // ─── Main export ──────────────────────────────────────────────────────────────
-export default function PerformanceLab({ history, onBack, resting = false }) {
+export default function PerformanceLab({ history, onBack, resting = false, breaks = EMPTY }) {
   const trends  = useMemo(() => mainLiftTrend(history),   [history]);
-  const rhythmWeeks = useMemo(() => weeklyRhythm(history, 8), [history]);
-  // The strip reads against the user's OWN weekly quota (schedule-aware).
-  const weeklyQuota = useMemo(() => {
-    const week = W.get() || WEEK;
-    return Math.max(1, week.filter((d) => d?.type === "strength").length);
-  }, []);
+  const todayIso = useTodayIso();
+  // Each week against the schedule in force that week, breathers excluded.
+  // No Days store: the Lab is history-only for strength (a session not yet
+  // synced into history isn't counted here).
+  const rhythmWeeks = useMemo(() => weeklyStrength(
+    makeDayContext({ todayIso, history, breaks, weekFor: W.getEffectiveOn }), { weeks: 8 },
+  ), [history, breaks, todayIso]);
   const readiness = useMemo(() => readinessBreakdown(history), [history]);
   const counts    = useMemo(() => sessionCount(history),       [history]);
   const plateaus  = useMemo(() => detectPlateaus(history),     [history]);
@@ -220,7 +224,7 @@ export default function PerformanceLab({ history, onBack, resting = false }) {
           {/* §13.5 consistency — planned sessions as hairline squares,
               completed filled with the day key; adherence as texture. */}
           <div className="lab-card" style={{margin:"28px 24px 0"}}>
-            <ConsistencyCells weeks={rhythmWeeks} quota={weeklyQuota}/>
+            <ConsistencyCells weeks={rhythmWeeks}/>
           </div>
 
           {/* Volume ledger — muscles grouped by training day, dense rows. */}
@@ -494,12 +498,21 @@ function LineChart({ series }) {
 
 // ─── Consistency — the last 8 weeks as day cells (§13.5) ─────────────────────
 // Planned sessions are hairline squares; completed ones fill with the
-// strength day key at the mark radius. Adherence reads as texture; the
-// streak prints in mono at the right.
-function ConsistencyCells({ weeks, quota }) {
+// strength day key at the mark radius. Each week has its own count (the
+// schedule in force then). This week's days still to come are faint, not
+// missed; strength days a breather took out read as rest cells. The
+// headline counts only what was due so far.
+function ConsistencyCells({ weeks }) {
   if (!weeks || weeks.length === 0) return null;
-  const done = weeks.reduce((n, w) => n + Math.min(w.days, quota), 0);
-  const planned = weeks.length * quota;
+  const due = (w) => (w.partial ? w.plannedSoFar : w.planned);
+  const done = weeks.reduce((n, w) => n + Math.min(w.done, due(w)), 0);
+  const planned = weeks.reduce((n, w) => n + due(w), 0);
+  const current = weeks.find((w) => w.partial);
+  const ahead = current ? current.planned - current.plannedSoFar : 0;
+  const rested = weeks.reduce((n, w) => n + w.plannedResting, 0);
+  const summary = `${done} of ${planned} planned sessions completed across ${weeks.length} weeks`
+    + (ahead > 0 ? `, ${ahead} still to come this week` : "")
+    + (rested > 0 ? `, ${rested} set aside for a breather` : "");
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",paddingBottom:8,borderBottom:`1px solid ${T.rule}`}}>
@@ -510,18 +523,33 @@ function ConsistencyCells({ weeks, quota }) {
           <span style={{fontFamily:T.measured}}>{done}</span> of <span style={{fontFamily:T.measured}}>{planned}</span> planned
         </span>
       </div>
-      <div style={{display:"flex",gap:10,paddingTop:12}} aria-label={`${done} of ${planned} planned sessions completed across ${weeks.length} weeks`}>
-        {weeks.map((w) => (
-          <div key={w.weekStart} style={{display:"flex",gap:3}}>
-            {Array.from({ length: quota }, (_, i) => (
-              <span key={i} aria-hidden="true" style={{
-                width:10,height:10,borderRadius:T.rMark,
-                background: i < w.days ? T.dayKey.strength : "transparent",
-                boxShadow: i < w.days ? "none" : `inset 0 0 0 1px ${T.rule}`,
-              }}/>
-            ))}
-          </div>
-        ))}
+      <div style={{display:"flex",gap:10,paddingTop:12,flexWrap:"wrap"}} aria-label={summary}>
+        {weeks.map((w) => {
+          const filled = Math.min(w.done, w.planned);
+          return (
+            <div key={w.mondayIso} data-week={w.mondayIso} style={{display:"flex",gap:3}}>
+              {Array.from({ length: w.planned }, (_, i) => {
+                const isDone = i < filled;
+                // Past what was due so far (partial week): still to come.
+                const isAhead = !isDone && w.partial && i >= w.plannedSoFar;
+                return (
+                  <span key={i} aria-hidden="true" data-cell={isDone ? "done" : isAhead ? "ahead" : "missed"} style={{
+                    width:10,height:10,borderRadius:T.rMark,
+                    background: isDone ? T.dayKey.strength : "transparent",
+                    boxShadow: isDone ? "none" : `inset 0 0 0 1px ${T.rule}`,
+                    opacity: isAhead ? 0.45 : 1,
+                  }}/>
+                );
+              })}
+              {Array.from({ length: w.plannedResting }, (_, i) => (
+                <span key={`r${i}`} aria-hidden="true" data-cell="resting" style={{
+                  width:10,height:10,borderRadius:T.rMark,
+                  background: T.dayKey.rest, opacity:0.25,
+                }}/>
+              ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

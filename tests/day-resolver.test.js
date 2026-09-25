@@ -5,7 +5,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   makeDayContext, resolveDay, resolveWeek, resolveRange, owedDays, activityInRange,
-  strengthRhythm, weeklyStrength, isStrengthRecord,
+  strengthRhythm, trainingRhythm, weeklyStrength, isStrengthRecord,
 } from "../lib/day-state.js";
 import { mondayIndex } from "../lib/dates.js";
 import { findUntickedRecent, findRecentDays, sessionMetaForDate, WEEK } from "../lib/programme.js";
@@ -205,8 +205,36 @@ describe("parity with findUntickedRecent", () => {
       const wed = now.find((r) => r.date === "2026-09-23");
       expect(wed.sessionIdx).toBe(sessionMetaForDate("2026-09-23", MWF, history).sessionIdx);
       expect(wed.sessionIdx).toBe(0);
-      expect(wed.sessionName).toBe("Strength A");
+      // Decision 10: the row names no letter; the retro sheet picks it at log time.
+      expect(wed.sessionName).toBe("Strength");
       expect(wed.dateLabel).toBe(old.find((r) => r.date === "2026-09-23").dateLabel);
+    });
+
+    it("decision 10: several missed strength days read plain 'Strength', no letter", () => {
+      // Owner bug: Wed B, Thu B, next up B. Strength every weekday, last trained Mon.
+      const plan = weekOf("strength", "strength", "strength", "strength", "strength", "rest", "rest");
+      const history = [rec("2026-09-21", "A")];
+      const now = owed("2026-09-25", history, 7, { weekFor: () => plan })
+        .filter((r) => r.date >= "2026-09-21");
+      expect(now.map((r) => [r.date, r.action])).toEqual([
+        ["2026-09-24", "log"], ["2026-09-23", "log"], ["2026-09-22", "log"],
+      ]);
+      for (const r of now) {
+        expect(r.sessionName).toBe("Strength");
+        expect(r.sessionName).not.toMatch(/\b[ABC]\b/);
+      }
+      // Logging still resolves a real letter for the date (the retro sheet's call).
+      expect(sessionMetaForDate("2026-09-24", plan, history).sessionName).toMatch(/^Strength [ABC]$/);
+    });
+
+    it("decision 3: a cardio tick on a day since edited to zone2 is offered 'Yes, done' for zone2", () => {
+      const plan = weekOf("rest", "zone2", "rest", "rest", "rest", "rest", "rest");
+      const days = { "2026-09-22": { completedType: "cardio" } };
+      const now = owed("2026-09-25", [], 7, { weekFor: () => plan, days })
+        .filter((r) => r.date >= "2026-09-21");
+      expect(now.map((r) => [r.date, r.type, r.action, r.sessionName])).toEqual([
+        ["2026-09-22", "zone2", "tick", "zone2"],
+      ]);
     });
 
     it("decision (f): a legacy strength-typed tick on a strength day counts as done", () => {
@@ -459,6 +487,45 @@ describe("strengthRhythm", () => {
   });
 });
 
+// Decision 4: the home rhythm counts conditioning days too, so "Done.
+// Rhythm kept." on a ticked cardio day moves the number.
+describe("trainingRhythm (decision 4)", () => {
+  // Mon S, Tue cardio, Wed S, Thu zone2, Fri S, Sat hiit, Sun rest.
+  const MIXED = weekOf("strength", "cardio", "strength", "zone2", "strength", "hiit", "rest");
+  const weekFor = () => MIXED;
+
+  it("an own-type tick counts; a wrong-type tick and rest days don't", () => {
+    // Week of Mon 21 Sep, today Thu 24 (not done). Past: Mon, Tue, Wed.
+    const days = { "2026-09-22": { completedType: "cardio" }, "2026-09-23": { completedType: "cardio" } };
+    const r = trainingRhythm(makeDayContext({ todayIso: "2026-09-24", days, weekFor }), { days: 4 });
+    expect(r).toEqual({ completed: 1, expected: 3, ratio: 1 / 3, window: 4 });
+    expect(strengthRhythm(makeDayContext({ todayIso: "2026-09-24", days, weekFor }), { days: 4 }).completed).toBe(0);
+  });
+
+  it("today counts only once done; a strength session satisfies a conditioning day", () => {
+    const history = [rec("2026-09-24")];
+    const undone = trainingRhythm(makeDayContext({ todayIso: "2026-09-24", weekFor }), { days: 1 });
+    expect(undone).toEqual({ completed: 0, expected: 0, ratio: 0, window: 1 });
+    const done = trainingRhythm(makeDayContext({ todayIso: "2026-09-24", history, weekFor }), { days: 1 });
+    expect(done).toEqual({ completed: 1, expected: 1, ratio: 1, window: 1 });
+  });
+
+  it("a strength session on a cardio day completes it AND makes up the missed strength day (decision 1)", () => {
+    // Mon strength missed, Tue cardio day trained as strength. Today Wed, not done.
+    const ctx = makeDayContext({ todayIso: "2026-09-23", history: [rec("2026-09-22")], weekFor });
+    expect(resolveDay(ctx, "2026-09-21").status).toBe("covered");
+    expect(trainingRhythm(ctx, { days: 3 })).toEqual({ completed: 2, expected: 2, ratio: 1, window: 3 });
+  });
+
+  it("breather days aren't expected unless trained; Days-only sessions count (decision 7)", () => {
+    const breaks = [{ id: "b", start: "2026-09-21", endedAt: "2026-09-23" }];
+    const days = { "2026-09-22": { sessionId: "s" } };
+    // Mon resting (untrained), Tue resting but trained (Days only), Wed trained, today Thu undone.
+    const r = trainingRhythm(makeDayContext({ todayIso: "2026-09-24", history: [rec("2026-09-23")], days, breaks, weekFor }), { days: 4 });
+    expect(r).toEqual({ completed: 2, expected: 2, ratio: 1, window: 4 });
+  });
+});
+
 describe("weeklyStrength", () => {
   it("per-week schedule, partial current week, resting weeks, history-only done", () => {
     const three = weekOf("strength", "rest", "strength", "rest", "strength", "rest", "rest");
@@ -469,25 +536,25 @@ describe("weeklyStrength", () => {
     const days = { "2026-09-19": { sessionId: "s" } };
     const ctx = makeDayContext({ todayIso: "2026-09-23", history, days, breaks, weekFor });
     expect(weeklyStrength(ctx, { weeks: 4 })).toEqual([
-      { mondayIso: "2026-08-31", planned: 3, plannedSoFar: 3, done: 2, resting: 0, partial: false },
-      { mondayIso: "2026-09-07", planned: 0, plannedSoFar: 0, done: 0, resting: 7, partial: false },
-      { mondayIso: "2026-09-14", planned: 2, plannedSoFar: 2, done: 1, resting: 0, partial: false },
-      { mondayIso: "2026-09-21", planned: 2, plannedSoFar: 1, done: 1, resting: 0, partial: true },
+      { mondayIso: "2026-08-31", planned: 3, plannedSoFar: 3, plannedResting: 0, done: 2, resting: 0, partial: false },
+      { mondayIso: "2026-09-07", planned: 0, plannedSoFar: 0, plannedResting: 3, done: 0, resting: 7, partial: false },
+      { mondayIso: "2026-09-14", planned: 2, plannedSoFar: 2, plannedResting: 0, done: 1, resting: 0, partial: false },
+      { mondayIso: "2026-09-21", planned: 2, plannedSoFar: 1, plannedResting: 0, done: 1, resting: 0, partial: true },
     ]);
   });
 });
 
 describe("resolveWeek wrapper", () => {
-  it("carries the new fields (covered, resting) and keeps the strip's current letters", () => {
-    // Trained A Mon, skipped Wed, today Fri: the strip still steps Wed back
-    // from today's projection; resolveDay gives the retro letter.
+  it("carries the new fields (covered, resting); a past missed day takes the retro letter (decision 8)", () => {
+    // Trained A Mon, B Tue (off-plan), skipped Wed, today Fri: Wed shows
+    // what logging it would write (C after Tue's B), same as resolveDay.
     const history = [rec("2026-09-21", "A"), rec("2026-09-22", "B")];
     const breaks = [{ id: "b", start: "2026-09-26", endedAt: null }];
     const w = resolveWeek({ mondayIso: "2026-09-21", todayIdx: 4, history, weekFor: () => MWF, breaks });
     expect(w.map((d) => d.status)).toEqual(["done", "done", "covered", "rest", "due", "resting", "resting"]);
-    expect(w[2].session).toBe(1);
+    expect(w[2].session).toBe(2);
     const ctx = makeDayContext({ todayIso: "2026-09-25", history, weekFor: () => MWF, breaks });
-    expect(resolveDay(ctx, "2026-09-23").session).toBe(2);
+    expect(resolveDay(ctx, "2026-09-23").session).toBe(w[2].session);
   });
 });
 
@@ -522,5 +589,27 @@ describe("review fixes (2026-09-25)", () => {
     });
     expect(resolveDay(ctx, "2026-09-23").resting).toBe(false);
     expect(resolveDay(ctx, "2026-09-23").owed).toBe("log");
+  });
+});
+
+describe("a past tick stands if it matched the plan when made (2026-09-25)", () => {
+  const wk = (...types) => types.map((type) => ({ type }));
+  const OLD = wk("zone2", "strength", "rest", "strength", "rest", "strength", "rest");
+  const NEW = wk("strength", "rest", "rest", "cardio", "rest", "strength", "strength");
+  const weekFor = (iso) => (iso >= "2026-09-21" ? NEW : OLD); // edit saved Fri, effective Mon
+
+  it("a zone2 ticked on Monday stays done after the week is edited to put strength on Monday", () => {
+    const ctx = makeDayContext({ todayIso: "2026-09-25", weekFor,
+      days: { "2026-09-21": { completedType: "zone2", scheduledType: "zone2" } } });
+    const mon = resolveDay(ctx, "2026-09-21");
+    expect(mon.planned).toBe("strength");
+    expect(mon.done).toBe(true);
+    expect(mon.owed).toBeNull();
+    expect(mon.shown.type).toBe("zone2");
+  });
+  it("today stays strict: a cardio tick doesn't complete today once today became strength", () => {
+    const ctx = makeDayContext({ todayIso: "2026-09-21", weekFor,
+      days: { "2026-09-21": { completedType: "zone2", scheduledType: "zone2" } } });
+    expect(resolveDay(ctx, "2026-09-21").done).toBe(false);
   });
 });

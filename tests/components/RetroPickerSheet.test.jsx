@@ -37,7 +37,7 @@ const strengthRow = (date) => ({
   date,
   dateLabel: `Day ${date}`,
   type: "strength",
-  sessionName: "Strength A",
+  sessionName: "Strength", // decision 10: rows carry no letter (owedDays)
   action: "log",
 });
 
@@ -56,7 +56,7 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
     // badge, no "X unmarked" framing that turns the list into a TODO to
     // clear. The session names prove both rows rendered.
     expect(screen.getByText("Recent days")).toBeTruthy();
-    expect(screen.getByText("Strength A")).toBeTruthy();
+    expect(screen.getByText("Strength")).toBeTruthy();
     expect(screen.getByText("Z2 — 60 min")).toBeTruthy();
   });
 
@@ -111,7 +111,7 @@ describe("RetroPickerSheet — date-keyed catch-up", () => {
     // Z2 row gone, strength row still there — no auto-close, no "all caught
     // up" celebration. The user closes manually when they're done.
     expect(screen.queryByText("Z2 — 60 min")).toBeNull();
-    expect(screen.getByText("Strength A")).toBeTruthy();
+    expect(screen.getByText("Strength")).toBeTruthy();
   });
 
   it("celebrates when the user clears the list manually — but does NOT auto-close", () => {

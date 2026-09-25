@@ -7,19 +7,20 @@ import {
   rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
   dedupeRotationConfig,
   ROTATION_AUTO, DEFAULT_FOCUS, // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
-  sessionMetaForDate, findUntickedRecent, isValidMainLiftChoice, } from "@/lib/programme";
+  sessionMetaForDate, isValidMainLiftChoice, } from "@/lib/programme";
 import {
   SessionIntent,
-  LS, P, PB, W, F, H, BW, PN, Days, Bk, bumpStreak, recordCompletion,
-  computeRhythm, detectRecoveryPattern,
+  LS, P, PB, W, F, H, BW, PN, AN, Days, Bk, bumpStreak, recordCompletion,
+  detectRecoveryPattern,
   flushPendingPushes, getLocalProfile, backgroundSync, SyncStatus,
   ensurePersistentStorage,
   enableAutoSync, disableAutoSync, pushNow, weeksSince, dateOfWeekdayIdxInCurrentWeek,
   newDraftLog, logSet, finaliseDraft, D, TS,
   startingWeightForLift,
 } from "@/lib/storage";
-import { resolveWeek, sessionsFrom } from "@/lib/day-state";
-import { absencesFromHistory, weeklySlotsFromWeek } from "@/lib/absence";
+import { makeDayContext, resolveRange, sessionsFrom, owedDays, trainingRhythm } from "@/lib/day-state";
+import { useTodayIso } from "@/lib/use-today-iso";
+import { nudgeAbsence, weeklySlotsFromWeek } from "@/lib/absence";
 import { isHeatwayveOrigin, migrationWindowOpen, hasPreFlipStory } from "@/lib/origin";
 import { activeBreak } from "@/lib/breaks";
 import { todayLocalIso, mondayIndex, jsDow, mondayOfWeekIso, addDaysIso } from "@/lib/dates";
@@ -125,21 +126,22 @@ export default function ForgeApp(){
     withNavTransition(() => setScreenRaw(next), next === "home" ? "nav-back" : null);
   }, []);
   const [programmeBlock,setProgrammeBlock]=useState(()=>PB.get());
-  const [weekDone,setWeekDone]=useState({});
-  // Date-keyed { [ISO date]: true }. Source of truth for "this day is done."
-  // Strength session finalises auto-write it; non-strength Mark ✓ writes it
-  // explicitly; cross-week back-marking just works because the key is the
-  // date, not the weekday-of-current-week. weekDone stays as a derived
-  // projection for the home week strip to render against without re-deriving
-  // the math at every cell.
-  const [dayDone,setDayDone]=useState({});
-  const [bonusDone,setBonusDone]=useState({});
+  // Days store revision. Every Days write bumps it; everything that reads
+  // Days (the day context, the tick dates) keys on it instead of holding a
+  // mirrored copy that each write path had to remember to refresh.
+  const [daysRev,setDaysRev]=useState(0);
+  const bumpDays=useCallback(()=>setDaysRev((n)=>n+1),[]);
+  // Local date as state, re-anchored when the calendar day changes, so the
+  // home week and everything derived from it roll over at midnight.
+  const todayIso=useTodayIso();
   // Breathers — declared pauses (lib/breaks.js, Bk store). Hydrated from LS
   // in the profile-load effect; kept in state so the resting badge + nudge
   // react to start/end without a reload.
   const [breaks,setBreaks]=useState([]);
   const [breatherOpen,setBreatherOpen]=useState(false);
-  const [absenceNudgeDismissed,setAbsenceNudgeDismissed]=useState(false);
+  // Start date of the absence whose nudge was dismissed (AN store), so the
+  // dismissal outlives reloads but not the absence.
+  const [absenceDismissedStart,setAbsenceDismissedStart]=useState(null);
   const [userFocus,setUserFocus]=useState(DEFAULT_FOCUS);
   const [mainLifts,setMainLifts]=useState({});
   const [focusPickerOpen,setFocusPickerOpen]=useState(false);
@@ -304,67 +306,54 @@ export default function ForgeApp(){
     () => projectStrengthDaySessions(userWeek, history, mondayIndex(new Date())),
     [userWeek, history],
   );
-  // Rhythm — derived from history against the USER'S schedule (expected =
-  // weekly strength days × 4), no persistence needed. Lives below userWeek
-  // so the memo can read it.
-  const rhythm = useMemo(
-    () => computeRhythm(history, {
-      weeklyStrengthDays: userWeek.filter((d) => d?.type === "strength").length,
-      weekFor: (d) => W.getEffectiveOn(d) || WEEK,
-    }),
-    [history, userWeek]
-  );
-  // Single source of truth for catch-up state. dayDone is date-keyed
-  // (`{ "2026-06-13": true, ... }`) — strength session finalises write it,
-  // the Mark ✓ path writes it explicitly. findUntickedRecent returns the
-  // actionable list (date + type + "log"/"tick" hint). Link surfaces when
-  // length > 0; picker drives off the same list; count goes into the
-  // editorial label so the user knows the scope up front.
-  // weekFor: each past date is judged under the schedule IN FORCE on it
-  // (W.getEffectiveOn), falling back to the default WEEK for dates before
-  // any edit existed. A static `week: userWeek` here reinterpreted the
-  // whole 7-day window under today's schedule — edit the week and past
-  // days changed meaning: wrong tick/log actions, phantom "missed" days.
-  // userWeek stays in the dep list so schedule saves recompute the list.
-  const untickedDays = useMemo(
-    () => findUntickedRecent(history, 7, dayDone, {
-      week: userWeek,
-      weekFor: (d) => W.getEffectiveOn(d) || WEEK,
-    }),
-    [history, dayDone, userWeek]
-  );
-  const hasRetroGaps = untickedDays.length > 0;
-
-  // The home week, resolved once (lib/day-state.js): each day's plan as it
-  // stood, what was actually done, and the session to show. The strip, the
-  // headline and the done ticks all read this, so they can't disagree.
-  // weekDone/dayDone are deps because Days changes land through them.
-  const homeWeek = useMemo(() => resolveWeek({
-    mondayIso: mondayOfWeekIso(todayLocalIso()),
-    todayIdx: mondayIndex(new Date()),
+  // ONE day context per render (lib/day-state.js): every date's plan as it
+  // stood, what was actually done, coverage and breathers. The strip, the
+  // headline and the done ticks all read it, so they can't disagree.
+  const dayCtx = useMemo(() => makeDayContext({
+    todayIso,
     history,
     days: activeProfile ? Days.getAll(activeProfile) : {},
+    breaks,
     weekFor: (iso) => W.getEffectiveOn(iso),
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- weekDone/dayDone/userWeek signal Days and schedule writes read inside
-  }), [activeProfile, history, weekDone, dayDone, userWeek]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- daysRev/userWeek signal Days and schedule writes read inside
+  }), [activeProfile, history, daysRev, userWeek, breaks, todayIso]);
+  // Rhythm — every non-rest planned day in the last 28, conditioning ticks
+  // included, off the same ctx as the strip (lib/day-state.js trainingRhythm).
+  const rhythm = useMemo(() => trainingRhythm(dayCtx, { days: 28 }), [dayCtx]);
+  // Catch-up rows ("Anything missed?" link and the picker) come off the same
+  // ctx as the strip, so a day the strip shows done or made up is never
+  // offered. Each date is judged under the schedule in force on it.
+  const untickedDays = useMemo(() => owedDays(dayCtx, { daysBack: 7 }), [dayCtx]);
+  const hasRetroGaps = untickedDays.length > 0;
+  const homeWeek = useMemo(() => {
+    const monday = mondayOfWeekIso(todayIso);
+    return resolveRange(dayCtx, monday, addDaysIso(monday, 6));
+  }, [dayCtx, todayIso]);
   const homeWeekDays = useMemo(() => homeWeek.map((d) => d.shown), [homeWeek]);
   const homeWeekSessions = useMemo(() => sessionsFrom(homeWeek), [homeWeek]);
   const homeWeekDone = useMemo(() => Object.fromEntries(homeWeek.map((d, i) => [i, d.done]).filter(([, v]) => v)), [homeWeek]);
+  const bonusDone = useMemo(() => Object.fromEntries(homeWeek.map((d, i) => [i, d.bonus]).filter(([, v]) => v)), [homeWeek]);
+  // Status and coverage per strip cell: covered and resting days draw
+  // differently from a plain miss.
+  const homeWeekStates = useMemo(() => homeWeek.map((d) => ({ status: d.status, coveredBy: d.coveredBy })), [homeWeek]);
 
   // Breathers — the resting state (rhythm pauses) and the absence nudge.
   // restingBreak drives the badge; absenceNudge surfaces the Home prompt
-  // only when NOT already resting and not dismissed this session. Activity
-  // = strength history dates ∪ manual day ticks, judged against the
-  // schedule's cadence (lib/absence.js). current = an ongoing absence.
+  // only when NOT already resting and not dismissed for this absence.
+  // Activity and breather days come off the day context (any did counts,
+  // including a finalised session whose history hasn't synced), judged
+  // against the schedule's cadence (lib/absence.js). current = an ongoing
+  // absence; breather days are skipped and today is never a day off.
   const restingBreak = useMemo(() => activeBreak(breaks), [breaks]);
   const absenceNudge = useMemo(() => {
-    if (restingBreak || absenceNudgeDismissed) return null;
-    const { current } = absencesFromHistory(history, {
-      weeklySlots: weeklySlotsFromWeek(userWeek),
-      extraDates: Object.keys(dayDone || {}),
-    });
-    return current;
-  }, [restingBreak, absenceNudgeDismissed, history, dayDone, userWeek]);
+    if (restingBreak) return null;
+    return nudgeAbsence(dayCtx, { weeklySlots: weeklySlotsFromWeek(userWeek), dismissedStart: absenceDismissedStart });
+  }, [restingBreak, dayCtx, userWeek, absenceDismissedStart]);
+  const handleDismissAbsenceNudge = useCallback(() => {
+    if (!absenceNudge) return;
+    AN.dismiss(activeProfile, absenceNudge.start);
+    setAbsenceDismissedStart(absenceNudge.start);
+  }, [absenceNudge, activeProfile]);
 
   const handleStartBreather = useCallback((reason) => {
     if (!activeProfile) return;
@@ -380,14 +369,9 @@ export default function ForgeApp(){
   // marking cardio done and then flipping today to strength left the day
   // reading "done" and Begin unreachable until a full reload (boss report,
   // 2026-08-04).
-  const refreshDayProjection = useCallback(() => {
-    const proj = Days.projectCurrentWeek(activeProfile);
-    setWeekDone(proj.complete);
-    setBonusDone(proj.bonus);
-    setDayDone(Days.manualTickDates(activeProfile));
-  }, [activeProfile]);
+  const refreshDayProjection = bumpDays;
   const handleSaveWeek = (newWeek) => {
-    W.save(newWeek);
+    W.saveEdit(newWeek);
     setUserWeek(W.get() || WEEK); // re-read so state mirrors the persisted/normalised shape
     refreshDayProjection();
     setWeekEditorOpen(false);
@@ -427,21 +411,16 @@ export default function ForgeApp(){
     setWRState(local.meta.reps || {});
     setStreak(local.meta.streak?.count || 0);
     setProgrammeBlock(local.meta.programmeBlock || PB.get());
-    // Completion reads now come from the unified Day entity (date-keyed,
-    // type-stamped at mark time). weekDone = any completion this week
-    // (strength session OR manual non-strength tick); bonusDone = bonus
-    // marks this week; dayDone = manual non-strength ticks by date (feeds
-    // the retro picker). A schedule edit can't change a stored Day, so
-    // completion no longer drifts when the week is reshaped.
-    {
-      const proj = Days.projectCurrentWeek(activeProfile);
-      setWeekDone(proj.complete);
-      setBonusDone(proj.bonus);
-      setDayDone(Days.manualTickDates(activeProfile));
-    }
+    // Completion reads come from the unified Day entity (date-keyed,
+    // type-stamped at mark time) through the day context; a new profile
+    // re-reads it because activeProfile is a ctx dep. A schedule edit can't
+    // change a stored Day, so completion no longer drifts when the week is
+    // reshaped.
+    bumpDays();
     setUserFocus(F.get(activeProfile));
     setMainLifts(P.getMainLifts(activeProfile));
     setBreaks(Bk.getAll(activeProfile));
+    setAbsenceDismissedStart(AN.get(activeProfile));
     setHistory(local.history || []);
 
     // Retry any failed pushes from previous sessions. NO payload argument,
@@ -489,10 +468,7 @@ export default function ForgeApp(){
       setUserFocus(F.get(activeProfile));
       setMainLifts(P.getMainLifts(activeProfile));
       setBreaks(Bk.getAll(activeProfile));
-      const proj = Days.projectCurrentWeek(activeProfile);
-      setWeekDone(proj.complete);
-      setBonusDone(proj.bonus);
-      setDayDone(Days.manualTickDates(activeProfile));
+      bumpDays();
       const bw = BW.getKg(activeProfile);
       if (bw != null) setBodyweightState(bw);
       const ts = TS.get(activeProfile);
@@ -562,7 +538,7 @@ export default function ForgeApp(){
       cancelled = true;
       disableAutoSync();
     };
-  },[activeProfile]);
+  },[activeProfile, bumpDays]);
 
   // PWA install prompt — iOS needs a custom overlay because Safari has no
   // beforeinstallprompt event. Android/Chrome handles this natively via
@@ -660,9 +636,8 @@ export default function ForgeApp(){
   //     today's date for that weekday within the current week
   //   - nothing → today
   // Streak only bumps when the resolved date IS today (no gaming the streak
-  // by backfilling). Writes to the date-keyed dayDone store; weekDone
-  // updates as a derived projection so the home week strip refreshes
-  // without separate state plumbing.
+  // by backfilling). Writes the date-keyed Days entry; bumpDays re-resolves
+  // the home week from it.
   const handleMarkDayDone = useCallback((target)=>{
     if(!activeProfile) return;
     const todayDate = todayLocalIso();
@@ -681,18 +656,15 @@ export default function ForgeApp(){
     // day BEFORE it confirmed leaves the breather intact).
     const res = recordCompletion(activeProfile, dateStr, { kind: "tick" });
     if (res?.endedBreak) setBreaks(Bk.getAll(activeProfile));
-    // Refresh React state from the unified Day projection.
-    const proj = Days.projectCurrentWeek(activeProfile);
-    setWeekDone(proj.complete);
-    setDayDone(Days.manualTickDates(activeProfile));
+    bumpDays();
     if (dateStr === todayDate) {
       const newStreak = bumpStreak(activeProfile);
       setStreak(newStreak);
     }
     pushNow(activeProfile);
-  },[activeProfile]);
+  },[activeProfile, bumpDays]);
 
-  // Mark today's optional cardio bonus complete. Separate store from weekDone;
+  // Mark today's optional cardio bonus complete. A Days mark, never a completion;
   // deliberately does NOT bump the streak — bonuses are extras, not adherence.
   const handleMarkBonusDone = useCallback((renderedDate)=>{
     if(!activeProfile) return;
@@ -713,10 +685,9 @@ export default function ForgeApp(){
     // to guess. Bonus never sets completedType, never bumps rhythm, never
     // resumes a breather — extras, not adherence.
     recordCompletion(activeProfile, today, { kind: "bonus" });
-    // Refresh React state from the unified Day projection.
-    setBonusDone(Days.projectCurrentWeek(activeProfile).bonus);
+    bumpDays();
     pushNow(activeProfile);
-  },[activeProfile]);
+  },[activeProfile, bumpDays]);
 
   // Save the user's training focus + re-rotate accessories IMMEDIATELY with the
   // new bias. Keeps block number and startDate (the change is a re-pick, not
@@ -1068,7 +1039,7 @@ export default function ForgeApp(){
       // strength completion is history-backed. See the live finalise path
       // for the rationale (mixing the two stores would mean a schedule edit
       // could promote a cardio tick into a phantom strength completion).
-      setWeekDone(Days.projectCurrentWeek(activeProfile).complete);
+      bumpDays();
 
       // ─── Engine block — THE engine (lib/session-engine, #16), shared
       // with the live finalise path. UI mirrors stay here.
@@ -1192,7 +1163,7 @@ export default function ForgeApp(){
 
   return (
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={homeWeekDays} strengthDaySessions={homeWeekSessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={homeWeekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={()=>setAbsenceNudgeDismissed(true)}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={homeWeekDays} strengthDaySessions={homeWeekSessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={homeWeekDone} dayStates={homeWeekStates} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={handleDismissAbsenceNudge}/>}
       {breatherOpen           && <BreatherModal onConfirm={handleStartBreather} onCancel={()=>setBreatherOpen(false)}/>}
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} history={history} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
@@ -1325,8 +1296,9 @@ function PromiseLine({ kicker, body }) {
 // Shown when auto-rotation fires. Non-dismissible — you acknowledge, you continue.
 // ─── Week editor sheet ────────────────────────────────────────────────────────
 // Lets users customise their training week (e.g. "no gym Monday — shift the
-// strength days back to Thu/Fri/Sat"). Persists via W.save(); the engine reads
-// the new week and reflows home / retro / done screens. Validation is advisory
+// strength days back to Thu/Fri/Sat"). Persists via W.saveEdit() (effective
+// from this week's Monday); the engine reads the new week and reflows home /
+// retro / done screens. Validation is advisory
 // only — we surface a banner for "no strength days" / "missing sessions" but
 // don't block saving (some users may intentionally run a 4-strength week or
 // take a week off).

@@ -10,10 +10,14 @@
 //   4. Retroactive edits (effectiveFrom in the past) supported.
 //   5. Same-day repeat saves collapse to one entry.
 //   6. Sync merge unions by editedAt, accepts legacy + new shapes.
+//   7. Week editor saves apply from this week's Monday (decision 9).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { W } from "../lib/storage.js";
+import { mergeScheduleHistory } from "../lib/sync-merge.js";
+import { weekOn } from "../lib/mcp-server.js";
+import { makeDayContext, owedDays } from "../lib/day-state.js";
 
 function week(...types) {
   if (types.length !== 7) throw new Error("week() needs 7 types");
@@ -159,5 +163,71 @@ describe("W — legacy shape migration", () => {
     expect(W.replaceHistory(null)).toBe(null);
     expect(W.replaceHistory({ not: "an array" })).toBe(null);
     expect(W.replaceHistory([{ no: "shape" }])).toBe(null);
+  });
+});
+
+// Decision 9 (2026-09-25): the week editor saves with effectiveFrom = this
+// week's Monday. Owner bug: Thursday edited to cardio on Friday still listed
+// as owed strength.
+describe("W.saveEdit — week edits apply from this week's Monday", () => {
+  const FRI = "2026-09-25";
+  const THU_ONLY = week("rest", "rest", "rest", "strength", "rest", "rest", "rest");
+  const THU_CARDIO = week("rest", "rest", "rest", "cardio", "rest", "rest", "rest");
+  // Pin the wall clock (editedAt) per save; timers stay real.
+  const at = (isoLocal) => vi.setSystemTime(new Date(isoLocal));
+  const owedOn = (today) => owedDays(makeDayContext({
+    todayIso: today, weekFor: (iso) => W.getEffectiveOn(iso),
+  }), { daysBack: 10 }).map((r) => [r.date, r.type, r.action]);
+
+  beforeEach(() => { localStorage.clear(); vi.useFakeTimers({ toFake: ["Date"] }); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("an edit on Friday reclassifies this week's untrained Thursday, not last week's", () => {
+    at("2026-01-01T09:00:00");
+    W.save(THU_ONLY, { effectiveFrom: "2026-01-01" });
+    at(`${FRI}T12:00:00`);
+    expect(owedOn(FRI)).toEqual([["2026-09-24", "strength", "log"], ["2026-09-17", "strength", "log"]]);
+
+    W.saveEdit(THU_CARDIO, FRI);
+
+    expect(W.getHistory().at(-1).effectiveFrom).toBe("2026-09-21");
+    expect(owedOn(FRI)).toEqual([["2026-09-24", "cardio", "tick"], ["2026-09-17", "strength", "log"]]);
+  });
+
+  it("repeat saves in one week collapse onto the Monday entry", () => {
+    at("2026-09-22T09:00:00");
+    W.saveEdit(THU_ONLY, "2026-09-22");
+    at(`${FRI}T12:00:00`);
+    W.saveEdit(THU_CARDIO, FRI);
+    const hist = W.getHistory();
+    expect(hist).toHaveLength(1);
+    expect(hist[0].effectiveFrom).toBe("2026-09-21");
+    expect(W.getEffectiveOn("2026-09-24")[3].type).toBe("cardio");
+  });
+
+  it("a later save outranks an older entry dated later (legacy mid-week save, or one a merge brings back)", () => {
+    // Mid-week entry from the old today-dated save, then a Monday-dated edit.
+    at("2026-09-23T09:00:00");
+    W.save(THU_ONLY, { effectiveFrom: "2026-09-23" });
+    at(`${FRI}T12:00:00`);
+    W.saveEdit(THU_CARDIO, FRI);
+    for (const iso of ["2026-09-24", "2026-10-01", "2027-01-07"]) {
+      expect(W.getEffectiveOn(iso)[3].type).toBe("cardio");
+    }
+    // The server-side reader resolves the same way.
+    expect(weekOn(W.getHistory(), "2026-10-01")[3].type).toBe("cardio");
+
+    // A peer still holding the collapsed Monday entry: the union keeps both
+    // facts; the later edit still wins.
+    localStorage.clear();
+    at("2026-09-22T09:00:00");
+    W.saveEdit(THU_ONLY, "2026-09-22");
+    const peer = W.getHistory();
+    at(`${FRI}T12:00:00`);
+    W.saveEdit(THU_CARDIO, FRI);
+    const merged = mergeScheduleHistory(W.getHistory(), peer);
+    expect(merged).toHaveLength(2);
+    W.replaceHistory(merged);
+    expect(W.getEffectiveOn("2026-09-24")[3].type).toBe("cardio");
   });
 });
