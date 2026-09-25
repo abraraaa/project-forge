@@ -82,3 +82,34 @@ describe("the never-list records the amendment", () => {
     expect(tokens).not.toContain("the template test, enforced");
   });
 });
+
+describe(".forge-lift sits under the thumb", () => {
+  // Without lib/press-lift.js feeding --x/--y the lift silently centres —
+  // how the coaching and connect buttons shipped.
+  it("every lift spreads pressLiftHandlers", () => {
+    const offenders = [];
+    for (const f of files.filter((p) => !p.includes("diag-") && /className="[^"]*forge-lift/.test(src(p)))) {
+      for (const tag of src(f).match(/<[a-zA-Z][^>]*className="[^"]*forge-lift[^"]*"[^>]*>/g) || []) {
+        if (!tag.includes("{...pressLiftHandlers}")) offenders.push(f);
+      }
+    }
+    expect(offenders, `forge-lift without pressLiftHandlers: ${offenders.join(", ")}`).toEqual([]);
+  });
+});
+
+describe("quiet press warms toward the thumb", () => {
+  it("sits behind content and follows the contact point", () => {
+    const rule = css.slice(css.indexOf(".forge-press.forge-tint::before {"), css.indexOf(".forge-press.forge-tint:active::before"));
+    expect(rule).toContain("z-index: -1");
+    expect(rule).toMatch(/radial-gradient\(160px circle at var\(--x\) var\(--y\), var\(--press-quiet\), var\(--press\)/);
+    expect(rule).not.toMatch(/transform:|filter:/);
+    expect(css).toMatch(/\.forge-press\.forge-tint \{[^}]*isolation: isolate/);
+  });
+  it("one listener feeds every press surface", () => {
+    expect(src("app/layout.jsx")).toContain("<PressPoint />");
+    expect(src("components/PressPoint.jsx")).toContain('closest(".forge-lift, .forge-tint")');
+  });
+  it("the never-list records the second amendment", () => {
+    expect(tokens).toContain(".forge-tint (2026-09-25)");
+  });
+});

@@ -69,3 +69,25 @@ describe("#16 class lock — the engine lives ONCE", () => {
     }
   });
 });
+
+// A stale total (bodyweight) stored as a pull-up's added load heals on the
+// next unloaded session: the engine writes 0 back (2026-09-25).
+describe("bodyweight lifts heal a stale working weight", () => {
+  beforeEach(() => localStorage.clear());
+  it("an unloaded pull-up session writes 0 added, and lift state follows", () => {
+    const BW = 79.8;
+    const set = { weight: 0, reps: 8, rir: 2, loadType: "loaded_bodyweight", bodyweightUsed: BW, effectiveLoad: BW };
+    const rec = {
+      v: 2, id: new Date().toISOString(), date: "2026-09-25", readiness: "normal", session: "strength_b",
+      blocks: [{ id: "bss1", type: "superset", exercises: [{
+        name: "Pull-Up", muscle: "Lats", loadType: "loaded_bodyweight", sets: [set, set, set],
+        prescribed: { sets: 3, reps: 8, weight: BW }, summary: { topSet: set },
+      }] }],
+    };
+    TS.save("p", { lifts: { "Pull-Up": { currentWeight: BW, sessionsCount: 5, consecutiveAdds: 0, consecutiveHolds: 0 } } });
+    H.append("p", rec);
+    const out = applySessionToEngine("p", rec, { currentWeights: { "Pull-Up": BW } });
+    expect(out.wwUpdates["Pull-Up"]).toBe(0);
+    expect(TS.get("p").lifts["Pull-Up"].currentWeight).toBe(0);
+  });
+});

@@ -67,6 +67,12 @@ export async function POST(request) {
   return res === null ? json(null, 202) : json(res);
 }
 
-// No server-initiated stream: this server never pushes.
-export function GET() { return json(null, 405, { Allow: "POST, OPTIONS" }); }
+// No server-initiated stream: this server never pushes. A person who opens
+// the URL in a browser lands on the coaching page, not a blank download.
+export function GET(request) {
+  if ((request.headers.get("accept") || "").includes("text/html")) {
+    return Response.redirect(new URL("/profile/coach", request.url), 307);
+  }
+  return json({ error: "method_not_allowed" }, 405, { Allow: "POST, OPTIONS" });
+}
 export function OPTIONS() { return json(null, 204); }

@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { withNavTransition } from "@/lib/nav-transitions";
 import { T, DISPLAY } from "@/lib/tokens";
-import { P, pushNow } from "@/lib/storage";
+import { P } from "@/lib/storage";
+import { saveMainLiftCore, stashRotationSummary } from "@/lib/profile-actions";
 import { isValidMainLiftChoice } from "@/lib/programme";
 import { Fade } from "@/components/ui";
 import Glyph from "@/components/Glyph";
@@ -27,9 +28,11 @@ export default function MainLiftsView() {
   // reach the anchor slot, whichever surface calls this.
   const handleChange = (canonical, choice) => {
     if (!current || !isValidMainLiftChoice(canonical, choice)) return;
-    // Stamped per lift and synced; default is stored explicitly (see P).
-    setMainLifts(P.setMainLift(current, canonical, choice));
-    pushNow(current).catch(() => {});
+    // Stamped per lift and synced (see P); re-plans the block's accessories
+    // only if the new lift breaks a volume band. Any change shows on home.
+    const { mainLifts: next, summary } = saveMainLiftCore(current, canonical, choice);
+    setMainLifts(next);
+    if (summary) stashRotationSummary(current, summary);
   };
 
   if (!current) return null;

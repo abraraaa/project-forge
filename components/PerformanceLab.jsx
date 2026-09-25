@@ -467,20 +467,20 @@ function LineChart({ series }) {
       <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:"auto", display:"block"}}>
         <defs>
           <linearGradient id="hwLabTrend" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="var(--heat-1)"/>
-            <stop offset="0.6" stopColor="var(--heat-2)"/>
-            <stop offset="1" stopColor="var(--heat-3)"/>
+            <stop offset="0" stopColor="var(--trend-1)"/>
+            <stop offset="0.6" stopColor="var(--trend-2)"/>
+            <stop offset="1" stopColor="var(--trend-3)"/>
           </linearGradient>
           <linearGradient id="hwLabArea" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="var(--heat-3)" stopOpacity="0.12"/>
-            <stop offset="1" stopColor="var(--heat-3)" stopOpacity="0"/>
+            <stop offset="0" stopColor="var(--trend-3)" stopOpacity="0.12"/>
+            <stop offset="1" stopColor="var(--trend-3)" stopOpacity="0"/>
           </linearGradient>
         </defs>
         <path d={areaD} fill="url(#hwLabArea)" />
         <path d={pathD} stroke="url(#hwLabTrend)" strokeWidth="1.6" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
         {series.map((p, i) => (
           <circle key={i} cx={xAt(i)} cy={yAt(p.est1RM)} r={i === series.length-1 ? 3.6 : 2.4}
-            fill={p.cooked ? "var(--heat-4)" : "var(--heat-2)"}
+            fill={p.cooked ? "var(--heat-4)" : "var(--trend-2)"}
             stroke="var(--ground)" strokeWidth="1.4"/>
         ))}
       </svg>

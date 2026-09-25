@@ -113,6 +113,9 @@ body {
 
   /* Pressed-surface tint for quiet (non-commit) touchables. */
   --press: light-dark(#F1E7DF, #2C241F);
+  /* Its warm centre, under the thumb. Dark lifts only a step off --press so
+     the quiet press never reads as light. P3 raises the light half below. */
+  --press-quiet: light-dark(#F4E4D6, #3A2F28);
   /* Commit-surface press bloom. Derived from --commit rather than picked
      from the heat ramp: the ramp encodes effort, and --commit already sits
      on it (heat-3 light, heat-2 dark), so a bloom that TRAVELLED the ramp
@@ -484,8 +487,34 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
    surfaces, whose colour carries meaning. Arrives with the 90ms press,
    exhales over 380ms on release. Pair with .forge-press (the transition
    lives there). */
-.forge-press.forge-tint:active {
-  background-color: var(--press);
+/* Amended 2026-09-25: the tint now centres on the contact point — a warm
+   core falling off to --press — so quiet presses have the same dimension as
+   the commit lift, far more softly. A layer BEHIND the content (isolation +
+   z-index -1): it paints over an inline background yet touches no child, so
+   no row layout changes. --x/--y come from components/PressPoint.jsx. */
+.forge-press.forge-tint {
+  position: relative;
+  isolation: isolate;
+  --x: 50%;
+  --y: 50%;
+}
+.forge-press.forge-tint::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(160px circle at var(--x) var(--y), var(--press-quiet), var(--press) 74%);
+  transition: opacity 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.forge-press.forge-tint:active::before { opacity: 1; transition-duration: 90ms; }
+@supports (color: color(display-p3 1 1 1)) {
+  :root { --press-quiet: light-dark(color(display-p3 0.99 0.90 0.80), #3A2F28); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .forge-press.forge-tint::before { transition: none; }
 }
 
 /* Commit-surface press LIFT — light under the thumb, on the ONE coloured
@@ -499,6 +528,19 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
    degraded but correct default. */
 @supports (color: color(display-p3 1 1 1)) {
   :root { --press-lift: color(display-p3 0.98 0.60 0.44); }
+}
+
+/* Lab trend ramp — the drill-down's heat gradient. On a wide-gamut panel
+   the LIGHT theme raises its chroma past sRGB (chosen on /diag-hdr,
+   2026-09-25); dark keeps the shipped heat steps, so a bedtime scroll never
+   gets brighter. */
+:root { --trend-1: var(--heat-1); --trend-2: var(--heat-2); --trend-3: var(--heat-3); }
+@supports (color: color(display-p3 1 1 1)) {
+  :root {
+    --trend-1: light-dark(oklch(75% 0.11 40), var(--heat-1));
+    --trend-2: light-dark(oklch(64% 0.15 38), var(--heat-2));
+    --trend-3: light-dark(oklch(53% 0.18 34), var(--heat-3));
+  }
 }
 .forge-lift {
   position: relative;
@@ -599,17 +641,19 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   will-change: transform, opacity;
 }
 
-/* (3) Home header compression. The day headline gently shrinks + dims as
-   the user scrolls into the session content. Range capped at 180px so
-   it's done before the user has scrolled meaningfully. */
-@keyframes home-header-compress {
-  to { transform: scale(0.94) translateY(-6px); opacity: 0.72; }
-}
+/* (3) Header compression. The page headline shrinks + dims once you start
+   reading down, and returns near the top. A STATE on a fixed 240ms curve,
+   not scrubbed to scroll position: scrubbing over a short page ran the whole
+   move in a frame or two and pulsed with Safari's toolbar and the end-of-
+   page bounce (2026-09-25). Same feel at every page length, no padding.
+   html[data-scrolled] comes from components/ScrollState.jsx (hysteresis:
+   on past 24px, off above 8px). */
 .home-headline {
-  animation: home-header-compress linear both;
-  animation-timeline: scroll();
-  animation-range: 0 180px;
-  will-change: transform, opacity;
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+html[data-scrolled] .home-headline {
+  transform: scale(0.94) translateY(-6px);
+  opacity: 0.72;
 }
 
 /* (4) Surface — detail data fades/slides in on engagement. Each Lab
@@ -659,12 +703,16 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
     animation-duration: 0.01ms;
   }
   .drum-item,
-  .home-headline,
   .lab-card,
   .lab-scroll-cue,
   .hw-breathe {
     animation: none;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-headline { transition: opacity 240ms linear; }
+  html[data-scrolled] .home-headline { transform: none; }
 }
 
 /* Breathe hook class — rest ring. Kept as a class so reduced-motion can

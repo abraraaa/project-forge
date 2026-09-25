@@ -24,6 +24,7 @@ import {
   getLocalProfile,
 } from "@/lib/storage";
 import { checkStoreHealth, collectStoreSnapshot } from "@/lib/store-health";
+import { staleAddedLoads } from "@/lib/bodyweight-repair";
 import { DeltaSync } from "@/lib/sync-delta";
 import { windowPressure } from "@/lib/analytics";
 import { LIBRARY } from "@/lib/library";
@@ -114,6 +115,7 @@ export default function DiagSync() {
   // results + window pressure, derived fresh per render like the snapshot.
   const health = !profile ? [] : checkStoreHealth(collectStoreSnapshot(profile));
   const pressure = !profile ? { lifts: [], binding: false } : windowPressure(H.get(profile));
+  const staleBw = !profile ? [] : staleAddedLoads({ weights: P.getWeights(profile), trainingState: TS.get(profile), history: H.get(profile) });
 
   const snapshot = !profile ? null : {
     historyCount: H.get(profile).length,
@@ -420,6 +422,15 @@ export default function DiagSync() {
       {/* Window pressure — the progression-v2 gate made observable. The
           engine's per-lift window is 12; the decision arms the day any
           lift's flat run outgrows it. */}
+      <Section title="Bodyweight loads — dry run, nothing is changed">
+        {staleBw.length === 0
+          ? <Row label="Stale added loads" value="none" dim />
+          : staleBw.map((r) => (
+            <Row key={`${r.lift}-${r.field}`} label={`${r.lift} · ${r.field}`}
+              value={`${r.stored} → would set ${r.wouldSet} (last logged ${r.from})`} />
+          ))}
+      </Section>
+
       <Section title="Progression window pressure">
         <Row label="verdict"
           value={pressure.binding

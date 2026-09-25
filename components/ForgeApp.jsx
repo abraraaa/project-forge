@@ -18,6 +18,7 @@ import {
   newDraftLog, logSet, finaliseDraft, D, TS,
   startingWeightForLift,
 } from "@/lib/storage";
+import { resolveWeek, sessionsFrom } from "@/lib/day-state";
 import { absencesFromHistory, weeklySlotsFromWeek } from "@/lib/absence";
 import { isHeatwayveOrigin, migrationWindowOpen, hasPreFlipStory } from "@/lib/origin";
 import { activeBreak } from "@/lib/breaks";
@@ -334,14 +335,21 @@ export default function ForgeApp(){
   );
   const hasRetroGaps = untickedDays.length > 0;
 
-  // This week as it was lived: each day under the schedule in force on it.
-  // Rendering every day with today's schedule meant a mid-week edit turned a
-  // trained Monday into a ticked "rest" day on the home strip. Today and
-  // later resolve to today's schedule, so only past days can differ.
-  const weekAsLived = useMemo(() => {
-    const monday = mondayOfWeekIso(todayLocalIso());
-    return userWeek.map((d, i) => (W.getEffectiveOn(addDaysIso(monday, i)) || WEEK)[i] || d);
-  }, [userWeek]);
+  // The home week, resolved once (lib/day-state.js): each day's plan as it
+  // stood, what was actually done, and the session to show. The strip, the
+  // headline and the done ticks all read this, so they can't disagree.
+  // weekDone/dayDone are deps because Days changes land through them.
+  const homeWeek = useMemo(() => resolveWeek({
+    mondayIso: mondayOfWeekIso(todayLocalIso()),
+    todayIdx: mondayIndex(new Date()),
+    history,
+    days: activeProfile ? Days.getAll(activeProfile) : {},
+    weekFor: (iso) => W.getEffectiveOn(iso),
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- weekDone/dayDone/userWeek signal Days and schedule writes read inside
+  }), [activeProfile, history, weekDone, dayDone, userWeek]);
+  const homeWeekDays = useMemo(() => homeWeek.map((d) => d.shown), [homeWeek]);
+  const homeWeekSessions = useMemo(() => sessionsFrom(homeWeek), [homeWeek]);
+  const homeWeekDone = useMemo(() => Object.fromEntries(homeWeek.map((d, i) => [i, d.done]).filter(([, v]) => v)), [homeWeek]);
 
   // Breathers — the resting state (rhythm pauses) and the absence nudge.
   // restingBreak drives the badge; absenceNudge surfaces the Home prompt
@@ -1184,7 +1192,7 @@ export default function ForgeApp(){
 
   return (
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={weekAsLived} strengthDaySessions={strengthDaySessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={weekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={()=>setAbsenceNudgeDismissed(true)}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={homeWeekDays} strengthDaySessions={homeWeekSessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={homeWeekDone} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={()=>setAbsenceNudgeDismissed(true)}/>}
       {breatherOpen           && <BreatherModal onConfirm={handleStartBreather} onCancel={()=>setBreatherOpen(false)}/>}
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} history={history} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
@@ -1535,14 +1543,23 @@ function RotationSummaryModal({summary,onContinue}){
   return (
     <div onKeyDown={onKeyDown} className="forge-scrim forge-scrim-deep" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        {/* Three causes, one sheet: a new block, a focus change, or a
+            main-lift swap that pushed a muscle out of band. Mid-block
+            re-plans keep the block number and must not claim a new one. */}
         <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
-          New block · <span style={{fontFamily:T.measured}}>{summary.blockNumber}</span>
+          {summary.reason ? "Block" : "New block"} · <span style={{fontFamily:T.measured}}>{summary.blockNumber}</span>
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:30,color:T.ink,marginBottom:8}}>
-          Your programme has rotated
+          {summary.reason === "main_lift" ? "Rebalanced for your lift"
+            : summary.reason === "focus" ? `Retuned for ${summary.focus || "your focus"}`
+            : "Your programme has rotated"}
         </div>
         <p style={{fontSize:13,color:T.ink2,marginBottom:topDeltas.length?14:18,lineHeight:1.6}}>
-          {count} {count===1?"accessory":"accessories"} swapped to keep the stimulus fresh. Main lifts stay the same — progressive overload continues.
+          {summary.reason === "main_lift"
+            ? `${count} ${count===1?"accessory":"accessories"} swapped so every muscle stays in its range with your new main lift.`
+            : summary.reason === "focus"
+            ? `${count} ${count===1?"accessory":"accessories"} swapped to match your focus. Main lifts stay the same.`
+            : `${count} ${count===1?"accessory":"accessories"} swapped to keep the stimulus fresh. Main lifts stay the same — progressive overload continues.`}
         </p>
         {solvedLine && (
           <div style={{fontSize:13,color:T.ink2,marginBottom:14,lineHeight:1.5}}>

@@ -79,3 +79,11 @@ describe("consent route trusts the server's passkey, not the request", () => {
     expect(lv).toContain("credentialId: matchingCred.id");
   });
 });
+
+describe("an unregistered client explains the usual cause", () => {
+  it("names the typed-in Client ID and what to do instead", () => {
+    const r = checkAuthorizeParams({ client_id: "abrar" }, null);
+    expect(r.fatal).toMatch(/Client ID was typed/);
+    expect(r.fatal).toMatch(/leave the OAuth fields empty/);
+  });
+});

@@ -5,6 +5,8 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import ThemeFollower from "@/components/ThemeFollower";
+import PressPoint from "@/components/PressPoint";
+import ScrollState from "@/components/ScrollState";
 // ViewTransition ships in the React canary Next vendors for App Router
 // bundles (verified: next/dist/compiled/react exports it). Server components
 // compile against that copy — the `any` cast is only for the build's
@@ -254,6 +256,8 @@ export default function RootLayout({ children }) {
       <body>
         <ServiceWorkerRegistrar />
         <ThemeFollower />
+        <PressPoint />
+        <ScrollState />
         <ErrorBoundary>
           {/* <main> because this wrapper IS the document's dominant content:
               every route renders through it and the layout has no nav or

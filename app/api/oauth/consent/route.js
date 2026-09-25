@@ -3,6 +3,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { readTokenData } from "@/lib/auth-server";
 import { issueCode } from "@/lib/oauth";
 import { neonOAuthStore } from "@/lib/oauth-store";
+import { resolveClient } from "@/lib/oauth-cimd";
 import { checkAuthorizeParams, consentFromToken, redirectWith } from "@/lib/oauth-http";
 import { credentialExists } from "@/lib/oauth-credentials";
 import { normaliseProfile } from "@/lib/profile-name";
@@ -25,7 +26,7 @@ export async function POST(request) {
     const store = await neonOAuthStore();
     if (!store) return NextResponse.json({ error: "Connections are unavailable right now." }, { status: 503 });
 
-    const client = q.client_id ? await store.getClient(String(q.client_id)) : null;
+    const client = q.client_id ? await resolveClient(store, String(q.client_id)) : null;
     const checked = checkAuthorizeParams(q, client);
     if (checked.fatal) return NextResponse.json({ error: checked.fatal }, { status: 400 });
     if (checked.redirectError) {
