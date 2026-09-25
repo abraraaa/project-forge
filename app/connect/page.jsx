@@ -32,7 +32,7 @@ export default async function ConnectPage({ searchParams }) {
         <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>Connect your AI</div>
         <h1 style={{ ...DISPLAY, fontSize: 34, color: T.ink, margin: "0 0 10px" }}>That didn't work</h1>
         <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6 }}>
-          {checked.fatal || "Connections are unavailable right now."} Start again from your AI.
+          {checked.fatal || "Connections are unavailable right now. Start again from your AI."}
         </p>
       </div>
     );
