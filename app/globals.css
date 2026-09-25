@@ -641,17 +641,19 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   will-change: transform, opacity;
 }
 
-/* (3) Home header compression. The day headline gently shrinks + dims as
-   the user scrolls into the session content. Range capped at 180px so
-   it's done before the user has scrolled meaningfully. */
-@keyframes home-header-compress {
-  to { transform: scale(0.94) translateY(-6px); opacity: 0.72; }
-}
+/* (3) Header compression. The page headline shrinks + dims once you start
+   reading down, and returns near the top. A STATE on a fixed 240ms curve,
+   not scrubbed to scroll position: scrubbing over a short page ran the whole
+   move in a frame or two and pulsed with Safari's toolbar and the end-of-
+   page bounce (2026-09-25). Same feel at every page length, no padding.
+   html[data-scrolled] comes from components/ScrollState.jsx (hysteresis:
+   on past 24px, off above 8px). */
 .home-headline {
-  animation: home-header-compress linear both;
-  animation-timeline: scroll();
-  animation-range: 0 180px;
-  will-change: transform, opacity;
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+html[data-scrolled] .home-headline {
+  transform: scale(0.94) translateY(-6px);
+  opacity: 0.72;
 }
 
 /* (4) Surface — detail data fades/slides in on engagement. Each Lab
@@ -701,12 +703,16 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
     animation-duration: 0.01ms;
   }
   .drum-item,
-  .home-headline,
   .lab-card,
   .lab-scroll-cue,
   .hw-breathe {
     animation: none;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-headline { transition: opacity 240ms linear; }
+  html[data-scrolled] .home-headline { transform: none; }
 }
 
 /* Breathe hook class — rest ring. Kept as a class so reduced-motion can
