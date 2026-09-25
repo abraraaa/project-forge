@@ -46,6 +46,30 @@ describe("buildCoachContext", () => {
   });
 });
 
+describe("consistency line (weeklyStrength)", () => {
+  const two = ["rest","strength","rest","rest","rest","strength","rest"].map(S);
+  // now = Thu 2026-09-24. Mon/Wed/Fri until an edit to Tue/Sat from 09-14;
+  // a breather covered the week of 09-07.
+  const text = buildCoachContext({
+    history: [rec("2026-08-31", 100), rec("2026-09-02", 100), rec("2026-09-15", 100), rec("2026-09-22", 105)],
+    week: two, weekFor: (iso) => (iso >= "2026-09-14" ? two : week),
+    breaks: [{ id: "b", start: "2026-09-07", endedAt: "2026-09-14" }],
+    now,
+  });
+  const line = text.split("\n")[text.split("\n").findIndex((l) => l.startsWith("## Consistency")) + 2];
+
+  it("judges each week by its own schedule, a breather as a breather, this week as in progress", () => {
+    expect(line.split(" · ")).toEqual([
+      "0/3", "0/3", "0/3", "0/3", "2/3", "breather", "1/2",
+      "1/1 so far (this week, in progress; 2 planned)",
+    ]);
+  });
+  it("defaults every week to the passed schedule when no weekFor is given", () => {
+    const flat = buildCoachContext({ history: [rec("2026-09-21", 100)], week, now });
+    expect(flat).toMatch(/0\/3 · 1\/2 so far \(this week, in progress; 3 planned\)/);
+  });
+});
+
 describe("wiring", () => {
   const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
   it("profile links to the coaching page; the page and the Lab share one copy path", () => {

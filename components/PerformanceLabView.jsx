@@ -29,6 +29,10 @@ export default function PerformanceLabView() {
   const [history, setHistory] = useState(() =>
     typeof window === "undefined" || !P.getActive() ? [] : H.get(P.getActive()),
   );
+  // Breathers: the consistency cells read breather days as rest, not missed.
+  const [breaks, setBreaks] = useState(() =>
+    typeof window === "undefined" || !P.getActive() ? [] : Bk.getAll(P.getActive()),
+  );
   // Resting = a declared breather is open. Only the DECLARED state surfaces
   // here; an undeclared quiet stretch is already covered by the Home nudge
   // and the VolumeLandscape away-state (showing both would repeat the
@@ -54,7 +58,7 @@ export default function PerformanceLabView() {
       return;
     }
     backgroundSync(profile, {
-      onUpdate: () => setHistory(H.get(profile)),
+      onUpdate: () => { setHistory(H.get(profile)); setBreaks(Bk.getAll(profile)); },
     });
   }, [profile, router]);
 
@@ -62,7 +66,7 @@ export default function PerformanceLabView() {
 
   return (
     <ErrorBoundary>
-      <PerformanceLab history={history} onBack={onBack} resting={resting} />
+      <PerformanceLab history={history} onBack={onBack} resting={resting} breaks={breaks} />
     </ErrorBoundary>
   );
 }

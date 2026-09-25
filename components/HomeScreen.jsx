@@ -50,7 +50,7 @@ const linkBtn = {
 };
 
 export default
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,mainLifts={},onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},dayStates=[],onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,mainLifts={},onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -129,7 +129,12 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
     : "fresh block";
   // Masthead support is exactly ONE sentence (§11.3); focus + block tenure
   // live in the rotation footer, not the masthead.
-  const subText = viewSession ? `${viewSession.subtitle}.` : cfg.sub;
+  // A missed strength day made up later in the week says so instead of
+  // prescribing a session that's already been answered for.
+  const viewCoveredBy = dayStates[viewIdx]?.status === "covered" ? dayStates[viewIdx].coveredBy : null;
+  const subText = viewCoveredBy
+    ? `Made up on ${DAY_NAMES[mondayIndex(viewCoveredBy)].slice(0, 3)}.`
+    : viewSession ? `${viewSession.subtitle}.` : cfg.sub;
 
   // Negative diff = earlier this week, positive = later this week
   const diffDays = viewIdx - todayIdx;
@@ -182,13 +187,18 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       <Fade d={60}>
         <div style={{padding:"26px 24px 0",display:"flex",gap:6}}>
           {userWeek.map((d,i)=>{
-            const key     = T.dayKey[d.type] || T.dayKey.rest;
-            const isToday = i === todayIdx;
-            const isView  = i === viewIdx;
-            const isDone  = !!weekDone[i];
+            const status    = dayStates[i]?.status;
+            // Inside a breather the day reads as rest, whatever was planned.
+            const isResting = status === "resting";
+            const key       = isResting ? T.dayKey.rest : T.dayKey[d.type] || T.dayKey.rest;
+            const isToday   = i === todayIdx;
+            const isView    = i === viewIdx;
+            const isDone    = !!weekDone[i];
+            // Made up later in the week: a muted tick, not a solid one.
+            const isCovered = !isDone && status === "covered";
             return (
               <button key={i} onClick={()=>setViewIdx(i)} className="forge-press"
-                aria-label={`${DAY_NAMES[i]}${isToday ? " (today)" : ""}${isDone ? ", done" : ""}`}
+                aria-label={`${DAY_NAMES[i]}${isToday ? " (today)" : ""}${isDone ? ", done" : isCovered ? ", made up" : isResting ? ", resting" : ""}`}
                 aria-current={isView ? "date" : undefined}
                 style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:7,cursor:"pointer",background:"none",border:"none",padding:"6px 0 4px"}}>
                 {/* Weekday glyph carries the day; the key tick below
@@ -205,8 +215,8 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                     opacity:isDone?1:isToday||isView?0.9:0.45,
                     transition:`all 200ms ${T.ease}`,
                   }}/>
-                  {isDone && (
-                    <span style={{position:"absolute",top:-11,lineHeight:1}}><Glyph name="check" size={9} color={key}/></span>
+                  {(isDone || isCovered) && (
+                    <span style={{position:"absolute",top:-11,lineHeight:1}}><Glyph name="check" size={9} color={isDone ? key : T.ink3}/></span>
                   )}
                 </span>
                 <span style={{width:18,height:1,background:isView?T.ink:"transparent",transition:`background 200ms ${T.ease}`}}/>
@@ -795,8 +805,9 @@ function StreakLine({rhythm, resting=false}){
     );
   }
   const completed = rhythm?.completed || 0;
-  const expected  = rhythm?.expected  || 12;
-  // Rolling 28-day count of strength sessions — labelled honestly.
+  // Planned days kept (strength or conditioning) over the calendar window.
+  // A brand-new week can honestly expect none yet, so 0 is shown, not a default.
+  const expected  = rhythm?.expected  ?? 12;
   const window  = rhythm?.window || 28;
   const over = completed > expected;
   return (
