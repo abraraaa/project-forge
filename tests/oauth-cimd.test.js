@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { isCimdClientId, clientFromDocument, resolveClient, CIMD_TTL_MS } from "../lib/oauth-cimd.js";
+import { describe, it, expect, beforeEach } from "vitest";
+beforeEach(() => _resetCimdFailures());
+import { isCimdClientId, clientFromDocument, resolveClient, CIMD_TTL_MS, CIMD_FAIL_TTL_MS, _resetCimdFailures } from "../lib/oauth-cimd.js";
 import { memoryStore, issueCode, exchangeCode } from "../lib/oauth.js";
 import { authorizationServerMetadata } from "../lib/oauth-http.js";
 import { createHash } from "node:crypto";
@@ -53,8 +54,9 @@ describe("resolveClient", () => {
   it("a failed re-check keeps the last good copy; a first failure is no client", async () => {
     const store = memoryStore(), now = Date.parse("2026-09-25T10:00:00Z");
     expect(await resolveClient(store, URL_ID, { fetchImpl: fakeFetch("nope", { status: 500 }), now })).toBeNull();
-    await resolveClient(store, URL_ID, { fetchImpl: fakeFetch(DOC), now });
-    const kept = await resolveClient(store, URL_ID, { fetchImpl: async () => { throw new Error("down"); }, now: now + CIMD_TTL_MS + 1 });
+    // A failed URL isn't refetched for ten minutes (abuse guard), so step past it.
+    await resolveClient(store, URL_ID, { fetchImpl: fakeFetch(DOC), now: now + CIMD_FAIL_TTL_MS + 1 });
+    const kept = await resolveClient(store, URL_ID, { fetchImpl: async () => { throw new Error("down"); }, now: now + CIMD_FAIL_TTL_MS + CIMD_TTL_MS + 2 });
     expect(kept.name).toBe("Claude");
   });
   it("refuses oversize documents", async () => {
@@ -77,5 +79,26 @@ describe("resolveClient", () => {
   });
   it("discovery says we support it", () => {
     expect(authorizationServerMetadata().client_id_metadata_document_supported).toBe(true);
+  });
+});
+
+describe("abuse: repeated bad client URLs", () => {
+  it("a failed document isn't refetched for ten minutes", async () => {
+    const calls = [];
+    const bad = "https://nothing-here.example/client.json";
+    const failing = async (url) => { calls.push(url); return new Response("no", { status: 404 }); };
+    const t = Date.parse("2026-09-25T10:00:00Z");
+    await resolveClient(memoryStore(), bad, { fetchImpl: failing, now: t });
+    await resolveClient(memoryStore(), bad, { fetchImpl: failing, now: t + 60e3 });
+    expect(calls).toHaveLength(1);
+    await resolveClient(memoryStore(), bad, { fetchImpl: failing, now: t + 11 * 60e3 });
+    expect(calls).toHaveLength(2);
+  });
+  it("the connect page is rate-limited before it can fetch anything", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(resolve(__dirname, "../app/connect/page.jsx"), "utf8");
+    expect(src).toContain('"oauth-connect", 20)');
+    expect(src.indexOf('"oauth-connect", 20)')).toBeLessThan(src.indexOf("resolveClient(store"));
   });
 });
