@@ -1543,14 +1543,23 @@ function RotationSummaryModal({summary,onContinue}){
   return (
     <div onKeyDown={onKeyDown} className="forge-scrim forge-scrim-deep" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
+        {/* Three causes, one sheet: a new block, a focus change, or a
+            main-lift swap that pushed a muscle out of band. Mid-block
+            re-plans keep the block number and must not claim a new one. */}
         <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
-          New block · <span style={{fontFamily:T.measured}}>{summary.blockNumber}</span>
+          {summary.reason ? "Block" : "New block"} · <span style={{fontFamily:T.measured}}>{summary.blockNumber}</span>
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:30,color:T.ink,marginBottom:8}}>
-          Your programme has rotated
+          {summary.reason === "main_lift" ? "Rebalanced for your lift"
+            : summary.reason === "focus" ? `Retuned for ${summary.focus || "your focus"}`
+            : "Your programme has rotated"}
         </div>
         <p style={{fontSize:13,color:T.ink2,marginBottom:topDeltas.length?14:18,lineHeight:1.6}}>
-          {count} {count===1?"accessory":"accessories"} swapped to keep the stimulus fresh. Main lifts stay the same — progressive overload continues.
+          {summary.reason === "main_lift"
+            ? `${count} ${count===1?"accessory":"accessories"} swapped so every muscle stays in its range with your new main lift.`
+            : summary.reason === "focus"
+            ? `${count} ${count===1?"accessory":"accessories"} swapped to match your focus. Main lifts stay the same.`
+            : `${count} ${count===1?"accessory":"accessories"} swapped to keep the stimulus fresh. Main lifts stay the same — progressive overload continues.`}
         </p>
         {solvedLine && (
           <div style={{fontSize:13,color:T.ink2,marginBottom:14,lineHeight:1.5}}>
