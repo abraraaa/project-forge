@@ -500,6 +500,19 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
 @supports (color: color(display-p3 1 1 1)) {
   :root { --press-lift: color(display-p3 0.98 0.60 0.44); }
 }
+
+/* Lab trend ramp — the drill-down's heat gradient. On a wide-gamut panel
+   the LIGHT theme raises its chroma past sRGB (chosen on /diag-hdr,
+   2026-09-25); dark keeps the shipped heat steps, so a bedtime scroll never
+   gets brighter. */
+:root { --trend-1: var(--heat-1); --trend-2: var(--heat-2); --trend-3: var(--heat-3); }
+@supports (color: color(display-p3 1 1 1)) {
+  :root {
+    --trend-1: light-dark(oklch(75% 0.11 40), var(--heat-1));
+    --trend-2: light-dark(oklch(64% 0.15 38), var(--heat-2));
+    --trend-3: light-dark(oklch(53% 0.18 34), var(--heat-3));
+  }
+}
 .forge-lift {
   position: relative;
   overflow: hidden;
