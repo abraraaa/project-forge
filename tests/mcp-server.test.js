@@ -102,6 +102,15 @@ describe("/mcp route", () => {
   it("one profile read serves a burst of calls", () => {
     expect(src).toContain("readCached(who.grantId, () => dbReadProfile(who.profile))");
   });
+  it("a browser visit redirects to the coaching page instead of downloading", async () => {
+    const { GET } = await import("../app/mcp/route.js");
+    const html = GET(new Request("https://heatwayve.app/mcp", { headers: { accept: "text/html,application/xhtml+xml" } }));
+    expect(html.status).toBe(307);
+    expect(html.headers.get("location")).toBe("https://heatwayve.app/profile/coach");
+    const client = GET(new Request("https://heatwayve.app/mcp", { headers: { accept: "text/event-stream" } }));
+    expect(client.status).toBe(405);
+    expect(client.headers.get("content-type")).toBe("application/json");
+  });
   it("rate-limits per connection", () => {
     expect(src).toContain("rateLimit(request, `mcp:${who.grantId}`, 60)");
   });
