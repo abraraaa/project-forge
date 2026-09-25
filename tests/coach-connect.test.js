@@ -12,7 +12,7 @@ describe("connect your AI", () => {
     expect(u.searchParams.get("connectorUrl")).toBe("https://heatwayve.app/mcp");
   });
   it("one dropdown, one button, steps for each — no list of connectors", () => {
-    expect(CONNECT_OPTIONS.map((o) => o.id)).toEqual(["claude", "chatgpt", "other"]);
+    expect(CONNECT_OPTIONS.map((o) => o.id)).toEqual(["claude", "chatgpt", "gemini", "muse", "other"]);
     for (const o of CONNECT_OPTIONS) {
       expect(o.steps.length).toBeGreaterThan(0);
       if (o.action === "open") expect(o.href).toMatch(/^https:\/\//);
