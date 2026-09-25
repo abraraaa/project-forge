@@ -29,9 +29,9 @@ describe("MCP handshake", () => {
     await call({ id: 3, method: "tools/list" }, async () => { loads++; return data; });
     expect(loads).toBe(0);
   });
-  it("lists five read-only tools", async () => {
+  it("lists six read-only tools", async () => {
     const r = await call({ id: 4, method: "tools/list" });
-    expect(r.result.tools.map((t) => t.name)).toEqual(["training_snapshot", "recent_sessions", "programme", "current_loads", "lift_history"]);
+    expect(r.result.tools.map((t) => t.name)).toEqual(["training_snapshot", "recent_sessions", "programme", "chart_style", "current_loads", "lift_history"]);
     for (const t of r.result.tools) expect(t.annotations.readOnlyHint).toBe(true);
   });
   it("rejects unknown methods, unknown tools and malformed messages", async () => {
