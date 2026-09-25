@@ -3,6 +3,7 @@
 // renders; the page itself only asks for a name and a Face ID.
 import { redirect } from "next/navigation";
 import { neonOAuthStore } from "@/lib/oauth-store";
+import { resolveClient } from "@/lib/oauth-cimd";
 import { checkAuthorizeParams, redirectWith } from "@/lib/oauth-http";
 import ConnectView from "@/components/ConnectView";
 import { T, DISPLAY } from "@/lib/tokens";
@@ -23,7 +24,7 @@ export default async function ConnectPage({ searchParams }) {
   /** @type {Record<string, string | undefined>} */
   const q = Object.fromEntries(Object.entries(raw || {}).map(([k, v]) => [k, first(v)]));
   const store = await neonOAuthStore();
-  const client = store && q.client_id ? await store.getClient(q.client_id) : null;
+  const client = store && q.client_id ? await resolveClient(store, q.client_id) : null;
   const checked = checkAuthorizeParams(q, client);
   if (checked.redirectError) redirect(redirectWith(q.redirect_uri, { error: checked.redirectError, state: q.state }));
   if (checked.fatal || !client) {
