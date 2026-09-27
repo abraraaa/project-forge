@@ -19,6 +19,8 @@ async function connected(store = memoryStore(), now = 1_000_000) {
   return { store, client, code, tokens, now };
 }
 
+const AI = { audience: MCP_RESOURCE, kind: "ai" };
+
 describe("registration and redirect URIs", () => {
   it("https anywhere, http only on loopback, no fragments", () => {
     expect(isAllowedRedirectUri(REDIRECT)).toBe(true);
@@ -69,9 +71,9 @@ describe("authorization code", () => {
 describe("access and refresh", () => {
   it("a valid access token resolves to the profile", async () => {
     const { store, tokens, now } = await connected();
-    expect((await verifyAccessToken(store, tokens.access_token, {}, now + 1))?.profile).toBe("sam");
-    expect(await verifyAccessToken(store, tokens.access_token, {}, now + ACCESS_TTL_MS + 1)).toBe(null);
-    expect(await verifyAccessToken(store, tokens.refresh_token, {}, now)).toBe(null);
+    expect((await verifyAccessToken(store, tokens.access_token, AI, now + 1))?.profile).toBe("sam");
+    expect(await verifyAccessToken(store, tokens.access_token, AI, now + ACCESS_TTL_MS + 1)).toBe(null);
+    expect(await verifyAccessToken(store, tokens.refresh_token, AI, now)).toBe(null);
   });
   it("secrets are stored hashed, never raw", async () => {
     const { store, tokens } = await connected();
@@ -84,7 +86,7 @@ describe("access and refresh", () => {
     expect(r1.tokens.access_token).not.toBe(tokens.access_token);
     const replay = await refreshTokens(store, { refreshToken: tokens.refresh_token, clientId: client.id }, now + 20);
     expect(replay.error).toBe("invalid_grant");
-    expect(await verifyAccessToken(store, r1.tokens.access_token, {}, now + 30)).toBe(null);
+    expect(await verifyAccessToken(store, r1.tokens.access_token, AI, now + 30)).toBe(null);
   });
 });
 
@@ -92,15 +94,15 @@ describe("the grant belongs to the consenting passkey", () => {
   it("removing that passkey ends access", async () => {
     const { store, tokens, now } = await connected();
     const gone = async () => false;
-    expect(await verifyAccessToken(store, tokens.access_token, { credentialExists: gone }, now)).toBe(null);
+    expect(await verifyAccessToken(store, tokens.access_token, { ...AI, credentialExists: gone }, now)).toBe(null);
   });
   it("only the owner can disconnect it, and it stays disconnected", async () => {
     const { store, tokens, now } = await connected();
-    const grantId = (await verifyAccessToken(store, tokens.access_token, {}, now)).grantId;
+    const grantId = (await verifyAccessToken(store, tokens.access_token, AI, now)).grantId;
     expect(await revokeGrantFor(store, "someone-else", grantId, now)).toBe(false);
-    expect(await verifyAccessToken(store, tokens.access_token, {}, now)).not.toBe(null);
+    expect(await verifyAccessToken(store, tokens.access_token, AI, now)).not.toBe(null);
     expect(await revokeGrantFor(store, "sam", grantId, now)).toBe(true);
-    expect(await verifyAccessToken(store, tokens.access_token, {}, now)).toBe(null);
+    expect(await verifyAccessToken(store, tokens.access_token, AI, now)).toBe(null);
   });
 });
 
@@ -119,5 +121,40 @@ describe("oauth keys profiles by the shared name rule", () => {
     const src = readFileSync(resolve(__dirname, "../lib/oauth.js"), "utf8");
     expect(src).toContain("profile: normaliseProfile(profile)");
     expect(src).toContain("grant.profile !== normaliseProfile(profile)");
+  });
+});
+
+describe("tokens are audience-bound (MCP spec)", () => {
+  const connect = async () => {
+    const store = memoryStore();
+    const { client } = await registerClient(store, { redirect_uris: ["https://claude.ai/cb"] });
+    const verifier = "v".repeat(50);
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const { code } = await issueCode(store, { clientId: client.id, profile: "sam", credentialId: "c1", redirectUri: "https://claude.ai/cb", codeChallenge: challenge, codeChallengeMethod: "S256" });
+    const { tokens } = await exchangeCode(store, { code, clientId: client.id, redirectUri: "https://claude.ai/cb", codeVerifier: verifier });
+    return { store, tokens };
+  };
+  it("a caller that doesn't state the audience lets no one in", async () => {
+    const { store, tokens } = await connect();
+    expect(await verifyAccessToken(store, tokens.access_token, {})).toBeNull();
+    expect(await verifyAccessToken(store, tokens.access_token, { audience: MCP_RESOURCE })).toBeNull();
+  });
+  it("a token for /mcp is refused for another audience or kind", async () => {
+    const { store, tokens } = await connect();
+    expect(await verifyAccessToken(store, tokens.access_token, AI)).not.toBeNull();
+    expect(await verifyAccessToken(store, tokens.access_token, { audience: "https://heatwayve.app/trainer", kind: "ai" })).toBeNull();
+    expect(await verifyAccessToken(store, tokens.access_token, { audience: MCP_RESOURCE, kind: "trainer" })).toBeNull();
+  });
+  it("grants from before the columns read as AI grants for /mcp", async () => {
+    const { store, tokens } = await connect();
+    for (const g of (await store.listGrants("sam"))) { g.kind = undefined; g.resource = undefined; }
+    expect(await verifyAccessToken(store, tokens.access_token, AI)).not.toBeNull();
+  });
+  it("an expired grant is refused and leaves the connections list", async () => {
+    const { store, tokens } = await connect();
+    const [g] = await store.listGrants("sam");
+    g.expiresAt = Date.now() - 1;
+    expect(await verifyAccessToken(store, tokens.access_token, AI)).toBeNull();
+    expect(await store.listGrants("sam")).toEqual([]);
   });
 });

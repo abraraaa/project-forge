@@ -1,5 +1,5 @@
 import { rateLimit } from "@/lib/rate-limit";
-import { verifyAccessToken } from "@/lib/oauth";
+import { verifyAccessToken, MCP_RESOURCE, SCOPE_READ } from "@/lib/oauth";
 import { neonOAuthStore } from "@/lib/oauth-store";
 import { credentialExists } from "@/lib/oauth-credentials";
 import { handleMcp } from "@/lib/mcp-server";
@@ -52,8 +52,13 @@ export async function POST(request) {
 
   const store = await neonOAuthStore();
   if (!store) return json({ error: "temporarily_unavailable" }, 503);
-  const who = await verifyAccessToken(store, token, { credentialExists });
+  const who = await verifyAccessToken(store, token, { audience: MCP_RESOURCE, kind: "ai", credentialExists });
   if (!who) return unauthorized();
+  if (!String(who.scope || "").split(" ").includes(SCOPE_READ)) {
+    return json({ error: "insufficient_scope" }, 403, {
+      "WWW-Authenticate": `Bearer error="insufficient_scope", scope="${SCOPE_READ}", resource_metadata="${ISSUER}/.well-known/oauth-protected-resource/mcp"`,
+    });
+  }
 
   // Per connection, not just per IP: one AI can't hammer the database.
   const limited = rateLimit(request, `mcp:${who.grantId}`, 60);
