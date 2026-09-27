@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { readTokenData } from "@/lib/auth-server";
 import { issueCode } from "@/lib/oauth";
 import { neonOAuthStore } from "@/lib/oauth-store";
@@ -18,7 +18,7 @@ export const preferredRegion = "lhr1";
 // access_denied. The passkey comes from the server's token record, never
 // from the request body.
 export async function POST(request) {
-  const limited = rateLimit(request, "oauth-consent", 10);
+  const limited = rateLimit(request, "oauth-consent", 10) || await rateLimitShared(request, "oauth-consent", 10);
   if (limited) return limited;
   try {
     const { authToken, profile, params, approve } = await request.json().catch(() => ({}));

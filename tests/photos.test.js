@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { computeTargetDims, isJpegBytes, PHOTO_MAX_EDGE } from "../lib/photos.js";
+import { computeTargetDims, isJpegBytes, jpegDims, jpegWithinBounds, PHOTO_MAX_EDGE } from "../lib/photos.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -257,5 +257,31 @@ describe("House pattern — no corner-close buttons anywhere (boss, 2026-07-21)"
       walk(dir);
     }
     expect(offenders, `corner-close buttons found (use a bottom-row Cancel): ${offenders.join(", ")}`).toEqual([]);
+  });
+});
+
+describe("jpegDims / jpegWithinBounds", () => {
+  // SOI, APP0 (JFIF, 16 bytes), DQT stub, SOF0 w×h, SOS, EOI.
+  const jpeg = (w, h, sof = 0xc0) => new Uint8Array([
+    0xff, 0xd8,
+    0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+    0xff, 0xdb, 0x00, 0x04, 0x00, 0x00,
+    0xff, sof, 0x00, 0x0b, 0x08, h >> 8, h & 255, w >> 8, w & 255, 0x01, 0x01, 0x11, 0x00,
+    0xff, 0xda, 0x00, 0x02,
+    0xff, 0xd9,
+  ]);
+  it("reads the frame header, baseline and progressive", () => {
+    expect(jpegDims(jpeg(1536, 2048))).toEqual({ width: 1536, height: 2048 });
+    expect(jpegDims(jpeg(800, 600, 0xc2))).toEqual({ width: 800, height: 600 });
+  });
+  it("accepts what the client produces and refuses anything larger", () => {
+    expect(jpegWithinBounds(jpeg(PHOTO_MAX_EDGE, 1536))).toBe(true);
+    expect(jpegWithinBounds(jpeg(PHOTO_MAX_EDGE + 1, 10))).toBe(false);
+    expect(jpegWithinBounds(jpeg(60000, 60000))).toBe(false);
+  });
+  it("refuses a stream with no frame header or a zero dimension", () => {
+    expect(jpegDims(new Uint8Array([0xff, 0xd8, 0xff, 0xda, 0x00, 0x02, 0xff, 0xd9]))).toBeNull();
+    expect(jpegDims(jpeg(0, 100))).toBeNull();
+    expect(jpegDims(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]))).toBeNull();
   });
 });

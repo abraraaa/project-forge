@@ -1,4 +1,4 @@
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { exchangeCode, refreshTokens, MCP_RESOURCE } from "@/lib/oauth";
 import { neonOAuthStore } from "@/lib/oauth-store";
 import { oauthJson, preflight, readParams } from "@/lib/oauth-http";
@@ -10,7 +10,7 @@ export const preferredRegion = "lhr1";
 // Token endpoint: code → tokens, refresh → rotated tokens. Errors use the
 // RFC 6749 codes so AI clients know to start over.
 export async function POST(request) {
-  const limited = rateLimit(request, "oauth-token", 30);
+  const limited = rateLimit(request, "oauth-token", 30) || await rateLimitShared(request, "oauth-token", 30);
   if (limited) return limited;
   try {
     const p = await readParams(request);

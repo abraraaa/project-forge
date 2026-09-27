@@ -1,4 +1,4 @@
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { verifyAccessToken, MCP_RESOURCE, SCOPE_READ } from "@/lib/oauth";
 import { neonOAuthStore } from "@/lib/oauth-store";
 import { credentialExists } from "@/lib/oauth-credentials";
@@ -61,7 +61,9 @@ export async function POST(request) {
   }
 
   // Per connection, not just per IP: one AI can't hammer the database.
-  const limited = rateLimit(request, `mcp:${who.grantId}`, 60);
+  const limited = rateLimit(request, `mcp:${who.grantId}`, 60)
+    || await rateLimitShared(request, "mcp", 60, { id: who.grantId })
+    || await rateLimitShared(request, "mcp-day", 2000, { windowMs: 86_400_000, id: who.grantId });
   if (limited) return limited;
 
   const msg = await request.json().catch(() => undefined);

@@ -6,7 +6,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { put, get, list, del } from "@vercel/blob";
 import { isTokenValid, readTokenData, mintAuthToken } from "@/lib/auth-server";
 import { hasDb, dbUpsertPhoto, dbListPhotos, dbDeletePhoto, dbGetPhoto, dbHasRetiredPhotos } from "@/lib/db";
-import { isJpegBytes, PHOTO_MAX_UPLOAD_BYTES } from "@/lib/photos";
+import { isJpegBytes, jpegWithinBounds, PHOTO_MAX_UPLOAD_BYTES } from "@/lib/photos";
 import { normaliseProfile } from "@/lib/profile-name";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
@@ -123,6 +123,9 @@ export async function POST(request) {
     }
     if (!isJpegBytes(buf)) {
       return NextResponse.json({ error: "Not a JPEG" }, { status: 415 });
+    }
+    if (!jpegWithinBounds(buf)) {
+      return NextResponse.json({ error: "Image dimensions not accepted" }, { status: 415 });
     }
 
     const bwRaw = request.headers.get("x-hw-bodyweight");

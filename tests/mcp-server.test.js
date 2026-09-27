@@ -114,6 +114,7 @@ describe("/mcp route", () => {
   });
   it("rate-limits per connection", () => {
     expect(src).toContain("rateLimit(request, `mcp:${who.grantId}`, 60)");
+    expect(src).toContain(`rateLimitShared(request, "mcp-day", 2000`);
   });
 });
 

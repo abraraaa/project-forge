@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { serverError } from "@/lib/api-errors";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { list } from "@vercel/blob";
 import crypto from "crypto";
 import { hasChallengeSecret, issueChallenge, rpConfigFromRequest } from "@/lib/auth-server";
@@ -17,7 +17,7 @@ const normalise = normaliseProfile;
 const legacyPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/`;
 
 export async function POST(request) {
-  const limited = rateLimit(request, "auth-register", 15);
+  const limited = rateLimit(request, "auth-register", 15) || await rateLimitShared(request, "auth-register", 15);
   if (limited) return limited;
   try {
     const { profile } = await request.json();

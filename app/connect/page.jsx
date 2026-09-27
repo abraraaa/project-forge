@@ -3,7 +3,7 @@
 // renders; the page itself only asks for a name and a Face ID.
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { neonOAuthStore } from "@/lib/oauth-store";
 import { resolveClient } from "@/lib/oauth-cimd";
 import { checkAuthorizeParams, redirectWith } from "@/lib/oauth-http";
@@ -37,7 +37,8 @@ export default async function ConnectPage({ searchParams }) {
   const q = Object.fromEntries(Object.entries(raw || {}).map(([k, v]) => [k, first(v)]));
   // This page can fetch a client's metadata document (CIMD), so it is an
   // outbound-request endpoint: rate-limited like the API routes.
-  if (rateLimit(/** @type {any} */ ({ headers: await headers() }), "oauth-connect", 20)) {
+  const req = /** @type {any} */ ({ headers: await headers() });
+  if (rateLimit(req, "oauth-connect", 20) || await rateLimitShared(req, "oauth-connect", 20)) {
     return <Refusal message="Too many attempts. Wait a minute, then start again from your AI." />;
   }
   const store = await neonOAuthStore();
