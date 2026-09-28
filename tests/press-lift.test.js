@@ -106,8 +106,9 @@ describe("quiet press warms toward the thumb", () => {
     expect(css).toMatch(/\.forge-press\.forge-tint \{[^}]*isolation: isolate/);
   });
   it("one listener feeds every press surface", () => {
+    // What the listener does is pinned by render in
+    // tests/components/PressPoint.test.jsx; this pins that the app mounts it.
     expect(src("app/layout.jsx")).toContain("<PressPoint />");
-    expect(src("components/PressPoint.jsx")).toContain('closest(".forge-lift, .forge-tint")');
   });
   it("the never-list records the second amendment", () => {
     expect(tokens).toContain(".forge-tint (2026-09-25)");

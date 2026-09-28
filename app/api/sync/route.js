@@ -14,24 +14,6 @@ export const preferredRegion = "lhr1";
 // Generic client error + full server-side log. Raw exception text (Neon/blob
 // driver detail, query fragments, schema names) must not reach the client —
 // audit 2026-07-26, P3 info-disclosure. Detail stays in the server log.
-// Ceiling on the blob→DB migration that runs inline on a GET. The write path
-// is one sequential round-trip per record plus ~14 for meta fields, and it is
-// AWAITED before the response returns — so an unbounded history can outrun the
-// platform's function timeout. That failure is deterministic (every retry
-// re-enters the same path) and it lands during restore-from-blob, when it is
-// least welcome.
-//
-// Above the cap we REFUSE rather than migrate part of the history. A partial
-// DB would be indistinguishable from a complete one on the next read: the
-// response serves the blob, the client acknowledges that full state as pushed
-// (storage.js commitPushState), and the un-migrated records would then exist
-// only in the blob — invisible to any future device. Skipping keeps the blob
-// authoritative, leaves the DB empty so the trigger stays live, and says so
-// loudly.
-//
-// Sized from measurement (internal notes): ~114 queries at 100 records, which
-// leaves ~70ms per round-trip inside a 10s budget. Raise only with numbers.
-const MAX_INLINE_BACKFILL = 100;
 
 const serverError = (e, opts = {}) => apiError(e, { label: "sync", ...opts });
 
@@ -345,9 +327,8 @@ export async function GET(request) {
       return withSyncCookie(NextResponse.json({ delta: true, ...delta }), gate);
     }
 
-    // DB-first (Neon migration step 2): if the profile has rows, serve them.
-    // Blob remains the fallback + the lazy-migration source below. A DB
-    // failure degrades to the blob path — never a 500 from this branch.
+    // DB-first: if the profile has rows, serve them. Blob remains the read
+    // fallback. A DB failure degrades to the blob path — never a 500 here.
     if (hasDb()) {
       try {
         const fromDb = await dbReadProfile(normalise(profile));
@@ -365,31 +346,10 @@ export async function GET(request) {
       readJson(historyPath(profile)),
     ]);
 
-    // If both deterministic paths returned data, we're done — and this is
-    // the LAZY MIGRATION moment: the DB had no rows for this profile, the
-    // blob does, so backfill the DB from what we just read (idempotent:
-    // sessions ON CONFLICT DO NOTHING, meta upsert). No import ceremony,
-    // no separate endpoint; each profile migrates on its first post-deploy
-    // read. Blobs are never deleted. Failure is logged and harmless — the
-    // next read retries.
+    // Both deterministic paths returned data: serve the blob. GET never
+    // writes the DB — a profile that only exists in blob migrates on its
+    // first PUT, which merges stamp-aware against the DB (see the PUT seed).
     if (metaDirect !== null && historyDirect !== null) {
-      const records = Array.isArray(historyDirect) ? historyDirect : [];
-      if (hasDb()) {
-        if (records.length > MAX_INLINE_BACKFILL) {
-          // Refuse, don't half-migrate. See MAX_INLINE_BACKFILL.
-          console.error(
-            `[forge:sync GET] backfill SKIPPED: ${profile} has ${records.length} records, ` +
-            `over the inline cap of ${MAX_INLINE_BACKFILL}. Serving from blob; the blob ` +
-            `remains complete and authoritative. Run a deliberate migration.`,
-          );
-        } else {
-          try {
-            await dbUpsertProfile(normalise(profile), { meta: metaDirect, history: records });
-          } catch (e) {
-            console.error("[forge:sync GET] lazy backfill failed:", e?.message || e);
-          }
-        }
-      }
       return withSyncCookie(NextResponse.json({
         meta: metaDirect,
         history: Array.isArray(historyDirect) ? historyDirect : [],
@@ -786,19 +746,9 @@ export async function DELETE(request) {
       );
     }
 
-    // Consume the used token (relocated with Rec 11b: DB row first, blob
-    // best-effort for transition-era tokens). Same announced behaviour —
-    // the wipe path has always deleted its ceremony token on success.
-    // Encoded to match the mint path, so the delete aims where the write landed.
-    try {
-      await dbDeleteToken(authToken);
-      const { blobs: tokenBlobs } = await list({
-        prefix: `forge/tokens/${encodeURIComponent(authToken)}`,
-      });
-      if (tokenBlobs.length) {
-        await del(tokenBlobs.map(b => b.url));
-      }
-    } catch {}
+    // Consume the used ceremony token (its DB row). Same announced
+    // behaviour — the wipe path has always deleted its ceremony token.
+    try { await dbDeleteToken(authToken); } catch {}
 
     // Proceed with deletion. DB rows go too (announced 2026-07-19, wipe
     // protocol): same user-initiated, passkey-gated scope as the blob
@@ -822,8 +772,10 @@ export async function DELETE(request) {
         `forge/snapshots/weekly/${enc}.json`,
       ]);
     } catch (e) {
-      // Not fatal (the SDK doesn't document whether a missing path throws),
-      // but never silent: a failure here orphans a backup nothing rewrites.
+      // Not fatal. del() resolves for a missing path ("does not throw if the
+      // blob URL does not exist" — vercel.com/docs/vercel-blob/using-blob-sdk), so this
+      // catch fires only on transport/auth/rate-limit/store errors — and it
+      // is never silent: a failure here orphans a backup nothing rewrites.
       console.error(`[forge:sync-delete] snapshot delete failed: ${e?.message || e}`);
     }
 

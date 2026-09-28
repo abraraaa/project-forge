@@ -29,7 +29,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { track } from "@vercel/analytics";
 import {
-  P, H, W, PB, F, TS, BW, Days, Bk, D, SessionIntent, TRAVEL,
+  P, H, W, PB, F, TS, BW, D, SessionIntent, TRAVEL,
   newDraftLog, logSet, finaliseDraft, bumpStreak, scaleForReadiness,
   startingWeightForLift, pushNow, recordCompletion, rpeToRir,
 } from "@/lib/storage";

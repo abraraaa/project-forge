@@ -1,15 +1,11 @@
 // Bodyweight lifts accept added weight. Both surfaces must derive that from
-// acceptsAddedWeight, never from the programme's static weight.
+// acceptsAddedWeight, never from the programme's static weight. The two
+// surfaces (the weight card and the drum) are rendered in
+// tests/components/SessionScreen.surface.test.jsx.
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
 import { acceptsAddedWeight } from "../lib/lift-translations.js";
 import { SESSIONS, EXERCISE_POOLS } from "../lib/programme.js";
-
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const screen = readFileSync(resolve(root, "components/SessionScreen.jsx"), "utf8");
 
 describe("acceptsAddedWeight", () => {
   it("is false only for pure bodyweight", () => {
@@ -27,17 +23,6 @@ describe("acceptsAddedWeight", () => {
     for (const lt of ["per_db", "total", "cable", "machine", "barbell"]) {
       expect(acceptsAddedWeight(lt), lt).toBe(true);
     }
-  });
-});
-
-describe("the two surfaces cannot drift apart again", () => {
-  it("both the picker and the drum derive from the shared predicate", () => {
-    expect(screen).toContain("const showWeightPicker = acceptsAddedWeight(loadType)");
-    expect(screen).toContain("const hasWeight=acceptsAddedWeight(");
-  });
-
-  it("the drum never asks the programme's static weight again", () => {
-    expect(screen).not.toContain("ex?.weight!==null&&ex?.weight!==undefined");
   });
 });
 

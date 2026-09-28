@@ -5,11 +5,12 @@
 // notice once weakened — which is why they are pinned rather than trusted.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { isTokenValid } from "../lib/auth-server.js";
+import { blobDelete } from "../lib/storage.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (f) => readFileSync(resolve(root, f), "utf8");
@@ -75,29 +76,13 @@ describe("token scope fails closed by default", () => {
   });
 });
 
-describe("one token store per deployment — the DB is authoritative", () => {
-  const auth = read("lib/auth-server.js");
-
-  it("the blob fallback is reachable ONLY when there is no DB", () => {
-    // One authoritative store. A credential must not outlive the deletion
-    // of the thing it authorises, so the fallback exists only where there is
-    // no database to be authoritative in the first place.
-    const fn = auth.slice(auth.indexOf("export async function readTokenData"));
-    const body = fn.slice(0, fn.indexOf("\n}"));
-    const dbAt   = body.indexOf("if (hasDb())");
-    const blobAt = body.indexOf("readJsonDirect(");
-    expect(dbAt).toBeGreaterThan(-1);
-    expect(blobAt).toBeGreaterThan(dbAt);          // fallback is AFTER the guard
-    // ...and the DB branch must RETURN, never fall through to the blob.
-    expect(body).toMatch(/if \(hasDb\(\)\)\s*\{\s*return[\s\S]{0,80}dbReadToken/);
-  });
-
-  it("mint and read agree on which store a deployment uses", () => {
-    // Mint and read must agree on the store. Asymmetry here means valid
-    // credentials are rejected while the gate's guarantees quietly weaken.
-    const mint = auth.slice(auth.indexOf("export async function mintAuthToken"));
-    expect(mint).toMatch(/if \(hasDb\(\)\)[\s\S]{0,200}dbInsertToken/);
-    expect(mint).toMatch(/else[\s\S]{0,120}put\(`forge\/tokens\//);
+describe("one token store — the DB, and nothing else", () => {
+  // A credential must not outlive the deletion of the thing it authorises,
+  // so there is exactly one store and no fallback to a second.
+  it("no code path reads or writes forge/tokens blobs", () => {
+    for (const rel of ["lib/auth-server.js", "app/api/sync/route.js", "app/api/auth/login-verify/route.js", "app/api/photos/route.js"]) {
+      expect(read(rel), rel).not.toContain("forge/tokens");
+    }
   });
 });
 
@@ -126,11 +111,44 @@ describe("credentials never ride URLs", () => {
     expect(del).not.toContain('searchParams.get("authToken")');
   });
 
-  it("the client sends it as a header, not a query param", () => {
-    const storage = read("lib/storage.js");
-    const fn = storage.slice(storage.indexOf("export async function blobDelete"));
-    expect(fn.slice(0, 900)).toContain('"X-HW-Auth"');
-    expect(fn.slice(0, 900)).not.toContain("&authToken=");
+  // The client half: blobDelete is the wipe client. These calls only ever
+  // reach the fetch stub below — the stub is installed before each call and
+  // asserted to be the one that answered, so no request leaves the test.
+  describe("the client sends it as a header, not a query param", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    const stubFetch = () => {
+      const fetchStub = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ deleted: 3 }) }));
+      vi.stubGlobal("fetch", fetchStub);
+      return fetchStub;
+    };
+
+    it("sends the token as X-HW-Auth and keeps it out of the URL", async () => {
+      const fetchStub = stubFetch();
+      const token = "wipe-token-123";
+      expect(await blobDelete("Sam Smith", { authToken: token })).toEqual({ ok: true, deleted: 3 });
+
+      expect(fetchStub).toHaveBeenCalledTimes(1);
+      const [url, opts] = fetchStub.mock.calls[0];
+      expect(opts.method).toBe("DELETE");
+      expect(url).toBe("/api/sync?profile=Sam%20Smith");
+      expect(url).not.toMatch(/authToken/);
+      expect(url).not.toContain(token);
+      expect(opts.headers["X-HW-Auth"]).toBe(token);
+    });
+
+    it("sends no headers at all when there is no token", async () => {
+      const fetchStub = stubFetch();
+      await blobDelete("Sam");
+
+      expect(fetchStub).toHaveBeenCalledTimes(1);
+      const [url, opts] = fetchStub.mock.calls[0];
+      expect(opts.method).toBe("DELETE");
+      expect(url).toBe("/api/sync?profile=Sam");
+      expect("headers" in opts).toBe(false);
+    });
   });
 });
 

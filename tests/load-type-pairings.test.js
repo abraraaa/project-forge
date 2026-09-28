@@ -17,8 +17,6 @@
 import { describe, it, expect } from "vitest";
 import { SESSIONS, EXERCISE_POOLS, SWAP_DB } from "../lib/programme.js";
 import { getLoadType, swapLoadType, getLiftProfile, weightStepForLoadType, snapToImplement, nextRung } from "../lib/lift-translations.js";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { computeEffectiveLoad } from "../lib/storage.js";
 
 const BW_FAMILY = new Set(["bodyweight", "loaded_bodyweight", "assisted_bodyweight"]);
@@ -119,7 +117,8 @@ describe("load-type pairings", () => {
 // else branch, which prints the literal word "Bodyweight". A dumbbell press
 // announced itself as a bodyweight movement.
 //
-// The load type was right the whole time. The RENDER was the lie.
+// The load type was right the whole time. The RENDER was the lie. The render
+// itself is held in tests/components/SessionScreen.surface.test.jsx.
 // ────────────────────────────────────────────────────────────────────────────
 describe("a swapped-in lift arrives with a weight to stand on", () => {
   it("only a known, tiny set of swap options cannot be cold-started", () => {
@@ -153,19 +152,6 @@ describe("a swapped-in lift arrives with a weight to stand on", () => {
     // And the pin shrinks rather than rots: nothing listed that now anchors.
     const stale = [...UNSEEDABLE].filter((n) => !orphans.has(n));
     expect(stale, stale.join(", ")).toEqual([]);
-  });
-
-  it("the card's bodyweight branch is reachable only for bodyweight lifts", () => {
-    // Guards the fix structurally: the ternary must test showWeightPicker
-    // BEFORE it is allowed to print "Bodyweight".
-    const src = readFileSync(resolve(process.cwd(), "components/SessionScreen.jsx"), "utf8");
-    const idxNewLift = src.indexOf("New lift &mdash; set your weight");
-    const idxBodyweight = src.indexOf(">Bodyweight{bodyweight");
-    expect(idxNewLift, "the unknown-weight branch is missing").toBeGreaterThan(-1);
-    expect(idxBodyweight, "the bodyweight branch is missing").toBeGreaterThan(-1);
-    // The unknown-weight branch must come FIRST, or the bodyweight line
-    // catches loaded lifts again.
-    expect(idxNewLift).toBeLessThan(idxBodyweight);
   });
 });
 

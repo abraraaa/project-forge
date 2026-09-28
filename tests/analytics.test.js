@@ -13,12 +13,13 @@
 //   5. Every value normaliseMuscle can emit has a key in MUSCLE_COLOURS —
 //      the invariant that would have caught the Weekly Volume colour
 //      collision bug.
-//   6. recentForExercise / totalTonnage / weeklyVolumeByMuscle behaviour.
+//   6. recentForExercise / totalTonnage / weeklyTonnage / weeklyVolumeByMuscle
+//      behaviour.
 // ────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
-  weeklyVolume, recentForExercise,
+  weeklyTonnage, recentForExercise,
   weeklyVolumeByMuscle, totalTonnage, pendingTonnageMilestone,
   formatTonnage, TONNAGE_MILESTONES_KG, __test_p4__,
 } from "../lib/analytics.js";
@@ -154,8 +155,13 @@ describe("aggregateVolume — per_db loadType doubles", () => {
   });
 });
 
-describe("weeklyVolume — per_db loadType doubles", () => {
+describe("weeklyTonnage — per_db doubles", () => {
+  afterEach(() => vi.useRealTimers());
+
   it("doubles DB exercise volume in weekly aggregation", () => {
+    // weeklyTonnage anchors its columns on new Date(); pin the clock.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-04-29T12:00:00"));
     const session = buildSession({
       date: "2026-04-27",
       exercises: [{
@@ -169,11 +175,10 @@ describe("weeklyVolume — per_db loadType doubles", () => {
         ],
       }],
     });
-    const weeks = weeklyVolume([session]);
-    expect(weeks.length).toBe(1);
+    const cols = weeklyTonnage([session]);
+    expect(cols.length).toBe(6);
     // 3 × 120 × 2 = 720
-    expect(weeks[0].byMuscle.Arms.volume).toBe(720);
-    expect(weeks[0].byMuscle.Arms.sets).toBe(3);
+    expect(cols.at(-1)).toEqual({ weekStart: "2026-04-27", kg: 720 });
   });
 });
 

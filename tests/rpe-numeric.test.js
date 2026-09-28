@@ -4,6 +4,8 @@
 // steps; the record keeps THAT number. Records carry number-or-string by
 // era — enum-era records never migrate, numeric records never re-band.
 // The invariant: what the user dragged is what every surface reads back.
+// The capture point (EffortPanel) and the set ledger are rendered in
+// tests/components/SessionScreen.surface.test.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
@@ -13,8 +15,6 @@ import { dirname, resolve } from "node:path";
 import { rpeToRir, newDraftLog, logSet, finaliseDraft } from "../lib/storage.js";
 import { rpeValue, rpeForEffort, effortForRpe } from "../lib/tokens.js";
 import { pickFlashLine, isPullMovement } from "../lib/set-flash.js";
-
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("rpeToRir — numeric era alongside enum era", () => {
   it("maps every resting track position: RIR = 10 − RPE, half-steps kept", () => {
@@ -121,14 +121,11 @@ describe("banding survives where the coarse vocabulary is still spoken", () => {
   });
 });
 
-describe("code shape — the capture point cannot quietly re-band", () => {
-  it("EffortPanel commits the raw number", () => {
-    const s = readFileSync(resolve(root, "components/SessionScreen.jsx"), "utf8");
-    expect(s).toContain("onCommit(rpe)");
-    expect(s).not.toContain("onCommit(effortForRpe(rpe))");
-  });
-
-  it("no surface reconstructs a set's RPE from its band — rpeValue is the read path", () => {
+describe("no surface reconstructs a set's RPE from its band", () => {
+  // A "must never appear" guard: renders prove the surfaces that exist; this
+  // catches a new one re-banding. rpeValue is the read path.
+  it("SessionScreen never calls rpeForEffort on a stored rpe", () => {
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
     const s = readFileSync(resolve(root, "components/SessionScreen.jsx"), "utf8");
     expect(s).not.toMatch(/rpeForEffort\(s\.rpe\)/);
   });

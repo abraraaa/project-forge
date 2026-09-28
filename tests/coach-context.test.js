@@ -72,9 +72,10 @@ describe("consistency line (weeklyStrength)", () => {
 
 describe("wiring", () => {
   const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
-  it("profile links to the coaching page; the page and the Lab share one copy path", () => {
+  // The coaching page's side of the shared copy path is a render test:
+  // tests/components/CoachView.test.jsx.
+  it("profile links to the coaching page; the Lab copies through the shared path", () => {
     expect(read("components/ProfileScreen.jsx")).toContain('href="/profile/coach"');
-    expect(read("components/CoachView.jsx")).toContain("copyCoachContext(");
     expect(read("components/PerformanceLab.jsx")).toContain("copyCoachContext(");
     expect(read("scripts/generate-sw-precache.mjs")).toContain('"/profile/coach"');
   });

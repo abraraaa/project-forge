@@ -85,21 +85,10 @@ describe("Rec 11b — auth tokens live in the DB (code shape)", () => {
   const authServer = readFileSync(resolve(root, "lib/auth-server.js"), "utf8");
   const db = readFileSync(resolve(root, "lib/db.js"), "utf8");
 
-  it("ONE mint path: no route writes forge/tokens blobs any more", () => {
+  it("ONE mint path: every route mints through mintAuthToken", () => {
     for (const rel of ["app/api/auth/login-verify/route.js", "app/api/photos/route.js"]) {
-      const src = readFileSync(resolve(root, rel), "utf8");
-      expect(src, rel).not.toContain("put(`forge/tokens/");
-      expect(src, rel).toContain("mintAuthToken(");
+      expect(readFileSync(resolve(root, rel), "utf8"), rel).toContain("mintAuthToken(");
     }
-    // The blob mint survives ONLY inside mintAuthToken's no-DB dev fallback.
-    expect(authServer).toContain("put(`forge/tokens/");
-    expect(authServer).toMatch(/if \(hasDb\(\)\) \{\s*await dbInsertToken/);
-  });
-
-  it("reads are DB-first with the transition blob fallback", () => {
-    const read = authServer.slice(authServer.indexOf("export async function readTokenData"));
-    expect(read.indexOf("dbReadToken")).toBeGreaterThan(-1);
-    expect(read.indexOf("dbReadToken")).toBeLessThan(read.indexOf("readJsonDirect"));
   });
 
   it("profile wipe kills the profile's outstanding tokens (the survive-the-wipe gap)", () => {
