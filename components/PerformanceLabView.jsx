@@ -3,11 +3,10 @@
 // components/PerformanceLabView.jsx
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared Performance Lab route view — the data-loading + back-nav wrapper around
-// the presentational PerformanceLab component. Used by BOTH:
-//   - app/performance/page.jsx          (full-page, direct/deep-link visits)
-//   - app/@overlay/(.)performance/...   (intercepted overlay over a still-
-//                                         mounted Home, so Home's scroll is
-//                                         natively preserved — PR3 stage C)
+// the presentational PerformanceLab component. Rendered only by
+// app/performance/page.jsx (via PerformanceLabShell, ssr:false), for in-app
+// navigation and direct visits alike. There is no intercepting overlay route:
+// Home unmounts on the way here and re-reads localStorage when it remounts.
 // Reads the active profile + local history on mount (local is canonical) and
 // kicks a backgroundSync so a direct visit still refreshes from blob.
 // ─────────────────────────────────────────────────────────────────────────────

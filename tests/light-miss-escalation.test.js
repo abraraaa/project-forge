@@ -100,6 +100,30 @@ describe("the counter", () => {
     const bare = { decision: "HOLD", weight: 100, reps: 5, sets: 3, rationale: [] };
     expect(updateLiftStateFromSession(state(2), rec(), ex, bare).consecutiveLightMisses).toBe(0);
   });
+
+  it("reads the structured decisionReason without the trail, and keeps it out of history", () => {
+    const fieldOnly = { decision: "HOLD", weight: 100, reps: 5, sets: 3, decisionReason: "missed_light", rationale: [] };
+    const st = updateLiftStateFromSession(state(1), rec(), ex, fieldOnly);
+    expect(st.consecutiveLightMisses).toBe(2);
+    expect(st.history.at(-1)).not.toHaveProperty("decisionReason");
+  });
+});
+
+describe("the structured reason agrees with the trail", () => {
+  it("engine output carries decisionReason equal to the decision_reason= entry", () => {
+    const clean = { ...lightMiss("2026-08-01") };
+    clean.blocks[0].exercises[0].sets = [set(5, 3), set(5, 3), set(5, 3)];
+    const cases = [
+      [prescribe(state(0)), "missed_light"],
+      [prescribe(state(2)), "missed_light_repeated"],
+      [prescribe(state(0), [clean]), "performed_full_with_rir"],
+    ];
+    for (const [p, expected] of cases) {
+      expect(p.decisionReason).toBe(expected);
+      const trail = p.rationale.filter((r) => r.startsWith("decision_reason="));
+      expect(trail).toEqual([`decision_reason=${p.decisionReason}`]);
+    }
+  });
 });
 
 describe("end to end — three sessions, one drop", () => {

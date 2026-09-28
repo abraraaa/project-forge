@@ -1,5 +1,7 @@
 // Flipping back to a finished block. The set number is no longer clamped onto
-// its last set, so advancement and the reach offer are re-pinned here.
+// its last set, so advancement and the reach offer are re-pinned here. What the
+// screen shows for a finished block is rendered in
+// tests/components/SessionScreen.surface.test.jsx.
 
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -9,7 +11,6 @@ import { dirname, resolve } from "node:path";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const src = (p) => readFileSync(resolve(root, p), "utf8");
 const host = src("components/SessionHost.jsx");
-const screen = src("components/SessionScreen.jsx");
 
 // The landing set number, as the host computes it.
 const landOn = (pairs) => pairs + 1;
@@ -57,25 +58,5 @@ describe("the host no longer clamps", () => {
   it("the reach is offered ON the last set, never past it", () => {
     // >= would now fire while revisiting a finished block.
     expect(host).toContain("setNum === blockSets && setNum >= REACH_EARLIEST_SET");
-  });
-});
-
-describe("the screen presents a finished block as finished", () => {
-  it("derives completion from the set number rather than a threaded flag", () => {
-    expect(screen).toContain("const blockDone = setNum > block.sets");
-  });
-
-  it("stops claiming a set is outstanding", () => {
-    expect(screen).toContain("logged · {block.label}");
-  });
-
-  it("offers adding a set as a deliberate act, not a primed commit", () => {
-    expect(screen).toContain("Add another set");
-    expect(screen).toContain("blockDone&&!adding");
-  });
-
-  it("resets the choice when the block or set changes", () => {
-    expect(screen).toContain("`${block.id}|${setNum}`");
-    expect(screen).toContain("if(addKey&&addKey!==thisKey) setAddKey(null)");
   });
 });

@@ -2,21 +2,15 @@
 // The Face ID button must work whatever filled the name: a post-hydration
 // prefill or autofill that never fires an event (2026-09-25: a filled field
 // sat under a button still disabled from the server render).
-import { describe, it, expect, vi } from "vitest";
-import { render, fireEvent, screen } from "@testing-library/react";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, fireEvent, screen, cleanup } from "@testing-library/react";
+
+afterEach(cleanup);
 
 vi.mock("@/lib/webauthn", () => ({ authenticatePasskey: vi.fn(async () => null) }));
 vi.mock("@/lib/net", () => ({ fetchWithTimeout: vi.fn() }));
 
 describe("connect page", () => {
-  it("never disables the button over an empty-looking name", () => {
-    const src = readFileSync(resolve(__dirname, "../components/ConnectView.jsx"), "utf8");
-    expect(src).not.toMatch(/disabled=\{!name/);
-    expect(src).toContain("inputRef.current?.value");
-  });
-
   it("reads an autofilled value straight from the field", async () => {
     const { authenticatePasskey } = await import("@/lib/webauthn");
     const { default: ConnectView } = await import("../components/ConnectView.jsx");

@@ -117,19 +117,9 @@ describe("cookie shape", () => {
     expect(photos).toContain("maxAge: 7 * 86400");
   });
 
-  it("the resting state offers the way back — Sync now runs the ceremony", () => {
-    // The lapse above is only survivable if some tap re-auths. With a
-    // passkey on file, Sync now IS the ceremony (the tap carries the
-    // transient user activation WebAuthn needs), followed by a FULL sync
-    // — the device may be days stale and needs the pull. A cancelled
-    // prompt is an answer: the row stays at rest.
-    const cards = readFileSync(resolve(root, "components/sync-cards.jsx"), "utf8");
-    expect(cards).toContain("authenticatePasskey(profile)");
-    expect(cards).toMatch(/needsAuth" && hasPasskey/);
-    const ceremony = cards.slice(cards.indexOf("const handleClick"), cards.indexOf("const ago"));
-    expect(ceremony).toContain("backgroundSync(profile");
-    expect(ceremony).toMatch(/if \(!auth\) return;/);
-  });
+  // The lapse above is only survivable if some tap re-auths: with a passkey
+  // on file, Sync now runs the ceremony and then a FULL sync. Pinned by
+  // rendering the row — tests/components/sync-cards.test.jsx.
 
   it("rotation stops at an absolute ceiling measured from the ORIGINAL ceremony", () => {
     // Without a cap, one captured cookie renews itself for life.
@@ -169,11 +159,8 @@ describe("client: a 401 is a resting state, not a failure", () => {
     }
   });
 
-  it("the UI names it honestly and does not paint it as an alarm", () => {
-    const cards = readFileSync(resolve(root, "components/sync-cards.jsx"), "utf8");
-    expect(cards).toContain("On this device only");
-    expect(cards).toMatch(/needsAuth: T\.under/);   // steel — never a heat colour
-  });
+  // The UI side (named "On this device only", painted steel, never a heat
+  // colour) is pinned by rendering the card — tests/components/sync-cards.test.jsx.
 });
 
 describe("the nightly self-test proves the gate is live in the deployed build", () => {

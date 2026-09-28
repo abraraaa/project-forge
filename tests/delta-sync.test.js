@@ -87,8 +87,8 @@ describe("route + db shapes (code)", () => {
   it("the inline blob→DB backfill is bounded, and refuses rather than half-migrating", () => {
     // Two properties, and the second is the subtle one.
     //
-    // BOUNDED: the migration writes one sequential round-trip per record and
-    // is awaited before the response returns, so an unbounded history can
+    // BOUNDED: the migration is awaited before the response returns (records
+    // in one batched insert, meta one round-trip per field), so an unbounded history can
     // outrun the function timeout — deterministically, since every retry
     // re-enters the same path.
     //

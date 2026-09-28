@@ -238,13 +238,9 @@ describe("the travel flag on the record", () => {
     expect(PROFILE_SUFFIXES.has("travel")).toBe(true);
   });
 
-  it("is device-local — it must never ride the sync payload", () => {
-    // Travel describes where the DEVICE is, not who the user is. Syncing it
-    // would put the phone left at home into travel mode.
-    const src = readFileSync(resolve(root, "lib/storage.js"), "utf8");
-    const payload = src.slice(src.indexOf("getLocalProfile"), src.indexOf("getLocalProfile") + 4000);
-    expect(payload).not.toMatch(/:travel`/);
-  });
+  // Device-local — it must never ride the sync payload. Exercised against
+  // getLocalProfile under jsdom in tests/travel-local-profile.test.js (the
+  // flag has to be really set in localStorage, which node can't do).
 });
 
 describe("movement pattern decides where muscle alone is ambiguous", () => {

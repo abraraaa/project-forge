@@ -15,9 +15,10 @@ export const preferredRegion = "lhr1";
 // driver detail, query fragments, schema names) must not reach the client —
 // audit 2026-07-26, P3 info-disclosure. Detail stays in the server log.
 // Ceiling on the blob→DB migration that runs inline on a GET. The write path
-// is one sequential round-trip per record plus ~14 for meta fields, and it is
-// AWAITED before the response returns — so an unbounded history can outrun the
-// platform's function timeout. That failure is deterministic (every retry
+// is one batched INSERT for all records (dbInsertRecords) plus one sequential
+// round-trip per meta field (~14), and it is AWAITED before the response
+// returns — so it must finish inside the platform's function timeout, and an
+// unbounded history could outrun it. That failure is deterministic (every retry
 // re-enters the same path) and it lands during restore-from-blob, when it is
 // least welcome.
 //
@@ -29,8 +30,11 @@ export const preferredRegion = "lhr1";
 // authoritative, leaves the DB empty so the trigger stays live, and says so
 // loudly.
 //
-// Sized from measurement (internal notes): ~114 queries at 100 records, which
-// leaves ~70ms per round-trip inside a 10s budget. Raise only with numbers.
+// Sized from measurement (internal notes) when records were still inserted
+// one round-trip each: ~114 queries at 100 records, ~70ms per round-trip
+// inside a 10s budget. Records are now one statement, so the query count no
+// longer grows with history; the cap has not been re-measured since. Raise
+// only with numbers.
 const MAX_INLINE_BACKFILL = 100;
 
 const serverError = (e, opts = {}) => apiError(e, { label: "sync", ...opts });
@@ -822,8 +826,10 @@ export async function DELETE(request) {
         `forge/snapshots/weekly/${enc}.json`,
       ]);
     } catch (e) {
-      // Not fatal (the SDK doesn't document whether a missing path throws),
-      // but never silent: a failure here orphans a backup nothing rewrites.
+      // Not fatal. del() resolves for a missing path ("does not throw if the
+      // blob URL does not exist" — vercel.com/docs/vercel-blob/using-blob-sdk), so this
+      // catch fires only on transport/auth/rate-limit/store errors — and it
+      // is never silent: a failure here orphans a backup nothing rewrites.
       console.error(`[forge:sync-delete] snapshot delete failed: ${e?.message || e}`);
     }
 

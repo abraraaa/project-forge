@@ -205,12 +205,8 @@ describe("audit tail nits #54/#55/#35 (code shape)", () => {
     expect(s).not.toMatch(/meta\.streak\?\.count\)/);
     expect(s).not.toMatch(/remoteHistory\?\.length\)/);
   });
-  it("#55: home header + strip share ONE re-anchoring clock", () => {
-    const s = readFileSync(resolve(__dirname, "../components/HomeScreen.jsx"), "utf8");
-    expect(s).toContain("new Date(nowMs).toLocaleDateString");
-    expect(s).not.toMatch(/\{new Date\(\)\.toLocaleDateString/);
-    expect(s).toMatch(/toDateString\(\) === new Date\(now\)\.toDateString\(\)/);
-  });
+  // #55 (header + strip share one re-anchoring clock) is covered by render
+  // behaviour in tests/components/HomeScreen.day.test.jsx.
   it("#35: deload math is calendar-day local; dead MAX constant gone", () => {
     const s = readFileSync(resolve(__dirname, "../lib/progression.js"), "utf8");
     expect(s).toContain("parseLocalDate(sessionDate || todayLocalIso())");

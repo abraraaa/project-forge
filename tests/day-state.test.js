@@ -47,6 +47,11 @@ describe("a done day wears what was done", () => {
     expect(w[2].done).toBe(false);          // Wed strength ticked cardio: not done
     expect(w[2].shown.type).toBe("strength");
   });
+  it("a session in the previous week does not complete this week's day", () => {
+    const w = resolveWeek({ mondayIso: MON, todayIdx: 4, history: [], days: { "2026-09-14": { completedType: "strength", sessionId: "s" } }, weekFor: () => OLD });
+    expect(w[0].did).toBeNull();
+    expect(w[0].done).toBe(false);
+  });
   it("undone days keep their planned colour", () => {
     const w = resolveWeek({ mondayIso: MON, todayIdx: 0, history: [], days: {}, weekFor: () => OLD });
     expect(w.map((d) => d.shown.type)).toEqual(OLD.map((d) => d.type));
