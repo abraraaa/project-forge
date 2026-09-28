@@ -60,10 +60,10 @@ describe("band contract — rotations stay inside every landmark band", () => {
     });
   }
 
-  it("memory yields to the band: Forged seed 5020, fourth chained rotation", () => {
+  it("memory yields to the band: Forged seed 5029, fourth chained rotation", () => {
     // The one seed family where the remembered week breaks a band. Remove the
     // relaxed second solve and this goes red; the loop above cannot tell.
-    const rng = seeded(5020);
+    const rng = seeded(5029);
     let history = {}, config = null, r;
     for (let block = 0; block < 4; block++) {
       if (config) history = pushHistoryBlock(history, config);
@@ -148,5 +148,19 @@ describe("volumeObjective — the shape of the cost", () => {
     expect(volumeObjective(overMrv, "Forged")).toBeGreaterThan(
       volumeObjective(inBand, "Forged") + 100,
     );
+  });
+});
+
+describe("near-ties share the slot", () => {
+  // ass1-A's lunge candidates score within ~2% of each other. Rounding-level
+  // anatomy weights used to hand one of them 38% of Forged picks.
+  it("no ass1-A candidate takes more than 30% of 400 Forged solves", () => {
+    const counts = {};
+    for (let i = 0; i < 400; i++) {
+      const n = solveRotation({ focus: "Forged", rng: seeded(10000 + i) }).config["ass1-A"]?.name;
+      counts[n] = (counts[n] || 0) + 1;
+    }
+    expect(Math.max(...Object.values(counts)) / 400).toBeLessThan(0.3);
+    expect(Object.keys(counts).length).toBeGreaterThanOrEqual(5);
   });
 });
