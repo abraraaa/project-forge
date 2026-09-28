@@ -286,6 +286,7 @@ export default function SessionHost() {
     if (!name || newEx.weight != null || workingWeights[name] !== undefined) return;
     const prof = getLiftProfile(name);
     if (!prof.progressesByLoad) return;          // genuinely BW — no weight to seed
+    if (getLoadType(newEx) === "bodyweight") return; // added load is the user's choice
     const anchor = prof.primaryMuscle
       ? (TS.get(profile)?.muscleAnchors?.[prof.primaryMuscle] || null)
       : null;
@@ -388,7 +389,10 @@ export default function SessionHost() {
     const swapped  = !!swapPick;
     const fromPool = EXERCISE_POOLS[key] ? key : null;
     const loadType = getLoadType(ex);
-    const resolvedWeight = workingWeights[ex.name]
+    // A pure bodyweight set carries no added load from W (the engine never
+    // prescribes one; a stale W value there is not the user's).
+    const resolvedWeight = loadType === "bodyweight" ? null
+      : workingWeights[ex.name]
       ?? startingWeightForLift(ex.name, bodyweight)
       ?? ex.weight;
     logSet(draftLogRef.current, {
