@@ -76,29 +76,13 @@ describe("token scope fails closed by default", () => {
   });
 });
 
-describe("one token store per deployment — the DB is authoritative", () => {
-  const auth = read("lib/auth-server.js");
-
-  it("the blob fallback is reachable ONLY when there is no DB", () => {
-    // One authoritative store. A credential must not outlive the deletion
-    // of the thing it authorises, so the fallback exists only where there is
-    // no database to be authoritative in the first place.
-    const fn = auth.slice(auth.indexOf("export async function readTokenData"));
-    const body = fn.slice(0, fn.indexOf("\n}"));
-    const dbAt   = body.indexOf("if (hasDb())");
-    const blobAt = body.indexOf("readJsonDirect(");
-    expect(dbAt).toBeGreaterThan(-1);
-    expect(blobAt).toBeGreaterThan(dbAt);          // fallback is AFTER the guard
-    // ...and the DB branch must RETURN, never fall through to the blob.
-    expect(body).toMatch(/if \(hasDb\(\)\)\s*\{\s*return[\s\S]{0,80}dbReadToken/);
-  });
-
-  it("mint and read agree on which store a deployment uses", () => {
-    // Mint and read must agree on the store. Asymmetry here means valid
-    // credentials are rejected while the gate's guarantees quietly weaken.
-    const mint = auth.slice(auth.indexOf("export async function mintAuthToken"));
-    expect(mint).toMatch(/if \(hasDb\(\)\)[\s\S]{0,200}dbInsertToken/);
-    expect(mint).toMatch(/else[\s\S]{0,120}put\(`forge\/tokens\//);
+describe("one token store — the DB, and nothing else", () => {
+  // A credential must not outlive the deletion of the thing it authorises,
+  // so there is exactly one store and no fallback to a second.
+  it("no code path reads or writes forge/tokens blobs", () => {
+    for (const rel of ["lib/auth-server.js", "app/api/sync/route.js", "app/api/auth/login-verify/route.js", "app/api/photos/route.js"]) {
+      expect(read(rel), rel).not.toContain("forge/tokens");
+    }
   });
 });
 
