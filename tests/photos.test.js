@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { computeTargetDims, isJpegBytes, jpegDims, jpegWithinBounds, PHOTO_MAX_EDGE } from "../lib/photos.js";
+import { computeTargetDims, isJpegBytes, jpegDims, jpegWithinBounds, firstFitting, PHOTO_ENCODE_LADDER, PHOTO_MAX_EDGE, PHOTO_MAX_UPLOAD_BYTES } from "../lib/photos.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -283,5 +283,30 @@ describe("jpegDims / jpegWithinBounds", () => {
     expect(jpegDims(new Uint8Array([0xff, 0xd8, 0xff, 0xda, 0x00, 0x02, 0xff, 0xd9]))).toBeNull();
     expect(jpegDims(jpeg(0, 100))).toBeNull();
     expect(jpegDims(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]))).toBeNull();
+  });
+});
+
+describe("firstFitting — size steps down, never refuses", () => {
+  const fake = (sizes) => {
+    const seen = [];
+    return { seen, encode: async (step) => { seen.push(step); return { size: sizes[seen.length - 1] }; } };
+  };
+  it("keeps the best encode when it fits", async () => {
+    const f = fake([500_000]);
+    expect((await firstFitting(PHOTO_ENCODE_LADDER, f.encode))?.size).toBe(500_000);
+    expect(f.seen).toHaveLength(1);
+  });
+  it("steps down until one fits", async () => {
+    const big = PHOTO_MAX_UPLOAD_BYTES + 1;
+    const f = fake([big, big, 900_000]);
+    expect((await firstFitting(PHOTO_ENCODE_LADDER, f.encode))?.size).toBe(900_000);
+    expect(f.seen[2]).toEqual(PHOTO_ENCODE_LADDER[2]);
+  });
+  it("null only when encoding itself fails", async () => {
+    expect(await firstFitting(PHOTO_ENCODE_LADDER, async () => null)).toBeNull();
+  });
+  it("every step stays within the server's accepted edge", () => {
+    for (const s of PHOTO_ENCODE_LADDER) expect(s.edge).toBeLessThanOrEqual(PHOTO_MAX_EDGE);
+    expect(PHOTO_ENCODE_LADDER[0]).toEqual({ edge: PHOTO_MAX_EDGE, quality: 0.85 });
   });
 });
