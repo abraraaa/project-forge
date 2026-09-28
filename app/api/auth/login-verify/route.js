@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { serverError } from "@/lib/api-errors";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { put } from "@vercel/blob";
 import crypto from "crypto";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
@@ -30,7 +30,7 @@ const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normali
 const credentialsPath = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials.json`;
 
 export async function POST(request) {
-  const limited = rateLimit(request, "auth-login", 20);
+  const limited = rateLimit(request, "auth-login", 20) || await rateLimitShared(request, "auth-login", 20);
   if (limited) return limited;
   try {
     const { profile, credential } = await request.json();

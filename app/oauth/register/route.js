@@ -1,4 +1,4 @@
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { registerClient } from "@/lib/oauth";
 import { neonOAuthStore } from "@/lib/oauth-store";
 import { oauthJson, preflight } from "@/lib/oauth-http";
@@ -7,12 +7,18 @@ import { serverError } from "@/lib/api-errors";
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
 
+const DAY_MS = 86_400_000;
+
 // RFC 7591 dynamic client registration. Public clients only (PKCE, no
 // secret). Registering grants nothing: every connection still needs the
 // user's Face ID on /connect.
 export async function POST(request) {
-  const limited = rateLimit(request, "oauth-register", 10);
+  const limited = rateLimit(request, "oauth-register", 10) || await rateLimitShared(request, "oauth-register", 10);
   if (limited) return limited;
+  // Client rows are kept (nothing sweeps them), so registration has a
+  // service-wide daily ceiling as well as the per-IP one.
+  const capped = await rateLimitShared(request, "oauth-register-day", 500, { windowMs: DAY_MS, id: "all" });
+  if (capped) return capped;
   try {
     const body = await request.json().catch(() => ({}));
     const store = await neonOAuthStore();

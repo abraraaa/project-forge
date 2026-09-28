@@ -7,7 +7,7 @@ import { T, DISPLAY } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
 
 const URL = "https://heatwayve.app/privacy";
-export const UPDATED = "24 September 2026";
+export const UPDATED = "28 September 2026";
 export const CONTACT = "ab@heatwayve.app";
 
 export const metadata = {
@@ -89,6 +89,7 @@ const SECTIONS = [
       "Photos — until you delete them or your profile.",
       "Backups — refreshed daily and weekly, deleted with your profile. Our database provider keeps a short restore history that expires on its own.",
       "Sign-in records — each works for 30 days at most. The records (your profile name and dates) stay until you delete your profile.",
+      "AI connections — the record of which app you connected (never your training) stays after you delete your profile, and can't read anything once your profile and passkey are gone. Ask and we'll remove it.",
       "Bug reports — not removed when you delete your profile. Ask and we'll delete yours.",
       "Server logs, which can include your profile name — kept briefly by our hosting provider.",
       "No passkey? Your name (and anything synced before 27 July 2026) stays until you add one and delete your profile, or email us.",
@@ -103,7 +104,7 @@ const SECTIONS = [
   },
   {
     h: "Age",
-    p: ["Heatwayve is for adults and isn't intended for anyone under 16."],
+    p: ["Heatwayve is for adults, 18 and over."],
   },
   {
     h: "Complaints",

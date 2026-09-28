@@ -92,7 +92,8 @@ describe("tools", () => {
 describe("/mcp route", () => {
   const src = readFileSync(resolve(__dirname, "../app/mcp/route.js"), "utf8");
   it("demands a bearer token and points 401s at the resource metadata", () => {
-    expect(src).toContain("verifyAccessToken(store, token, { credentialExists })");
+    expect(src).toContain('verifyAccessToken(store, token, { audience: MCP_RESOURCE, kind: "ai", credentialExists })');
+    expect(src).toContain('error="insufficient_scope"');
     expect(src).toContain('resource_metadata="${ISSUER}/.well-known/oauth-protected-resource/mcp"');
   });
   it("reads only the token's profile, and never photos", () => {
@@ -113,6 +114,7 @@ describe("/mcp route", () => {
   });
   it("rate-limits per connection", () => {
     expect(src).toContain("rateLimit(request, `mcp:${who.grantId}`, 60)");
+    expect(src).toContain(`rateLimitShared(request, "mcp-day", 2000`);
   });
 });
 

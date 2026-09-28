@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { rateLimit, clientIp, _resetRateLimiter } from "../lib/rate-limit.js";
+import { rateLimit, rateLimitShared, sharedBucket, clientIp, _resetRateLimiter } from "../lib/rate-limit.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -79,5 +79,47 @@ describe("coverage class lock — every public API route is limited", () => {
     };
     walk("app/api");
     expect(offenders, offenders.join("; ")).toEqual([]);
+  });
+});
+
+describe("rateLimitShared (Neon-backed, bounded)", () => {
+  // Fake Neon tag: models the rate_buckets upsert, ignores schema DDL.
+  const fakeDb = () => {
+    const rows = new Map();
+    const q = (strings, ...v) => {
+      const text = strings.join("?");
+      if (!text.includes("INSERT INTO rate_buckets")) return Promise.resolve([]);
+      const [bucket, windowStart] = v;
+      const r = rows.get(bucket);
+      const count = r && r.window_start === windowStart ? r.count + 1 : 1;
+      rows.set(bucket, { window_start: windowStart, count });
+      return Promise.resolve([{ count }]);
+    };
+    return { q, rows };
+  };
+  const req = (ip) => ({ headers: new Headers({ "x-real-ip": ip }) });
+
+  it("limits across calls sharing the store, then resets in place next window", async () => {
+    const { q, rows } = fakeDb();
+    const now = 1_000_000_000_000;
+    for (let i = 0; i < 3; i++) expect(await rateLimitShared(req("1.1.1.1"), "t", 3, { q, now })).toBeNull();
+    const res = await rateLimitShared(req("1.1.1.1"), "t", 3, { q, now });
+    expect(res?.status).toBe(429);
+    expect(Number(res?.headers.get("Retry-After"))).toBeGreaterThan(0);
+    expect(await rateLimitShared(req("1.1.1.1"), "t", 3, { q, now: now + 60_000 })).toBeNull();
+    expect(rows.size).toBe(1);
+  });
+
+  it("keys hash into a bounded bucket space per route", () => {
+    const seen = new Set();
+    for (let i = 0; i < 5000; i++) seen.add(sharedBucket("r", `ip-${i}`));
+    expect(seen.size).toBeLessThanOrEqual(1024);
+    expect(sharedBucket("r", "x")).toBe(sharedBucket("r", "x"));
+  });
+
+  it("fails open when the database errors or is absent", async () => {
+    const q = () => Promise.reject(new Error("down"));
+    expect(await rateLimitShared(req("2.2.2.2"), "t", 0, { q })).toBeNull();
+    expect(await rateLimitShared(req("2.2.2.2"), "t", 0, { q: null })).toBeNull();
   });
 });
