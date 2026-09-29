@@ -7,8 +7,9 @@ import { T, DISPLAY } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
 
 const URL = "https://heatwayve.app/privacy";
-export const UPDATED = "28 September 2026";
+export const UPDATED = "29 September 2026";
 export const CONTACT = "ab@heatwayve.app";
+export const ICO_REG = "ZC257208";
 
 export const metadata = {
   title: "Privacy",
@@ -28,7 +29,7 @@ const SECTIONS = [
   },
   {
     h: "Who we are",
-    p: [`Heatwayve is run by Abrar Ahmed, who is responsible for your personal data (the "controller"). Questions, requests or complaints: ${CONTACT}.`],
+    p: [`Heatwayve is run by Abrar Ahmed, who is responsible for your personal data (the "controller"), registered with the ICO as ${ICO_REG}. Questions, requests or complaints: ${CONTACT}.`],
   },
   {
     h: "What we collect, and why",
