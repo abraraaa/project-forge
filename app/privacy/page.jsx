@@ -35,7 +35,7 @@ const SECTIONS = [
     h: "What we collect, and why",
     list: [
       "The name you choose — held on our servers from the moment you create a profile, so it stays yours. Names are checked against ours as you type.",
-      "A passkey, if you add one — to sign you in. We keep its public key and a few technical details (an ID, a sign-in counter, when it was made). Face ID, Touch ID and your device PIN never leave your device; your password manager keeps the passkey under your profile name.",
+      "A passkey, if you add one — to sign you in. We keep its public key and a few technical details (an ID, a sign-in counter, when it was made, and when you gave consent). Face ID, Touch ID and your device PIN never leave your device; your password manager keeps the passkey under your profile name.",
       "Your training, once you add a passkey: sessions (when they started, how long they took, your time zone), sets, weights, reps, effort ratings, readiness and its reason, breaks and their reason, schedule, focus, streak and the programme's working estimates — to run and adapt your programme.",
       "Bodyweight, and a dated log of it — to set loads and show your progress. It's also noted on each progress photo.",
       "Progress photos, only if you add them — stored privately and shown only to you after passkey sign-in. Location and camera data are stripped before upload.",
@@ -49,7 +49,7 @@ const SECTIONS = [
   {
     h: "Health information",
     p: [
-      "Readiness and its reasons, breaks (including \"injured or ill\"), bodyweight, training and photos can say something about your health, which UK law treats as special category data. We only use it with your explicit consent, which you give by entering it, and only to run Heatwayve for you. Withdraw consent any time by deleting it or your profile.",
+      "Readiness and its reasons, breaks (including \"injured or ill\"), bodyweight, training and photos can say something about your health, which UK law treats as special category data. We only use it with your explicit consent, and only to run Heatwayve for you. You give it when you add a passkey. If you added one before 29 September 2026, you gave it by entering your data. Withdraw consent any time by deleting your profile (photos can also be deleted one by one in the Locker Room).",
     ],
   },
   {

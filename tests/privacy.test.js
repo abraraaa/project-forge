@@ -2,6 +2,7 @@
 // the code changed under the notice: update app/privacy/page.jsx with it.
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
+import { EXISTING_HOLDER_CONSENT_TAP } from "../lib/consent.js";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
@@ -45,6 +46,31 @@ describe("privacy notice stays true", () => {
   it("bodyweight stays out of the photo upload URL", () => {
     expect(read("lib/photos.js")).not.toMatch(/params\.set\("bw"/);
     expect(read("app/api/photos/route.js")).toContain('request.headers.get("x-hw-bodyweight")');
+  });
+
+  it("health consent is described as the mechanism that records it", () => {
+    expect(page).toContain("You give it when you add a passkey.");
+    // The notice promises the Profile confirm only while the tap is switched on.
+    expect(page.includes("we'll ask you once, on your profile, to confirm")).toBe(EXISTING_HOLDER_CONSENT_TAP);
+    expect(page).toContain("Withdraw consent any time by deleting your profile");
+    expect(page).not.toContain("which you give by entering it");
+    expect(page).toContain("when you gave consent");
+    expect(read("lib/consent.js")).toContain('href: "/privacy"');
+    expect(read("app/api/auth/register-verify/route.js")).toContain("acceptedConsentVersion(consent)");
+    expect(read("app/api/auth/login-verify/route.js")).toContain("acceptedConsentVersion(consent)");
+    // "Withdraw by deleting your profile" holds only while the consent record
+    // lives under the prefix the profile delete sweeps.
+    const sync = read("app/api/sync/route.js");
+    expect(sync).toContain("const legacyPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/`;");
+    const wipe = sync.slice(sync.indexOf("export async function DELETE"));
+    expect(wipe).toContain("list({ prefix: legacyPrefix(profile) })");
+    expect(wipe).toContain("await del(blobs.map(b => b.url))");
+    for (const f of ["app/api/auth/register-verify/route.js", "app/api/auth/login-verify/route.js"]) {
+      expect(read(f)).toContain("`forge/profiles/${encodeURIComponent(normalise(name))}/credentials.json`");
+    }
+    // The age line matches the notice.
+    expect(page).toContain("18 and over");
+    expect(read("lib/consent.js")).toContain('"Over-18s only"');
   });
 
   it("is linked from the sitemap", () => {

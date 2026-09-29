@@ -8,13 +8,14 @@ import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPre
 import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge, mintAuthToken, isAdminProfile } from "@/lib/auth-server";
 import { LEGACY_RP_ID, passkeyNudgeUrgent, daysUntilPasskeySunset } from "@/lib/origin";
 import { normaliseProfile } from "@/lib/profile-name";
+import { acceptedConsentVersion } from "@/lib/consent";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
 
 // Verify WebAuthn authentication and mint a short-lived auth token.
 // POST /api/auth/login-verify
-// Body: { profile, credential: { id, rawId, type, response: { clientDataJSON, authenticatorData, signature, userHandle } } }
+// Body: { profile, credential: { id, rawId, type, response: { clientDataJSON, authenticatorData, signature, userHandle } }, consent?: { version } }
 //
 // The assertion signature is now REALLY verified against the stored public key
 // (over authenticatorData ‖ SHA-256(clientDataJSON)), along with the challenge,
@@ -24,6 +25,9 @@ export const preferredRegion = "lhr1";
 // to any caller, so the token was forgeable by anyone who knew a profile name.
 // That token is the sole gate on destructive DELETE, so the padlock was
 // decorative. It isn't anymore.
+// consent (optional): the existing-holder confirm — stamped on the credentials
+// doc only after the assertion verifies, riding the counter write, whose sweep
+// deletes every older blob under the credentials prefix.
 
 const normalise = normaliseProfile;
 const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
@@ -33,7 +37,7 @@ export async function POST(request) {
   const limited = rateLimit(request, "auth-login", 20) || await rateLimitShared(request, "auth-login", 20);
   if (limited) return limited;
   try {
-    const { profile, credential } = await request.json();
+    const { profile, credential, consent } = await request.json();
     if (!profile || !credential) {
       return NextResponse.json({ error: "Missing profile or credential" }, { status: 400 });
     }
@@ -111,9 +115,15 @@ export async function POST(request) {
     const verifiedRpId = verification.authenticationInfo.rpID || null;
     const counterChanged = typeof newCounter === "number" && newCounter !== matchingCred.counter;
     const rpIdChanged = !!verifiedRpId && matchingCred.rpId !== verifiedRpId;
-    if (counterChanged || rpIdChanged) {
+    // Consent rides the same write. Already on file at this version: nothing to stamp.
+    const consentVersion = acceptedConsentVersion(consent);
+    const stampConsent = !!consentVersion && credData.consent?.version !== consentVersion;
+    let consentRecorded = !!consentVersion && !stampConsent;
+    if (counterChanged || rpIdChanged || stampConsent) {
       try {
         const updated = {
+          // Spread first: consent and any other top-level key survive the counter write.
+          ...credData,
           credentials: credData.credentials.map((c) =>
             c.id === matchingCred.id
               ? {
@@ -123,9 +133,11 @@ export async function POST(request) {
                 }
               : c,
           ),
+          ...(stampConsent ? { consent: { version: consentVersion, at: new Date().toISOString() } } : null),
         };
         // Write-first, sweep-after — see audit #6 / writeJsonReplacingPrefix.
         await writeJsonReplacingPrefix(credentialsPrefix(profile), credentialsPath(profile), updated);
+        if (stampConsent) consentRecorded = true;
       } catch {
         // A counter-persist failure must not deny an otherwise-valid login.
       }
@@ -167,6 +179,8 @@ export async function POST(request) {
       // Single-admin recognition: a UI hint only — every admin surface
       // re-verifies the token's profile server-side.
       admin: isAdminProfile(profile),
+      // Present only when the request carried an accepted consent claim.
+      ...(consentVersion ? { consentRecorded } : null),
       ...(onLegacyCredential
         ? {
             passkeyUpgrade: {

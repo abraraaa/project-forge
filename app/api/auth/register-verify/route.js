@@ -7,13 +7,15 @@ import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPre
 import { rpConfigFromRequest, verifyAuthToken, hasUsablePasskey, isReclaimOfLapsedProfile, hasChallengeSecret, verifyChallenge, mintAuthToken } from "@/lib/auth-server";
 import { dbRetirePhotos } from "@/lib/db";
 import { normaliseProfile } from "@/lib/profile-name";
+import { acceptedConsentVersion } from "@/lib/consent";
+import { list } from "@vercel/blob";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
 
 // Verify WebAuthn registration and store the credential's PUBLIC KEY.
 // POST /api/auth/register-verify
-// Body: { profile, credential: { id, rawId, type, response: { clientDataJSON, attestationObject } }, authToken? }
+// Body: { profile, credential: { id, rawId, type, response: { clientDataJSON, attestationObject } }, authToken?, consent?: { version } }
 //
 // The attestation is now really verified (challenge, origin, rpId, user
 // verification) and the parsed public key is stored so authentication can
@@ -28,6 +30,9 @@ export const preferredRegion = "lhr1";
 //      the bootstrap claim, with nothing yet to authenticate against, and it
 //      grants an attacker no delete power they didn't already have on an
 //      unprotected profile.
+// consent (optional) is stamped on the profile's credentials doc only after
+// the attestation verifies; an unknown version is ignored. On a first-passkey
+// (bootstrap) claim it proves only that whoever claimed this name agreed.
 
 const normalise = normaliseProfile;
 const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
@@ -38,7 +43,7 @@ export async function POST(request) {
   const limited = rateLimit(request, "auth-register", 15) || await rateLimitShared(request, "auth-register", 15);
   if (limited) return limited;
   try {
-    const { profile, credential, authToken } = await request.json();
+    const { profile, credential, authToken, consent } = await request.json();
     if (!profile || !credential) {
       return NextResponse.json({ error: "Missing profile or credential" }, { status: 400 });
     }
@@ -69,7 +74,18 @@ export async function POST(request) {
     // VERIFIABLE passkey requires proving control of an existing one. Keyless
     // legacy credentials do not count as protection (see lib/auth-server.js),
     // so a legacy user can re-register freely and heal into a real credential.
-    const existing = (await readJsonByPrefix(credentialsPrefix(profile))) || { credentials: [] };
+    const read = await readJsonByPrefix(credentialsPrefix(profile));
+    // readJsonByPrefix returns null for BOTH "no doc" and "read threw". A doc
+    // that exists but won't read must not be treated as empty: the gate below
+    // would be skipped and the write would replace every passkey on it.
+    if (read === null) {
+      let present = true;
+      try { present = (await list({ prefix: credentialsPrefix(profile) })).blobs.length > 0; } catch { present = true; }
+      if (present) {
+        return NextResponse.json({ error: "Couldn't read this profile's passkeys. Try again in a moment." }, { status: 503 });
+      }
+    }
+    const existing = read || { credentials: [] };
     // From the credentials as they stand, before this registration.
     const reclaim = isReclaimOfLapsedProfile(existing);
     // hasUsablePasskey: a legacy-only profile has no ceremony left to prove
@@ -122,7 +138,19 @@ export async function POST(request) {
     // placeholders — a successful real registration supersedes them so the
     // profile ends up with only verifiable credentials.
     const kept = existing.credentials.filter((c) => c && c.publicKey && c.id !== vc.id);
-    const updated = { credentials: [...kept, newCredential] };
+    // Consent belongs to the person, so it carries across their passkeys —
+    // but not across a reclaim, where the registrant never proved they are
+    // the person who gave it. Same version already on file: keep its date.
+    // A new version replaces the old record in place (lib/consent.js).
+    // On a reclaim `...existing` still hands every OTHER top-level key to the
+    // new claimant; a future per-person key needs the same reset as consent.
+    const consentVersion = acceptedConsentVersion(consent);
+    const priorConsent = reclaim ? undefined : existing.consent;
+    const nextConsent = consentVersion && priorConsent?.version !== consentVersion
+      ? { version: consentVersion, at: new Date().toISOString() }
+      : priorConsent;
+    // Spread first: every other top-level key on the doc survives this write.
+    const updated = { ...existing, credentials: [...kept, newCredential], consent: nextConsent };
 
     // Write the new credentials blob FIRST, then sweep the old one — a
     // failure in between leaves two readable copies, never zero (audit #6;

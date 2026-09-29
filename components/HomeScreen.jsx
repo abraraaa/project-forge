@@ -19,6 +19,7 @@ import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
 import { mondayIndex, addDaysIso } from "@/lib/dates";
 import { Fade, Card, Tag, MonoNums } from "@/components/ui";
 import Glyph from "@/components/Glyph";
+import ConsentLine from "@/components/ConsentLine";
 import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
 import { deloadCardCopy } from "@/lib/progression";
@@ -42,6 +43,10 @@ function formatAgo(ms) {
 // height + the printed number: the redundancy law).
 const BLOCK_RPE = { main: 8, superset: 8, finisher: 9 };
 
+// Stable identity, so React calls it on mount only (an inline arrow would
+// re-focus on every render).
+const focusOnMount = (el) => { el?.focus(); };
+
 // Shared quiet text-button style (links, dismissals).
 const linkBtn = {
   background: "none", border: "none", padding: 0, cursor: "pointer",
@@ -54,6 +59,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
+  // The chip opens the card rather than registering: consent is only
+  // claimed from a surface that shows the ConsentLine.
+  const [pnChipOpen, setPnChipOpen] = useState(false);
+  const pnShowCard = pnStage === "card" || (pnStage === "chip" && pnChipOpen);
   const hasRotationDrift = Object.keys(programmeBlock?.config || {}).length > 0;
   const handleResetTap = () => {
     if (!resetArmed) {
@@ -596,10 +605,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       )}
 
       {/* Passkey nudge — chip phase (days 0-3). */}
-      {pnStage === "chip" && (
+      {pnStage === "chip" && !pnChipOpen && (
         <Fade d={195}>
           <div style={{margin:"14px 24px 0",display:"flex",justifyContent:"center",alignItems:"center",gap:8}}>
-            <button onClick={onPnRegister} disabled={pnBusy}
+            <button onClick={() => setPnChipOpen(true)} disabled={pnBusy}
               style={{...linkBtn,padding:"6px 4px",cursor:pnBusy?"default":"pointer",opacity:pnBusy?0.6:1}}>
               {pnBusy ? "Setting up…" : <>Secure your name across devices <Glyph name="arrowRight" size={11}/></>}
             </button>
@@ -616,32 +625,37 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         </Fade>
       )}
 
-      {/* Passkey nudge — card phase (days 4+). Consequence made explicit. */}
-      {pnStage === "card" && (
-        <Fade d={200}>
+      {/* Passkey nudge — card phase (days 4+, or opened from the chip).
+          Consequence made explicit. */}
+      {pnShowCard && (
+        <Fade d={pnChipOpen ? 0 : 200}>
           <Card style={{margin:"20px 24px 0",padding:"16px 18px"}}>
-            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:12}}>
-              <div style={{flex:1}}>
-                <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>Secure across devices</div>
-                <div style={{fontSize:16,fontWeight:500,color:T.ink,lineHeight:1.35,marginBottom:6}}>
-                  Add a passkey
+            {/* Focus moves in when the chip (which had it) unmounts. */}
+            <div tabIndex={-1} ref={pnChipOpen ? focusOnMount : undefined} style={{outline:"none"}}>
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:12}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>Secure across devices</div>
+                  <div style={{fontSize:16,fontWeight:500,color:T.ink,lineHeight:1.35,marginBottom:6}}>
+                    Add a passkey
+                  </div>
+                  <p style={{fontSize:13,color:T.ink2,lineHeight:1.55,margin:0}}>
+                    Without one, your data lives only on this device. Face ID, Touch ID, or your device PIN — takes a second.
+                  </p>
                 </div>
-                <p style={{fontSize:13,color:T.ink2,lineHeight:1.55,margin:0}}>
-                  Without one, your data lives only on this device. Face ID, Touch ID, or your device PIN — takes a second.
-                </p>
+                <button onClick={onPnSnooze} aria-label="Dismiss"
+                  style={{...linkBtn,flexShrink:0,padding:"4px 8px"}}><Glyph name="cross" size={12}/></button>
               </div>
-              <button onClick={onPnSnooze} aria-label="Dismiss"
-                style={{...linkBtn,flexShrink:0,padding:"4px 8px"}}><Glyph name="cross" size={12}/></button>
+              <button onClick={onPnRegister} disabled={pnBusy} aria-describedby="consent-home"
+                style={{width:"100%",height:46,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:pnBusy?"default":"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:pnBusy?0.6:1}}>
+                {pnBusy ? "Setting up…" : <>Set up passkey <Glyph name="arrowRight" size={12}/></>}
+              </button>
+              <ConsentLine id="consent-home" style={{ marginTop: 10 }} />
+              {pnError && (
+                <div style={{marginTop:10,fontSize:12,color:T.heat[4]}}>
+                  {pnError}
+                </div>
+              )}
             </div>
-            <button onClick={onPnRegister} disabled={pnBusy}
-              style={{width:"100%",height:46,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:pnBusy?"default":"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6,opacity:pnBusy?0.6:1}}>
-              {pnBusy ? "Setting up…" : <>Set up passkey <Glyph name="arrowRight" size={12}/></>}
-            </button>
-            {pnError && (
-              <div style={{marginTop:10,fontSize:12,color:T.heat[4]}}>
-                {pnError}
-              </div>
-            )}
           </Card>
         </Fade>
       )}
