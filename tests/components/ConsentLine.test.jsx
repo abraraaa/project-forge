@@ -12,14 +12,14 @@ describe("ConsentLine", () => {
   it("renders the exact line under the given id, and the small print with its link", () => {
     const { container } = render(<ConsentLine id="x" />);
     expect(screen.getByText(CONSENT_COPY.line).id).toBe("x");
-    const a = screen.getByRole("link", { name: /^What we keep, and how to delete it/ });
+    const a = screen.getByRole("link", { name: /^Full details on how we keep your data safe/ });
     expect(a.getAttribute("href")).toBe("/privacy");
     expect(a.getAttribute("target")).toBe("_blank");
     expect(a.getAttribute("rel")).toContain("noopener");
     expect(a.textContent).toContain("(opens in a new tab)");
     const small = a.parentElement.textContent.replace(/\s+/g, " ").replace(" (opens in a new tab)", "").trim();
-    expect(small).toBe("Over-18s only · What we keep, and how to delete it");
-    expect(a.querySelector('span[style*="nowrap"]').textContent.trim()).toBe("it");
+    expect(small).toBe("Over-18s only. Full details on how we keep your data safe");
+    expect(a.querySelector('span[style*="nowrap"]').textContent.trim()).toBe("safe");
     expect(a.querySelector('span[style*="nowrap"] svg')).not.toBeNull();
     expect(container.textContent).not.toMatch(/server/i);
   });

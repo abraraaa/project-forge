@@ -30,7 +30,7 @@ export default function ConsentLine({ id, style }) {
       <p id={id} style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: 0 }}>{CONSENT_COPY.line}</p>
       {/* Small print in ink2, not ink3: ink-3 is never used for sentences. */}
       <p style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, margin: "4px 0 0" }}>
-        {CONSENT_COPY.age} ·{" "}
+        {CONSENT_COPY.age}{" "}
         {/* New tab: following it mid-onboarding must not drop the step. */}
         <a href={CONSENT_COPY.href} target="_blank" rel="noopener noreferrer"
           style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}>

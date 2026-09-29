@@ -24,9 +24,9 @@ const filesContaining = (dirs, needle, exclude = []) =>
 describe("consent copy", () => {
   it("is the approved wording, in one place", () => {
     expect(CONSENT_VERSION).toBe("2026-09-29");
-    expect(CONSENT_COPY.line).toBe("With a passkey, your training, bodyweight and photos live safely with us, and follow you to any device. Only you can see them.");
-    expect(CONSENT_COPY.age).toBe("Over-18s only");
-    expect(CONSENT_COPY.link).toBe("What we keep, and how to delete it");
+    expect(CONSENT_COPY.line).toBe("With a passkey, your training, bodyweight and photos live safely with us, and follow you to any device. Only you own access.");
+    expect(CONSENT_COPY.age).toBe("Over-18s only.");
+    expect(CONSENT_COPY.link).toBe("Full details on how we keep your data safe");
     expect(CONSENT_COPY.href).toBe("/privacy");
     // Placeholders pending the owner's copy pass; pinned so a change is deliberate.
     expect(CONSENT_COPY.confirm).toBe("Yes, keep it for me");

@@ -32,7 +32,7 @@ describe("bodyweight sheet — secure step consent", () => {
     expect(!!(cta.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     expect(cta.getAttribute("aria-describedby")).toBe("bw-consent");
     expect(document.getElementById("bw-consent")).toBe(line);
-    expect(screen.getByRole("link", { name: /What we keep/ }).getAttribute("href")).toBe("/privacy");
+    expect(screen.getByRole("link", { name: /Full details on how we keep/ }).getAttribute("href")).toBe("/privacy");
 
     fireEvent.click(cta);
     await waitFor(() => expect(registerPasskey).toHaveBeenCalledWith("sam", null, { consent: { version: CONSENT_VERSION } }));

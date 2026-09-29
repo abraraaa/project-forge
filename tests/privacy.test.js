@@ -70,7 +70,7 @@ describe("privacy notice stays true", () => {
     }
     // The age line matches the notice.
     expect(page).toContain("18 and over");
-    expect(read("lib/consent.js")).toContain('"Over-18s only"');
+    expect(read("lib/consent.js")).toContain('"Over-18s only."');
   });
 
   it("is linked from the sitemap", () => {

@@ -34,7 +34,7 @@ describe("home passkey nudge — consent", () => {
     const line = screen.getByText(CONSENT_COPY.line);
     expect(follows(btn, line)).toBe(true);
     expect(document.getElementById(btn.getAttribute("aria-describedby"))).toBe(line);
-    expect(screen.getByRole("link", { name: /What we keep/ }).getAttribute("href")).toBe("/privacy");
+    expect(screen.getByRole("link", { name: /Full details on how we keep/ }).getAttribute("href")).toBe("/privacy");
   });
 
   it("the chip opens the card and never registers directly", () => {
