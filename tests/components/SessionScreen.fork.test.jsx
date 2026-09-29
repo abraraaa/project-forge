@@ -33,7 +33,7 @@ function props(overrides = {}) {
     swapKey: block.id, onSwap: () => {},
     showVid: false, setShowVid: () => {}, getW: (e) => e?.weight ?? null, getR: (e) => e?.reps ?? null,
     editTarget: null, setEditTarget: () => {},
-    workingWeights: {}, setWW: () => {}, workingReps: {}, setWR: () => {},
+    planWeights: {}, setPlanWeights: () => {}, planReps: {}, setPlanReps: () => {},
     history: [], loggedSets: [], awaitRpe: false, ssRoundDone: false,
     restActive: false, restRemain: 180, setRestActive: () => {}, setRestRemain: () => {},
     onCommit: () => {}, onLog: () => {}, onQuit: () => {}, onShowOverview: () => {},

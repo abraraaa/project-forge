@@ -498,7 +498,7 @@ function RestProgressLine({ active, remain, total }) {
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null}){
+export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,planWeights={},setPlanWeights,planReps={},setPlanReps,prescribedReps={},coachLine=null,travel=false,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null}){
   const [swapEx,setSwapEx]=useState(null);
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
   const vidEx    =isSS?(phase==="A"?resolvedExA:resolvedExB):resolvedEx;
@@ -536,9 +536,11 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const tempoPhrase=tempoEntry?.tempo
     ? decodeTempo(tempoEntry.tempo).filter(seg=>seg.n!=="0").map(seg=>seg.n==="X"?seg.label:`${seg.n}s ${seg.label}`).join(" · ")
     : null;
+  // A travel slot is bodyweight in a hotel room: no "last time" for the gym
+  // lift of the same name, nor the reverse.
   const recent = useMemo(
-    () => recentForExercise(history, activeEx?.name, 3),
-    [history, activeEx?.name]
+    () => recentForExercise(history, activeEx?.name, 3, { travel: !!travel }),
+    [history, activeEx?.name, travel]
   );
   const showRestHint=!isSS;
   const restMins =Math.floor(restRemain/60),restSecs=restRemain%60;
@@ -576,7 +578,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
     // Adding a step walks an off-grid weight along forever (18.75 -> 19.75);
     // taking the next rung lands clean on the first press (18.75 -> 19).
     const next = nextRung(currentW, loadType, dir);
-    setWW(p => ({...p, [activeEx.name]: next}));
+    // Today's weight only; the prescription moves with the engine.
+    setPlanWeights(p => ({...p, [activeEx.name]: next}));
   };
 
   // Last performance of this exercise (for the "this set, last week" cell
@@ -795,6 +798,12 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         </div>
       </div>
 
+      {/* How the engine read this lift last time, when it has something to
+          say: one quiet line, gone once the block is done. */}
+      {coachLine&&!blockDone&&(
+        <div style={{padding:"12px 20px 0",fontSize:13,color:T.ink2,lineHeight:1.45}}>{coachLine}</div>
+      )}
+
       {/* Per-set progress ticks — pulled up under the weight block so the
           middle carries the session's state, not empty ground. Day-key
           coloured: a session identifier, not measured data. */}
@@ -988,7 +997,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           )}
         </>
       )}
-      {editTarget&&<DrumEditOverlay target={editTarget} workingWeights={workingWeights} setWW={setWW} workingReps={workingReps} setWR={setWR} addedLoads={addedLoads} setAddedLoad={setAddedLoad} block={block} onClose={()=>setEditTarget(null)}/>}
+      {editTarget&&<DrumEditOverlay target={editTarget} planWeights={planWeights} setPlanWeights={setPlanWeights} planReps={planReps} setPlanReps={setPlanReps} prescribedReps={prescribedReps} addedLoads={addedLoads} setAddedLoad={setAddedLoad} block={block} onClose={()=>setEditTarget(null)}/>}
       {swapEx&&<SwapOverlay activeEx={activeEx} swapKey={swapKey} onSwap={onSwap} onClose={()=>setSwapEx(null)}/>}
       {showVid&&vidEx&&(
         <div onClick={()=>setShowVid(false)} className="forge-scrim forge-scrim-video" style={{overscrollBehavior:"contain",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
@@ -1113,7 +1122,10 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
 // lateral raise: .0/.25/.5/.75). Depth from tonal falloff + type scale —
 // zero blur, no glass cylinder.
 const ADDED_LOAD_MAX_KG = 100; // vest / plate range on a bodyweight lift
-function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,addedLoads,setAddedLoad,block,onClose}){
+// The drum is what you did: it edits today's plan (the host's session layer),
+// which the log reads and the next set inherits. It never writes the
+// prescription; the dot on the reps wheel marks that.
+function DrumEditOverlay({target,planWeights,setPlanWeights,planReps,setPlanReps,prescribedReps={},addedLoads,setAddedLoad,block,onClose}){
   const ex=block.type==="main"?block.ex:(target.exName===block.exA?.name?block.exA:block.exB);
   // Load type, not ex.weight: null means no prescribed load, not unloadable.
   const targetLt=target?.loadType ?? getLoadType(ex);
@@ -1125,8 +1137,8 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,addedLoa
   const optionalChrome=usesOptionalChrome(targetLt);
   const initKg = optionalWeight
     ? (addedLoadFor(addedLoads, target.exName) ?? 0)
-    : (workingWeights[target.exName]??ex?.weight??0);
-  const rawReps =workingReps[target.exName]??ex?.reps;
+    : (planWeights[target.exName]??ex?.weight??0);
+  const rawReps =planReps[target.exName]??ex?.reps;
   // Timed exercises (prescribed "20s") seed from the parsed seconds.
   const timedSeed = target.timed ? parseTimedReps(ex?.reps)?.seconds : null;
   const initReps = typeof rawReps==="string"
@@ -1142,8 +1154,8 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,addedLoa
   // fixed-stack increments.
   const lt = getLoadType(ex);
   const weightStep = weightStepForLoadType(lt);
-  // The programme's range gets a dot; counts outside the effective band dim.
-  const rec = recommendedReps(ex?.reps);
+  // The prescription gets a dot; counts outside the effective band dim.
+  const rec = recommendedReps(prescribedReps[target.exName] ?? ex?.reps);
   const repTone = (v) => (rec && v >= rec.min && v <= rec.max) ? "rec"
     : (v < EFFECTIVE_REP_BAND.min || v > EFFECTIVE_REP_BAND.max) ? "out" : null;
   return (
@@ -1159,18 +1171,19 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,addedLoa
           <ScrollDrum value={reps} onChange={(v)=>{setRepsTouched(true);setReps(v);}} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined} tone={target.timed?null:repTone}/>
         </div>
         {/* House pattern: Cancel/Confirm on the bottom row, no corner ✕.
-            Drum edits are LOCAL state — Cancel is a true discard. */}
+            Drum edits are LOCAL state — Cancel is a true discard. Confirm
+            sets today's plan, never the prescription. */}
         <div style={{display:"flex",gap:10,marginTop:24}}>
         <button onClick={onClose} style={{flex:1,padding:"16px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:14,color:T.ink2,fontFamily:T.text}}>Cancel</button>
         <button onClick={()=>{
-          if(hasWeight) setWW(p=>({...p,[target.exName]:kg}));
+          if(hasWeight) setPlanWeights(p=>({...p,[target.exName]:kg}));
           // Never W: a pure bodyweight lift's added load is its own store.
           if(optionalWeight && kg!==initKg) setAddedLoad?.(target.exName,kg);
           // An untouched reps wheel on the optional path writes nothing: it
           // seeds 8 from a string target ("15/leg"), so adding a vest must not
           // rewrite the lift's reps. Touched, it writes whatever it reads —
           // 8 included. Loaded lifts keep writing as before.
-          if(!optionalWeight || repsTouched) setWR(p=>({...p,[target.exName]:reps}));
+          if(!optionalWeight || repsTouched) setPlanReps(p=>({...p,[target.exName]:reps}));
           onClose();
         }} style={{flex:2,padding:"16px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
           Confirm <Glyph name="arrowRight" size={13}/>

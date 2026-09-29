@@ -8,13 +8,15 @@ import { computeNextPrescription, updateLiftStateFromSession } from "../lib/prog
 
 const set = (reps, rir = 1) => ({ weight: 100, effectiveLoad: 100, reps, rir, est1rm: 100 * (1 + reps / 30) });
 
-// One set short by one rep: MISSED_LIGHT.
+// One set short by one rep: MISSED_LIGHT. A middle set, because a short LAST
+// set is named apart (final_set_miss, tests/final-set-and-adoption.test.js)
+// while counting toward the same escalation.
 const lightMiss = (date) => ({
   id: `${date}T10:00:00`, date, session: "strength-a", readiness: "normal",
   blocks: [{ type: "main", exercises: [{
     name: "Barbell Back Squat", muscle: "Quadriceps",
     prescribed: { reps: 5, sets: 3, rir: 2 },
-    sets: [set(5), set(5), set(4)],
+    sets: [set(5), set(4), set(5)],
   }] }],
 });
 

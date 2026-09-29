@@ -14,6 +14,11 @@
 //   - a finished block reads as finished when you flip back to it
 //     (was tests/revisit-completed-block.test.js "the screen").
 //
+// "W" below is the weight map the screen is handed: the host's plan for
+// today (planWeights, session-scoped, defaulting to the prescription). The
+// screen writes only the plan; the prescription is the engine's
+// (tests/components/SessionHost.plan.test.jsx).
+//
 // Text queries, not getByRole: jsdom cannot resolve this app's CSS-variable
 // font sizes, and the a11y tree computation throws on this screen.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,8 +44,8 @@ function props(overrides = {}) {
     swapKey: "main", onSwap: () => {},
     showVid: false, setShowVid: () => {}, getW: () => 100, getR: (e) => e?.reps ?? null,
     editTarget: null, setEditTarget: () => {},
-    workingWeights: {}, setWW: () => {},
-    workingReps: {}, setWR: () => {},
+    planWeights: {}, setPlanWeights: () => {},
+    planReps: {}, setPlanReps: () => {},
     history: [], loggedSets: [], awaitRpe: false, ssRoundDone: false,
     restActive: false, restRemain: 180, setRestActive: () => {}, setRestRemain: () => {},
     onCommit: () => {}, onLog: () => {}, onQuit: () => {}, onShowOverview: () => {},
@@ -71,7 +76,7 @@ const kgWheel = (d) => within(d.getByText("+ kg · optional").parentElement);
 // The reps (or seconds) wheel, scoped through its label the same way.
 const repsWheel = (d, label) => within(d.getAllByText(label)[0].parentElement);
 // A distinct stale working weight, so reading or seeding from W is caught.
-const phantom = { getW: () => 37, workingWeights: { "Decline Push-Up": 37 } };
+const phantom = { getW: () => 37, planWeights: { "Decline Push-Up": 37 } };
 
 const flat = (s) => s.replace(/\s+/g, " ").trim();
 const drum = (container) => {
@@ -139,14 +144,14 @@ describe("the weight card never calls a loaded lift bodyweight", () => {
 // and loaded bodyweight share the optional chrome (usesOptionalChrome); only
 // the store differs — pure bodyweight has its own, loaded bodyweight keeps W.
 
-// The host's W for a loaded-bodyweight lift: getW reads it, setWW writes it,
-// so a confirmed drum lands back on the card.
+// The host's plan for a loaded-bodyweight lift: getW reads it, setPlanWeights
+// writes it, so a confirmed drum lands back on the card.
 function WithBelt({ initial = {}, onSetWW, ...p }) {
   const [editTarget, setEditTarget] = useState(null);
   const [ww, setWWState] = useState(initial);
-  const setWW = (fn) => { const next = fn(ww); onSetWW?.(next); setWWState(next); };
+  const setPlanWeights = (fn) => { const next = fn(ww); onSetWW?.(next); setWWState(next); };
   return <SessionScreen {...p} editTarget={editTarget} setEditTarget={setEditTarget}
-    workingWeights={ww} setWW={setWW} getW={(ex) => ww[ex?.name] ?? ex?.weight ?? null} />;
+    planWeights={ww} setPlanWeights={setPlanWeights} getW={(ex) => ww[ex?.name] ?? ex?.weight ?? null} />;
 }
 
 describe("loaded bodyweight lifts present added weight as optional, stored in W", () => {
@@ -175,9 +180,9 @@ describe("loaded bodyweight lifts present added weight as optional, stored in W"
     expect(bigNumber(container)).toBeNull();
   });
 
-  it("the chip opens the optional wheel; Confirm 7.5 writes W, never the added-load store", () => {
-    const onSetWW = vi.fn(), onAddedLoad = vi.fn(), setWR = vi.fn();
-    const { container } = render(<WithBelt {...props({ block: mainBlock(pullUp), setAddedLoad: onAddedLoad, setWR })} onSetWW={onSetWW} />);
+  it("the chip opens the optional wheel; Confirm 7.5 writes today's W, never the added-load store", () => {
+    const onSetWW = vi.fn(), onAddedLoad = vi.fn(), setPlanReps = vi.fn();
+    const { container } = render(<WithBelt {...props({ block: mainBlock(pullUp), setAddedLoad: onAddedLoad, setPlanReps })} onSetWW={onSetWW} />);
     fireEvent.click(screen.getByText("+ kg · optional"));
     const d = drum(container);
     expect(kgWheel(d).getByText("none")).toBeTruthy();
@@ -186,8 +191,8 @@ describe("loaded bodyweight lifts present added weight as optional, stored in W"
     fireEvent.click(d.getByText(/Confirm/));
     expect(onSetWW).toHaveBeenLastCalledWith({ "Pull-Up": 7.5 });
     expect(onAddedLoad).not.toHaveBeenCalled();
-    // Reps behave as on any loaded lift: Confirm writes them.
-    expect(setWR).toHaveBeenCalled();
+    // Reps behave as on any loaded lift: Confirm writes today's reps.
+    expect(setPlanReps).toHaveBeenCalled();
     expect(flat(document.body.textContent)).toContain("Bodyweight + 7.5 kg");
 
     // "none" writes 0 — the engine reads that as unloaded — and the chip returns.
@@ -211,14 +216,14 @@ describe("loaded bodyweight lifts present added weight as optional, stored in W"
 
   it("a pure bodyweight lift still writes its added-load store, not W", () => {
     const pushUp = { name: "Decline Push-Up", muscle: "Upper chest", reps: 15, weight: null, loadType: "bodyweight" };
-    const setWW = vi.fn(), onAddedLoad = vi.fn();
-    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), getW: () => null, setWW })} onAddedLoad={onAddedLoad} />);
+    const setPlanWeights = vi.fn(), onAddedLoad = vi.fn();
+    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), getW: () => null, setPlanWeights })} onAddedLoad={onAddedLoad} />);
     fireEvent.click(screen.getByText("+ kg · optional"));
     const d = drum(container);
     fireEvent.click(kgWheel(d).getByText("7.5"));
     fireEvent.click(d.getByText(/Confirm/));
     expect(onAddedLoad).toHaveBeenCalledWith("Decline Push-Up", 7.5);
-    expect(setWW).not.toHaveBeenCalled();
+    expect(setPlanWeights).not.toHaveBeenCalled();
   });
 
   it("an assisted lift keeps its assistance drum", () => {
@@ -278,45 +283,45 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
   });
 
   it("Confirm writes the added load, never W", () => {
-    const setWW = vi.fn(), setWR = vi.fn(), onAddedLoad = vi.fn();
-    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setWW, setWR })} onAddedLoad={onAddedLoad} />);
+    const setPlanWeights = vi.fn(), setPlanReps = vi.fn(), onAddedLoad = vi.fn();
+    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setPlanWeights, setPlanReps })} onAddedLoad={onAddedLoad} />);
     fireEvent.click(screen.getByText("+ kg · optional"));
     const d = drum(container);
     fireEvent.click(kgWheel(d).getByText("10"));
     fireEvent.click(d.getByText(/Confirm/));
     expect(onAddedLoad).toHaveBeenCalledWith("Decline Push-Up", 10);
-    expect(setWW).not.toHaveBeenCalled();
+    expect(setPlanWeights).not.toHaveBeenCalled();
     // The reps wheel was left alone, so the rep target is too.
-    expect(setWR).not.toHaveBeenCalled();
+    expect(setPlanReps).not.toHaveBeenCalled();
   });
 
   it("a vest on a per-leg lift keeps its per-leg reps", () => {
     // A string target seeds the reps wheel at 8; a vest-only confirm wrote
     // that 8 over "15/leg" (and, keyed by name, over the gym lift's target).
     const calf = { name: "Single-Leg Calf Raise", muscle: "Calves", reps: "15/leg", weight: null, loadType: "bodyweight" };
-    const setWW = vi.fn(), setWR = vi.fn(), onAddedLoad = vi.fn();
-    const { container } = render(<WithVest {...props({ block: mainBlock(calf), getW: () => 37, workingWeights: { "Single-Leg Calf Raise": 37 }, setWW, setWR })} onAddedLoad={onAddedLoad} />);
+    const setPlanWeights = vi.fn(), setPlanReps = vi.fn(), onAddedLoad = vi.fn();
+    const { container } = render(<WithVest {...props({ block: mainBlock(calf), getW: () => 37, planWeights: { "Single-Leg Calf Raise": 37 }, setPlanWeights, setPlanReps })} onAddedLoad={onAddedLoad} />);
     fireEvent.click(screen.getByText("+ kg · optional"));
     const d = drum(container);
     fireEvent.click(kgWheel(d).getByText("10"));
     fireEvent.click(d.getByText(/Confirm/));
     expect(onAddedLoad).toHaveBeenCalledWith("Single-Leg Calf Raise", 10);
-    expect(setWR).not.toHaveBeenCalled();
-    expect(setWW).not.toHaveBeenCalled();
+    expect(setPlanReps).not.toHaveBeenCalled();
+    expect(setPlanWeights).not.toHaveBeenCalled();
   });
 
   it("a touched reps wheel writes its value, even when it lands back on the seed", () => {
     const calf = { name: "Single-Leg Calf Raise", muscle: "Calves", reps: "15/leg", weight: null, loadType: "bodyweight" };
-    const setWW = vi.fn(), setWR = vi.fn(), onAddedLoad = vi.fn();
-    const { container } = render(<WithVest {...props({ block: mainBlock(calf), getW: () => 37, workingWeights: { "Single-Leg Calf Raise": 37 }, setWW, setWR })} onAddedLoad={onAddedLoad} />);
+    const setPlanWeights = vi.fn(), setPlanReps = vi.fn(), onAddedLoad = vi.fn();
+    const { container } = render(<WithVest {...props({ block: mainBlock(calf), getW: () => 37, planWeights: { "Single-Leg Calf Raise": 37 }, setPlanWeights, setPlanReps })} onAddedLoad={onAddedLoad} />);
     fireEvent.click(screen.getByText("15/leg"));
     const d = drum(container);
     fireEvent.click(repsWheel(d, "reps").getByText("9"));
     fireEvent.click(repsWheel(d, "reps").getByText("8"));
     fireEvent.click(d.getByText(/Confirm/));
-    expect(setWR.mock.calls[0][0]({})).toEqual({ "Single-Leg Calf Raise": 8 });
+    expect(setPlanReps.mock.calls[0][0]({})).toEqual({ "Single-Leg Calf Raise": 8 });
     expect(onAddedLoad).not.toHaveBeenCalled();
-    expect(setWW).not.toHaveBeenCalled();
+    expect(setPlanWeights).not.toHaveBeenCalled();
   });
 
   it("focus returns to the added-weight control after the drum closes, both ways", () => {
@@ -338,18 +343,18 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
   });
 
   it("reps-only confirm leaves the added load alone", () => {
-    const setWW = vi.fn(), setWR = vi.fn(), onAddedLoad = vi.fn();
-    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setWW, setWR })} onAddedLoad={onAddedLoad} />);
+    const setPlanWeights = vi.fn(), setPlanReps = vi.fn(), onAddedLoad = vi.fn();
+    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setPlanWeights, setPlanReps })} onAddedLoad={onAddedLoad} />);
     fireEvent.click(screen.getByText("+ kg · optional"));
     fireEvent.click(drum(container).getByText(/Confirm/));
     expect(onAddedLoad).not.toHaveBeenCalled();
-    expect(setWW).not.toHaveBeenCalled();
+    expect(setPlanWeights).not.toHaveBeenCalled();
   });
 
   it("a fresh drum starts at \"none\", never at W", () => {
     // Seeded from W (37), picking "none" would be a change and write 0.
-    const setWW = vi.fn(), setWR = vi.fn(), onAddedLoad = vi.fn();
-    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setWW, setWR })} onAddedLoad={onAddedLoad} />);
+    const setPlanWeights = vi.fn(), setPlanReps = vi.fn(), onAddedLoad = vi.fn();
+    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setPlanWeights, setPlanReps })} onAddedLoad={onAddedLoad} />);
     fireEvent.click(screen.getByText("+ kg · optional"));
     const d = drum(container);
     fireEvent.click(kgWheel(d).getByText("none"));
@@ -370,8 +375,8 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
   });
 
   it("round trip 0 → 10 → 0: \"none\" writes 0, the card returns to the chip", () => {
-    const setWW = vi.fn(), onAddedLoad = vi.fn();
-    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setWW })} onAddedLoad={onAddedLoad} />);
+    const setPlanWeights = vi.fn(), onAddedLoad = vi.fn();
+    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setPlanWeights })} onAddedLoad={onAddedLoad} />);
 
     fireEvent.click(screen.getByText("+ kg · optional"));
     const d = drum(container);
@@ -387,42 +392,42 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
     expect(onAddedLoad.mock.calls).toEqual([["Decline Push-Up", 10], ["Decline Push-Up", 0]]);
     expect(flat(document.body.textContent)).toContain("Bodyweight · 80 kg");
     expect(screen.getByText("+ kg · optional")).toBeTruthy();
-    expect(setWW).not.toHaveBeenCalled();
+    expect(setPlanWeights).not.toHaveBeenCalled();
   });
 
   it("a timed hold opens the drum in seconds and keeps its seconds", () => {
     // Without the timed flag the drum opened in reps mode, seeded 8, and
     // Confirm silently turned the 20s hold into 8.
     const lsit = { name: "L-Sit Hold", muscle: "Core", reps: "20s", weight: null, loadType: "bodyweight" };
-    const setWR = vi.fn();
-    const { container } = render(<WithVest {...props({ block: mainBlock(lsit), getW: () => 37, workingWeights: { "L-Sit Hold": 37 }, setWR })} />);
+    const setPlanReps = vi.fn();
+    const { container } = render(<WithVest {...props({ block: mainBlock(lsit), getW: () => 37, planWeights: { "L-Sit Hold": 37 }, setPlanReps })} />);
     fireEvent.click(screen.getByText("+ kg · optional"));
     const d = drum(container);
     expect(d.getAllByText("sec").length).toBeGreaterThan(0);
     expect(kgWheel(d).getByText("none")).toBeTruthy();
     fireEvent.click(d.getByText(/Confirm/));
     // Untouched, the hold keeps its "20s".
-    expect(setWR).not.toHaveBeenCalled();
+    expect(setPlanReps).not.toHaveBeenCalled();
 
     // Moved, it writes seconds.
     fireEvent.click(screen.getByText("+ kg · optional"));
     const d2 = drum(container);
     fireEvent.click(repsWheel(d2, "sec").getByText("25"));
     fireEvent.click(d2.getByText(/Confirm/));
-    expect(setWR.mock.calls[0][0]({})).toEqual({ "L-Sit Hold": 25 });
+    expect(setPlanReps.mock.calls[0][0]({})).toEqual({ "L-Sit Hold": 25 });
   });
 
   it("the reps cell opens the optional wheel too, and writes nothing to it untouched", () => {
-    const setWW = vi.fn(), setWR = vi.fn(), onAddedLoad = vi.fn();
-    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setWW, setWR })} onAddedLoad={onAddedLoad} />);
+    const setPlanWeights = vi.fn(), setPlanReps = vi.fn(), onAddedLoad = vi.fn();
+    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setPlanWeights, setPlanReps })} onAddedLoad={onAddedLoad} />);
     fireEvent.click(screen.getByText("15"));
     const d = drum(container);
     expect(kgWheel(d).getByText("none")).toBeTruthy();
     fireEvent.click(repsWheel(d, "reps").getByText("12"));
     fireEvent.click(d.getByText(/Confirm/));
     expect(onAddedLoad).not.toHaveBeenCalled();
-    expect(setWW).not.toHaveBeenCalled();
-    expect(setWR.mock.calls[0][0]({})).toEqual({ "Decline Push-Up": 12 });
+    expect(setPlanWeights).not.toHaveBeenCalled();
+    expect(setPlanReps.mock.calls[0][0]({})).toEqual({ "Decline Push-Up": 12 });
   });
 
   it("\"this lift, last time\" never shows a phantom as a vest", () => {
@@ -449,19 +454,39 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
     expect(flat(screen.getByRole("dialog").textContent)).toContain("1×12 @ 10 kg");
   });
 
+  // "This lift, last time" reads records of the session's own kind: a gym
+  // session skips travel records for the same lift, and a travel session
+  // reads only travel records (lib/analytics.js recentForExercise).
+  const bss = { name: "Bulgarian Split Squat", muscle: "Quads", reps: 8, weight: 18, loadType: "per_db" };
+  const travelRec = { id: "2026-09-20T10:00:00.000Z", date: "2026-09-20", travel: true, blocks: [{ type: "main", exercises: [
+    { name: "Bulgarian Split Squat", loadType: "bodyweight", sets: [
+      { weight: 10, reps: 8, rpe: 8, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 90 }] }] }] };
+  const gymRec = { id: "2026-09-13T10:00:00.000Z", date: "2026-09-13", blocks: [{ type: "main", exercises: [
+    { name: "Bulgarian Split Squat", loadType: "per_db", sets: [
+      { weight: 16, reps: 8, rpe: 8, loadType: "per_db", effectiveLoad: 16 }] }] }] };
+
   it("a travel backpack set never becomes a gym delta", () => {
-    const bss = { name: "Bulgarian Split Squat", muscle: "Quads", reps: 8, weight: 18, loadType: "per_db" };
-    const history = [{ id: "2026-09-20T10:00:00.000Z", date: "2026-09-20", travel: true, blocks: [{ type: "main", exercises: [
-      { name: "Bulgarian Split Squat", loadType: "bodyweight", sets: [
-        { weight: 10, reps: 8, rpe: 8, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 90 }] }] }] }];
-    render(<WithVest {...props({ block: mainBlock(bss), getW: () => 18, history })} />);
+    render(<WithVest {...props({ block: mainBlock(bss), getW: () => 18, history: [travelRec] })} />);
     expect(screen.queryByText(/on last time/)).toBeNull();
     expect(flat(document.body.textContent)).not.toContain("10 × 8");
-    // Nor, one tap deeper, 10 kg dumbbells in the history sheet.
+    // Nor, one tap deeper: a gym session has no travel history to open.
+    expect(screen.queryByLabelText(/Recent history for/)).toBeNull();
+  });
+
+  it("a gym session's last-time cell skips a newer travel record for the same lift", () => {
+    render(<WithVest {...props({ block: mainBlock(bss), getW: () => 18, history: [gymRec, travelRec] })} />);
+    const text = flat(document.body.textContent);
+    expect(text).toContain("16 × 8");
+    expect(text).not.toContain("10 × 8");
+    expect(text).toContain("+2 on last time");
+  });
+
+  it("a travel session reads its own kind", () => {
+    render(<WithVest {...props({ block: mainBlock(bss), getW: () => 18, history: [gymRec, travelRec], travel: true })} />);
+    const text = flat(document.body.textContent);
+    expect(text).not.toContain("16 × 8");
     fireEvent.click(screen.getByLabelText(/Recent history for/));
-    const sheet = flat(screen.getByRole("dialog").textContent);
-    expect(sheet).toContain("1×8");
-    expect(sheet).not.toContain("@ 10 kg");
+    expect(flat(screen.getByRole("dialog").textContent)).not.toContain("@ 16 kg");
   });
 });
 
