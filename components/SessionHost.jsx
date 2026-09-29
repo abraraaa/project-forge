@@ -270,6 +270,9 @@ export default function SessionHost() {
   const resolvedExB = isSS ? (block.exB ?? null) : null;
   const resolvedEx  = !isSS ? (block.ex ?? null) : null;
   const activeEx    = isSS ? (phase === "A" ? resolvedExA : resolvedExB) : resolvedEx;
+  // What the finished-block fork's primary names; null on the last block.
+  const nextBlock   = activeSession.blocks[blockIdx + 1] ?? null;
+  const nextExName  = nextBlock ? ((nextBlock.ex ?? nextBlock.exA)?.name ?? nextBlock.label ?? null) : null;
 
   const getW = useCallback((ex) => {
     if (!ex) return null;
@@ -494,10 +497,9 @@ export default function SessionHost() {
       : [resolveExFn(block.id, null, block.ex)];
     exes.forEach(ex => pushSetToDraft(ex, rpe));
     setReachArmed(false);            // a reach is one set, never a mode
-    if (setNum >= blockSets) {
-      if (blockIdx < activeSession.blocks.length - 1) { setBlockIdx(p => p + 1); setSetNum(1); setPhase("A"); }
-      else finishSession();
-    } else setSetNum(p => p + 1);
+    // Past the last set the block stays put: the screen forks into "Add
+    // another set" or Next (handleNext). Never advances on its own.
+    setSetNum(p => p + 1);
     // Start the rest timer directly — no trigger-effect indirection needed
     // now these are plain event handlers (the old restTrigger state existed
     // to re-fire an effect between same-duration sets).
@@ -518,15 +520,18 @@ export default function SessionHost() {
       setPhase("A");
       if (block.type === "superset") { setSsRoundDone(true); return; }
       pushSetToDraft(resolveExFn(block.id, "B", block.exB), null);
-      if (setNum >= blockSets) {
-        if (blockIdx < activeSession.blocks.length - 1) { setBlockIdx(p => p + 1); setSetNum(1); setPhase("A"); }
-        else finishSession();
-      } else setSetNum(p => p + 1);
+      setSetNum(p => p + 1);           // as commitLog: the fork, not an advance
       setRestRemain(block.rest);
       setRestActive(true);
       return;
     }
     setAwaitRpe(true);
+  };
+
+  // The fork's primary: move on to the next block, or finish on the last.
+  const handleNext = () => {
+    if (blockIdx < activeSession.blocks.length - 1) { setBlockIdx(p => p + 1); setSetNum(1); setPhase("A"); }
+    else finishSession();
   };
 
   const handleJumpToBlock = (targetIdx) => {
@@ -683,6 +688,7 @@ export default function SessionHost() {
   const sProps = {
     session: activeSession,
     block, blockIdx, totalBlocks: activeSession.blocks.length, setNum, phase, isSS,
+    blockSets, nextExName, onNext: handleNext,
     activeEx, resolvedExA, resolvedExB, resolvedEx,
     swapKey, onSwap,
     showVid, setShowVid, getW, getR, editTarget, setEditTarget,

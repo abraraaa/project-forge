@@ -498,18 +498,26 @@ function RestProgressLine({ active, remain, total }) {
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null}){
+export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null}){
   const [swapEx,setSwapEx]=useState(null);
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
   const vidEx    =isSS?(phase==="A"?resolvedExA:resolvedExB):resolvedEx;
   const progress =((blockIdx+(setNum-1)/block.sets)/totalBlocks)*100;
-  // setNum runs one past the prescribed count on a finished block.
-  const blockDone = setNum > block.sets;
+  // setNum runs one past the prescribed count on a finished block. The host's
+  // count includes a reach's bonus set, so that set is logged, not forked past.
+  const setsDue = blockSets ?? block.sets;
+  const blockDone = setNum > setsDue;
   // Adding a set is deliberate. Keyed so it resets on any block/set change.
   const [addKey,setAddKey]=useState(null);
   const thisKey=`${block.id}|${setNum}`;
   if(addKey&&addKey!==thisKey) setAddKey(null);
   const adding=addKey===thisKey;
+  // A finished block forks: add another set, or move on. Nothing auto-advances.
+  const fork=blockDone&&!adding;
+  // Either fork choice unmounts the button just pressed; hand focus to the
+  // Log button that replaces it rather than dropping it to the body.
+  const focusLogRef=useRef(false);
+  const logBtnRef=(el)=>{ if(el&&focusLogRef.current){ focusLogRef.current=false; el.focus(); } };
   // Display face fence: never below 28px. Long names wrap rather than
   // shrinking under the fence.
   const nameFz   =Math.min(42,Math.max(28,340/(activeEx?.name?.length||10)));
@@ -597,8 +605,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         {/* Kicker — the room's live state: set count + slot. Never a sentence. */}
         <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
           {blockDone
-            ? <>All <span style={{fontFamily:T.measured}}>{block.sets}</span> {isSS?"rounds":"sets"} logged · {block.label}</>
-            : <>Set <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{block.sets}</span> · {block.label}{isSS?` ${phase}`:""}</>}
+            ? <>All <span style={{fontFamily:T.measured}}>{setsDue}</span> {isSS?"rounds":"sets"} logged · {block.label}</>
+            : <>Set <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{setsDue}</span> · {block.label}{isSS?` ${phase}`:""}</>}
         </div>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
           <div onClick={resolveVid(activeEx?.name, activeEx?.vid) ? ()=>setShowVid(true) : undefined}
@@ -827,7 +835,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
 
       {!blocking&&(
         <>
-          {isSS&&phase==="A"&&!restActive&&(
+          {isSS&&!fork&&phase==="A"&&!restActive&&(
             <div style={{padding:"8px 20px 0",fontSize:13,color:T.ink3}}>
               Straight into B — no rest between exercises
             </div>
@@ -842,7 +850,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             </div>
           )}
           {/* Superset partner reads BEFORE the action it explains. */}
-          {isSS&&(
+          {isSS&&!fork&&(
             <Card style={{margin:"14px 20px 0",padding:"13px 16px"}}>
               <div style={{fontSize:12,color:T.ink3,marginBottom:5,display:"flex",alignItems:"center",gap:5}}>
                 {phase==="A"?<>Immediately after <Glyph name="arrowRight" size={10}/></>:<>Just completed <Glyph name="check" size={10}/></>}
@@ -897,7 +905,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             </div>
           )}
           <div style={{margin:"12px 20px 0",display:"flex",gap:12,alignItems:"center"}}>
-            {showRestHint&&!(blockDone&&!adding)&&(
+            {showRestHint&&!fork&&(
               <button
                 onClick={()=>{if(restActive){setRestActive(false);setRestRemain(block.rest);}else{setRestRemain(block.rest);setRestActive(true);}}}
                 aria-label={restActive?`Resting, ${restStr} left — tap to skip`:"Start rest timer"}
@@ -911,15 +919,23 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 {restActive?restStr:`${Math.round(block.rest/60)}:00`}
               </button>
             )}
-            {blockDone&&!adding?(
-              <button className="forge-press" onClick={()=>{haptic.tap();setAddKey(thisKey);}}
-                style={{flex:1,height:56,background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
-                  display:"flex",alignItems:"center",justifyContent:"center",
-                  fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink2}}>
-                Add another set
-              </button>
+            {fork?(
+              <>
+                <button className="forge-press" onClick={()=>{haptic.tap();focusLogRef.current=true;setAddKey(thisKey);}}
+                  style={{flex:"0 0 auto",height:56,padding:"0 16px",background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
+                    display:"flex",alignItems:"center",justifyContent:"center",whiteSpace:"nowrap",
+                    fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink2}}>
+                  Add another set
+                </button>
+                <button className="forge-press forge-lift" {...pressLiftHandlers} onClick={()=>{haptic.tap();focusLogRef.current=true;onNext?.();}}
+                  style={{flex:1,minWidth:0,height:56,padding:"0 14px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",
+                    display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",lineHeight:1.2,
+                    fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
+                  {nextExName?`Next: ${nextExName}`:"Finish session"}
+                </button>
+              </>
             ):(
-              <button className="forge-press forge-lift" {...pressLiftHandlers} onClick={()=>{haptic.tap();onLog();}}
+              <button ref={logBtnRef} className="forge-press forge-lift" {...pressLiftHandlers} onClick={()=>{haptic.tap();onLog();}}
                 style={{flex:1,height:56,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",
                   display:"flex",alignItems:"center",justifyContent:"center",
                   fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>

@@ -50,9 +50,19 @@ describe("the host no longer clamps", () => {
     expect(host).not.toMatch(/setSetNum\(Math\.min\(/);
   });
 
-  it("advancement still fires at or past the last set", () => {
-    // An extra set must still advance, so the threshold stays >=.
-    expect(host).toMatch(/if \(setNum >= blockSets\)/);
+  it("logging the last set forks rather than advancing; only Next moves on", () => {
+    // Every commit (straight set, superset round, finisher round) bumps the
+    // set number, so a finished block lands one past its end: the fork.
+    expect(host).not.toMatch(/if \(setNum >= blockSets\)/);
+    // The block advance lives in exactly one handler, handed to the screen.
+    const advance = host.match(/setBlockIdx\(p => p \+ 1\)/g) || [];
+    expect(advance).toHaveLength(1);
+    const next = host.slice(host.indexOf("const handleNext = () => {"));
+    expect(next.slice(0, 220)).toContain("setBlockIdx(p => p + 1); setSetNum(1); setPhase(\"A\");");
+    expect(next.slice(0, 220)).toContain("else finishSession();");
+    expect(host).toContain("onNext: handleNext");
+    // The screen forks on the host's count, reach bonus included.
+    expect(host).toContain("blockSets, nextExName, onNext: handleNext");
   });
 
   it("the reach is offered ON the last set, never past it", () => {
