@@ -201,7 +201,7 @@ export function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJum
           {session.name}
         </div>
         <p style={{fontSize:13,color:T.ink2,marginBottom:16,lineHeight:1.5}}>
-          Train in any order — auto-advance still happens; this is for when the gym dictates.
+          Train in any order — this is for when the gym dictates.
         </p>
 
         <div style={{flex:1,overflowY:"auto",marginRight:-8,paddingRight:8}}>
@@ -498,7 +498,7 @@ function RestProgressLine({ active, remain, total }) {
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null}){
+export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null}){
   const [swapEx,setSwapEx]=useState(null);
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
   const vidEx    =isSS?(phase==="A"?resolvedExA:resolvedExB):resolvedEx;
@@ -514,6 +514,9 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const adding=addKey===thisKey;
   // A finished block forks: add another set, or move on. Nothing auto-advances.
   const fork=blockDone&&!adding;
+  // Last block only: an earlier block left short turns the fork back towards
+  // it (host's backTo), with finishing still one tap away.
+  const guard=fork&&!!backTo;
   // Either fork choice unmounts the button just pressed; hand focus to the
   // Log button that replaces it rather than dropping it to the body.
   const focusLogRef=useRef(false);
@@ -907,6 +910,16 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               Reaching. Nothing to lose.
             </div>
           )}
+          {/* Guarded fork: two full buttons fit 390px, three don't, so adding
+              a set steps back to a quiet text control above the row. */}
+          {guard&&(
+            <div style={{margin:"12px 20px 0",display:"flex",justifyContent:"flex-end"}}>
+              <button onClick={()=>{haptic.tap();focusLogRef.current=true;setAddKey(thisKey);}}
+                style={{...linkBtn,minHeight:36,padding:"0 4px",color:T.ink2}}>
+                Add another set
+              </button>
+            </div>
+          )}
           <div style={{margin:"12px 20px 0",display:"flex",gap:12,alignItems:"center"}}>
             {showRestHint&&!fork&&(
               <button
@@ -922,7 +935,22 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 {restActive?restStr:`${Math.round(block.rest/60)}:00`}
               </button>
             )}
-            {fork?(
+            {guard?(
+              <>
+                <button className="forge-press" onClick={()=>{haptic.tap();onNext?.();}}
+                  style={{flex:"0 0 auto",height:56,padding:"0 16px",background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
+                    display:"flex",alignItems:"center",justifyContent:"center",whiteSpace:"nowrap",
+                    fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink2}}>
+                  Finish anyway
+                </button>
+                <button className="forge-press forge-lift" {...pressLiftHandlers} onClick={()=>{haptic.tap();focusLogRef.current=true;onJumpToBlock?.(backTo.idx);}}
+                  style={{flex:1,minWidth:0,height:56,padding:"0 14px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",
+                    display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",lineHeight:1.2,
+                    fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
+                  {`Back to ${backTo.name}`}
+                </button>
+              </>
+            ):fork?(
               <>
                 <button className="forge-press" onClick={()=>{haptic.tap();focusLogRef.current=true;setAddKey(thisKey);}}
                   style={{flex:"0 0 auto",height:56,padding:"0 16px",background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
@@ -949,6 +977,13 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           {showRestHint&&restActive&&(
             <div style={{padding:"0 20px"}}>
               <RestProgressLine active={restActive} remain={restRemain} total={block.rest} />
+            </div>
+          )}
+          {/* Ramp sets logged as working sets read as misses to the engine.
+              Main lifts only, until the block's first set is in. */}
+          {block.type==="main"&&!fork&&loggedSets.length===0&&(
+            <div style={{margin:"14px 20px 0",fontSize:13,color:T.ink3}}>
+              Log working sets only. Warm-ups don't count.
             </div>
           )}
         </>

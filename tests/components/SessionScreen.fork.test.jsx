@@ -134,3 +134,65 @@ describe("the fork on a superset waits for the round", () => {
     expect(screen.queryByText(/^Next:/)).toBeNull();
   });
 });
+
+describe("the working-sets hint", () => {
+  const HINT = "Log working sets only. Warm-ups don't count.";
+
+  it("shows on a main block before its first set, under the Log button", () => {
+    render(<SessionScreen {...props()} />);
+    const hint = screen.getByText(HINT);
+    const log = btn("Log set");
+    // Follows the Log button in document order.
+    expect(log.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("goes once a set is logged", () => {
+    render(<SessionScreen {...props({ setNum: 2, loggedSets: [{ weight: 100, reps: 5, rpe: "normal" }] })} />);
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+
+  it("never on a superset, and never at the fork", () => {
+    render(<SessionScreen {...props({ block: ss })} />);
+    expect(screen.queryByText(HINT)).toBeNull();
+    cleanup();
+    render(<SessionScreen {...props({ setNum: 4 })} />);
+    expect(screen.queryByText(HINT)).toBeNull();
+  });
+});
+
+describe("the last-block fork with an earlier block left short", () => {
+  const last = (over = {}) => props({ setNum: 4, nextExName: null, blockIdx: 1, ...over });
+
+  it("points back at it, keeps Finish anyway and Add another set", () => {
+    render(<SessionScreen {...last({ backTo: { idx: 0, name: "Barbell Back Squat" } })} />);
+    const back = btn("Back to Barbell Back Squat");
+    const finish = btn("Finish anyway");
+    expect(back.parentElement).toBe(finish.parentElement);   // one row
+    expect(btn("Add another set").parentElement).not.toBe(back.parentElement);
+    expect(screen.queryByText("Finish session")).toBeNull();
+  });
+
+  it("Back jumps to that block; Finish anyway finishes", () => {
+    const onJumpToBlock = vi.fn(), onNext = vi.fn();
+    render(<SessionScreen {...last({ backTo: { idx: 2, name: "Barbell Bench Press" }, onJumpToBlock, onNext })} />);
+    fireEvent.click(btn("Back to Barbell Bench Press"));
+    expect(onJumpToBlock).toHaveBeenCalledWith(2);
+    expect(onNext).not.toHaveBeenCalled();
+    fireEvent.click(btn("Finish anyway"));
+    expect(onNext).toHaveBeenCalledTimes(1);
+  });
+
+  it("Add another set still leads to a logged set", () => {
+    render(<SessionScreen {...last({ backTo: { idx: 0, name: "Barbell Back Squat" } })} />);
+    fireEvent.click(btn("Add another set"));
+    expect(btn("Log set 4")).toBeTruthy();
+    expect(screen.queryByText(/^Back to/)).toBeNull();
+  });
+
+  it("with every earlier block complete, the fork is unchanged", () => {
+    render(<SessionScreen {...last({ backTo: null })} />);
+    expect(btn("Finish session")).toBeTruthy();
+    expect(screen.queryByText("Finish anyway")).toBeNull();
+    expect(screen.queryByText(/^Back to/)).toBeNull();
+  });
+});

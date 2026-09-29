@@ -43,6 +43,7 @@ import { deriveTravelSession } from "@/lib/travel";
 import { applySessionToEngine } from "@/lib/session-engine";
 import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, coldStartFromAnchor, addedLoadFor } from "@/lib/lift-translations";
 import { restRemaining, restDeadline } from "@/lib/rest-clock";
+import { unfinishedBlocks, leadExerciseName } from "@/lib/session-progress";
 import { pickFlashLine, isPullMovement } from "@/lib/set-flash";
 import { EXERCISE_ANATOMY } from "@/lib/exercise-anatomy";
 import { todayLocalIso, daysBetween } from "@/lib/dates";
@@ -272,7 +273,14 @@ export default function SessionHost() {
   const activeEx    = isSS ? (phase === "A" ? resolvedExA : resolvedExB) : resolvedEx;
   // What the finished-block fork's primary names; null on the last block.
   const nextBlock   = activeSession.blocks[blockIdx + 1] ?? null;
-  const nextExName  = nextBlock ? ((nextBlock.ex ?? nextBlock.exA)?.name ?? nextBlock.label ?? null) : null;
+  const nextExName  = nextBlock ? leadExerciseName(nextBlock) : null;
+  // On the last block, the fork first points back at any earlier block left
+  // short (jumped past via the overview, or Next'd early): a finished session
+  // can't be amended. draftView is a render-safe copy of the draft, refreshed
+  // on every advance by the loggedSets effect below.
+  const [draftView, setDraftView] = useState(null);
+  const firstShort  = !nextBlock ? (unfinishedBlocks(activeSession, draftView, blockIdx)[0] ?? null) : null;
+  const backTo      = firstShort ? { idx: firstShort.idx, name: leadExerciseName(firstShort.block) } : null;
 
   const getW = useCallback((ex) => {
     if (!ex) return null;
@@ -675,6 +683,8 @@ export default function SessionHost() {
   useEffect(() => {
     // Mirrors the mutable draft (external store) into render state after
     // each advance; keyed deps make it converge in one pass, no cascade.
+    // A fresh wrapper each time, so readers re-derive from the mutated draft.
+    setDraftView(draftLogRef.current ? { ...draftLogRef.current } : null);
     const saved = draftLogRef.current?.blocks?.[block?.id];
     if (!saved?.exercises) { setLoggedSets([]); return; }
     const ex = saved.exercises[activeEx?.name]
@@ -689,6 +699,7 @@ export default function SessionHost() {
     session: activeSession,
     block, blockIdx, totalBlocks: activeSession.blocks.length, setNum, phase, isSS,
     blockSets, nextExName, onNext: handleNext,
+    backTo, onJumpToBlock: handleJumpToBlock,
     activeEx, resolvedExA, resolvedExB, resolvedEx,
     swapKey, onSwap,
     showVid, setShowVid, getW, getR, editTarget, setEditTarget,
