@@ -284,7 +284,8 @@ describe("computeWeeklyVolume / auditVolume — focus parameter", () => {
     // The trade-off the user explicitly accepts: arms ride at or below the
     // floor. Biceps sits under MEV; Triceps is lifted onto it by the
     // side-delt finisher's third set (bfin-A is its superset partner), so it
-    // is held to the floor rather than under it.
+    // is held to the floor rather than under it. (This is the template week;
+    // rotations keep it there via the solver's STRONG_PRESS_ONLY_SLOTS.)
     const biceps = strongAudit.flags.find(f => f.muscle === "Biceps");
     expect(biceps?.status).toBe("under_mev");
     expect(strongAudit.perMuscle.Triceps.sets).toBeGreaterThanOrEqual(VOLUME_TARGETS.Triceps.mev);
