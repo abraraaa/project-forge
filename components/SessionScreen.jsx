@@ -28,7 +28,7 @@ import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
 import { WEEK, SWAP_DB } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
-import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, addedLoadFor, loggedAddedKg } from "@/lib/lift-translations";
+import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, usesOptionalChrome, addedLoadFor, loggedAddedKg } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 import { resolveVid } from "@/lib/exercise-videos";
 
@@ -546,18 +546,21 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const loadType = getLoadType(activeEx);
   // Shared with DrumEditOverlay so the two cannot derive it differently.
   const showWeightPicker = acceptsAddedWeight(loadType);
-  const weightLabel = loadType === "loaded_bodyweight" || loadType === "loaded_bw" ? "+ kg"
-                    : loadType === "assisted_bodyweight" ? "− kg"
-                    : "kg";
-  const loadTypeSubtitle = loadType === "bodyweight" ? "Bodyweight"
-                         : loadType === "loaded_bodyweight" || loadType === "loaded_bw" ? "Added load"
+  const weightLabel = loadType === "assisted_bodyweight" ? "− kg" : "kg";
+  // Loaded bodyweight reads as bodyweight too: its added load is optional.
+  const loadTypeSubtitle = usesOptionalChrome(loadType) ? "Bodyweight"
                          : loadType === "assisted_bodyweight" ? "Band assist"
                          : null;
   const weightCaption = WEIGHT_CAPTIONS[loadType] || null;
   const weightStep = weightStepForLoadType(loadType);
   // Pure bodyweight: added load is optional and lives in its own store.
   const optionalWeight = acceptsOptionalWeight(loadType);
-  const addedKg = optionalWeight ? addedLoadFor(addedLoads, activeEx?.name) : null;
+  // Pure AND loaded bodyweight present added load as optional. Only the
+  // source differs: pure reads its own store, loaded reads W (0 = none).
+  const optionalChrome = usesOptionalChrome(loadType);
+  const addedKg = optionalWeight ? addedLoadFor(addedLoads, activeEx?.name)
+    : optionalChrome ? (typeof currentW === "number" && currentW > 0 ? currentW : null)
+    : null;
   // timed like the reps cell: a hold ("20s") must open the drum in seconds.
   const openAddedLoad = () => { if(activeEx?.name) setEditTarget({exName:activeEx.name,currentKg:addedKg,currentReps:getR(activeEx),loadType,timed:!!parseTimedReps(activeEx?.reps)}); };
 
@@ -674,7 +677,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           steppers for plate maths. */}
       <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",padding:"0 20px"}}>
         <div>
-          {showWeightPicker && currentW!==null ? (
+          {showWeightPicker && !optionalChrome && currentW!==null ? (
             <>
               <div style={{display:"flex",alignItems:"baseline",gap:8,cursor:"pointer",userSelect:"none"}}
                 onClick={()=>{ if(activeEx?.name) setEditTarget({exName:activeEx.name,currentKg:currentW,currentReps:getR(activeEx),loadType}); }}>
@@ -690,8 +693,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 </div>
               )}
             </>
-          ) : optionalWeight ? (
-            /* Pure bodyweight: the body is the load. Added weight (a vest, a
+          ) : optionalChrome ? (
+            /* Pure or loaded bodyweight: the body is the load. Added weight (a vest, a
                plate) is optional, so it is offered quietly — never the big
                number or steppers that mark lifts where weight is inherent.
                One button in both states, at the same child index, so React
@@ -714,7 +717,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               </button>
             </>
           ) : isBodyweightMovement(loadType) ? (
-            /* Bodyweight is the answer here, not a blank. Adding is opt-in. */
+            /* Assisted: bodyweight is the answer here, not a blank. */
             <>
               <div style={{fontSize:15,color:T.ink2}}>
                 Bodyweight{bodyweight ? <> &middot; <span style={{fontFamily:T.measured}}>{bodyweight}</span> kg</> : ""}
@@ -723,7 +726,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 onClick={()=>{ if(activeEx?.name) setEditTarget({exName:activeEx.name,currentKg:null,currentReps:getR(activeEx),loadType}); }}
                 style={{marginTop:10,padding:"7px 12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,
                   cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
-                {loadType === "assisted_bodyweight" ? "Set assistance" : "Add weight"}
+                Set assistance
               </button>
             </>
           ) : showWeightPicker ? (
@@ -745,7 +748,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             <div style={{fontSize:15,color:T.ink2}}>Bodyweight{bodyweight ? <> · <span style={{fontFamily:T.measured}}>{bodyweight}</span> kg</> : ""}</div>
           )}
         </div>
-        {showWeightPicker && currentW!==null && (
+        {showWeightPicker && !optionalChrome && currentW!==null && (
           <div style={{display:"flex",flexDirection:"column",gap:8,paddingBottom:4}}>
             <button aria-label={`Add ${weightStep} kg`} onClick={()=>nudgeWeight(1)} className="forge-press"
               style={{width:46,height:46,background:T.surface,border:"none",borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:T.elev,cursor:"pointer"}}><Glyph name="plus" size={16} color={T.ink2}/></button>
@@ -1083,6 +1086,8 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,addedLoa
   // Pure bodyweight: an optional added load, kept apart from W. Seeds from
   // the user's own added load (0 = none), never from a stale W value.
   const optionalWeight=acceptsOptionalWeight(targetLt);
+  // Loaded bodyweight shares the optional wheel but keeps writing W.
+  const optionalChrome=usesOptionalChrome(targetLt);
   const initKg = optionalWeight
     ? (addedLoadFor(addedLoads, target.exName) ?? 0)
     : (workingWeights[target.exName]??ex?.weight??0);
@@ -1113,9 +1118,9 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,addedLoa
           <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink}}>{target.exName}</div>
           <div style={{fontSize:13,color:T.ink3,marginTop:5}}>Scroll to adjust</div>
         </div>
-        <div style={{display:"flex",gap:16,justifyContent:(hasWeight||optionalWeight)?"space-between":"center"}}>
-          {hasWeight&&<SplitWeightDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
-          {optionalWeight&&<ScrollDrum value={kg} onChange={setKg} step={weightStep} min={0} max={ADDED_LOAD_MAX_KG} label="+ kg · optional" zeroLabel="none"/>}
+        <div style={{display:"flex",gap:16,justifyContent:(hasWeight||optionalChrome)?"space-between":"center"}}>
+          {hasWeight&&!optionalChrome&&<SplitWeightDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
+          {optionalChrome&&<ScrollDrum value={kg} onChange={setKg} step={weightStep} min={0} max={Math.max(ADDED_LOAD_MAX_KG,initKg)} label="+ kg · optional" zeroLabel="none"/>}
           <ScrollDrum value={reps} onChange={(v)=>{setRepsTouched(true);setReps(v);}} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined} tone={target.timed?null:repTone}/>
         </div>
         {/* House pattern: Cancel/Confirm on the bottom row, no corner ✕.

@@ -9,7 +9,7 @@
 //   - a loaded lift with no known weight never calls itself bodyweight
 //     (was tests/load-type-pairings.test.js, an indexOf ordering check);
 //   - bodyweight lifts take added weight on both the card and the drum,
-//     loaded ones inherently, pure ones optionally
+//     optionally for pure and loaded alike (pure in its own store, loaded in W)
 //     (was tests/added-weight-capture.test.js "two surfaces");
 //   - a finished block reads as finished when you flip back to it
 //     (was tests/revisit-completed-block.test.js "the screen").
@@ -136,33 +136,89 @@ describe("the weight card never calls a loaded lift bodyweight", () => {
 // ─── Added weight ────────────────────────────────────────────────────────────
 // Loaded lifts read acceptsAddedWeight(loadType), never the programme's
 // static weight: a Pull-Up is prescribed weight:null but takes a belt. Pure
-// bodyweight reads acceptsOptionalWeight into its own store, never W.
-describe("bodyweight lifts accept added weight on the card and on the drum", () => {
+// and loaded bodyweight share the optional chrome (usesOptionalChrome); only
+// the store differs — pure bodyweight has its own, loaded bodyweight keeps W.
+
+// The host's W for a loaded-bodyweight lift: getW reads it, setWW writes it,
+// so a confirmed drum lands back on the card.
+function WithBelt({ initial = {}, onSetWW, ...p }) {
+  const [editTarget, setEditTarget] = useState(null);
+  const [ww, setWWState] = useState(initial);
+  const setWW = (fn) => { const next = fn(ww); onSetWW?.(next); setWWState(next); };
+  return <SessionScreen {...p} editTarget={editTarget} setEditTarget={setEditTarget}
+    workingWeights={ww} setWW={setWW} getW={(ex) => ww[ex?.name] ?? ex?.weight ?? null} />;
+}
+
+describe("loaded bodyweight lifts present added weight as optional, stored in W", () => {
   const pullUp = { name: "Pull-Up", muscle: "Lats", reps: 8, weight: null, loadType: "loaded_bodyweight" };
+  const bigNumber = (container) => container.querySelector('span[style*="font-size: 72px"]');
 
-  it("a loaded-bodyweight lift with no added load offers it, and the drum has a kg wheel", () => {
-    const setWW = vi.fn();
-    const { container } = render(<WithDrum {...props({ block: mainBlock(pullUp), getW: () => null, setWW })} />);
-    expect(flat(document.body.textContent)).toContain("Bodyweight · 80 kg");
+  for (const [label, initial] of [["null", {}], ["0", { "Pull-Up": 0 }]]) {
+    it(`with W ${label}: "Bodyweight · 80 kg" and the quiet optional chip`, () => {
+      const { container } = render(<WithBelt {...props({ block: mainBlock(pullUp) })} initial={initial} />);
+      expect(flat(document.body.textContent)).toContain("Bodyweight · 80 kg");
+      expect(screen.getByText("+ kg · optional")).toBeTruthy();
+      expect(screen.getByLabelText(/tap to add weight/)).toBeTruthy();
+      expect(screen.queryByText("Add weight")).toBeNull();
+      expect(screen.queryByText("Added load")).toBeNull();
+      expect(screen.queryByLabelText("Add 1.25 kg")).toBeNull();
+      expect(bigNumber(container)).toBeNull();
+    });
+  }
+
+  it("with W 5: \"Bodyweight + 5 kg\", tap to edit — no big number, no steppers", () => {
+    const { container } = render(<WithBelt {...props({ block: mainBlock(pullUp) })} initial={{ "Pull-Up": 5 }} />);
+    expect(flat(document.body.textContent)).toContain("Bodyweight + 5 kg");
+    expect(screen.getByLabelText(/edit added weight/)).toBeTruthy();
     expect(screen.queryByText("+ kg · optional")).toBeNull();
-
-    fireEvent.click(screen.getByText("Add weight"));
-    const d = drum(container);
-    expect(d.queryByText("none")).toBeNull();
-    expect(d.getByText("kg")).toBeTruthy();
-    expect(d.getByText(/steps of/)).toBeTruthy();
-    expect(d.getAllByText("reps").length).toBeGreaterThan(0);
-
-    fireEvent.click(d.getByText(/Confirm/));
-    expect(setWW).toHaveBeenCalled();
+    expect(screen.queryByLabelText("Add 1.25 kg")).toBeNull();
+    expect(bigNumber(container)).toBeNull();
   });
 
-  it("once it carries a working weight, the card shows the number, not the programme's null", () => {
-    render(<SessionScreen {...props({ block: mainBlock(pullUp), getW: () => 10 })} />);
-    expect(screen.getByText("10")).toBeTruthy();
-    expect(screen.getByText("+ kg")).toBeTruthy();
-    expect(screen.getByLabelText("Add 1.25 kg")).toBeTruthy();
-    expect(screen.queryByText("Add weight")).toBeNull();
+  it("the chip opens the optional wheel; Confirm 7.5 writes W, never the added-load store", () => {
+    const onSetWW = vi.fn(), onAddedLoad = vi.fn(), setWR = vi.fn();
+    const { container } = render(<WithBelt {...props({ block: mainBlock(pullUp), setAddedLoad: onAddedLoad, setWR })} onSetWW={onSetWW} />);
+    fireEvent.click(screen.getByText("+ kg · optional"));
+    const d = drum(container);
+    expect(kgWheel(d).getByText("none")).toBeTruthy();
+    expect(d.queryByText(/steps of/)).toBeNull();
+    fireEvent.click(kgWheel(d).getByText("7.5"));
+    fireEvent.click(d.getByText(/Confirm/));
+    expect(onSetWW).toHaveBeenLastCalledWith({ "Pull-Up": 7.5 });
+    expect(onAddedLoad).not.toHaveBeenCalled();
+    // Reps behave as on any loaded lift: Confirm writes them.
+    expect(setWR).toHaveBeenCalled();
+    expect(flat(document.body.textContent)).toContain("Bodyweight + 7.5 kg");
+
+    // "none" writes 0 — the engine reads that as unloaded — and the chip returns.
+    fireEvent.click(screen.getByLabelText(/edit added weight/));
+    const d2 = drum(container);
+    fireEvent.click(kgWheel(d2).getByText("none"));
+    fireEvent.click(d2.getByText(/Confirm/));
+    expect(onSetWW).toHaveBeenLastCalledWith({ "Pull-Up": 0 });
+    expect(onAddedLoad).not.toHaveBeenCalled();
+    expect(screen.getByText("+ kg · optional")).toBeTruthy();
+  });
+
+  it("\"this lift, last time\" reads a loaded-bodyweight set's weight as added kg", () => {
+    const history = [{ id: "2026-09-20T10:00:00.000Z", date: "2026-09-20", blocks: [{ exercises: [
+      { name: "Pull-Up", loadType: "loaded_bodyweight", sets: [{ weight: 5, reps: 6, rpe: 8, loadType: "loaded_bodyweight" }] }] }] }];
+    render(<WithBelt {...props({ block: mainBlock(pullUp), history })} />);
+    expect(flat(document.body.textContent)).toContain("5 × 6");
+    fireEvent.click(screen.getByLabelText(/Recent history for/));
+    expect(flat(screen.getByRole("dialog").textContent)).toContain("1×6 @ 5 kg");
+  });
+
+  it("a pure bodyweight lift still writes its added-load store, not W", () => {
+    const pushUp = { name: "Decline Push-Up", muscle: "Upper chest", reps: 15, weight: null, loadType: "bodyweight" };
+    const setWW = vi.fn(), onAddedLoad = vi.fn();
+    const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), getW: () => null, setWW })} onAddedLoad={onAddedLoad} />);
+    fireEvent.click(screen.getByText("+ kg · optional"));
+    const d = drum(container);
+    fireEvent.click(kgWheel(d).getByText("7.5"));
+    fireEvent.click(d.getByText(/Confirm/));
+    expect(onAddedLoad).toHaveBeenCalledWith("Decline Push-Up", 7.5);
+    expect(setWW).not.toHaveBeenCalled();
   });
 
   it("an assisted lift keeps its assistance drum", () => {
@@ -175,6 +231,22 @@ describe("bodyweight lifts accept added weight on the card and on the drum", () 
     const d = drum(container);
     expect(d.getByText(/steps of/)).toBeTruthy();
     expect(d.queryByText("none")).toBeNull();
+  });
+
+  it("a superset of Push-Up and Pull-Up wears the same chrome on both", () => {
+    const pushUp = { name: "Push-Up", muscle: "Chest", reps: 12, weight: null, loadType: "bodyweight" };
+    const ss = { id: "ss1", type: "superset", label: "Superset", sets: 3, rest: 90, exA: pushUp, exB: pullUp };
+    const card = (ex) => {
+      const { container, unmount } = render(<WithBelt {...props({ block: ss, activeEx: ex, isSS: true, resolvedExA: pushUp, resolvedExB: pullUp })} />);
+      const chip = screen.getByLabelText(/tap to add weight/);
+      const out = { line: flat(chip.parentElement.textContent), chip: chip.getAttribute("style"),
+        big: !!bigNumber(container), steppers: !!screen.queryByLabelText("Add 1.25 kg") };
+      unmount();
+      return out;
+    };
+    const a = card(pushUp), b = card(pullUp);
+    expect(a.line).toBe("Bodyweight · 80 kg+ kg · optional");
+    expect(b).toEqual(a);
   });
 });
 
