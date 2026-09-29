@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vitest run)",
+      "Bash(git merge-base *)",
+      "Bash(npm run -s lint)",
+      "Bash(npm run lint)",
+      "Bash(npx tsc --noEmit -p .)",
+      "Bash(npx eslint .)",
+      "Bash(npm view *)",
+      "mcp__github__pull_request_read",
+      "mcp__github__search_code",
+      "mcp__github__actions_list",
+      "mcp__Google_Drive__search_files",
+      "mcp__Google_Drive__read_file_content",
+      "mcp__Vercel__search_vercel_documentation",
+      "mcp__Vercel__list_deployments",
+      "mcp__Heatwayve__lift_history"
+    ]
+  }
+}
