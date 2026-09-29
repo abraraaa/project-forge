@@ -103,6 +103,20 @@ describe("checkStoreHealth", () => {
     expect(fails).toContain("no unrecognised forge:* keys");
   });
 
+  it("a well-formed added load is green", () => {
+    const s = healthy();
+    s.addedLoads = { GB: { kg: 0, updatedAt: T1 }, HX: { kg: 10, updatedAt: T1 } };
+    expect(failing(checkStoreHealth(s, { todayIso: TODAY }))).toEqual([]);
+  });
+
+  it("flags a malformed added load", () => {
+    const s = healthy();
+    s.addedLoads = { GB: { kg: -1, updatedAt: T1 }, HX: { kg: 5 } };
+    const results = checkStoreHealth(s, { todayIso: TODAY });
+    expect(failing(results)).toContain("addedLoads: entries well-formed");
+    expect(results.find((r) => r.check === "addedLoads: entries well-formed").detail).toBe("GB, HX");
+  });
+
   it("mutates nothing — the snapshot is byte-identical after the check", () => {
     const s = healthy();
     const before = JSON.stringify(s);

@@ -4,7 +4,7 @@
 // tests/components/SessionScreen.surface.test.jsx.
 
 import { describe, it, expect } from "vitest";
-import { acceptsAddedWeight } from "../lib/lift-translations.js";
+import { acceptsAddedWeight, acceptsOptionalWeight } from "../lib/lift-translations.js";
 import { SESSIONS, EXERCISE_POOLS } from "../lib/programme.js";
 
 describe("acceptsAddedWeight", () => {
@@ -22,6 +22,26 @@ describe("acceptsAddedWeight", () => {
   it("is true for ordinary loaded lifts", () => {
     for (const lt of ["per_db", "total", "cable", "machine", "barbell"]) {
       expect(acceptsAddedWeight(lt), lt).toBe(true);
+    }
+  });
+});
+
+// Pure bodyweight lifts take an OPTIONAL added load (a vest) into their own
+// store; lifts where the weight is inherent take it through W. Never both.
+describe("acceptsOptionalWeight", () => {
+  const others = ["loaded_bodyweight", "assisted_bodyweight", "loaded_bw", "per_db", "total", "cable", "machine", "barbell", "external", null, undefined];
+
+  it("is true only for pure bodyweight", () => {
+    expect(acceptsOptionalWeight("bodyweight")).toBe(true);
+  });
+
+  it("is false for everything else", () => {
+    for (const lt of others) expect(acceptsOptionalWeight(lt), String(lt)).toBe(false);
+  });
+
+  it("the two never both hold", () => {
+    for (const lt of ["bodyweight", ...others]) {
+      expect(acceptsAddedWeight(lt) && acceptsOptionalWeight(lt), String(lt)).toBe(false);
     }
   });
 });

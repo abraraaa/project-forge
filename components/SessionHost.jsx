@@ -41,7 +41,7 @@ import {
 import { deloadDayLabel } from "@/lib/progression";
 import { deriveTravelSession } from "@/lib/travel";
 import { applySessionToEngine } from "@/lib/session-engine";
-import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, coldStartFromAnchor } from "@/lib/lift-translations";
+import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, coldStartFromAnchor, addedLoadFor } from "@/lib/lift-translations";
 import { restRemaining, restDeadline } from "@/lib/rest-clock";
 import { pickFlashLine, isPullMovement } from "@/lib/set-flash";
 import { EXERCISE_ANATOMY } from "@/lib/exercise-anatomy";
@@ -69,6 +69,10 @@ export default function SessionHost() {
   const [programmeBlock]             = useState(() => PB.get());
   const [userFocus]                  = useState(() => (profile ? F.get(profile) || DEFAULT_FOCUS : DEFAULT_FOCUS));
   const [mainLifts]                  = useState(() => (profile ? P.getMainLifts(profile) : {}));
+  // Optional added load on pure bodyweight lifts — the user's alone. Saved
+  // per lift with its own stamp and pushed on change. The engine never
+  // writes it.
+  const [addedLoads, setAddedLoadsState] = useState(() => (profile ? P.getAddedLoads(profile) : {}));
   const [userWeek]                   = useState(() => W.get());
   const [activeDeload, setActiveDeload] = useState(() => {
     if (!profile) return null;
@@ -128,6 +132,11 @@ export default function SessionHost() {
       if (profile) P.saveReps(profile, next);
       return next;
     });
+  }, [profile]);
+  const setAddedLoad = useCallback((name, kg) => {
+    if (!profile || !name) return;
+    setAddedLoadsState(P.setAddedLoad(profile, name, kg));
+    pushNow(profile);
   }, [profile]);
 
   // Rest timer. A DEADLINE against the wall clock, not a decrementing tally:
@@ -389,9 +398,10 @@ export default function SessionHost() {
     const swapped  = !!swapPick;
     const fromPool = EXERCISE_POOLS[key] ? key : null;
     const loadType = getLoadType(ex);
-    // A pure bodyweight set carries no added load from W (the engine never
-    // prescribes one; a stale W value there is not the user's).
-    const resolvedWeight = loadType === "bodyweight" ? null
+    // A pure bodyweight set logs only the user's optional added load — null
+    // when none, so a no-vest set is exactly what it always was. W is never
+    // read for these lifts (the engine never prescribes one there).
+    const resolvedWeight = loadType === "bodyweight" ? addedLoadFor(addedLoads, ex.name)
       : workingWeights[ex.name]
       ?? startingWeightForLift(ex.name, bodyweight)
       ?? ex.weight;
@@ -422,7 +432,7 @@ export default function SessionHost() {
       setBwPromptedThisSession(true);
       setTimeout(() => setBwEditOpen(true), 280);
     }
-  }, [block, isSS, phase, sessionSwaps, workingWeights, workingReps, resolveExFn, profile, bodyweight, bwPromptedThisSession, reachArmed]);
+  }, [block, isSS, phase, sessionSwaps, workingWeights, workingReps, addedLoads, resolveExFn, profile, bodyweight, bwPromptedThisSession, reachArmed]);
 
   // Final-set flash — one quiet line after rating the LAST set of an
   // exercise (lib/set-flash.js: no repeats this session, Easy falls back to
@@ -686,6 +696,7 @@ export default function SessionHost() {
       setSessionOverviewOpen(true);
     },
     bodyweight,
+    addedLoads, setAddedLoad,
     canReach, reachStep, reachArmed, onTakeReach: takeReach, onDeclineReach: declineReach,
     deloadDayTag: activeDeload ? deloadDayLabel(activeDeload) : null,
   };

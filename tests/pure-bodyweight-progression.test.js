@@ -10,7 +10,7 @@ import { computeNextPrescription } from "../lib/progression.js";
 function pureBodyweightNames() {
   const names = new Set();
   const add = (ex, lt) => { if (ex?.name && lt === "bodyweight") names.add(ex.name); };
-  for (const s of SESSIONS) for (const b of s.blocks || []) for (const ex of b.exercises || []) add(ex, getLoadType(ex));
+  for (const s of SESSIONS) for (const b of s.blocks || []) for (const ex of [b.ex, b.exA, b.exB]) if (ex) add(ex, getLoadType(ex));
   for (const p of Object.values(EXERCISE_POOLS)) for (const ex of p.pool || []) add(ex, getLoadType(ex));
   for (const opts of Object.values(SWAP_DB)) for (const o of opts) add(o, swapLoadType(o));
   return [...names].sort();
@@ -42,5 +42,21 @@ describe("pure bodyweight lifts progress by reps", () => {
     const p = computeNextPrescription({ liftName: "Glute Bridge", history, liftState: { currentWeight: 80, history: [] }, context: { pureBodyweight: true } });
     expect(p.weight).toBeNull();
     expect(p.rationale).toContain("bw_rep_progression");
+  });
+
+  it("the prescription ignores the added load", () => {
+    // Parity: the bodyweight branch never reads set weights, so a vest set
+    // and a no-vest set prescribe the same thing — reps climb, kg stays null.
+    const mk = (w) => [{ id: "s1", date: "2026-09-20", readiness: "normal", blocks: [{ id: "ass2", type: "superset", exercises: [
+      { name: "Glute Bridge", loadType: "bodyweight", prescribed: { reps: 12, sets: 3, rir: 2 },
+        sets: [0, 1, 2].map(() => ({ weight: w, reps: 12, rir: 2, rpe: 8, loadType: "bodyweight" })) }] }] }];
+    const run = (w) => computeNextPrescription({
+      liftName: "Glute Bridge", history: mk(w), liftState: { currentWeight: 10, history: [] },
+      context: { pureBodyweight: true, currentWeight: 80 },
+    });
+    expect(run(10)).toEqual(run(null));
+    expect(run(10).weight).toBeNull();
+    expect(run(10).reps).toBe(13);
+    expect(run(10).rationale).toContain("bw_rep_progression");
   });
 });

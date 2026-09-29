@@ -28,7 +28,7 @@ import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
 import { WEEK, SWAP_DB } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
-import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement } from "@/lib/lift-translations";
+import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, addedLoadFor, loggedAddedKg } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 import { resolveVid } from "@/lib/exercise-videos";
 
@@ -249,10 +249,21 @@ export function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJum
   );
 }
 
+// A logged top set's kg, only where it means what this lift's kg means.
+// A pure bodyweight set's weight counts only as a proven added load
+// (loggedAddedKg), and only on a lift that takes one. A body-loaded set on a
+// loaded lift (a travel session) says nothing about its bar or dumbbell
+// weight. The last-time cell and the history sheet it opens both read this.
+function loggedKgFor(top, optionalWeight) {
+  if (!top) return null;
+  if (top.loadType === "bodyweight") return optionalWeight ? loggedAddedKg(top, "bodyweight") : null;
+  return top.weight ?? null;
+}
+
 // ─── Recent-history sanity-check sheet ──────────────────────────────────────
 // Shows the last N performances of the active exercise. Read-only; renders
 // only when there's at least one prior entry.
-function RecentHistorySheet({ exerciseName, recent, onCancel }) {
+function RecentHistorySheet({ exerciseName, recent, optionalWeight, onCancel }) {
   const { containerRef, onKeyDown } = useModalA11y(onCancel);
   const titleId = "recent-history-title";
 
@@ -284,7 +295,7 @@ function RecentHistorySheet({ exerciseName, recent, onCancel }) {
 
         <div style={{flex:1,overflowY:"auto",marginRight:-8,paddingRight:8}}>
           {recent.map((r, i) => {
-            const w  = r.topSet?.weight;
+            const w  = loggedKgFor(r.topSet, optionalWeight);
             const reps = r.topSet?.reps;
             const summary = r.allEqual
               ? `${r.sets.length}×${reps ?? "?"}${w == null ? "" : ` @ ${w} kg`}`
@@ -487,7 +498,7 @@ function RestProgressLine({ active, remain, total }) {
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null}){
+export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null}){
   const [swapEx,setSwapEx]=useState(null);
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
   const vidEx    =isSS?(phase==="A"?resolvedExA:resolvedExB):resolvedEx;
@@ -536,6 +547,11 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                          : null;
   const weightCaption = WEIGHT_CAPTIONS[loadType] || null;
   const weightStep = weightStepForLoadType(loadType);
+  // Pure bodyweight: added load is optional and lives in its own store.
+  const optionalWeight = acceptsOptionalWeight(loadType);
+  const addedKg = optionalWeight ? addedLoadFor(addedLoads, activeEx?.name) : null;
+  // timed like the reps cell: a hold ("20s") must open the drum in seconds.
+  const openAddedLoad = () => { if(activeEx?.name) setEditTarget({exName:activeEx.name,currentKg:addedKg,currentReps:getR(activeEx),loadType,timed:!!parseTimedReps(activeEx?.reps)}); };
 
   // Stepper — the most-touched surface: one-tap plate maths in the lift's
   // real-world increment, drum for bigger jumps (tap the number).
@@ -552,7 +568,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   // Last performance of this exercise (for the "this set, last week" cell
   // and the delta line under the weight).
   const last = recent[0] || null;
-  const lastW = last?.topSet?.weight ?? null;
+  const lastW = loggedKgFor(last?.topSet ?? null, optionalWeight);
   const delta = (lastW != null && currentW != null) ? Math.round((currentW - lastW) * 100) / 100 : null;
   const lastRpe = rpeValue(last?.topSet?.rpe) ?? (last?.effort ? rpeForEffort(last.effort) : null);
 
@@ -665,6 +681,29 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                   <span style={{fontFamily:T.measured,color:T.heat[3]}}>{delta>0?"+":""}{delta}</span> on last time
                 </div>
               )}
+            </>
+          ) : optionalWeight ? (
+            /* Pure bodyweight: the body is the load. Added weight (a vest, a
+               plate) is optional, so it is offered quietly — never the big
+               number or steppers that mark lifts where weight is inherent.
+               One button in both states, at the same child index, so React
+               keeps its DOM node and the drum hands focus back to it. */
+            <>
+              {addedKg == null && (
+                <div style={{fontSize:15,color:T.ink2}}>
+                  Bodyweight{bodyweight ? <> &middot; <span style={{fontFamily:T.measured}}>{bodyweight}</span> kg</> : ""}
+                </div>
+              )}
+              <button onClick={openAddedLoad}
+                aria-label={addedKg != null ? `Bodyweight + ${addedKg} kg — tap to edit added weight` : "+ kg · optional — tap to add weight"}
+                style={addedKg != null
+                  ? {background:"none",border:"none",padding:0,cursor:"pointer",textAlign:"left",fontFamily:T.text,fontSize:15,color:T.ink2}
+                  : {marginTop:10,padding:"6px 11px",background:"none",border:`1px dashed ${T.ink3}`,borderRadius:T.rSm,
+                    cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
+                {addedKg != null
+                  ? <>Bodyweight + <span style={{fontFamily:T.measured}}>{addedKg}</span> kg</>
+                  : "+ kg · optional"}
+              </button>
             </>
           ) : isBodyweightMovement(loadType) ? (
             /* Bodyweight is the answer here, not a blank. Adding is opt-in. */
@@ -895,7 +934,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           )}
         </>
       )}
-      {editTarget&&<DrumEditOverlay target={editTarget} workingWeights={workingWeights} setWW={setWW} workingReps={workingReps} setWR={setWR} block={block} onClose={()=>setEditTarget(null)}/>}
+      {editTarget&&<DrumEditOverlay target={editTarget} workingWeights={workingWeights} setWW={setWW} workingReps={workingReps} setWR={setWR} addedLoads={addedLoads} setAddedLoad={setAddedLoad} block={block} onClose={()=>setEditTarget(null)}/>}
       {swapEx&&<SwapOverlay activeEx={activeEx} swapKey={swapKey} onSwap={onSwap} onClose={()=>setSwapEx(null)}/>}
       {showVid&&vidEx&&(
         <div onClick={()=>setShowVid(false)} className="forge-scrim forge-scrim-video" style={{overscrollBehavior:"contain",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
@@ -915,6 +954,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         <RecentHistorySheet
           exerciseName={activeEx?.name}
           recent={recent}
+          optionalWeight={optionalWeight}
           onCancel={()=>setHistoryOpen(false)}
         />
       )}
@@ -1018,9 +1058,18 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
 // steps derived per-lift from the equipment increment (leg press: .0 only;
 // lateral raise: .0/.25/.5/.75). Depth from tonal falloff + type scale —
 // zero blur, no glass cylinder.
-function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,onClose}){
+const ADDED_LOAD_MAX_KG = 100; // vest / plate range on a bodyweight lift
+function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,addedLoads,setAddedLoad,block,onClose}){
   const ex=block.type==="main"?block.ex:(target.exName===block.exA?.name?block.exA:block.exB);
-  const initKg  =workingWeights[target.exName]??ex?.weight??0;
+  // Load type, not ex.weight: null means no prescribed load, not unloadable.
+  const targetLt=target?.loadType ?? getLoadType(ex);
+  const hasWeight=acceptsAddedWeight(targetLt);
+  // Pure bodyweight: an optional added load, kept apart from W. Seeds from
+  // the user's own added load (0 = none), never from a stale W value.
+  const optionalWeight=acceptsOptionalWeight(targetLt);
+  const initKg = optionalWeight
+    ? (addedLoadFor(addedLoads, target.exName) ?? 0)
+    : (workingWeights[target.exName]??ex?.weight??0);
   const rawReps =workingReps[target.exName]??ex?.reps;
   // Timed exercises (prescribed "20s") seed from the parsed seconds.
   const timedSeed = target.timed ? parseTimedReps(ex?.reps)?.seconds : null;
@@ -1029,8 +1078,7 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
     : (rawReps ?? timedSeed ?? 8);
   const [kg,setKg]    =useState(initKg);
   const [reps,setReps]=useState(initReps);
-  // Load type, not ex.weight: null means no prescribed load, not unloadable.
-  const hasWeight=acceptsAddedWeight(target?.loadType ?? getLoadType(ex));
+  const [repsTouched,setRepsTouched]=useState(false);
   const { containerRef, onKeyDown } = useModalA11y(onClose);
   const titleId = "drum-edit-title";
   // Step size honours real-world implement increments: dumbbells come in
@@ -1049,9 +1097,10 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
           <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink}}>{target.exName}</div>
           <div style={{fontSize:13,color:T.ink3,marginTop:5}}>Scroll to adjust</div>
         </div>
-        <div style={{display:"flex",gap:16,justifyContent:hasWeight?"space-between":"center"}}>
+        <div style={{display:"flex",gap:16,justifyContent:(hasWeight||optionalWeight)?"space-between":"center"}}>
           {hasWeight&&<SplitWeightDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
-          <ScrollDrum value={reps} onChange={setReps} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined} tone={target.timed?null:repTone}/>
+          {optionalWeight&&<ScrollDrum value={kg} onChange={setKg} step={weightStep} min={0} max={ADDED_LOAD_MAX_KG} label="+ kg · optional" zeroLabel="none"/>}
+          <ScrollDrum value={reps} onChange={(v)=>{setRepsTouched(true);setReps(v);}} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined} tone={target.timed?null:repTone}/>
         </div>
         {/* House pattern: Cancel/Confirm on the bottom row, no corner ✕.
             Drum edits are LOCAL state — Cancel is a true discard. */}
@@ -1059,7 +1108,13 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,block,on
         <button onClick={onClose} style={{flex:1,padding:"16px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:14,color:T.ink2,fontFamily:T.text}}>Cancel</button>
         <button onClick={()=>{
           if(hasWeight) setWW(p=>({...p,[target.exName]:kg}));
-          setWR(p=>({...p,[target.exName]:reps}));
+          // Never W: a pure bodyweight lift's added load is its own store.
+          if(optionalWeight && kg!==initKg) setAddedLoad?.(target.exName,kg);
+          // An untouched reps wheel on the optional path writes nothing: it
+          // seeds 8 from a string target ("15/leg"), so adding a vest must not
+          // rewrite the lift's reps. Touched, it writes whatever it reads —
+          // 8 included. Loaded lifts keep writing as before.
+          if(!optionalWeight || repsTouched) setWR(p=>({...p,[target.exName]:reps}));
           onClose();
         }} style={{flex:2,padding:"16px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
           Confirm <Glyph name="arrowRight" size={13}/>

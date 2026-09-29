@@ -13,6 +13,7 @@ const data = {
   history: [rec("2026-09-01", "Barbell Bench Press", 60, 8, 8), rec("2026-09-03", "Barbell Hip Thrust", 100, 10, 7), rec("2026-09-05", "Barbell Bench Press", 62.5, 8, 8)],
 };
 const now = new Date("2026-09-24T12:00:00Z");
+const T1 = "2026-09-20T10:00:00.000Z";
 const call = (msg, load = async () => data) => handleMcp({ jsonrpc: "2.0", ...msg }, { load, now });
 
 describe("MCP handshake", () => {
@@ -72,6 +73,49 @@ describe("tools", () => {
       "- Barbell Hip Thrust: 100 kg",
       "- Plank: bodyweight × 45s",
     ]);
+  });
+  it("current_loads: pure-BW lifts show the added load, never a phantom W", () => {
+    // "Barbell Glute Bridge" name-matches the bodyweight pattern but is a
+    // barbell lift; "45-Degree Hip Extension" is bodyweight but unmatched.
+    const d = { meta: {
+      weights: { "Glute Bridge": 80, "45-Degree Hip Extension": 40, "Barbell Glute Bridge": 60 },
+      reps: { "Glute Bridge": 12 },
+      addedLoads: { "Glute Bridge": { kg: 10, updatedAt: T1 } },
+    }, history: [] };
+    expect(runTool("current_loads", {}, d, now).text.split("\n")).toEqual([
+      "- 45-Degree Hip Extension: bodyweight",
+      "- Barbell Glute Bridge: 60 kg",
+      "- Glute Bridge: bodyweight + 10 kg × 12",
+    ]);
+  });
+  it("current_loads: a travel backpack under a gym-loaded name never hides W", () => {
+    // Single-Leg RDL is a catalogue per_db lift with no W: no row. Deficit
+    // Push-Up is outside the catalogue, so its key makes it pure bodyweight.
+    const d = { meta: {
+      weights: { "Bulgarian Split Squat": 18 },
+      addedLoads: {
+        "Bulgarian Split Squat": { kg: 10, updatedAt: T1 },
+        "Single-Leg RDL": { kg: 5, updatedAt: T1 },
+        "Deficit Push-Up": { kg: 5, updatedAt: T1 },
+      },
+    }, history: [] };
+    expect(runTool("current_loads", {}, d, now).text.split("\n")).toEqual([
+      "- Bulgarian Split Squat: 18 kg",
+      "- Deficit Push-Up: bodyweight + 5 kg",
+    ]);
+  });
+  it("lift_history: a proven added load reads as BW+N; a phantom reads BW", () => {
+    const h = [{ id: "2026-09-10", date: "2026-09-10", session: "strength_a", readiness: "normal", blocks: [{ exercises: [
+      { name: "Glute Bridge", loadType: "bodyweight", sets: [
+        { weight: 10, reps: 12, rpe: 8, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 90 },
+        { weight: null, reps: 12, rpe: 8, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 80 },
+        { weight: 40, reps: 15, rpe: 8, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 80 }] },
+      { name: "Pull-Up", loadType: "loaded_bodyweight", sets: [{ weight: 10, reps: 8, rpe: 8, loadType: "loaded_bodyweight" }] }] }] }];
+    const t = runTool("lift_history", { lifts: ["glute bridge", "pull-up"] }, { meta: {}, history: h }, now).text;
+    expect(t).toContain("BW+10×12 @8, BW×12 @8, BW×15 @8");
+    expect(t).toContain("BW+10×8 @8");
+    expect(t).not.toContain("BW+40");
+    expect(t).not.toContain("40×15");
   });
   it("an empty profile reads as empty, not an error", () => {
     expect(runTool("recent_sessions", {}, null, now).text).toBe("No sessions logged yet.");
@@ -188,6 +232,28 @@ describe("programme loads read the way the session screen reads them", () => {
       history: [],
     }, now).text;
     expect(t).toContain("L-Sit Hold 4 × 30s hold");
+  });
+  it("a pure-BW slot ignores a phantom W", () => {
+    const hx = EXERCISE_POOLS["ass2-A"].pool.find((e) => e.name === "45-Degree Hip Extension");
+    expect(hx).toBeTruthy();
+    const t = runTool("programme", {}, {
+      meta: { ...base, programmeBlock: { number: 1, config: { "ass2-A": hx } }, mainLifts: {}, weights: { "45-Degree Hip Extension": 40 } },
+      history: [],
+    }, now).text;
+    expect(t).toMatch(/45-Degree Hip Extension \d+ × \S+ @ bodyweight/);
+    expect(t).not.toMatch(/45-Degree Hip Extension \d+ × \S+ @ 40 kg/);
+  });
+  it("a pure-BW slot reads the vest", () => {
+    const hx = EXERCISE_POOLS["ass2-A"].pool.find((e) => e.name === "45-Degree Hip Extension");
+    const t = runTool("programme", {}, {
+      meta: {
+        ...base, programmeBlock: { number: 1, config: { "ass2-A": hx } }, mainLifts: {},
+        weights: { "45-Degree Hip Extension": 40 },
+        addedLoads: { "45-Degree Hip Extension": { kg: 10, updatedAt: T1 } },
+      },
+      history: [],
+    }, now).text;
+    expect(t).toMatch(/45-Degree Hip Extension \d+ × \S+ @ bodyweight \+ 10 kg/);
   });
   it("malformed synced data is a tool error, never a thrown request", async () => {
     const r = await handleMcp(
