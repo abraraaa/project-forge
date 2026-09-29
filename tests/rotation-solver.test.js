@@ -16,8 +16,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
-import { solveRotation, volumeObjective, FOCUS_VOLUME_PROFILES } from "../lib/rotation-solver.js";
+import { solveRotation, volumeObjective, FOCUS_VOLUME_PROFILES, STRONG_PRESS_ONLY_SLOTS, poolFor } from "../lib/rotation-solver.js";
+import { getAnatomy } from "../lib/exercise-anatomy.js";
 import { EXERCISE_POOLS, FOCUS_OPTIONS, pushHistoryBlock } from "../lib/programme.js";
+import { VOLUME_TARGETS } from "../lib/volume-audit.js";
 
 // mulberry32 — tiny seeded PRNG, good enough for sampling tests.
 function seeded(seed) {
@@ -81,6 +83,58 @@ describe("band contract — rotations stay inside every landmark band", () => {
     expect(FOCUS_VOLUME_PROFILES.Strong.floorExempt.has("Biceps")).toBe(true);
     expect(FOCUS_VOLUME_PROFILES.Strong.floorExempt.has("Triceps")).toBe(true);
   });
+});
+
+describe("Strong Triceps holds MEV across rotations", () => {
+  // Apart from css2-A, Strong's Triceps volume comes from bench, OHP, the bfin
+  // pushdown and (secondarily) css2-B's straight-arm pulldown. A fly there left 12.5% of fresh and 24.5% of chained solves under
+  // MEV; with css2-A pressing-only, 400 fresh + 100×6 chained solves all land
+  // at or above it (min 6.6 default mains, 6.1 with Incline BB + Arnold).
+  const mev = VOLUME_TARGETS.Triceps.mev;
+  const LOWEST_TRICEPS_MAINS = { "Barbell Bench Press": "Incline BB Press", "Barbell Overhead Press": "Arnold Press" };
+
+  for (const [label, mainLifts] of [["default mains", {}], ["lowest-triceps mains", LOWEST_TRICEPS_MAINS]]) {
+    it(`${label}: every fresh and chained Strong solve is at or above MEV`, () => {
+      const under = [];
+      for (let i = 0; i < 400; i++) {
+        const { report } = solveRotation({ focus: "Strong", mainLifts, rng: seeded(10000 + i) });
+        if (report.volume.Triceps < mev) under.push(`fresh ${10000 + i}: ${report.volume.Triceps}`);
+      }
+      for (let i = 0; i < 100; i++) {
+        const rng = seeded(50000 + i);
+        let history = {}, config = null;
+        for (let block = 0; block < 6; block++) {
+          if (config) history = pushHistoryBlock(history, config);
+          const r = solveRotation({ history, focus: "Strong", mainLifts, rng });
+          config = r.config;
+          if (r.report.volume.Triceps < mev) under.push(`chain ${50000 + i}/${block + 1}: ${r.report.volume.Triceps}`);
+        }
+      }
+      expect(under).toEqual([]);
+    }, 30_000); // ~4s alone; headroom for a loaded full-suite run
+  }
+
+  it("css2-A offers only Triceps-crediting presses under Strong, flies elsewhere", () => {
+    expect(STRONG_PRESS_ONLY_SLOTS.has("css2-A")).toBe(true);
+    const flies = ["DB Chest Fly", "Low-to-High Cable Fly"];
+    const slot = EXERCISE_POOLS["css2-A"];
+    // Pool-level check: sampled Forged picks land on a fly too rarely to be a
+    // sturdy witness that the restriction is Strong-only.
+    const forgedPool = poolFor("css2-A", slot, "Forged").map((ex) => ex.name);
+    for (const fly of flies) expect(forgedPool).toContain(fly);
+    const strongPool = poolFor("css2-A", slot, "Strong");
+    expect(strongPool.length).toBeGreaterThanOrEqual(3);
+    for (const ex of strongPool) {
+      const a = getAnatomy(ex.name);
+      expect(a.primary === "Triceps" || (a.secondary?.Triceps || 0) > 0, ex.name).toBe(true);
+    }
+    const strongPicks = new Set();
+    for (let i = 0; i < 100; i++) {
+      strongPicks.add(solveRotation({ focus: "Strong", rng: seeded(10000 + i) }).config["css2-A"].name);
+    }
+    for (const fly of flies) expect(strongPicks.has(fly)).toBe(false);
+    expect(strongPicks.size).toBeGreaterThanOrEqual(3);
+  }, 30_000);
 });
 
 describe("diversity contract — the temperature is alive", () => {

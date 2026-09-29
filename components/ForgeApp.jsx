@@ -49,6 +49,7 @@ import BodyweightEditModal from "@/components/BodyweightEditModal";
 import ProfileScreen from "@/components/ProfileScreen";
 import FocusPickerSheet from "@/components/FocusPickerSheet";
 import HomeScreen from "@/components/HomeScreen";
+import { consentClaim } from "@/lib/consent";
 import { activateProfileCore, saveFocusCore, takePendingRotationSummary } from "@/lib/profile-actions";
 
 
@@ -216,8 +217,9 @@ export default function ForgeApp(){
   // per profile activation + once per home-screen render trigger and store
   // the effective stage here so the UI can subscribe without re-reading LS.
   // Also tracks the WebAuthn support flag and the registration ceremony state
-  // so the home nudge can register a passkey directly without bouncing through
-  // ProfileScreen — every extra tap leaks conversion.
+  // so the home nudge can register a passkey without bouncing through
+  // ProfileScreen. The chip opens the card first, so consent is only claimed
+  // where the consent line shows.
   const [pnStage,setPnStage]               =useState("hidden");
   const [pnWebAuthnSupported,setPnWebAuthnSupported]=useState(false);
   const [pnHasPasskey,setPnHasPasskey]     =useState(false);
@@ -1096,9 +1098,9 @@ export default function ForgeApp(){
   };
 
   // ─── Passkey nudge handlers ────────────────────────────────────────────────
-  // Both chip and card share the same register flow. The button on either
-  // surface calls handleRegisterPasskeyFromHome — which runs the WebAuthn
-  // ceremony and, on success, hides the nudge forever for this profile.
+  // The card's button calls handleRegisterPasskeyFromHome (the chip opens
+  // the card first, so the consent line is always shown) — which runs the
+  // WebAuthn ceremony and, on success, hides the nudge forever for this profile.
   // On cancellation/error, we silently snooze for 7 days. The user can
   // re-attempt by waiting out the snooze or by going to the profile sheet.
   const handleRegisterPasskeyFromHome = async () => {
@@ -1106,7 +1108,7 @@ export default function ForgeApp(){
     setPnBusy(true);
     setPnError(null);
     try {
-      const result = await registerPasskey(activeProfile);
+      const result = await registerPasskey(activeProfile, null, { consent: consentClaim() });
       if (result?.ok) {
         setPnHasPasskey(true);
         setPnStage("hidden");

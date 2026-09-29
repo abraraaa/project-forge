@@ -322,6 +322,20 @@ describe("the engine never writes the vest, and never treats it as evidence", ()
     expect(Object.keys(out).sort()).toEqual(["justCompletedDeload", "stillInDeload", "wrUpdates", "wwUpdates"]);
   });
 
+  it("rep progression with a vest keeps the vest, climbs reps", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    P.setAddedLoad("p", "Glute Bridge", 10);
+    const before = localStorage.getItem("forge:p:addedLoads");
+    const rec = vestRecord();
+    TS.save("p", { lifts: { "Glute Bridge": { ...liftState } } });
+    H.append("p", rec);
+    const out = applySessionToEngine("p", rec, { currentWeights: { "Glute Bridge": 80 } });
+    expect(err).not.toHaveBeenCalled();
+    expect(out.wrUpdates["Glute Bridge"]).toBe(13);
+    expect(out.wwUpdates["Glute Bridge"]).toBeUndefined();
+    expect(localStorage.getItem("forge:p:addedLoads")).toBe(before);
+  });
+
   it("a lighter vest never reads as a regression", () => {
     vi.useFakeTimers();
     const days = ["2026-09-20T10:00:00", "2026-09-22T10:00:00", "2026-09-24T10:00:00"];

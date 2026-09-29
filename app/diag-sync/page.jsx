@@ -422,7 +422,7 @@ export default function DiagSync() {
       {/* Window pressure — the progression-v2 gate made observable. The
           engine's per-lift window is 12; the decision arms the day any
           lift's flat run outgrows it. */}
-      <Section title="Bodyweight loads — dry run, nothing is changed">
+      <Section title="Loaded bodyweight lifts — dry run, nothing is changed">
         {staleBw.length === 0
           ? <Row label="Stale added loads" value="none" dim />
           : staleBw.map((r) => (

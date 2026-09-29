@@ -5,6 +5,7 @@ import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasUsablePasskey, credentialRpId } from "@/lib/auth-server";
 import { acceptedRpIds } from "@/lib/origin";
 import { normaliseProfile } from "@/lib/profile-name";
+import { consentRecord } from "@/lib/consent";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -16,6 +17,9 @@ export const preferredRegion = "lhr1";
 // legacy credential (written by the pre-2026-07-15 code) reports false here so
 // the UI re-offers setup — re-registration heals it into a real credential.
 // See lib/auth-server.js for the doctrine.
+// Also returns consent as { version } | null, additively — only when a usable
+// passkey exists. Never `at`: this route is unauthenticated, so whoever types
+// the name must not learn when consent was given.
 
 const normalise = normaliseProfile;
 const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
@@ -35,12 +39,14 @@ export async function GET(request) {
     const accepted = acceptedRpIds();
     const has = hasUsablePasskey(credData, accepted);
     const usable = new Set([...accepted, "localhost"]);
+    const consent = has ? consentRecord(credData) : null;
 
     return NextResponse.json({
       hasPasskey: has,
       credentialCount: has
         ? credData.credentials.filter((c) => c.publicKey && usable.has(credentialRpId(c))).length
         : 0,
+      consent: consent ? { version: consent.version } : null,
     });
   } catch (e) {
     return serverError(e, { label: "auth-check" });

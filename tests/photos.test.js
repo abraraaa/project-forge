@@ -105,7 +105,7 @@ describe("P2 capture flow — morphing-sheet contract (code shape)", () => {
   });
 
   it("passkey-less users get INLINE setup then continue (recruitment, not refusal)", () => {
-    expect(src).toContain("registerPasskey(profileName)");
+    expect(src).toContain("registerPasskey(profileName, null, { consent: consentClaim() })");
     expect(src).toContain("getAuthTokenWithCeremony(profileName)");
     expect(src).toMatch(/has === false.*setStep\("secure"\)/s);
   });

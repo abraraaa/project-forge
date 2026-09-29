@@ -15,14 +15,14 @@ import { useState, useEffect, useRef } from "react";
 import { T, DISPLAY } from "@/lib/tokens";
 import { LS, P, BW, blobDelete, checkProfileExists } from "@/lib/storage";
 import {
-  hasPasskey, registerPasskey, authenticatePasskey, isPlatformAuthenticatorAvailable,
+  passkeyStatus, registerPasskey, authenticatePasskey, isPlatformAuthenticatorAvailable,
 } from "@/lib/webauthn";
 import { FOCUS_SUMMARIES, mainLiftSummary } from "@/lib/programme";
 import { reasonLabel } from "@/lib/breaks";
 import BugReportSheet from "@/components/BugReportSheet";
 import InstallWalkthrough, { canWalkthroughInstall } from "@/components/InstallWalkthrough";
 import BodyweightDrum from "@/components/BodyweightDrum";
-import { isAdminSession } from "@/lib/auth-session";
+import { isAdminSession, cacheAuthToken } from "@/lib/auth-session";
 import { useInlineModalA11y } from "@/lib/a11y";
 import { PROFILE_SUFFIXES, LEGACY_PROFILE_KEY_PREFIXES } from "@/lib/store-health";
 import { Fade } from "@/components/ui";
@@ -34,6 +34,8 @@ import Link from "next/link";
 import { SyncStatusCard, SyncNowRow } from "@/components/sync-cards";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
 import TakenNameModal from "@/components/TakenNameModal";
+import ConsentLine from "@/components/ConsentLine";
+import { consentClaim, isCurrentConsent, CONSENT_COPY, CONSENT_VERSION, EXISTING_HOLDER_CONSENT_TAP } from "@/lib/consent";
 
 // Mirrors the server rule (validateProfile in app/api/sync/route.js): path
 // separators and control characters are rejected there with a 400, and the
@@ -41,6 +43,10 @@ import TakenNameModal from "@/components/TakenNameModal";
 // message at the input instead of a dead-end "network hiccup" on submit.
 const NAME_BLOCKED_RE = /[/\\\u0000-\u001F\u007F]/;
 const NAME_MAX_LEN = 64;
+
+// Stable identity, so React calls it on mount only (an inline arrow would
+// re-focus on every render).
+const focusOnMount = (el) => { el?.focus(); };
 
 // Sun · Auto · Moon — the appearance switch. Selection is the card
 // (§12.3, turned horizontal): three cells on the ground, the chosen one
@@ -120,6 +126,12 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [passkeyError, setPasskeyError] = useState(null);
   const [profileHasPasskey, setProfileHasPasskey] = useState({});
+  // Consent record per profile from /api/auth/check: undefined = not known
+  // yet (never prompt), null = none on file, { version } = recorded.
+  const [profileConsent, setProfileConsent] = useState({});
+  const [consentBusy, setConsentBusy] = useState(false);
+  // Profile whose quiet tap just recorded, for the one-line acknowledgement.
+  const [consentAck, setConsentAck] = useState(null);
   const [authToken, setAuthToken] = useState(null); // For authenticated destructive ops
   const [needsPasskeyAuth, setNeedsPasskeyAuth] = useState(null); // Profile name requiring auth
   // Recorded at login by lib/webauthn.js; read here, never probed. Same
@@ -150,24 +162,25 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   // Using a ref to track which profiles we've already checked
   const checkedProfilesRef = useRef(new Set());
   useEffect(() => {
+    // null = check failed — keep whatever we knew rather than storing a
+    // guess. Only update if not already true (preserves local registration
+    // state); likewise a consent recorded this visit. One helper for both
+    // call sites so a late reply is guarded the same way everywhere.
+    const takeStatus = (who, s) => {
+      if (s === null) return;
+      setProfileHasPasskey(prev => prev[who] === true ? prev : { ...prev, [who]: s.hasPasskey });
+      setProfileConsent(prev => isCurrentConsent(prev[who]) ? prev : { ...prev, [who]: s.consent });
+    };
     // Check all existing profiles we haven't checked yet
     existing.forEach(async (profile) => {
       if (checkedProfilesRef.current.has(profile)) return;
       checkedProfilesRef.current.add(profile);
-      const has = await hasPasskey(profile);
-      // null = check failed — keep whatever we knew rather than storing a
-      // guess. Only update if not already true (preserves local
-      // registration state).
-      if (has === null) return;
-      setProfileHasPasskey(prev => prev[profile] === true ? prev : { ...prev, [profile]: has });
+      takeStatus(profile, await passkeyStatus(profile));
     });
     // Also explicitly check current profile if not checked
     if (current && !checkedProfilesRef.current.has(current)) {
       checkedProfilesRef.current.add(current);
-      hasPasskey(current).then(has => {
-        if (has === null) return;
-        setProfileHasPasskey(prev => prev[current] === true ? prev : { ...prev, [current]: has });
-      });
+      passkeyStatus(current).then(s => takeStatus(current, s));
     }
   }, [existing, current]);
 
@@ -245,16 +258,20 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
     setPasskeyBusy(false);
   };
 
+  const noteConsent = (who) =>
+    setProfileConsent(prev => ({ ...prev, [who]: { version: CONSENT_VERSION } }));
+
   // Register a passkey for the current profile
   const handleRegisterPasskey = async () => {
     if (!current) return;
     setPasskeyBusy(true);
     setPasskeyError(null);
     try {
-      const result = await registerPasskey(current);
+      const result = await registerPasskey(current, null, { consent: consentClaim() });
       if (result?.ok) {
         // Update local state immediately - don't wait for async check
         setProfileHasPasskey(prev => ({ ...prev, [current]: true }));
+        noteConsent(current);
         setShowPasskeySetup(false);
         setPasskeyError(null);
       } else if (result === null) {
@@ -267,6 +284,21 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       setPasskeyError(e.message || "Passkey setup failed");
     }
     setPasskeyBusy(false);
+  };
+
+  // Existing holders confirm once, quietly: the tap runs the sign-in
+  // ceremony with the consent claim. Cancel or failure: stay quiet, the
+  // tap simply remains. No refreshUpgrade() here: a need recorded by this
+  // sign-in must not open the upgrade modal during this visit.
+  const handleConfirmConsent = async () => {
+    if (!current || consentBusy) return;
+    setConsentBusy(true);
+    try {
+      const result = await authenticatePasskey(current, { consent: consentClaim() });
+      if (result?.verified && result.authToken) cacheAuthToken(current, result.authToken, { admin: !!result.admin });
+      if (result?.consentRecorded === true) { noteConsent(current); setConsentAck(current); }
+    } catch { /* quiet by design — no banner */ }
+    setConsentBusy(false);
   };
 
   // Debounced availability check as user types
@@ -355,6 +387,13 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   // active". Deleting the active profile with others still present is "This
   // device", not "New here".
   const hasAnyProfile = !!current || existing.length > 0;
+  // The quiet consent tap: a confirmed passkey holder with no current
+  // consent on file. Unknown (check failed / in flight) never prompts; the
+  // upgrade card owns the slot while it shows. Off entirely until
+  // EXISTING_HOLDER_CONSENT_TAP is switched on (see lib/consent.js).
+  const consentKnown = current ? profileConsent[current] : undefined;
+  const askConsent = EXISTING_HOLDER_CONSENT_TAP && !!current && webAuthnSupported && profileHasPasskey[current] === true
+    && !upgrade?.needed && consentKnown !== undefined && !isCurrentConsent(consentKnown);
 
   // Post-claim passkey step (first-time onboarding only). Sits between name
   // claim and BW step. Three exit paths all fall through to BW:
@@ -373,11 +412,12 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       setOnboardingPasskeyBusy(true);
       setOnboardingPasskeyError(null);
       try {
-        const result = await registerPasskey(claimedName);
+        const result = await registerPasskey(claimedName, null, { consent: consentClaim() });
         if (result?.ok) {
           // Mark this profile as having a passkey in the local cache so the
           // existing ProfileScreen card respects it on later visits.
           setProfileHasPasskey(prev => ({ ...prev, [claimedName]: true }));
+          noteConsent(claimedName);
           advanceToBw();
         } else {
           // Cancellation or non-ok result — surface a soft message and let
@@ -432,7 +472,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
         <Fade d={200}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <button onClick={handlePasskeyAccept} disabled={onboardingPasskeyBusy} style={{
+            <button onClick={handlePasskeyAccept} disabled={onboardingPasskeyBusy} aria-describedby="consent-onboarding" style={{
               width: "100%", height: 58, padding: "0 22px",
               background: T.commit, border: "none", borderRadius: T.r,
               cursor: onboardingPasskeyBusy ? "default" : "pointer",
@@ -444,6 +484,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <span>{onboardingPasskeyBusy ? "Setting up…" : "Add passkey"}</span>
               {!onboardingPasskeyBusy && <Glyph name="arrowRight" size={14}/>}
             </button>
+            <ConsentLine id="consent-onboarding" style={{ marginTop: -2, marginBottom: 4 }} />
             <button onClick={handlePasskeyLater} disabled={onboardingPasskeyBusy} style={{
               width: "100%", padding: "14px 24px",
               background: "transparent", border: "none", cursor: onboardingPasskeyBusy ? "default" : "pointer",
@@ -791,6 +832,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               <button
                 onClick={handleRegisterPasskey}
                 disabled={passkeyBusy}
+                aria-describedby="consent-profile"
                 style={{
                   padding:"10px 16px",
                   background:T.commit,
@@ -809,6 +851,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 {passkeyBusy ? "..." : "Set up"}
               </button>
             </div>
+            <ConsentLine id="consent-profile" style={{ marginTop: 12 }} />
             {passkeyError && (
               <div style={{marginTop:12,fontSize:12,color:T.heat[4]}}>
                 {passkeyError}
@@ -828,12 +871,30 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {/* Passkey enabled row */}
       {current && profileHasPasskey[current] && !upgrade?.needed && (
         <Fade d={280}>
-          <div style={{borderTop:`1px solid ${T.rule}`,padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div>
-              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Passkey enabled</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Your profile is secured with biometric auth</div>
+          <div style={{borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,padding:"15px 2px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Passkey enabled</div>
+                <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Your profile is secured with biometric auth</div>
+              </div>
+              <Glyph name="check" size={13} color={T.ink3}/>
             </div>
-            <Glyph name="check" size={13} color={T.ink3}/>
+            {askConsent && (
+              <div style={{marginTop:12}}>
+                <button onClick={handleConfirmConsent} disabled={consentBusy} aria-describedby="consent-confirm"
+                  style={{background:"none",border:"none",padding:"6px 0",cursor:consentBusy?"default":"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"inline-flex",alignItems:"center",gap:6,opacity:consentBusy?0.6:1}}>
+                  {CONSENT_COPY.confirm} <Glyph name="arrowRight" size={11}/>
+                </button>
+                <ConsentLine id="consent-confirm" style={{marginTop:4}} />
+              </div>
+            )}
+            {!askConsent && consentAck === current && (
+              // Focus lands here so it doesn't drop to <body> when the button unmounts.
+              <div role="status" tabIndex={-1} ref={focusOnMount}
+                style={{marginTop:12,fontSize:13,color:T.ink2,fontFamily:T.text,outline:"none"}}>
+                {CONSENT_COPY.confirmed}
+              </div>
+            )}
           </div>
         </Fade>
       )}

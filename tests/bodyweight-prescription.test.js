@@ -25,10 +25,10 @@ const session = (sets) => ({
     summary: { totalVolume: 0, topSet: sets[0] },
   }] }],
 });
-const run = (sets, ctx = {}) => computeNextPrescription({
+const run = (sets, ctx = {}, state = {}) => computeNextPrescription({
   liftName: "Pull-Up",
   history: [session(sets)],
-  liftState: { currentWeight: null, sessionsCount: 4, consecutiveAdds: 0, consecutiveHolds: 0, stallSignal: null, currentRepRange: null },
+  liftState: { currentWeight: null, sessionsCount: 4, consecutiveAdds: 0, consecutiveHolds: 0, stallSignal: null, currentRepRange: null, ...state },
   context: { readiness: "normal", loadType: "loaded_bodyweight", ...ctx },
 });
 
@@ -58,7 +58,17 @@ describe("the reported bug", () => {
     const r = run([bwSet({ reps: 8, rir: 3 })]);
     expect(r.decision).toBe("ADD");
     expect(r.reps).toBe(9);
+    expect(r.repRangeChanged).toBe(true);
     expect(r.rationale).toContain("bw_rep_progression_unloaded");
+  });
+
+  it("at base + 3 it holds reps and never adds load itself", () => {
+    const r = run([bwSet({ reps: 11, rir: 3 })], {}, { currentRepRange: { reps: 11, sets: 1, baseReps: 8, bwClimb: true } });
+    expect(r.decision).toBe("HOLD");
+    expect(r.reps).toBe(11);
+    expect(r.repRangeChanged).toBe(false);
+    expect(r.weight).toBe(0);
+    expect(r.rationale).toContain("bw_rep_ceiling");
   });
 
   it("holds reps when the set was not clean", () => {
@@ -81,6 +91,24 @@ describe("a genuinely loaded bodyweight lift still progresses its load", () => {
   it("holds the added weight rather than resetting it", () => {
     const r = run([bwSet({ reps: 6, rir: 0, weight: 10 })]);
     expect(r.weight).toBe(10);
+  });
+
+  it("a belt after an unloaded rep climb banks the climb back to its base", () => {
+    // The loaded path keeps the unloaded climb's base, so the raised target
+    // is banked as load (one rung) rather than becoming a new base.
+    const r = run([bwSet({ reps: 11, rir: 3, weight: 10 })], {}, { currentRepRange: { reps: 11, sets: 1, baseReps: 8, bwClimb: true } });
+    expect(r.decision).toBe("ADD");
+    expect(r.reps).toBe(8);
+    expect(r.repRangeChanged).toBe(true);
+    expect(r.rationale).toContain("rep_climb_banked");
+    expect(r.repRange).toMatchObject({ reps: 8, baseReps: 8, bwBase: 8 });
+    expect(r.weight).toBeGreaterThan(10);
+  });
+
+  it("a belt with a target outside the unloaded climb starts from that target", () => {
+    const r = run([bwSet({ reps: 15, rir: 3, weight: 10 })], {}, { currentRepRange: { reps: 11, sets: 1, baseReps: 8, bwClimb: true } });
+    expect(r.reps).toBe(15);
+    expect(r.rationale).not.toContain("rep_climb_banked");
   });
 });
 
