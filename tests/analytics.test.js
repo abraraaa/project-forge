@@ -19,7 +19,7 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
-  weeklyTonnage, recentForExercise,
+  weeklyTonnage, recentForExercise, mainLiftTrend, detectPlateaus,
   weeklyVolumeByMuscle, totalTonnage, pendingTonnageMilestone,
   formatTonnage, TONNAGE_MILESTONES_KG, __test_p4__,
 } from "../lib/analytics.js";
@@ -445,6 +445,44 @@ describe("recentForExercise", () => {
     const out = recentForExercise(h, "Back Squat");
     expect(out).toHaveLength(1);
     expect(out[0].date).toBe("2026-04-15");
+  });
+
+  it("a proven vest outranks a phantom", () => {
+    // A stale working weight logged on a pure bodyweight set (effective load
+    // the body alone) must not outrank a real added load.
+    const vest = [buildHistorySession("2026-09-20", [{ name: "Glute Bridge", loadType: "bodyweight", sets: [
+      { weight: 80, reps: 15, rpe: 8, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 80 },
+      { weight: 10, reps: 12, rpe: 8, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 90 },
+    ] }])];
+    expect(recentForExercise(vest, "Glute Bridge")[0].topSet.weight).toBe(10);
+
+    const phantoms = [buildHistorySession("2026-09-20", [{ name: "Glute Bridge", loadType: "bodyweight", sets: [
+      { weight: 80, reps: 14, rpe: 8, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 80 },
+      { weight: 80, reps: 15, rpe: 8, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 80 },
+    ] }])];
+    expect(recentForExercise(phantoms, "Glute Bridge")[0].topSet.reps).toBe(15);
+  });
+});
+
+// mainLiftTrend — a travel main slot is bodyweight; its backpack is no 1RM.
+// ────────────────────────────────────────────────────────────────────────────
+describe("mainLiftTrend and pure bodyweight", () => {
+  it("a travel main slot's backpack is never a main-lift e1RM", () => {
+    const h = ["2026-09-10", "2026-09-12", "2026-09-14"].map((d) => ({
+      id: d + "T10:00:00.000Z", date: d, readiness: "normal", travel: true,
+      blocks: [{ id: "main", type: "main", exercises: [
+        { name: "Bulgarian Split Squat", loadType: "bodyweight", sets: [{ weight: 10, reps: 10, loadType: "bodyweight" }] }] }],
+    }));
+    expect(mainLiftTrend(h)).not.toHaveProperty(["Bulgarian Split Squat"]);
+    expect(detectPlateaus(h)).toEqual([]);
+  });
+
+  it("a gym main lift still trends", () => {
+    const h = [{ id: "2026-09-10T10:00:00.000Z", date: "2026-09-10", readiness: "normal", blocks: [{ id: "main", type: "main", exercises: [
+      { name: "Barbell Back Squat", loadType: "barbell", sets: [{ weight: 100, reps: 5, loadType: "barbell" }] }] }] }];
+    const series = mainLiftTrend(h)["Barbell Back Squat"];
+    expect(series).toHaveLength(1);
+    expect(series[0].est1RM).toBeGreaterThan(100);
   });
 });
 

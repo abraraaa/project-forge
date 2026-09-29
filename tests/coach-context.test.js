@@ -2,7 +2,7 @@
 // model. Private by construction (no profile name) and honest about its date.
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { buildCoachContext } from "../lib/coach-context.js";
+import { buildCoachContext, sessionLine } from "../lib/coach-context.js";
 
 const S = (t) => ({ type: t });
 const week = ["strength","rest","strength","rest","strength","rest","rest"].map(S);
@@ -37,6 +37,22 @@ describe("buildCoachContext", () => {
     expect(text).toMatch(/Barbell Back Squat: .* kg est\. 1RM over 2 sessions .*· stall/);
     expect(text).toMatch(/## Weekly volume vs landmarks/);
     expect(text).toMatch(/- 2026-09-21 · normal: Barbell Back Squat 105 kg × 5\/5\/5 @RPE 8/);
+  });
+  it("sessionLine: added load reads '+N kg', a phantom reads nothing", () => {
+    const r = { date: "2026-09-10", readiness: "normal", blocks: [{ exercises: [
+      { name: "Glute Bridge", loadType: "bodyweight", sets: [
+        { weight: 10, reps: 12, rpe: 8, bodyweightUsed: 80, effectiveLoad: 90 },
+        { weight: 10, reps: 12, rpe: 8, bodyweightUsed: 80, effectiveLoad: 90 }] },
+      { name: "45-Degree Hip Extension", loadType: "bodyweight", sets: [
+        { weight: 40, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 80, reps: 15, rpe: 8 }] },
+      { name: "Hanging Leg Raise", loadType: "bodyweight", sets: [{ weight: null, reps: 10, rpe: 7 }] },
+      { name: "Pull-Up", loadType: "loaded_bodyweight", sets: [{ weight: 10, reps: 8, rpe: 8 }] }] }] };
+    const line = sessionLine(r);
+    expect(line).toContain("Glute Bridge +10 kg × 12/12 @RPE 8");
+    expect(line).toContain("45-Degree Hip Extension × 15 @RPE 8");
+    expect(line).toContain("Hanging Leg Raise × 10 @RPE 7");
+    expect(line).toContain("Pull-Up +10 kg × 8 @RPE 8");
+    expect(line).not.toContain("40 kg");
   });
   it("carries no profile name", () => {
     expect(buildCoachContext({ history: [], now })).not.toMatch(/profile/i);

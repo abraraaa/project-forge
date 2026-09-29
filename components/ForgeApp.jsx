@@ -1685,7 +1685,7 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
 // applied to all sets in an exercise.
 // effectiveWeek = the schedule in force ON `date` (resolved by the host via
 // W.getEffectiveOn) — never today's config; see handleSubmitRetro.
-function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingReps, effectiveWeek=WEEK, history=[], onCancel, onSubmit}){
+export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingReps, effectiveWeek=WEEK, history=[], onCancel, onSubmit}){
   const meta = useMemo(() => sessionMetaForDate(date, effectiveWeek, history), [date, effectiveWeek, history]);
   const sessionDef = meta?.type === "strength" ? SESSIONS[meta.sessionIdx] : null;
 
@@ -1714,12 +1714,15 @@ function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingRep
   const [entries, setEntries] = useState(() => exerciseRows.map(ex => {
     const setCount = ex.sets || 3;
     // Same resolution order as the live session's getW: working → BW-seeded → SESSIONS default.
-    const baseWeight = workingWeights[ex.name]
+    const lt = getLoadType(ex);
+    // A pure bodyweight row logs no weight: its column is hidden, and W for
+    // these lifts is not the user's (see SessionHost pushSetToDraft).
+    const baseWeight = lt === "bodyweight" ? null
+      : workingWeights[ex.name]
       ?? startingWeightForLift(ex.name, bodyweight)
       ?? ex.weight
       ?? null;
     const baseReps   = workingReps[ex.name] ?? ex.reps ?? null;
-    const lt = getLoadType(ex);
     return {
       name: ex.name,
       muscle: ex.muscle,

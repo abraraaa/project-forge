@@ -58,6 +58,7 @@ const MUTATING_CALLS = [
   /\bDays\.set\s*\(/,
   /\bH\.append\s*\(/,
   /\bbumpStreak\s*\(/,
+  /\bP\.setAddedLoad\s*\(/,
 ];
 
 // Function names that are EXEMPT from the push requirement, with reason.

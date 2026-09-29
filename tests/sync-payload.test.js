@@ -20,7 +20,7 @@ const PROFILE = "payload-probe";
 // extending BOTH getLocalProfile and this list is the regression S1 was.
 const SYNCED_META_FIELDS = [
   "weights", "reps", "streak", "programmeBlock", "userWeek", "userFocus",
-  "days", "bodyweight", "trainingState", "breaks",
+  "days", "bodyweight", "trainingState", "breaks", "addedLoads",
 ];
 
 beforeEach(() => localStorage.clear());
