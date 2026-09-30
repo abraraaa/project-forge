@@ -61,9 +61,9 @@ describe("Profile passkey setup card", () => {
 });
 
 describe("quiet consent tap for existing holders", () => {
-  it("with the real flag (off), never renders, even with no consent on file", async () => {
-    expect(REAL_TAP_FLAG).toBe(false);
-    tapFlag.on = REAL_TAP_FLAG;
+  it("with the flag off, never renders, even with no consent on file", async () => {
+    expect(REAL_TAP_FLAG).toBe(true);
+    tapFlag.on = false;
     passkeyStatus.mockResolvedValue({ hasPasskey: true, consent: null });
     profile();
     await screen.findByText("Passkey enabled");
