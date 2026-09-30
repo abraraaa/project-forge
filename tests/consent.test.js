@@ -30,7 +30,8 @@ describe("consent copy", () => {
     expect(CONSENT_COPY.href).toBe("/privacy");
     // Placeholders pending the owner's copy pass; pinned so a change is deliberate.
     expect(CONSENT_COPY.confirm).toBe("Yes, keep it for me");
-    expect(CONSENT_COPY.confirmed).toBe("Noted. Thank you.");
+    expect(CONSENT_COPY.confirmed).toBe("Kept.");
+    expect(CONSENT_COPY.holderLine).toBe("One thing we didn't ask when you set up your passkey. We keep your training, bodyweight and photos with us so they follow you to any device. Only you own access. Happy for us to keep going?");
     for (const v of Object.values(CONSENT_COPY)) expect(v).not.toMatch(/server/i);
   });
 

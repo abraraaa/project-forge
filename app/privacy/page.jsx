@@ -7,7 +7,7 @@ import { T, DISPLAY } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
 
 const URL = "https://heatwayve.app/privacy";
-export const UPDATED = "29 September 2026";
+export const UPDATED = "30 September 2026";
 export const CONTACT = "ab@heatwayve.app";
 export const ICO_REG = "ZC257208";
 
@@ -49,7 +49,7 @@ const SECTIONS = [
   {
     h: "Health information",
     p: [
-      "Readiness and its reasons, breaks (including \"injured or ill\"), bodyweight, training and photos can say something about your health, which UK law treats as special category data. We only use it with your explicit consent, and only to run Heatwayve for you. You give it when you add a passkey. If you added one before 29 September 2026, you gave it by entering your data. Withdraw consent any time by deleting your profile (photos can also be deleted one by one in the Locker Room).",
+      "Readiness and its reasons, breaks (including \"injured or ill\"), bodyweight, training and photos can say something about your health, which UK law treats as special category data. We only use it with your explicit consent, and only to run Heatwayve for you. You give it when you add a passkey. If you added one before 29 September 2026, you gave it by entering your data, and we'll ask you once, on your profile, to confirm. Withdraw consent any time by deleting your profile (photos can also be deleted one by one in the Locker Room).",
     ],
   },
   {

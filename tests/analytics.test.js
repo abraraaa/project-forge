@@ -462,6 +462,27 @@ describe("recentForExercise", () => {
     ] }])];
     expect(recentForExercise(phantoms, "Glute Bridge")[0].topSet.reps).toBe(15);
   });
+
+  describe("travel option", () => {
+    const gym = buildHistorySession("2026-09-20", [{ name: "Back Squat", sets: [{ weight: 120, reps: 5 }] }]);
+    const trip = { ...buildHistorySession("2026-09-25", [{ name: "Back Squat", loadType: "bodyweight", sets: [
+      { weight: 8, reps: 15, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 88 },
+    ] }]), travel: true };
+    const h = [gym, trip];
+
+    it("a gym session skips travel records", () => {
+      expect(recentForExercise(h, "Back Squat", 3, { travel: false }).map(r => r.date)).toEqual(["2026-09-20"]);
+    });
+
+    it("a travel session skips gym records", () => {
+      expect(recentForExercise(h, "Back Squat", 3, { travel: true }).map(r => r.date)).toEqual(["2026-09-25"]);
+    });
+
+    it("no option keeps today's unfiltered behaviour", () => {
+      expect(recentForExercise(h, "Back Squat").map(r => r.date)).toEqual(["2026-09-25", "2026-09-20"]);
+      expect(recentForExercise(h, "Back Squat", 3, {}).map(r => r.date)).toEqual(["2026-09-25", "2026-09-20"]);
+    });
+  });
 });
 
 // mainLiftTrend — a travel main slot is bodyweight; its backpack is no 1RM.

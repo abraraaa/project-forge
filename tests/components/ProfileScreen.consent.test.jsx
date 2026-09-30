@@ -61,9 +61,9 @@ describe("Profile passkey setup card", () => {
 });
 
 describe("quiet consent tap for existing holders", () => {
-  it("with the real flag (off), never renders, even with no consent on file", async () => {
-    expect(REAL_TAP_FLAG).toBe(false);
-    tapFlag.on = REAL_TAP_FLAG;
+  it("with the flag off, never renders, even with no consent on file", async () => {
+    expect(REAL_TAP_FLAG).toBe(true);
+    tapFlag.on = false;
     passkeyStatus.mockResolvedValue({ hasPasskey: true, consent: null });
     profile();
     await screen.findByText("Passkey enabled");
@@ -78,8 +78,8 @@ describe("quiet consent tap for existing holders", () => {
     passkeyStatus.mockResolvedValue({ hasPasskey: true, consent: null });
     profile();
     const tap = await screen.findByRole("button", { name: TAP });
-    expect(screen.getByText(CONSENT_COPY.line)).toBeTruthy();
-    expect(document.getElementById(tap.getAttribute("aria-describedby")).textContent).toBe(CONSENT_COPY.line);
+    expect(screen.getByText(CONSENT_COPY.holderLine)).toBeTruthy();
+    expect(document.getElementById(tap.getAttribute("aria-describedby")).textContent).toBe(CONSENT_COPY.holderLine);
   });
 
   it("runs the sign-in ceremony with the claim, then acknowledges and keeps focus", async () => {
@@ -103,7 +103,7 @@ describe("quiet consent tap for existing holders", () => {
       fireEvent.click(await screen.findByRole("button", { name: TAP }));
       await waitFor(() => expect(authenticatePasskey).toHaveBeenCalled());
       await waitFor(() => expect(screen.getByRole("button", { name: TAP }).disabled).toBe(false));
-      expect(within(await passkeyRow()).queryByText(/cancel|didn.t|failed|error/i)).toBeNull();
+      expect(within(await passkeyRow()).queryByText(/cancel|didn.t (go|take|work)|failed|error/i)).toBeNull();
       expect(screen.queryByText(/Authentication cancelled or failed|Passkey authentication failed/)).toBeNull();
     });
   }
@@ -123,7 +123,7 @@ describe("quiet consent tap for existing holders", () => {
     profile();
     await screen.findByText("Passkey enabled");
     expect(screen.queryByRole("button", { name: TAP })).toBeNull();
-    expect(screen.queryByText(CONSENT_COPY.line)).toBeNull();
+    expect(screen.queryByText(CONSENT_COPY.holderLine)).toBeNull();
   });
 
   it("unknown status: no tap and no card", async () => {
@@ -131,7 +131,7 @@ describe("quiet consent tap for existing holders", () => {
     profile();
     await waitFor(() => expect(passkeyStatus).toHaveBeenCalled());
     await waitFor(() => expect(isPlatformAuthenticatorAvailable).toHaveBeenCalled());
-    expect(screen.queryByText(CONSENT_COPY.line)).toBeNull();
+    expect(screen.queryByText(CONSENT_COPY.holderLine)).toBeNull();
   });
 });
 

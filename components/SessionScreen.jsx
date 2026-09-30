@@ -28,7 +28,7 @@ import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
 import { WEEK, SWAP_DB } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
-import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, addedLoadFor, loggedAddedKg } from "@/lib/lift-translations";
+import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, usesOptionalChrome, addedLoadFor, loggedAddedKg } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 import { resolveVid } from "@/lib/exercise-videos";
 
@@ -201,7 +201,7 @@ export function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJum
           {session.name}
         </div>
         <p style={{fontSize:13,color:T.ink2,marginBottom:16,lineHeight:1.5}}>
-          Train in any order — auto-advance still happens; this is for when the gym dictates.
+          Train in any order — this is for when the gym dictates.
         </p>
 
         <div style={{flex:1,overflowY:"auto",marginRight:-8,paddingRight:8}}>
@@ -498,18 +498,29 @@ function RestProgressLine({ active, remain, total }) {
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,workingWeights,setWW,workingReps,setWR,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null}){
+export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,planWeights={},setPlanWeights,planReps={},setPlanReps,prescribedReps={},coachLine=null,travel=false,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null}){
   const [swapEx,setSwapEx]=useState(null);
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
   const vidEx    =isSS?(phase==="A"?resolvedExA:resolvedExB):resolvedEx;
   const progress =((blockIdx+(setNum-1)/block.sets)/totalBlocks)*100;
-  // setNum runs one past the prescribed count on a finished block.
-  const blockDone = setNum > block.sets;
+  // setNum runs one past the prescribed count on a finished block. The host's
+  // count includes a reach's bonus set, so that set is logged, not forked past.
+  const setsDue = blockSets ?? block.sets;
+  const blockDone = setNum > setsDue;
   // Adding a set is deliberate. Keyed so it resets on any block/set change.
   const [addKey,setAddKey]=useState(null);
   const thisKey=`${block.id}|${setNum}`;
   if(addKey&&addKey!==thisKey) setAddKey(null);
   const adding=addKey===thisKey;
+  // A finished block forks: add another set, or move on. Nothing auto-advances.
+  const fork=blockDone&&!adding;
+  // Last block only: an earlier block left short turns the fork back towards
+  // it (host's backTo), with finishing still one tap away.
+  const guard=fork&&!!backTo;
+  // Either fork choice unmounts the button just pressed; hand focus to the
+  // Log button that replaces it rather than dropping it to the body.
+  const focusLogRef=useRef(false);
+  const logBtnRef=(el)=>{ if(el&&focusLogRef.current){ focusLogRef.current=false; el.focus(); } };
   // Display face fence: never below 28px. Long names wrap rather than
   // shrinking under the fence.
   const nameFz   =Math.min(42,Math.max(28,340/(activeEx?.name?.length||10)));
@@ -525,9 +536,11 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const tempoPhrase=tempoEntry?.tempo
     ? decodeTempo(tempoEntry.tempo).filter(seg=>seg.n!=="0").map(seg=>seg.n==="X"?seg.label:`${seg.n}s ${seg.label}`).join(" · ")
     : null;
+  // A travel slot is bodyweight in a hotel room: no "last time" for the gym
+  // lift of the same name, nor the reverse.
   const recent = useMemo(
-    () => recentForExercise(history, activeEx?.name, 3),
-    [history, activeEx?.name]
+    () => recentForExercise(history, activeEx?.name, 3, { travel: !!travel }),
+    [history, activeEx?.name, travel]
   );
   const showRestHint=!isSS;
   const restMins =Math.floor(restRemain/60),restSecs=restRemain%60;
@@ -538,18 +551,21 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const loadType = getLoadType(activeEx);
   // Shared with DrumEditOverlay so the two cannot derive it differently.
   const showWeightPicker = acceptsAddedWeight(loadType);
-  const weightLabel = loadType === "loaded_bodyweight" || loadType === "loaded_bw" ? "+ kg"
-                    : loadType === "assisted_bodyweight" ? "− kg"
-                    : "kg";
-  const loadTypeSubtitle = loadType === "bodyweight" ? "Bodyweight"
-                         : loadType === "loaded_bodyweight" || loadType === "loaded_bw" ? "Added load"
+  const weightLabel = loadType === "assisted_bodyweight" ? "− kg" : "kg";
+  // Loaded bodyweight reads as bodyweight too: its added load is optional.
+  const loadTypeSubtitle = usesOptionalChrome(loadType) ? "Bodyweight"
                          : loadType === "assisted_bodyweight" ? "Band assist"
                          : null;
   const weightCaption = WEIGHT_CAPTIONS[loadType] || null;
   const weightStep = weightStepForLoadType(loadType);
   // Pure bodyweight: added load is optional and lives in its own store.
   const optionalWeight = acceptsOptionalWeight(loadType);
-  const addedKg = optionalWeight ? addedLoadFor(addedLoads, activeEx?.name) : null;
+  // Pure AND loaded bodyweight present added load as optional. Only the
+  // source differs: pure reads its own store, loaded reads W (0 = none).
+  const optionalChrome = usesOptionalChrome(loadType);
+  const addedKg = optionalWeight ? addedLoadFor(addedLoads, activeEx?.name)
+    : optionalChrome ? (typeof currentW === "number" && currentW > 0 ? currentW : null)
+    : null;
   // timed like the reps cell: a hold ("20s") must open the drum in seconds.
   const openAddedLoad = () => { if(activeEx?.name) setEditTarget({exName:activeEx.name,currentKg:addedKg,currentReps:getR(activeEx),loadType,timed:!!parseTimedReps(activeEx?.reps)}); };
 
@@ -562,7 +578,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
     // Adding a step walks an off-grid weight along forever (18.75 -> 19.75);
     // taking the next rung lands clean on the first press (18.75 -> 19).
     const next = nextRung(currentW, loadType, dir);
-    setWW(p => ({...p, [activeEx.name]: next}));
+    // Today's weight only; the prescription moves with the engine.
+    setPlanWeights(p => ({...p, [activeEx.name]: next}));
   };
 
   // Last performance of this exercise (for the "this set, last week" cell
@@ -597,8 +614,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         {/* Kicker — the room's live state: set count + slot. Never a sentence. */}
         <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
           {blockDone
-            ? <>All <span style={{fontFamily:T.measured}}>{block.sets}</span> {isSS?"rounds":"sets"} logged · {block.label}</>
-            : <>Set <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{block.sets}</span> · {block.label}{isSS?` ${phase}`:""}</>}
+            ? <>All <span style={{fontFamily:T.measured}}>{setsDue}</span> {isSS?"rounds":"sets"} logged · {block.label}</>
+            : <>Set <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{setsDue}</span> · {block.label}{isSS?` ${phase}`:""}</>}
         </div>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
           <div onClick={resolveVid(activeEx?.name, activeEx?.vid) ? ()=>setShowVid(true) : undefined}
@@ -666,7 +683,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           steppers for plate maths. */}
       <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",padding:"0 20px"}}>
         <div>
-          {showWeightPicker && currentW!==null ? (
+          {showWeightPicker && !optionalChrome && currentW!==null ? (
             <>
               <div style={{display:"flex",alignItems:"baseline",gap:8,cursor:"pointer",userSelect:"none"}}
                 onClick={()=>{ if(activeEx?.name) setEditTarget({exName:activeEx.name,currentKg:currentW,currentReps:getR(activeEx),loadType}); }}>
@@ -682,8 +699,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 </div>
               )}
             </>
-          ) : optionalWeight ? (
-            /* Pure bodyweight: the body is the load. Added weight (a vest, a
+          ) : optionalChrome ? (
+            /* Pure or loaded bodyweight: the body is the load. Added weight (a vest, a
                plate) is optional, so it is offered quietly — never the big
                number or steppers that mark lifts where weight is inherent.
                One button in both states, at the same child index, so React
@@ -706,7 +723,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               </button>
             </>
           ) : isBodyweightMovement(loadType) ? (
-            /* Bodyweight is the answer here, not a blank. Adding is opt-in. */
+            /* Assisted: bodyweight is the answer here, not a blank. */
             <>
               <div style={{fontSize:15,color:T.ink2}}>
                 Bodyweight{bodyweight ? <> &middot; <span style={{fontFamily:T.measured}}>{bodyweight}</span> kg</> : ""}
@@ -715,7 +732,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 onClick={()=>{ if(activeEx?.name) setEditTarget({exName:activeEx.name,currentKg:null,currentReps:getR(activeEx),loadType}); }}
                 style={{marginTop:10,padding:"7px 12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,
                   cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
-                {loadType === "assisted_bodyweight" ? "Set assistance" : "Add weight"}
+                Set assistance
               </button>
             </>
           ) : showWeightPicker ? (
@@ -737,7 +754,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             <div style={{fontSize:15,color:T.ink2}}>Bodyweight{bodyweight ? <> · <span style={{fontFamily:T.measured}}>{bodyweight}</span> kg</> : ""}</div>
           )}
         </div>
-        {showWeightPicker && currentW!==null && (
+        {showWeightPicker && !optionalChrome && currentW!==null && (
           <div style={{display:"flex",flexDirection:"column",gap:8,paddingBottom:4}}>
             <button aria-label={`Add ${weightStep} kg`} onClick={()=>nudgeWeight(1)} className="forge-press"
               style={{width:46,height:46,background:T.surface,border:"none",borderRadius:T.r,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:T.elev,cursor:"pointer"}}><Glyph name="plus" size={16} color={T.ink2}/></button>
@@ -780,6 +797,12 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           </div>
         </div>
       </div>
+
+      {/* How the engine read this lift last time, when it has something to
+          say: one quiet line, gone once the block is done. */}
+      {coachLine&&!blockDone&&(
+        <div style={{padding:"12px 20px 0",fontSize:13,color:T.ink2,lineHeight:1.45}}>{coachLine}</div>
+      )}
 
       {/* Per-set progress ticks — pulled up under the weight block so the
           middle carries the session's state, not empty ground. Day-key
@@ -827,7 +850,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
 
       {!blocking&&(
         <>
-          {isSS&&phase==="A"&&!restActive&&(
+          {isSS&&!fork&&phase==="A"&&!restActive&&(
             <div style={{padding:"8px 20px 0",fontSize:13,color:T.ink3}}>
               Straight into B — no rest between exercises
             </div>
@@ -842,7 +865,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             </div>
           )}
           {/* Superset partner reads BEFORE the action it explains. */}
-          {isSS&&(
+          {isSS&&!fork&&(
             <Card style={{margin:"14px 20px 0",padding:"13px 16px"}}>
               <div style={{fontSize:12,color:T.ink3,marginBottom:5,display:"flex",alignItems:"center",gap:5}}>
                 {phase==="A"?<>Immediately after <Glyph name="arrowRight" size={10}/></>:<>Just completed <Glyph name="check" size={10}/></>}
@@ -896,8 +919,18 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               Reaching. Nothing to lose.
             </div>
           )}
+          {/* Guarded fork: two full buttons fit 390px, three don't, so adding
+              a set steps back to a quiet text control above the row. */}
+          {guard&&(
+            <div style={{margin:"12px 20px 0",display:"flex",justifyContent:"flex-end"}}>
+              <button onClick={()=>{haptic.tap();focusLogRef.current=true;setAddKey(thisKey);}}
+                style={{...linkBtn,minHeight:36,padding:"0 4px",color:T.ink2}}>
+                Add another set
+              </button>
+            </div>
+          )}
           <div style={{margin:"12px 20px 0",display:"flex",gap:12,alignItems:"center"}}>
-            {showRestHint&&!(blockDone&&!adding)&&(
+            {showRestHint&&!fork&&(
               <button
                 onClick={()=>{if(restActive){setRestActive(false);setRestRemain(block.rest);}else{setRestRemain(block.rest);setRestActive(true);}}}
                 aria-label={restActive?`Resting, ${restStr} left — tap to skip`:"Start rest timer"}
@@ -911,15 +944,38 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 {restActive?restStr:`${Math.round(block.rest/60)}:00`}
               </button>
             )}
-            {blockDone&&!adding?(
-              <button className="forge-press" onClick={()=>{haptic.tap();setAddKey(thisKey);}}
-                style={{flex:1,height:56,background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
-                  display:"flex",alignItems:"center",justifyContent:"center",
-                  fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink2}}>
-                Add another set
-              </button>
+            {guard?(
+              <>
+                <button className="forge-press" onClick={()=>{haptic.tap();onNext?.();}}
+                  style={{flex:"0 0 auto",height:56,padding:"0 16px",background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
+                    display:"flex",alignItems:"center",justifyContent:"center",whiteSpace:"nowrap",
+                    fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink2}}>
+                  Finish anyway
+                </button>
+                <button className="forge-press forge-lift" {...pressLiftHandlers} onClick={()=>{haptic.tap();focusLogRef.current=true;onJumpToBlock?.(backTo.idx);}}
+                  style={{flex:1,minWidth:0,height:56,padding:"0 14px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",
+                    display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",lineHeight:1.2,
+                    fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
+                  {`Back to ${backTo.name}`}
+                </button>
+              </>
+            ):fork?(
+              <>
+                <button className="forge-press" onClick={()=>{haptic.tap();focusLogRef.current=true;setAddKey(thisKey);}}
+                  style={{flex:"0 0 auto",height:56,padding:"0 16px",background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
+                    display:"flex",alignItems:"center",justifyContent:"center",whiteSpace:"nowrap",
+                    fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink2}}>
+                  Add another set
+                </button>
+                <button className="forge-press forge-lift" {...pressLiftHandlers} onClick={()=>{haptic.tap();focusLogRef.current=true;onNext?.();}}
+                  style={{flex:1,minWidth:0,height:56,padding:"0 14px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",
+                    display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",lineHeight:1.2,
+                    fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
+                  {nextExName?`Next: ${nextExName}`:"Finish session"}
+                </button>
+              </>
             ):(
-              <button className="forge-press forge-lift" {...pressLiftHandlers} onClick={()=>{haptic.tap();onLog();}}
+              <button ref={logBtnRef} className="forge-press forge-lift" {...pressLiftHandlers} onClick={()=>{haptic.tap();onLog();}}
                 style={{flex:1,height:56,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",
                   display:"flex",alignItems:"center",justifyContent:"center",
                   fontFamily:T.text,fontSize:17,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
@@ -932,9 +988,16 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               <RestProgressLine active={restActive} remain={restRemain} total={block.rest} />
             </div>
           )}
+          {/* Ramp sets logged as working sets read as misses to the engine.
+              Main lifts only, until the block's first set is in. */}
+          {block.type==="main"&&!fork&&loggedSets.length===0&&(
+            <div style={{margin:"14px 20px 0",fontSize:13,color:T.ink3}}>
+              Log working sets only. Warm-ups don't count.
+            </div>
+          )}
         </>
       )}
-      {editTarget&&<DrumEditOverlay target={editTarget} workingWeights={workingWeights} setWW={setWW} workingReps={workingReps} setWR={setWR} addedLoads={addedLoads} setAddedLoad={setAddedLoad} block={block} onClose={()=>setEditTarget(null)}/>}
+      {editTarget&&<DrumEditOverlay target={editTarget} planWeights={planWeights} setPlanWeights={setPlanWeights} planReps={planReps} setPlanReps={setPlanReps} prescribedReps={prescribedReps} addedLoads={addedLoads} setAddedLoad={setAddedLoad} block={block} onClose={()=>setEditTarget(null)}/>}
       {swapEx&&<SwapOverlay activeEx={activeEx} swapKey={swapKey} onSwap={onSwap} onClose={()=>setSwapEx(null)}/>}
       {showVid&&vidEx&&(
         <div onClick={()=>setShowVid(false)} className="forge-scrim forge-scrim-video" style={{overscrollBehavior:"contain",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
@@ -1059,7 +1122,10 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
 // lateral raise: .0/.25/.5/.75). Depth from tonal falloff + type scale —
 // zero blur, no glass cylinder.
 const ADDED_LOAD_MAX_KG = 100; // vest / plate range on a bodyweight lift
-function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,addedLoads,setAddedLoad,block,onClose}){
+// The drum is what you did: it edits today's plan (the host's session layer),
+// which the log reads and the next set inherits. It never writes the
+// prescription; the dot on the reps wheel marks that.
+function DrumEditOverlay({target,planWeights,setPlanWeights,planReps,setPlanReps,prescribedReps={},addedLoads,setAddedLoad,block,onClose}){
   const ex=block.type==="main"?block.ex:(target.exName===block.exA?.name?block.exA:block.exB);
   // Load type, not ex.weight: null means no prescribed load, not unloadable.
   const targetLt=target?.loadType ?? getLoadType(ex);
@@ -1067,10 +1133,12 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,addedLoa
   // Pure bodyweight: an optional added load, kept apart from W. Seeds from
   // the user's own added load (0 = none), never from a stale W value.
   const optionalWeight=acceptsOptionalWeight(targetLt);
+  // Loaded bodyweight shares the optional wheel but keeps writing W.
+  const optionalChrome=usesOptionalChrome(targetLt);
   const initKg = optionalWeight
     ? (addedLoadFor(addedLoads, target.exName) ?? 0)
-    : (workingWeights[target.exName]??ex?.weight??0);
-  const rawReps =workingReps[target.exName]??ex?.reps;
+    : (planWeights[target.exName]??ex?.weight??0);
+  const rawReps =planReps[target.exName]??ex?.reps;
   // Timed exercises (prescribed "20s") seed from the parsed seconds.
   const timedSeed = target.timed ? parseTimedReps(ex?.reps)?.seconds : null;
   const initReps = typeof rawReps==="string"
@@ -1086,8 +1154,8 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,addedLoa
   // fixed-stack increments.
   const lt = getLoadType(ex);
   const weightStep = weightStepForLoadType(lt);
-  // The programme's range gets a dot; counts outside the effective band dim.
-  const rec = recommendedReps(ex?.reps);
+  // The prescription gets a dot; counts outside the effective band dim.
+  const rec = recommendedReps(prescribedReps[target.exName] ?? ex?.reps);
   const repTone = (v) => (rec && v >= rec.min && v <= rec.max) ? "rec"
     : (v < EFFECTIVE_REP_BAND.min || v > EFFECTIVE_REP_BAND.max) ? "out" : null;
   return (
@@ -1097,24 +1165,25 @@ function DrumEditOverlay({target,workingWeights,setWW,workingReps,setWR,addedLoa
           <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink}}>{target.exName}</div>
           <div style={{fontSize:13,color:T.ink3,marginTop:5}}>Scroll to adjust</div>
         </div>
-        <div style={{display:"flex",gap:16,justifyContent:(hasWeight||optionalWeight)?"space-between":"center"}}>
-          {hasWeight&&<SplitWeightDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
-          {optionalWeight&&<ScrollDrum value={kg} onChange={setKg} step={weightStep} min={0} max={ADDED_LOAD_MAX_KG} label="+ kg · optional" zeroLabel="none"/>}
+        <div style={{display:"flex",gap:16,justifyContent:(hasWeight||optionalChrome)?"space-between":"center"}}>
+          {hasWeight&&!optionalChrome&&<SplitWeightDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
+          {optionalChrome&&<ScrollDrum value={kg} onChange={setKg} step={weightStep} min={0} max={Math.max(ADDED_LOAD_MAX_KG,initKg)} label="+ kg · optional" zeroLabel="none"/>}
           <ScrollDrum value={reps} onChange={(v)=>{setRepsTouched(true);setReps(v);}} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined} tone={target.timed?null:repTone}/>
         </div>
         {/* House pattern: Cancel/Confirm on the bottom row, no corner ✕.
-            Drum edits are LOCAL state — Cancel is a true discard. */}
+            Drum edits are LOCAL state — Cancel is a true discard. Confirm
+            sets today's plan, never the prescription. */}
         <div style={{display:"flex",gap:10,marginTop:24}}>
         <button onClick={onClose} style={{flex:1,padding:"16px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:14,color:T.ink2,fontFamily:T.text}}>Cancel</button>
         <button onClick={()=>{
-          if(hasWeight) setWW(p=>({...p,[target.exName]:kg}));
+          if(hasWeight) setPlanWeights(p=>({...p,[target.exName]:kg}));
           // Never W: a pure bodyweight lift's added load is its own store.
           if(optionalWeight && kg!==initKg) setAddedLoad?.(target.exName,kg);
           // An untouched reps wheel on the optional path writes nothing: it
           // seeds 8 from a string target ("15/leg"), so adding a vest must not
           // rewrite the lift's reps. Touched, it writes whatever it reads —
           // 8 included. Loaded lifts keep writing as before.
-          if(!optionalWeight || repsTouched) setWR(p=>({...p,[target.exName]:reps}));
+          if(!optionalWeight || repsTouched) setPlanReps(p=>({...p,[target.exName]:reps}));
           onClose();
         }} style={{flex:2,padding:"16px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
           Confirm <Glyph name="arrowRight" size={13}/>

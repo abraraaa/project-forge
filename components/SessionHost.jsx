@@ -25,7 +25,7 @@
 // only one host: ForgeApp no longer renders the session flow at all.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { track } from "@vercel/analytics";
 import {
@@ -38,11 +38,13 @@ import {
   applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
   DEFAULT_FOCUS, WEEK,
 } from "@/lib/programme";
-import { deloadDayLabel } from "@/lib/progression";
+import { deloadDayLabel, isFinalSetMiss, lastSessionNote, ADOPT_AFTER_SESSIONS } from "@/lib/progression";
+import { SESSION_COPY } from "@/lib/session-copy";
 import { deriveTravelSession } from "@/lib/travel";
 import { applySessionToEngine } from "@/lib/session-engine";
 import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, coldStartFromAnchor, addedLoadFor } from "@/lib/lift-translations";
 import { restRemaining, restDeadline } from "@/lib/rest-clock";
+import { unfinishedBlocks, leadExerciseName } from "@/lib/session-progress";
 import { pickFlashLine, isPullMovement } from "@/lib/set-flash";
 import { EXERCISE_ANATOMY } from "@/lib/exercise-anatomy";
 import { todayLocalIso, daysBetween } from "@/lib/dates";
@@ -62,8 +64,23 @@ export default function SessionHost() {
 
   // ─── Identity + LS hydration (lazy initialisers — LS is canonical) ────────
   const [profile] = useState(() => P.getActive());
+  // W and R are the PRESCRIPTION: what the engine set for each lift. Only the
+  // engine (finishSession) and a cold-start seed write them. What the lifter
+  // spins on the drum today lives in the session plan below.
   const [workingWeights, setWWState] = useState(() => (profile ? P.getWeights(profile) : {}));
   const [workingReps, setWRState]    = useState(() => (profile ? P.getReps(profile) : {}));
+  // Today's plan: the drum's edits, session-scoped. The drum is what you did,
+  // so it carries to the next set as the default but never rewrites the
+  // prescription. Lost with the session; a resume re-seeds it from the draft.
+  const [sessionWeights, setSessionWeights] = useState({});
+  const [sessionReps, setSessionReps]       = useState({});
+  const planWeights = useMemo(() => ({ ...workingWeights, ...sessionWeights }), [workingWeights, sessionWeights]);
+  const planReps    = useMemo(() => ({ ...workingReps, ...sessionReps }), [workingReps, sessionReps]);
+  // Lift state as the session opened, for the card's note on last session.
+  const [liftStates] = useState(() => {
+    if (!profile) return {};
+    try { return TS.get(profile)?.lifts || {}; } catch { return {}; }
+  });
   const [history]                    = useState(() => (profile ? H.get(profile) : []));
   const [bodyweight, setBodyweight]  = useState(() => (profile ? BW.getKg(profile) : null));
   const [programmeBlock]             = useState(() => PB.get());
@@ -221,6 +238,20 @@ export default function SessionHost() {
         }
       }
       draftLogRef.current = draft;
+      // The plan carries the last logged set of each lift, as it did before
+      // the refresh. A pure bodyweight lift's weight is its added load, kept
+      // in its own store, so it never seeds the plan.
+      const seedW = {}, seedR = {};
+      for (const b of Object.values(draft.blocks || {})) {
+        for (const ex of Object.values(b?.exercises || {})) {
+          const lastSet = (ex?.sets || [])[ex.sets.length - 1];
+          if (!ex?.name || !lastSet) continue;
+          if (lastSet.reps !== null && lastSet.reps !== undefined) seedR[ex.name] = lastSet.reps;
+          if (ex.loadType !== "bodyweight" && typeof lastSet.weight === "number") seedW[ex.name] = lastSet.weight;
+        }
+      }
+      setSessionWeights(seedW);
+      setSessionReps(seedR);
       // Best-available baseline for the Done diff — the original pre-session
       // snapshot isn't stored on the draft. See ForgeApp's old resume note.
       setSessionStartWeights({ ...P.getWeights(profile) });
@@ -270,15 +301,27 @@ export default function SessionHost() {
   const resolvedExB = isSS ? (block.exB ?? null) : null;
   const resolvedEx  = !isSS ? (block.ex ?? null) : null;
   const activeEx    = isSS ? (phase === "A" ? resolvedExA : resolvedExB) : resolvedEx;
+  // What the finished-block fork's primary names; null on the last block.
+  const nextBlock   = activeSession.blocks[blockIdx + 1] ?? null;
+  const nextExName  = nextBlock ? leadExerciseName(nextBlock) : null;
+  // On the last block, the fork first points back at any earlier block left
+  // short (jumped past via the overview, or Next'd early): a finished session
+  // can't be amended. draftView is a render-safe copy of the draft, refreshed
+  // on every advance by the loggedSets effect below.
+  const [draftView, setDraftView] = useState(null);
+  const firstShort  = !nextBlock ? (unfinishedBlocks(activeSession, draftView, blockIdx)[0] ?? null) : null;
+  const backTo      = firstShort ? { idx: firstShort.idx, name: leadExerciseName(firstShort.block) } : null;
 
+  // The card, the drum and the log read today's plan, which defaults to the
+  // prescription until the drum moves.
   const getW = useCallback((ex) => {
     if (!ex) return null;
-    if (workingWeights[ex.name] !== undefined) return workingWeights[ex.name];
+    if (planWeights[ex.name] !== undefined) return planWeights[ex.name];
     const bwSeeded = startingWeightForLift(ex.name, bodyweight);
     if (bwSeeded !== null) return bwSeeded;
     return ex.weight;
-  }, [workingWeights, bodyweight]);
-  const getR = useCallback((ex) => ex ? (workingReps[ex.name] ?? ex.reps) : null, [workingReps]);
+  }, [planWeights, bodyweight]);
+  const getR = useCallback((ex) => ex ? (planReps[ex.name] ?? ex.reps) : null, [planReps]);
 
   const onSwap = (key, newEx) => {
     setSessionSwaps(prev => ({ ...prev, [key]: newEx }));
@@ -333,7 +376,7 @@ export default function SessionHost() {
   // Resolved WITHOUT calling getW: invoking a useCallback from the render body
   // is the other thing that makes the compiler bail here.
   const reachWeight = activeEx
-    ? (workingWeights[activeEx.name] ?? startingWeightForLift(activeEx.name, bodyweight) ?? activeEx.weight)
+    ? (planWeights[activeEx.name] ?? startingWeightForLift(activeEx.name, bodyweight) ?? activeEx.weight)
     : null;
   // Never ask before two sets are in the bank. Today every main block is 3 or
   // 4 sets, so "last set" already lands on the 3rd or later — but that is a
@@ -365,12 +408,20 @@ export default function SessionHost() {
       // and the engine reconciles from the logged sets at finalise regardless.
       const name = activeEx?.name;
       const next = Math.round(((reachWeight ?? 0) + reachStep) * 100) / 100;
-      if (name) setWW((prev) => ({ ...prev, [name]: next }));
+      if (name) setSessionWeights((prev) => ({ ...prev, [name]: next }));
     } else {
       setBonusSets(1);
     }
   };
   const declineReach = () => setReachSpent(true);
+
+  // One line on the card about how the engine read this lift last time: a
+  // target adopted from the lifter's own repeated choice, or a last set that
+  // came up short on an otherwise full session.
+  const lastNote = activeEx?.name ? lastSessionNote(liftStates[activeEx.name]) : null;
+  const coachLine = lastNote?.kind === "adopted" ? SESSION_COPY.adoptedTarget(lastNote.reps, ADOPT_AFTER_SESSIONS)
+    : lastNote?.kind === "final_set_miss" ? SESSION_COPY.ownAllSets(block.sets)
+    : null;
 
   const resolveExFn = useCallback((blockId, ph, defaultEx) => {
     const b = activeSession.blocks.find(x => x.id === blockId);
@@ -402,9 +453,16 @@ export default function SessionHost() {
     // when none, so a no-vest set is exactly what it always was. W is never
     // read for these lifts (the engine never prescribes one there).
     const resolvedWeight = loadType === "bodyweight" ? addedLoadFor(addedLoads, ex.name)
-      : workingWeights[ex.name]
+      : planWeights[ex.name]
       ?? startingWeightForLift(ex.name, bodyweight)
       ?? ex.weight;
+    // The prescription this set was measured against — W/R, never the drum —
+    // so the engine judges what was done against what was asked.
+    const prescribedWeight = loadType === "bodyweight" ? null
+      : workingWeights[ex.name]
+      ?? startingWeightForLift(ex.name, bodyweight)
+      ?? ex.weight
+      ?? null;
     logSet(draftLogRef.current, {
       blockId: block.id,
       blockType: block.type,
@@ -415,9 +473,10 @@ export default function SessionHost() {
       loadType,
       bodyweight: bodyweight,
       weight: resolvedWeight,
-      reps: workingReps[ex.name] ?? ex.reps,
+      reps: planReps[ex.name] ?? ex.reps,
       rpe: rpe || null,
       reach: reachArmed,
+      prescribed: { reps: workingReps[ex.name] ?? ex.reps, weight: prescribedWeight, sets: block.sets },
     });
     D.save(profile, draftLogRef.current);
     // Bodyweight prompt — once per session, timed to the RPE card fade.
@@ -432,7 +491,7 @@ export default function SessionHost() {
       setBwPromptedThisSession(true);
       setTimeout(() => setBwEditOpen(true), 280);
     }
-  }, [block, isSS, phase, sessionSwaps, workingWeights, workingReps, addedLoads, resolveExFn, profile, bodyweight, bwPromptedThisSession, reachArmed]);
+  }, [block, isSS, phase, sessionSwaps, workingWeights, workingReps, planWeights, planReps, addedLoads, resolveExFn, profile, bodyweight, bwPromptedThisSession, reachArmed]);
 
   // Final-set flash — one quiet line after rating the LAST set of an
   // exercise (lib/set-flash.js: no repeats this session, Easy falls back to
@@ -446,11 +505,35 @@ export default function SessionHost() {
   const usedFlashRef  = useRef(new Set());
   const flashTimersRef = useRef([]);
   useEffect(() => () => flashTimersRef.current.forEach(clearTimeout), []);
+  const showFlash = (line) => {
+    usedFlashRef.current.add(line);
+    flashTimersRef.current.forEach(clearTimeout);
+    setFlashLeaving(false);
+    setSetFlash(null);
+    flashTimersRef.current = [
+      setTimeout(() => { setSetFlash(line); announce(line); }, 450),  // let the screen swap settle
+      setTimeout(() => setFlashLeaving(true), 3200),
+      setTimeout(() => { setSetFlash(null); setFlashLeaving(false); }, 3800),
+    ];
+  };
   const maybeFlash = (rpe) => {
-    if (setNum !== blockSets || isSS) return; // last set of a plain block only
+    if (isSS) return;
+    // Measured against the prescription, not the template: the drum moves
+    // today's plan, and a climbed target is still the target.
+    const prescribedReps = activeEx ? (workingReps[activeEx.name] ?? activeEx.reps) : null;
     const timed  = parseTimedReps(activeEx?.reps);
-    const target = timed ? timed.seconds : parseInt(activeEx?.reps, 10);
+    const target = typeof prescribedReps === "number" ? prescribedReps
+      : timed ? timed.seconds : parseInt(prescribedReps, 10);
     const done   = getR(activeEx);
+    // The last prescribed set came up short at full effort, every earlier one
+    // on target: the engine reads that as a good day (final_set_miss).
+    if (setNum === block.sets && !timed && activeEx?.name) {
+      const prior = draftLogRef.current?.blocks?.[block.id]?.exercises?.[activeEx.name]?.sets || [];
+      const rir = rpeToRir(rpe);
+      const asLogged = { prescribed: { reps: prescribedReps, sets: block.sets }, sets: [...prior, { reps: done }] };
+      if (rir !== null && rir <= 1 && isFinalSetMiss(asLogged)) { showFlash(SESSION_COPY.finalSetMiss); return; }
+    }
+    if (setNum !== blockSets) return; // last set of a plain block only
     const fullReps = !Number.isFinite(target) || (typeof done === "number" ? done >= target : true);
     // Unambiguous-ADD certification for the consequence lines ("Next time,
     // heavier."): full reps + effort at/above this lift's ADD threshold +
@@ -476,15 +559,7 @@ export default function SessionHost() {
       addLikely,
     });
     if (!line) return;
-    usedFlashRef.current.add(line);
-    flashTimersRef.current.forEach(clearTimeout);
-    setFlashLeaving(false);
-    setSetFlash(null);
-    flashTimersRef.current = [
-      setTimeout(() => { setSetFlash(line); announce(line); }, 450),  // let the screen swap settle
-      setTimeout(() => setFlashLeaving(true), 3200),
-      setTimeout(() => { setSetFlash(null); setFlashLeaving(false); }, 3800),
-    ];
+    showFlash(line);
   };
 
   const commitLog = (rpe) => {
@@ -494,10 +569,9 @@ export default function SessionHost() {
       : [resolveExFn(block.id, null, block.ex)];
     exes.forEach(ex => pushSetToDraft(ex, rpe));
     setReachArmed(false);            // a reach is one set, never a mode
-    if (setNum >= blockSets) {
-      if (blockIdx < activeSession.blocks.length - 1) { setBlockIdx(p => p + 1); setSetNum(1); setPhase("A"); }
-      else finishSession();
-    } else setSetNum(p => p + 1);
+    // Past the last set the block stays put: the screen forks into "Add
+    // another set" or Next (handleNext). Never advances on its own.
+    setSetNum(p => p + 1);
     // Start the rest timer directly — no trigger-effect indirection needed
     // now these are plain event handlers (the old restTrigger state existed
     // to re-fire an effect between same-duration sets).
@@ -518,15 +592,18 @@ export default function SessionHost() {
       setPhase("A");
       if (block.type === "superset") { setSsRoundDone(true); return; }
       pushSetToDraft(resolveExFn(block.id, "B", block.exB), null);
-      if (setNum >= blockSets) {
-        if (blockIdx < activeSession.blocks.length - 1) { setBlockIdx(p => p + 1); setSetNum(1); setPhase("A"); }
-        else finishSession();
-      } else setSetNum(p => p + 1);
+      setSetNum(p => p + 1);           // as commitLog: the fork, not an advance
       setRestRemain(block.rest);
       setRestActive(true);
       return;
     }
     setAwaitRpe(true);
+  };
+
+  // The fork's primary: move on to the next block, or finish on the last.
+  const handleNext = () => {
+    if (blockIdx < activeSession.blocks.length - 1) { setBlockIdx(p => p + 1); setSetNum(1); setPhase("A"); }
+    else finishSession();
   };
 
   const handleJumpToBlock = (targetIdx) => {
@@ -624,7 +701,9 @@ export default function SessionHost() {
       // Progression engine + volume — THE engine (lib/session-engine, #16).
       // One function shared with the retro-log path; UI mirrors stay here.
       if (sessionRecord) {
-        const engine = applySessionToEngine(profile, sessionRecord, { currentWeights: workingWeights });
+        // Context only (a first-time lift's fallback weight): today's plan,
+        // which is what these weights held when the drum wrote them.
+        const engine = applySessionToEngine(profile, sessionRecord, { currentWeights: planWeights });
         if (Object.keys(engine.wwUpdates).length) {
           setWW(p => ({ ...p, ...engine.wwUpdates }));
         }
@@ -670,6 +749,8 @@ export default function SessionHost() {
   useEffect(() => {
     // Mirrors the mutable draft (external store) into render state after
     // each advance; keyed deps make it converge in one pass, no cascade.
+    // A fresh wrapper each time, so readers re-derive from the mutated draft.
+    setDraftView(draftLogRef.current ? { ...draftLogRef.current } : null);
     const saved = draftLogRef.current?.blocks?.[block?.id];
     if (!saved?.exercises) { setLoggedSets([]); return; }
     const ex = saved.exercises[activeEx?.name]
@@ -683,10 +764,15 @@ export default function SessionHost() {
   const sProps = {
     session: activeSession,
     block, blockIdx, totalBlocks: activeSession.blocks.length, setNum, phase, isSS,
+    blockSets, nextExName, onNext: handleNext,
+    backTo, onJumpToBlock: handleJumpToBlock,
     activeEx, resolvedExA, resolvedExB, resolvedEx,
     swapKey, onSwap,
     showVid, setShowVid, getW, getR, editTarget, setEditTarget,
-    workingWeights, setWW, workingReps, setWR,
+    // The screen edits today's plan only; the prescription is read-only here
+    // (the drum's dot marks it).
+    planWeights, setPlanWeights: setSessionWeights, planReps, setPlanReps: setSessionReps,
+    prescribedReps: workingReps, coachLine, travel,
     history, loggedSets,
     awaitRpe, ssRoundDone,
     restActive, restRemain, setRestActive, setRestRemain,

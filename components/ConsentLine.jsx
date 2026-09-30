@@ -23,11 +23,11 @@ const SR_ONLY = /** @type {import("react").CSSProperties} */ ({
   overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0,
 });
 
-/** @param {{ id?: string, style?: import("react").CSSProperties }} props */
-export default function ConsentLine({ id, style }) {
+/** @param {{ id?: string, style?: import("react").CSSProperties, line?: string }} props */
+export default function ConsentLine({ id, style, line = CONSENT_COPY.line }) {
   return (
     <div style={{ fontFamily: T.text, ...style }}>
-      <p id={id} style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: 0 }}>{CONSENT_COPY.line}</p>
+      <p id={id} style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: 0 }}>{line}</p>
       {/* Small print in ink2, not ink3: ink-3 is never used for sentences. */}
       <p style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, margin: "4px 0 0" }}>
         {CONSENT_COPY.age}{" "}

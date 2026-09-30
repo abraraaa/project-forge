@@ -881,11 +881,11 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             </div>
             {askConsent && (
               <div style={{marginTop:12}}>
+                <ConsentLine id="consent-confirm" line={CONSENT_COPY.holderLine} style={{marginBottom:6}} />
                 <button onClick={handleConfirmConsent} disabled={consentBusy} aria-describedby="consent-confirm"
                   style={{background:"none",border:"none",padding:"6px 0",cursor:consentBusy?"default":"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"inline-flex",alignItems:"center",gap:6,opacity:consentBusy?0.6:1}}>
                   {CONSENT_COPY.confirm} <Glyph name="arrowRight" size={11}/>
                 </button>
-                <ConsentLine id="consent-confirm" style={{marginTop:4}} />
               </div>
             )}
             {!askConsent && consentAck === current && (
