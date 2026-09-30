@@ -263,6 +263,18 @@ html[data-mode="dark"] .forge-page {
     url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20baseFrequency='.9'%20numOctaves='3'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='120'%20height='120'%20filter='url%28%23n%29'%20opacity='.015'/%3E%3C/svg%3E");
 }
 
+/* Where light-dark() takes images (Safari 27, Chrome 150, Firefox 150) the
+   substrate follows color-scheme directly — the toggle already sets it on
+   <html>. The data-mode rule above stays as the fallback for iOS 26 and
+   agrees with this one in dark, so the two never disagree. */
+@supports (background-image: light-dark(none, none)) {
+  .forge-page {
+    background-image:
+      light-dark(url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20baseFrequency='.9'%20numOctaves='3'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='120'%20height='120'%20filter='url%28%23n%29'%20opacity='.055'/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20baseFrequency='.9'%20numOctaves='3'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='120'%20height='120'%20filter='url%28%23n%29'%20opacity='.025'/%3E%3C/svg%3E")),
+      light-dark(url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20baseFrequency='.9'%20numOctaves='3'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='120'%20height='120'%20filter='url%28%23n%29'%20opacity='.04'/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20baseFrequency='.9'%20numOctaves='3'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='120'%20height='120'%20filter='url%28%23n%29'%20opacity='.015'/%3E%3C/svg%3E"));
+  }
+}
+
 @media not (display-mode: standalone) {
   .forge-page { min-height: 100dvh; }
 }
