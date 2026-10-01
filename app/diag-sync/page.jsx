@@ -28,6 +28,9 @@ import { staleAddedLoads } from "@/lib/bodyweight-repair";
 import { DeltaSync } from "@/lib/sync-delta";
 import { windowPressure } from "@/lib/analytics";
 import { LIBRARY } from "@/lib/library";
+import { getAuthTokenWithCeremony, isAdminSession } from "@/lib/auth-session";
+import { authenticatePasskey } from "@/lib/webauthn";
+import { fetchWithTimeout } from "@/lib/net";
 
 function fmtTs(ts) {
   if (!ts) return "never";
@@ -85,12 +88,128 @@ function Button({ children, onClick, variant = "default", busy = false }) {
   );
 }
 
+// Identity backfill (owner only). Reading is a SELECT-only dry-run behind the
+// admin passkey gate; apply exists only while IDENTITY_BACKFILL_APPLY=1 and
+// runs a fresh ceremony, posting back the exact planHash shown here.
+function IdentityBackfill({ profile }) {
+  const [plan, setPlan] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(null); // "read" | "apply" | null
+  const [applied, setApplied] = useState(null);
+
+  const readPlan = async (token) => {
+    const res = await fetchWithTimeout("/api/diag/identity-backfill/admin", { headers: { "X-HW-Auth": token } });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`HTTP ${res.status}${body.error ? ` — ${body.error}` : ""}`);
+    setPlan(body);
+  };
+
+  const onRead = async () => {
+    setBusy("read"); setErr(null);
+    try {
+      const t = await getAuthTokenWithCeremony(profile);
+      if (!t) { setErr("Ceremony cancelled."); return; }
+      await readPlan(t);
+    } catch (e) { setErr(e?.message || "Failed"); } finally { setBusy(null); }
+  };
+
+  const onApply = async () => {
+    if (!plan?.planHash) return;
+    setBusy("apply"); setErr(null);
+    try {
+      // Fresh ceremony every time (the wipe gate's posture) — never the cache.
+      const auth = await authenticatePasskey(profile);
+      if (!auth?.verified || !auth?.authToken) { setErr("Ceremony cancelled."); return; }
+      const res = await fetchWithTimeout("/api/diag/identity-backfill/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-HW-Auth": auth.authToken },
+        body: JSON.stringify({ confirm: plan.planHash }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErr(`HTTP ${res.status}${body.error ? ` — ${body.error}` : ""}${body.planHash ? ` (now ${body.planHash.slice(0, 12)}…)` : ""}`);
+        return;
+      }
+      setApplied(body.inserted);
+      await readPlan(auth.authToken); // the re-read must now show 0 to create
+    } catch (e) { setErr(e?.message || "Failed"); } finally { setBusy(null); }
+  };
+
+  const c = plan?.counts;
+  return (
+    <Section title="Identity backfill — dry run, nothing is changed">
+      {!plan && (
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button onClick={onRead} busy={busy === "read"}>Read the plan (passkey)</Button>
+        </div>
+      )}
+      {err && <div style={{ fontSize: 12, color: "var(--heat-4)", marginTop: 8 }}>{err}</div>}
+      {plan && c && (<>
+        <Row label="to create · accounts / handles / credentials"
+          value={`${c.accounts.create} / ${c.handles.create} / ${c.credentials.create}`} />
+        <Row label="already present" value={`${c.accounts.present} / ${c.handles.present} / ${c.credentials.present}`} dim />
+        <Row label="conflicts" value={plan.conflicts.length} dim={plan.conflicts.length === 0} />
+        <Row label="orphan references (no account)" value={plan.skipped.orphanReferences.length} dim={plan.skipped.orphanReferences.length === 0} />
+        <Row label="anomalies" value={plan.anomalies.length} dim={plan.anomalies.length === 0} />
+        <Row label="keyless credentials skipped" value={plan.skipped.keyless.length} dim />
+        <Row label="retired photo keys skipped" value={plan.skipped.retiredPhotoKeys} dim />
+        <Row label="database" value={plan.db ? "connected" : "NOT configured"} dim={plan.db} />
+        {plan.accounts.map((a) => (
+          <Row key={`a-${a.storageKey}`} label={`account · ${a.storageKey}`}
+            value={`${a.status}${a.consent ? ` · consent ${a.consent.version}` : " · no consent"}${a.otherDocKeys?.length ? ` · not carried: ${a.otherDocKeys.join(",")}` : ""}`} />
+        ))}
+        {plan.handles.map((h) => (
+          <Row key={`h-${h.handle}`} label={`handle · ${h.handle}`}
+            value={`${h.status} · "${h.display}" · claimed ${String(h.claimedAt).slice(0, 10)}`} />
+        ))}
+        {plan.credentials.map((cr) => (
+          <Row key={`c-${cr.storageKey}-${cr.idPrefix}`} label={`passkey · ${cr.storageKey} · ${cr.idPrefix}…`}
+            value={`${cr.status} · ${cr.rpId}${cr.rpIdInferred ? " (inferred)" : ""} · n=${cr.counter}`} />
+        ))}
+        {plan.conflicts.map((x, i) => (
+          <Row key={`x-${i}`} label={`conflict · ${x.key}`} value={`${x.reason}${x.idPrefix ? ` · ${x.idPrefix}…` : ""}`} />
+        ))}
+        {plan.skipped.orphanReferences.map((o) => (
+          <Row key={`o-${o.key}`} label={`orphan · ${o.key}`} value={o.sources.join(", ")} dim />
+        ))}
+        {plan.anomalies.map((x, i) => (
+          <Row key={`n-${i}`} label={`anomaly · ${x.key}`} value={x.reason} dim />
+        ))}
+        <div style={{ marginTop: 10, fontSize: 11, color: "var(--ink-3)" }}>planHash</div>
+        <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, wordBreak: "break-all", color: "var(--ink)", marginTop: 2 }}>{plan.planHash}</div>
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <Button onClick={onRead} busy={busy === "read"}>Re-read</Button>
+        </div>
+        {applied && (
+          <Row label="applied · accounts / handles / credentials"
+            value={`${applied.accounts} / ${applied.handles} / ${applied.credentials}`} />
+        )}
+        {plan.applyEnabled && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 11, color: "var(--heat-4)", marginBottom: 6, lineHeight: 1.5 }}>
+              Apply is ON. Inserts exactly the rows above marked create (no updates, no deletes),
+              only if the store still hashes to {plan.planHash.slice(0, 12)}… and nothing conflicts.
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button onClick={onApply} busy={busy === "apply"} variant="danger">Apply backfill (passkey)</Button>
+            </div>
+          </div>
+        )}
+      </>)}
+    </Section>
+  );
+}
+
 export default function DiagSync() {
   // Lazy initialisers — localStorage reads during render are impure, the
   // function-form useState arg only runs on mount so it doesn't trip the
   // react-hooks/purity rule.
   const [profile] = useState(() =>
     typeof window === "undefined" ? null : P.getActive(),
+  );
+  // UI hint only; the backfill routes re-verify the admin server-side.
+  const [admin] = useState(() =>
+    typeof window !== "undefined" && !!P.getActive() && isAdminSession(P.getActive()),
   );
   const [status, setStatus] = useState(() => SyncStatus.get());
   const [, setNow] = useState(() => Date.now());
@@ -427,6 +546,8 @@ export default function DiagSync() {
               value={`${r.stored} → would set ${r.wouldSet} (last logged ${r.from})`} />
           ))}
       </Section>
+
+      {admin && <IdentityBackfill profile={profile} />}
 
       {/* Window pressure — the progression-v2 gate made observable. The
           engine's per-lift window is 12; the decision arms the day any
