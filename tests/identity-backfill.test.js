@@ -291,3 +291,57 @@ describe("identity backfill — rules", () => {
     expect(JSON.stringify(writes)).toContain(PK_NATIVE);
   });
 });
+
+describe("self-test leftovers", () => {
+  it("never become accounts, handles or orphans; counted once per key", async () => {
+    const { buildIdentityBackfill } = await import("../lib/identity-backfill.js");
+    const junk = "selftest-1785124827397-fbw80z";
+    const { plan } = buildIdentityBackfill({
+      blobs: [
+        { pathname: `forge/profiles/${junk}/meta.json`, uploadedAt: "2026-07-27T00:00:00Z" },
+        { pathname: "forge/profiles/abrar/meta.json", uploadedAt: "2026-07-01T00:00:00Z" },
+      ],
+      credentialDocs: {},
+      dbNames: { sessions: [junk], meta: [junk, "abrar"], photos: [], auth_tokens: [junk], oauth_grants: [], oauth_codes: [] },
+      displayNames: {}, existing: {}, now: "2026-10-01T00:00:00.000Z",
+    });
+    const keys = JSON.stringify(plan);
+    expect(plan.skipped.selftestKeys).toBe(1);
+    expect(plan.accounts.map((a) => a.storageKey)).toEqual(["abrar"]);
+    expect(plan.handles.map((h) => h.handle)).toEqual(["abrar"]);
+    expect(keys).not.toContain(`"storageKey":"${junk}"`);
+    expect(plan.skipped.orphanReferences).toEqual([]);
+  });
+
+  it("a name that only resembles the pattern is still a person", async () => {
+    const { buildIdentityBackfill } = await import("../lib/identity-backfill.js");
+    const { plan } = buildIdentityBackfill({
+      blobs: [{ pathname: "forge/profiles/selftest-fan/meta.json", uploadedAt: "2026-07-01T00:00:00Z" }],
+      credentialDocs: {}, dbNames: {}, displayNames: {}, existing: {}, now: "2026-10-01T00:00:00.000Z",
+    });
+    expect(plan.accounts.map((a) => a.storageKey)).toEqual(["selftest-fan"]);
+    expect(plan.skipped.selftestKeys).toBe(0);
+  });
+});
+
+describe("owner exclusions", () => {
+  it("named keys stay out of the plan and are counted, nothing else changes", async () => {
+    const { buildIdentityBackfill } = await import("../lib/identity-backfill.js");
+    const base = {
+      blobs: ["abrar", "testy", "other"].map((n) => ({ pathname: `forge/profiles/${n}/meta.json`, uploadedAt: "2026-07-28T00:00:00Z" })),
+      credentialDocs: {}, dbNames: { meta: ["testy"] }, displayNames: {}, existing: {}, now: "2026-10-01T00:00:00.000Z",
+    };
+    const { plan } = buildIdentityBackfill({ ...base, exclude: ["testy"] });
+    expect(plan.accounts.map((a) => a.storageKey)).toEqual(["abrar", "other"]);
+    expect(plan.skipped.excludedKeys).toBe(1);
+    expect(plan.skipped.orphanReferences).toEqual([]);
+    const all = buildIdentityBackfill(base).plan;
+    expect(all.accounts).toHaveLength(3);
+    expect(all.planHash).not.toBe(plan.planHash);
+  });
+  it("reads the env list normalised and ignores blanks", async () => {
+    const { backfillExclusions } = await import("../lib/identity-backfill-inputs.js");
+    expect(backfillExclusions(" An, ana ,,GHOST ")).toEqual(["an", "ana", "ghost"]);
+    expect(backfillExclusions(undefined)).toEqual([]);
+  });
+});
