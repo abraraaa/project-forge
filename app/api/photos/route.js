@@ -8,6 +8,7 @@ import { isTokenValid, readTokenData, mintAuthToken } from "@/lib/auth-server";
 import { hasDb, dbUpsertPhoto, dbListPhotos, dbDeletePhoto, dbGetPhoto, dbHasRetiredPhotos } from "@/lib/db";
 import { isJpegBytes, jpegWithinBounds, PHOTO_MAX_UPLOAD_BYTES } from "@/lib/photos";
 import { normaliseProfile } from "@/lib/profile-name";
+import { photoPath } from "@/lib/storage-keys";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -43,8 +44,7 @@ function isBadProfileName(name) {
 }
 
 // Deterministic, overwrite-in-place (house pattern): one photo per local day.
-const photoPath = (profile, date) =>
-  `forge/profiles/${encodeURIComponent(normalise(profile))}/photos/${date}.jpg`;
+// The path comes from lib/storage-keys (photoPath), fed the normalised name.
 
 // Sliding 7-day cookie window (boss call, 2026-07-21): a secure device that
 // keeps being used never re-auths — any active day past ROTATE_AFTER mints a
@@ -131,7 +131,7 @@ export async function POST(request) {
     const bwRaw = request.headers.get("x-hw-bodyweight");
     const bodyweightAt = bwRaw !== null && Number.isFinite(Number(bwRaw)) ? Number(bwRaw) : null;
 
-    const path = photoPath(g.profile, g.date);
+    const path = photoPath(normalise(g.profile), g.date);
     await put(path, Buffer.from(buf.buffer, buf.byteOffset, buf.byteLength), {
       access: "private",
       contentType: "image/jpeg",

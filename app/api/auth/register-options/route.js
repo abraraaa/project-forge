@@ -5,6 +5,7 @@ import { list } from "@vercel/blob";
 import crypto from "crypto";
 import { hasChallengeSecret, issueChallenge, rpConfigFromRequest } from "@/lib/auth-server";
 import { normaliseProfile } from "@/lib/profile-name";
+import { profileDir } from "@/lib/storage-keys";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -14,7 +15,6 @@ export const preferredRegion = "lhr1";
 // Body: { profile: string }
 
 const normalise = normaliseProfile;
-const legacyPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/`;
 
 export async function POST(request) {
   const limited = rateLimit(request, "auth-register", 15) || await rateLimitShared(request, "auth-register", 15);
@@ -26,7 +26,7 @@ export async function POST(request) {
     }
 
     // Check if profile exists (must exist to register a passkey)
-    const { blobs } = await list({ prefix: legacyPrefix(profile) });
+    const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
     if (!blobs.length) {
       return NextResponse.json(
         { error: "Profile not found. Create a profile first." },

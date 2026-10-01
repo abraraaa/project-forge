@@ -8,6 +8,7 @@ import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPre
 import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge, mintAuthToken, isAdminProfile } from "@/lib/auth-server";
 import { LEGACY_RP_ID, passkeyNudgeUrgent, daysUntilPasskeySunset } from "@/lib/origin";
 import { normaliseProfile } from "@/lib/profile-name";
+import { credentialsPrefix, credentialsPath } from "@/lib/storage-keys";
 import { acceptedConsentVersion } from "@/lib/consent";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
@@ -30,8 +31,6 @@ export const preferredRegion = "lhr1";
 // deletes every older blob under the credentials prefix.
 
 const normalise = normaliseProfile;
-const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
-const credentialsPath = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials.json`;
 
 export async function POST(request) {
   const limited = rateLimit(request, "auth-login", 20) || await rateLimitShared(request, "auth-login", 20);
@@ -66,7 +65,7 @@ export async function POST(request) {
     }
 
     // Find the stored credential this assertion claims to be.
-    const credData = await readJsonByPrefix(credentialsPrefix(profile));
+    const credData = await readJsonByPrefix(credentialsPrefix(normalise(profile)));
     const matchingCred = credData?.credentials?.find((c) => c.id === credential.id);
     if (!matchingCred) {
       return NextResponse.json({ error: "Unknown credential" }, { status: 400 });
@@ -136,7 +135,7 @@ export async function POST(request) {
           ...(stampConsent ? { consent: { version: consentVersion, at: new Date().toISOString() } } : null),
         };
         // Write-first, sweep-after — see audit #6 / writeJsonReplacingPrefix.
-        await writeJsonReplacingPrefix(credentialsPrefix(profile), credentialsPath(profile), updated);
+        await writeJsonReplacingPrefix(credentialsPrefix(normalise(profile)), credentialsPath(normalise(profile)), updated);
         if (stampConsent) consentRecorded = true;
       } catch {
         // A counter-persist failure must not deny an otherwise-valid login.

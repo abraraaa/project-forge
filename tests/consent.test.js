@@ -73,8 +73,10 @@ describe("only verified ceremonies stamp consent", () => {
 
   it("only those two routes write the credentials doc", () => {
     expect(filesContaining(["app", "lib", "scripts"], "writeJsonReplacingPrefix(credentialsPrefix(")).toEqual(VERIFY_ROUTES);
-    // Any writer must name the path (addRandomSuffix appends to it).
-    expect(filesContaining(["app", "lib", "scripts"], "/credentials.json")).toEqual(VERIFY_ROUTES);
+    // Any writer must name the path (addRandomSuffix appends to it). The
+    // literal lives only in lib/storage-keys; only the verify routes use it.
+    expect(read("lib/storage-keys.js")).toContain("export const credentialsPath = (sk) => `${credentialsPrefix(sk)}.json`;");
+    expect(filesContaining(["app", "lib", "scripts"], "credentialsPath(", ["lib/storage-keys.js"])).toEqual(VERIFY_ROUTES);
   });
 
   it("both writers spread the existing doc, and login-verify keeps a single write", () => {

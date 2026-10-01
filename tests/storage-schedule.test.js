@@ -14,7 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { W } from "../lib/storage.js";
+import { P, W } from "../lib/storage.js";
 import { mergeScheduleHistory } from "../lib/sync-merge.js";
 import { weekOn } from "../lib/mcp-server.js";
 import { makeDayContext, owedDays } from "../lib/day-state.js";
@@ -90,11 +90,19 @@ describe("W — schedule edit log", () => {
   });
 
   it("reset() wipes the entire log", () => {
+    // reset is per profile (the schedule lives at forge:<profile>:weekConfig).
+    P.setActive("p");
     W.save(DEFAULT_WEEK, { effectiveFrom: "2026-06-01" });
     W.save(ALT_WEEK,     { effectiveFrom: "2026-06-15" });
     W.reset();
     expect(W.getHistory()).toBe(null);
     expect(W.get()).toBe(null);
+  });
+
+  it("reset() with no profile never removes the device-wide key", () => {
+    W.save(DEFAULT_WEEK, { effectiveFrom: "2026-06-01" });
+    W.reset();
+    expect(W.getHistory()).toHaveLength(1);
   });
 });
 

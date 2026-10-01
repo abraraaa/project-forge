@@ -413,6 +413,9 @@ export default function ForgeApp(){
     setWRState(local.meta.reps || {});
     setStreak(local.meta.streak?.count || 0);
     setProgrammeBlock(local.meta.programmeBlock || PB.get());
+    // The week schedule is per profile (storage.js W), so a profile switch
+    // re-reads it here, not only after a pull.
+    setUserWeek(W.get(activeProfile) || WEEK);
     // Completion reads come from the unified Day entity (date-keyed,
     // type-stamped at mark time) through the day context; a new profile
     // re-reads it because activeProfile is a ctx dep. A schedule edit can't

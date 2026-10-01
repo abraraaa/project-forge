@@ -49,14 +49,15 @@ describe("PR C code shapes", () => {
     expect(dbBranch).toContain("dbUpsertProfile(norm");
     expect(dbBranch).not.toContain("await put(");
     // unmigrated profiles still seed their merge base from blobs, guarded
-    expect(dbBranch).toContain("blobExists(metaPath(profile))");
+    expect(dbBranch).toContain("blobExists(metaPath(normalise(profile)))");
     expect(dbBranch).toContain("readLatestLegacy");
   });
 
   it("snapshot cron: Bearer-gated, both generations, and ZERO delete authority", () => {
     expect(cron).toContain("Bearer ${cronSecret}");
-    expect(cron).toContain("forge/snapshots/daily/");
-    expect(cron).toContain("forge/snapshots/weekly/");
+    expect(cron).toContain("snapshotPaths(profile)");
+    expect(cron).toContain("put(dailyPath");
+    expect(cron).toContain("put(weeklyPath");
     expect(cron).toContain("allowOverwrite: true");
     // The whole point: no delete exists in this file, not even imported.
     expect(cron).not.toMatch(/\bdel\s*\(/);
@@ -70,8 +71,8 @@ describe("PR C code shapes", () => {
 
   it("profile DELETE removes the snapshot generations — exact enumerated paths", () => {
     const delBlock = route.slice(route.indexOf("export async function DELETE"));
-    expect(delBlock).toContain("forge/snapshots/daily/${enc}.json");
-    expect(delBlock).toContain("forge/snapshots/weekly/${enc}.json");
+    expect(delBlock).toContain("snapshotPaths(normalise(profile))");
+    expect(delBlock).toContain("del([snaps.daily, snaps.weekly])");
   });
 
   it("#3 — the class-2 deferral tier is gone", () => {

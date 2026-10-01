@@ -73,7 +73,9 @@ describe("photos route — privacy contract (code shape)", () => {
 
   it("date is regex-locked before path interpolation (no traversal)", () => {
     expect(src).toMatch(/DATE_RE\.test\(date\)/);
-    expect(src).toMatch(/\$\{date\}\.jpg/);
+    // The interpolation lives in lib/storage-keys; the route only passes the locked date.
+    expect(src).toContain("photoPath(normalise(g.profile), g.date)");
+    expect(readFileSync(resolve(root, "lib/storage-keys.js"), "utf8")).toMatch(/\$\{date\}\.jpg/);
   });
 
   it("blob writes are private + deterministic; responses are private-cache", () => {
