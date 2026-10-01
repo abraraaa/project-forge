@@ -323,3 +323,25 @@ describe("self-test leftovers", () => {
     expect(plan.skipped.selftestKeys).toBe(0);
   });
 });
+
+describe("owner exclusions", () => {
+  it("named keys stay out of the plan and are counted, nothing else changes", async () => {
+    const { buildIdentityBackfill } = await import("../lib/identity-backfill.js");
+    const base = {
+      blobs: ["abrar", "testy", "other"].map((n) => ({ pathname: `forge/profiles/${n}/meta.json`, uploadedAt: "2026-07-28T00:00:00Z" })),
+      credentialDocs: {}, dbNames: { meta: ["testy"] }, displayNames: {}, existing: {}, now: "2026-10-01T00:00:00.000Z",
+    };
+    const { plan } = buildIdentityBackfill({ ...base, exclude: ["testy"] });
+    expect(plan.accounts.map((a) => a.storageKey)).toEqual(["abrar", "other"]);
+    expect(plan.skipped.excludedKeys).toBe(1);
+    expect(plan.skipped.orphanReferences).toEqual([]);
+    const all = buildIdentityBackfill(base).plan;
+    expect(all.accounts).toHaveLength(3);
+    expect(all.planHash).not.toBe(plan.planHash);
+  });
+  it("reads the env list normalised and ignores blanks", async () => {
+    const { backfillExclusions } = await import("../lib/identity-backfill-inputs.js");
+    expect(backfillExclusions(" An, ana ,,GHOST ")).toEqual(["an", "ana", "ghost"]);
+    expect(backfillExclusions(undefined)).toEqual([]);
+  });
+});
