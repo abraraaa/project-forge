@@ -25,6 +25,7 @@ import { NextResponse } from "next/server";
 import { serverError } from "@/lib/api-errors";
 import { put, list } from "@vercel/blob";
 import { readJsonDirect } from "@/lib/blob-utils";
+import { snapshotPaths } from "@/lib/storage-keys";
 import { hasDb, sql, ensureSchema, dbReadProfile } from "@/lib/db";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
@@ -75,7 +76,8 @@ export async function GET(request) {
       const data = await dbReadProfile(profile);
       if (!data) continue;
 
-      const dailyPath = `forge/snapshots/daily/${encodeURIComponent(profile)}.json`;
+      // profile is the DB key as stored: passed verbatim, never re-normalised.
+      const { daily: dailyPath, weekly: weeklyPath } = snapshotPaths(profile);
       const prior = await readJsonDirect(dailyPath);
       if (looksLikeDisaster(prior, (data.history || []).length)) {
         guarded.push(profile);
@@ -106,7 +108,7 @@ export async function GET(request) {
       await put(dailyPath, body,
         { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false });
       if (isWeeklyDay) {
-        await put(`forge/snapshots/weekly/${encodeURIComponent(profile)}.json`, body,
+        await put(weeklyPath, body,
           { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false });
       }
       written.push(profile);

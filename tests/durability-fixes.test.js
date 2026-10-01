@@ -105,8 +105,8 @@ describe("#6 — writeJsonReplacingPrefix: write first, sweep after", () => {
 describe("#7 — sync PUT unreadable-blob guard (code shape)", () => {
   it("the PUT handler guards both meta and history reads against present-but-unreadable blobs", () => {
     const src = readFileSync(resolve(__dirname, "../app/api/sync/route.js"), "utf8");
-    expect(src).toMatch(/blobExists\(metaPath\(profile\)\)/);
-    expect(src).toMatch(/blobExists\(historyPath\(profile\)\)/);
+    expect(src).toMatch(/blobExists\(metaPath\(normalise\(profile\)\)\)/);
+    expect(src).toMatch(/blobExists\(historyPath\(normalise\(profile\)\)\)/);
     expect((src.match(/status: 503/g) || []).length).toBeGreaterThanOrEqual(2);
   });
 });

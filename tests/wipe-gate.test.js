@@ -76,7 +76,7 @@ describe("wipe gate — fails closed, always", () => {
     // An absent token is refused before anything destructive is reached.
     const tokenGuard = deleteSrc.indexOf("if (!authToken)");
     expect(tokenGuard).toBeGreaterThan(-1);
-    for (const destructive of ["dbDeleteProfile", "forge/snapshots/daily/", "del(blobs.map"]) {
+    for (const destructive of ["dbDeleteProfile", "snapshotPaths(", "del(blobs.map"]) {
       expect(deleteSrc.indexOf(destructive)).toBeGreaterThan(tokenGuard);
     }
   });

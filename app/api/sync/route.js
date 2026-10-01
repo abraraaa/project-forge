@@ -7,6 +7,7 @@ import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbDeleteToken, 
 import { NextResponse } from "next/server";
 import { serverError as apiError } from "@/lib/api-errors";
 import { normaliseProfile } from "@/lib/profile-name";
+import { metaPath, historyPath, profileDir, credentialsPrefix, snapshotPaths } from "@/lib/storage-keys";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -34,11 +35,8 @@ const serverError = (e, opts = {}) => apiError(e, { label: "sync", ...opts });
 // forms (café NFC vs NFD) resolve to DIFFERENT profiles — a squatting and
 // impersonation surface on a namespace where the NAME is the identity.
 const normalise = normaliseProfile;
-const metaPath     = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/meta.json`;
-const historyPath  = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/history.json`;
-// Trailing slash is load-bearing — without it, list() does a prefix match that
-// catches adjacent names (e.g. "analmonk" would hit "analmonkey/meta.json").
-const legacyPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/`;
+// Blob paths come from lib/storage-keys, fed the normalised name (the storage
+// key). profileDir's trailing slash is load-bearing: list() is a prefix match.
 
 // Identifies legacy addRandomSuffix blobs from the broken era — pathnames of
 // the form `…/meta-XXXX.json` and `…/history-XXXX.json`. Used for one-shot
@@ -300,7 +298,7 @@ export async function GET(request) {
     // we don't want to release a name that was previously claimed under the
     // old broken scheme).
     if (check) {
-      const { blobs } = await list({ prefix: legacyPrefix(profile) });
+      const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
       return NextResponse.json({ exists: blobs.length > 0 });
     }
 
@@ -342,8 +340,8 @@ export async function GET(request) {
     // expected case for any profile written after the addRandomSuffix bug
     // was fixed.
     const [metaDirect, historyDirect] = await Promise.all([
-      readJson(metaPath(profile)),
-      readJson(historyPath(profile)),
+      readJson(metaPath(normalise(profile))),
+      readJson(historyPath(normalise(profile))),
     ]);
 
     // Both deterministic paths returned data: serve the blob. GET never
@@ -360,7 +358,7 @@ export async function GET(request) {
     // this profile has never been written under the new scheme (legacy
     // suffixed blobs only), or partially migrated. List once and fall
     // back to the latest legacy blob for whichever side is missing.
-    const { blobs } = await list({ prefix: legacyPrefix(profile) });
+    const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
 
     // Read-failure guard (audit #13, same class as PUT's #7): a null read
     // for a blob the LIST says exists is a transient failure, not absence.
@@ -368,8 +366,8 @@ export async function GET(request) {
     // profile — the client would then treat real data as gone. 503 lets
     // the client retry instead.
     const existsInList = (path) => blobs.some((b) => b.pathname === path);
-    if ((metaDirect === null && existsInList(metaPath(profile))) ||
-        (historyDirect === null && existsInList(historyPath(profile)))) {
+    if ((metaDirect === null && existsInList(metaPath(normalise(profile)))) ||
+        (historyDirect === null && existsInList(historyPath(normalise(profile))))) {
       return NextResponse.json(
         { error: "Blob present but unreadable — retry" },
         { status: 503 },
@@ -470,14 +468,14 @@ export async function PUT(request) {
       let baseMeta = fromDb?.meta || null;
       let baseHistory = fromDb?.history || null;
       if (!fromDb) {
-        const { blobs } = await list({ prefix: legacyPrefix(profile) });
+        const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
         const blobExists = (path) => blobs.some((b) => b.pathname === path);
-        const meta = await readJson(metaPath(profile));
-        if (meta === null && blobExists(metaPath(profile))) {
+        const meta = await readJson(metaPath(normalise(profile)));
+        if (meta === null && blobExists(metaPath(normalise(profile)))) {
           return NextResponse.json({ error: "Meta blob unreadable — refusing to overwrite; retry" }, { status: 503 });
         }
-        let history = await readJson(historyPath(profile));
-        if (history === null && blobExists(historyPath(profile))) {
+        let history = await readJson(historyPath(normalise(profile)));
+        if (history === null && blobExists(historyPath(normalise(profile)))) {
           return NextResponse.json({ error: "History blob unreadable — refusing to overwrite; retry" }, { status: 503 });
         }
         if (!Array.isArray(history)) history = await readLatestLegacy(blobs, LEGACY_HISTORY_RE);
@@ -510,7 +508,7 @@ export async function PUT(request) {
     // List once up-front to identify legacy suffixed blobs for cleanup +
     // history-merge fallback. Cheap — single API call, used by everything
     // that follows.
-    const { blobs } = await list({ prefix: legacyPrefix(profile) });
+    const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
 
     // ── Meta write (merge with remote — audit S3) ───────────────
     // History always merged server-side; meta used to overwrite wholesale,
@@ -533,8 +531,8 @@ export async function PUT(request) {
     const blobExists = (path) => blobs.some((b) => b.pathname === path);
 
     if (data.meta) {
-      const existingMeta = await readJson(metaPath(profile));
-      if (existingMeta === null && blobExists(metaPath(profile))) {
+      const existingMeta = await readJson(metaPath(normalise(profile)));
+      if (existingMeta === null && blobExists(metaPath(normalise(profile)))) {
         return NextResponse.json(
           { error: "Meta blob unreadable — refusing to overwrite; retry" },
           { status: 503 },
@@ -545,7 +543,7 @@ export async function PUT(request) {
         : data.meta;
       const stamped = { ...mergedMeta, syncedAt: new Date().toISOString() };
       await put(
-        metaPath(profile),
+        metaPath(normalise(profile)),
         JSON.stringify(stamped),
         { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false },
       );
@@ -558,8 +556,8 @@ export async function PUT(request) {
     // profiles that only have data in the broken-suffix scheme). Merge
     // by record id and write deterministic.
     if (Array.isArray(data.history)) {
-      let existing = await readJson(historyPath(profile));
-      if (existing === null && blobExists(historyPath(profile))) {
+      let existing = await readJson(historyPath(normalise(profile)));
+      if (existing === null && blobExists(historyPath(normalise(profile)))) {
         // Same guard as meta: an unreadable-but-present history blob must not
         // be treated as empty — the union merge would then "merge" from
         // nothing and drop every record this device doesn't hold.
@@ -579,7 +577,7 @@ export async function PUT(request) {
       const merged = mergeHistories(existing, data.history);
 
       await put(
-        historyPath(profile),
+        historyPath(normalise(profile)),
         JSON.stringify(merged),
         { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false },
       );
@@ -632,7 +630,7 @@ export async function POST(request) {
     // Existence check stays list-based so it catches legacy suffixed
     // blobs from the broken-suffix era — a name claimed previously under
     // that scheme should still be treated as taken.
-    const { blobs } = await list({ prefix: legacyPrefix(profile) });
+    const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
     if (blobs.length > 0) {
       return NextResponse.json({ error: "Name taken", exists: true }, { status: 409 });
     }
@@ -643,7 +641,7 @@ export async function POST(request) {
     // race-loser gets a 500; the UI's claim flow treats that as "try
     // again" / "name taken" anyway.
     await put(
-      metaPath(profile),
+      metaPath(normalise(profile)),
       JSON.stringify({
         displayName: resolvedDisplay,
         claimedAt: new Date().toISOString(),
@@ -712,9 +710,7 @@ export async function DELETE(request) {
     // meant no DB-minted token could ever satisfy this gate, so the
     // legitimate passkey-protected wipe was broken in production.
     if (!authToken) {
-      const credData = await readJsonByPrefix(
-        `forge/profiles/${encodeURIComponent(normalise(profile))}/credentials`,
-      );
+      const credData = await readJsonByPrefix(credentialsPrefix(normalise(profile)));
       return NextResponse.json(
         hasRealPasskey(credData)
           ? { error: "Passkey authentication required", requiresAuth: true }
@@ -765,12 +761,9 @@ export async function DELETE(request) {
     // with the profile (announced with PR C, wipe protocol): two EXACT
     // enumerated paths, same user-initiated passkey-gated scope as
     // everything above. Best-effort — a missing snapshot is not an error.
-    const enc = encodeURIComponent(normalise(profile));
+    const snaps = snapshotPaths(normalise(profile));
     try {
-      await del([
-        `forge/snapshots/daily/${enc}.json`,
-        `forge/snapshots/weekly/${enc}.json`,
-      ]);
+      await del([snaps.daily, snaps.weekly]);
     } catch (e) {
       // Not fatal. del() resolves for a missing path ("does not throw if the
       // blob URL does not exist" — vercel.com/docs/vercel-blob/using-blob-sdk), so this
@@ -779,7 +772,7 @@ export async function DELETE(request) {
       console.error(`[forge:sync-delete] snapshot delete failed: ${e?.message || e}`);
     }
 
-    const { blobs } = await list({ prefix: legacyPrefix(profile) });
+    const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
     if (!blobs.length) {
       return NextResponse.json({ ok: true, deleted: 0 });
     }

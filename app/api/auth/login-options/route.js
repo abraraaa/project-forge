@@ -6,6 +6,7 @@ import crypto from "crypto";
 import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasChallengeSecret, issueChallenge, rpConfigFromRequest, planLoginCeremony } from "@/lib/auth-server";
 import { normaliseProfile } from "@/lib/profile-name";
+import { credentialsPrefix } from "@/lib/storage-keys";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -16,8 +17,7 @@ export const preferredRegion = "lhr1";
 
 const normalise = normaliseProfile;
 // Note: Vercel Blob addRandomSuffix inserts BEFORE extension
-// So credentials.json becomes credentials-ABC123.json
-const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
+// So credentials.json becomes credentials-ABC123.json (credentialsPrefix).
 
 export async function POST(request) {
   const limited = rateLimit(request, "auth-login", 20) || await rateLimitShared(request, "auth-login", 20);
@@ -29,7 +29,7 @@ export async function POST(request) {
     }
 
     // Find credentials for this profile
-    const credData = await readJsonByPrefix(credentialsPrefix(profile));
+    const credData = await readJsonByPrefix(credentialsPrefix(normalise(profile)));
 
     // Planned before the challenge. A ceremony is single-rpId, so this picks
     // one pool and offers only its credentials. Null reads as "no passkey".

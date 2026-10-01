@@ -5,6 +5,7 @@ import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasUsablePasskey, credentialRpId } from "@/lib/auth-server";
 import { acceptedRpIds } from "@/lib/origin";
 import { normaliseProfile } from "@/lib/profile-name";
+import { credentialsPrefix } from "@/lib/storage-keys";
 import { consentRecord } from "@/lib/consent";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
@@ -22,7 +23,6 @@ export const preferredRegion = "lhr1";
 // the name must not learn when consent was given.
 
 const normalise = normaliseProfile;
-const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
 
 export async function GET(request) {
   const limited = rateLimit(request, "auth-check", 60) || await rateLimitShared(request, "auth-check", 60);
@@ -34,7 +34,7 @@ export async function GET(request) {
       return NextResponse.json({ error: "No profile" }, { status: 400 });
     }
 
-    const credData = await readJsonByPrefix(credentialsPrefix(profile));
+    const credData = await readJsonByPrefix(credentialsPrefix(normalise(profile)));
     // "Can they still get in", not "is there a record".
     const accepted = acceptedRpIds();
     const has = hasUsablePasskey(credData, accepted);

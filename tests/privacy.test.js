@@ -61,12 +61,13 @@ describe("privacy notice stays true", () => {
     // "Withdraw by deleting your profile" holds only while the consent record
     // lives under the prefix the profile delete sweeps.
     const sync = read("app/api/sync/route.js");
-    expect(sync).toContain("const legacyPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/`;");
+    expect(read("lib/storage-keys.js")).toContain("export const profileDir = (sk) => `forge/profiles/${enc(sk)}/`;");
+    expect(read("lib/storage-keys.js")).toContain("export const credentialsPrefix = (sk) => `${profileDir(sk)}credentials`;");
     const wipe = sync.slice(sync.indexOf("export async function DELETE"));
-    expect(wipe).toContain("list({ prefix: legacyPrefix(profile) })");
+    expect(wipe).toContain("list({ prefix: profileDir(normalise(profile)) })");
     expect(wipe).toContain("await del(blobs.map(b => b.url))");
     for (const f of ["app/api/auth/register-verify/route.js", "app/api/auth/login-verify/route.js"]) {
-      expect(read(f)).toContain("`forge/profiles/${encodeURIComponent(normalise(name))}/credentials.json`");
+      expect(read(f)).toContain("writeJsonReplacingPrefix(credentialsPrefix(normalise(profile)), credentialsPath(normalise(profile)),");
     }
     // The age line matches the notice.
     expect(page).toContain("18 and over");

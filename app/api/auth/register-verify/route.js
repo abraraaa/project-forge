@@ -7,6 +7,7 @@ import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPre
 import { rpConfigFromRequest, verifyAuthToken, hasUsablePasskey, isReclaimOfLapsedProfile, hasChallengeSecret, verifyChallenge, mintAuthToken } from "@/lib/auth-server";
 import { dbRetirePhotos } from "@/lib/db";
 import { normaliseProfile } from "@/lib/profile-name";
+import { credentialsPrefix, credentialsPath } from "@/lib/storage-keys";
 import { acceptedConsentVersion } from "@/lib/consent";
 import { list } from "@vercel/blob";
 
@@ -35,9 +36,8 @@ export const preferredRegion = "lhr1";
 // (bootstrap) claim it proves only that whoever claimed this name agreed.
 
 const normalise = normaliseProfile;
-const credentialsPrefix = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials`;
-// addRandomSuffix inserts BEFORE the extension, so this is the write path.
-const credentialsPath = (name) => `forge/profiles/${encodeURIComponent(normalise(name))}/credentials.json`;
+// Credentials paths come from lib/storage-keys. addRandomSuffix inserts
+// BEFORE the extension, so credentialsPath is the write path.
 
 export async function POST(request) {
   const limited = rateLimit(request, "auth-register", 15) || await rateLimitShared(request, "auth-register", 15);
@@ -74,13 +74,13 @@ export async function POST(request) {
     // VERIFIABLE passkey requires proving control of an existing one. Keyless
     // legacy credentials do not count as protection (see lib/auth-server.js),
     // so a legacy user can re-register freely and heal into a real credential.
-    const read = await readJsonByPrefix(credentialsPrefix(profile));
+    const read = await readJsonByPrefix(credentialsPrefix(normalise(profile)));
     // readJsonByPrefix returns null for BOTH "no doc" and "read threw". A doc
     // that exists but won't read must not be treated as empty: the gate below
     // would be skipped and the write would replace every passkey on it.
     if (read === null) {
       let present = true;
-      try { present = (await list({ prefix: credentialsPrefix(profile) })).blobs.length > 0; } catch { present = true; }
+      try { present = (await list({ prefix: credentialsPrefix(normalise(profile)) })).blobs.length > 0; } catch { present = true; }
       if (present) {
         return NextResponse.json({ error: "Couldn't read this profile's passkeys. Try again in a moment." }, { status: 503 });
       }
@@ -155,7 +155,7 @@ export async function POST(request) {
     // Write the new credentials blob FIRST, then sweep the old one — a
     // failure in between leaves two readable copies, never zero (audit #6;
     // the old delete-then-write order could destroy every passkey).
-    await writeJsonReplacingPrefix(credentialsPrefix(profile), credentialsPath(profile), updated);
+    await writeJsonReplacingPrefix(credentialsPrefix(normalise(profile)), credentialsPath(normalise(profile)), updated);
 
     // Retire the previous holder's photo rows. An UPDATE, not a delete —
     // recovery is the same statement in reverse. After the credential write,
