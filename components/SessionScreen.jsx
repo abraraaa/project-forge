@@ -17,7 +17,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { T, DISPLAY, heatForRpe, onHeatForRpe, heatMarkHeight, rpeForEffort, rpeValue } from "@/lib/tokens";
+import { T, DISPLAY, heatForRpe, onHeatForRpe, heatMarkHeight, rpeValue } from "@/lib/tokens";
 import { Fade, Card, MonoNums } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import { useModalA11y, haptic } from "@/lib/a11y";
@@ -587,7 +587,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const last = recent[0] || null;
   const lastW = loggedKgFor(last?.topSet ?? null, optionalWeight);
   const delta = (lastW != null && currentW != null) ? Math.round((currentW - lastW) * 100) / 100 : null;
-  const lastRpe = rpeValue(last?.topSet?.rpe) ?? (last?.effort ? rpeForEffort(last.effort) : null);
+  const lastRpe = rpeValue(last?.topSet?.rpe) ?? rpeValue(last?.effort);
 
   return (
     /* Three-zone column: identity (top) — numbers (upper-middle) — actions

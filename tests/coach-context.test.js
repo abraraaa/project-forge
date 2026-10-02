@@ -54,6 +54,19 @@ describe("buildCoachContext", () => {
     expect(line).toContain("Pull-Up +10 kg × 8 @RPE 8");
     expect(line).not.toContain("40 kg");
   });
+  it("sessionLine: effort prints from numbers only — enum-era labels and NaN never print \"@RPE NaN\"", () => {
+    const r = { date: "2026-09-21", readiness: "normal", blocks: [{ exercises: [
+      { name: "Barbell Back Squat", sets: [90, 90, 110].map((weight) => ({ weight, reps: 5, rpe: "normal", rir: 2 })) },
+      { name: "Barbell Bench Press", sets: [1, 2, 3].map(() => ({ weight: 95, reps: 3, rpe: "cooked", rir: 0 })) },
+      { name: "Landmine Press", sets: [{ weight: 18.75, reps: 10, rpe: NaN }, { weight: 18.75, reps: 10, rpe: 8.5 }] },
+      { name: "Chest-Supported DB Row", sets: [{ weight: 34, reps: 10, rpe: "cooked" }, { weight: 34, reps: 10, rpe: 9 }] }] }] };
+    const line = sessionLine(r);
+    expect(line).not.toMatch(/NaN/);
+    expect(line).toContain("Barbell Back Squat 90 kg × 5/5/5;");
+    expect(line).toContain("Barbell Bench Press 95 kg × 3/3/3;");
+    expect(line).toContain("Landmine Press 18.75 kg × 10/10 @RPE 8.5");
+    expect(line).toContain("Chest-Supported DB Row 34 kg × 10/10 @RPE 9");
+  });
   it("carries no profile name", () => {
     expect(buildCoachContext({ history: [], now })).not.toMatch(/profile/i);
   });
