@@ -69,14 +69,15 @@ export async function POST(request) {
   }
   for (const h of writes.handles) {
     const rows = await q`INSERT INTO handles (handle, account_id, display, kind, claimed_at)
-      SELECT ${h.handle}, a.id, ${h.display}, 'primary', ${h.claimedAt} FROM accounts a WHERE a.storage_key = ${h.storageKey}
+      SELECT ${h.handle}, a.id, ${h.display}, 'primary', ${h.claimedAt} FROM accounts a
+      WHERE a.storage_key = ${h.storageKey} AND a.deleted_at IS NULL
       ON CONFLICT (handle) WHERE released_at IS NULL DO NOTHING RETURNING id`;
     inserted.handles += rows.length;
   }
   for (const c of writes.credentials) {
     const rows = await q`INSERT INTO credentials (id, account_id, public_key, counter, transports, rp_id, user_handle, source, created_at)
       SELECT ${c.id}, a.id, ${c.publicKey}, ${c.counter}, ${JSON.stringify(c.transports)}::jsonb, ${c.rpId}, ${c.userHandle}, 'backfill', ${c.createdAt}
-      FROM accounts a WHERE a.storage_key = ${c.storageKey}
+      FROM accounts a WHERE a.storage_key = ${c.storageKey} AND a.deleted_at IS NULL
       ON CONFLICT (id) DO NOTHING RETURNING id`;
     inserted.credentials += rows.length;
   }
