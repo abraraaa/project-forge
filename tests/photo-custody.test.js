@@ -1,6 +1,9 @@
-// Photos are keyed by profile name, so a re-claimed name would inherit them.
-// Claiming a lapsed profile retires the rows (UPDATE, never DELETE). The
-// trigger must stay false for every path that proved control.
+// Photos are keyed by storage key. Claiming a lapsed name creates a NEW
+// account with its own storage key, so the previous holder's photos are
+// never reachable from it and nothing needs retiring. The trigger must stay
+// false for every path that proved control. dbRetirePhotos stays as the
+// recovery inverse for rows retired before accounts existed (UPDATE, never
+// DELETE).
 
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -73,26 +76,33 @@ describe("nothing is deleted to achieve refusal", () => {
     expect(body).not.toMatch(/\bDELETE\b/);
   });
 
-  it("register-verify retires but never deletes photo data", () => {
+  it("register-verify neither retires nor deletes photo data", () => {
     const s = src("app/api/auth/register-verify/route.js");
-    expect(s).toContain("dbRetirePhotos");
+    expect(s).not.toContain("dbRetirePhotos");
     expect(s).not.toContain("dbDeletePhoto");
     expect(s).not.toContain("dbDeleteProfile");
   });
 
-  it("retiring runs only under the trigger, and only after the credential write", () => {
+  it("a reclaim creates a new account only under the trigger, decided before any write", () => {
     const s = src("app/api/auth/register-verify/route.js");
     expect(s).toContain("if (reclaim) {");
-    // Decided before the write, acted on after it.
-    const write = s.indexOf("await writeJsonReplacingPrefix(");   // the call, not the import
-    expect(s.indexOf("const reclaim =")).toBeLessThan(write);
-    expect(write).toBeLessThan(s.indexOf("await dbRetirePhotos("));
+    const reclaimAt = s.indexOf("await dbReclaimHandle(");
+    expect(reclaimAt).toBeGreaterThan(s.indexOf("if (reclaim) {"));
+    // Decided before the write, acted on after the attestation verifies.
+    expect(s.indexOf("const reclaim =")).toBeLessThan(s.indexOf("await verifyRegistrationResponse("));
+    expect(s.indexOf("await verifyRegistrationResponse(")).toBeLessThan(reclaimAt);
+    expect(s.indexOf("await verifyRegistrationResponse(")).toBeLessThan(s.indexOf("await writeJsonReplacingPrefix("));
   });
 
-  it("a failure to retire never fails the registration", () => {
-    const s = src("app/api/auth/register-verify/route.js");
-    const i = s.indexOf("dbRetirePhotos(");
-    expect(s.slice(i, i + 200)).toMatch(/\} catch \{/);
+  it("the reclaim transaction touches only handles, accounts and credentials, and releases by UPDATE", () => {
+    const store = src("lib/identity-store.js");
+    const fn = store.slice(store.indexOf("export async function dbReclaimHandle"));
+    const body = fn.slice(0, fn.indexOf("\n}"));
+    expect(body).toContain("UPDATE handles SET released_at = now()");
+    expect([...body.matchAll(/\b(INSERT INTO|UPDATE) (\w+)/g)].map((m) => `${m[1]} ${m[2]}`)).toEqual([
+      "UPDATE handles", "INSERT INTO accounts", "INSERT INTO handles", "INSERT INTO credentials",
+    ]);
+    expect(body).not.toMatch(/\bDELETE\b|\bphotos\b|\bsessions\b|\bmeta\b/);
   });
 });
 

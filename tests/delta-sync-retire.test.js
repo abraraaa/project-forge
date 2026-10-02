@@ -49,7 +49,7 @@ describe("PR C code shapes", () => {
     expect(dbBranch).toContain("dbUpsertProfile(norm");
     expect(dbBranch).not.toContain("await put(");
     // unmigrated profiles still seed their merge base from blobs, guarded
-    expect(dbBranch).toContain("blobExists(metaPath(normalise(profile)))");
+    expect(dbBranch).toContain("blobExists(metaPath(gate.profile))");
     expect(dbBranch).toContain("readLatestLegacy");
   });
 
@@ -71,7 +71,8 @@ describe("PR C code shapes", () => {
 
   it("profile DELETE removes the snapshot generations — exact enumerated paths", () => {
     const delBlock = route.slice(route.indexOf("export async function DELETE"));
-    expect(delBlock).toContain("snapshotPaths(normalise(profile))");
+    expect(delBlock).toContain("const sk = id.storageKey;");
+    expect(delBlock).toContain("snapshotPaths(sk)");
     expect(delBlock).toContain("del([snaps.daily, snaps.weekly])");
   });
 
@@ -135,8 +136,8 @@ describe("bug reports — fill-or-kill (boss flow, built pre-flip)", () => {
       const block = route.slice(route.indexOf(`export async function ${verb}`));
       expect(block.slice(0, 400), verb).toContain("ceremonyGate(request)");
     }
-    // photo-scope cookies never qualify for triage (wipe-gate posture)
-    expect(route).toContain('data.scope === "photos"');
+    // no scoped token (photos, sync) qualifies for triage (wipe-gate posture)
+    expect(route).toContain("if (!data || data.scope ||");
   });
   it("the sheet follows the modal doctrine and the review page runs the real ceremony", () => {
     const sheet = readFileSync(resolve(root, "components/BugReportSheet.jsx"), "utf8");
@@ -158,16 +159,16 @@ describe("single-admin recognition (boss, 2026-07-26 — not a role system)", ()
   });
   it("login-verify carries the flag; bugs gate enforces it server-side", () => {
     const login = readFileSync(resolve(root, "app/api/auth/login-verify/route.js"), "utf8");
-    expect(login).toContain("admin: isAdminProfile(profile)");
+    expect(login).toContain("admin: isAdminIdentity(identity)");
     const bugs = readFileSync(resolve(root, "app/api/bugs/route.js"), "utf8");
     // Strengthened 2026-07-26 (deep audit): the gate used to be
     // `if (process.env.ADMIN_PROFILE && !isAdminProfile(...))`, which
     // silently opened the wing to ANY passkey holder when the env var was
     // absent, empty or mistyped — behaviour changing as a side effect of an
     // env-var state, the 2026-07-09 failure shape. It must now FAIL CLOSED
-    // in production and still re-derive admin from the TOKEN's profile.
-    expect(bugs).toContain("isAdminProfile(data.profile)");
-    expect(bugs).toMatch(/if \(!process\.env\.ADMIN_PROFILE\)/);
+    // in production and still re-derive admin from the TOKEN's account.
+    expect(bugs).toContain("isAdminIdentity(identity)");
+    expect(bugs).toMatch(/if \(!process\.env\.ADMIN_ACCOUNT_ID && !process\.env\.ADMIN_PROFILE\)/);
     expect(bugs).toMatch(/NODE_ENV === "production"[\s\S]{0,120}status: 403/);
     expect(bugs).toContain("status: 403");
   });
