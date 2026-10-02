@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { serverError } from "@/lib/api-errors";
 import { rateLimit } from "@/lib/rate-limit";
-import { readTokenData, isAdminProfile } from "@/lib/auth-server";
+import { readTokenData, resolveTokenIdentity, isAdminIdentity } from "@/lib/auth-server";
 import { hasDb, dbInsertBug, dbListBugs, dbUpdateBugStatus, BUG_STATUSES } from "@/lib/db";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
@@ -18,10 +18,10 @@ export const preferredRegion = "lhr1";
 //         text, not the submitter's own profile data, so the open-reads
 //         doctrine (#20/#21) does NOT extend here.
 //   PATCH { id, status } — status-only triage transition. Same gate.
-//         ADMIN RECOGNITION (boss, 2026-07-26): when ADMIN_PROFILE is set,
-//         the ceremony token must belong to THAT profile — the app now
-//         knows who the boss is. Unset (dev): any passkey holder, the
-//         documented pre-admin behaviour. Either way there is NO delete
+//         ADMIN RECOGNITION (boss, 2026-07-26): when ADMIN_ACCOUNT_ID (or
+//         the ADMIN_PROFILE fallback) is set, the ceremony token must belong
+//         to THAT account — the app now knows who the boss is. Unset (dev):
+//         any passkey holder, the documented pre-admin behaviour. Either way there is NO delete
 //         verb for this table anywhere.
 
 const MAX_MESSAGE_LEN = 2000;
@@ -29,16 +29,22 @@ const MAX_MESSAGE_LEN = 2000;
 async function ceremonyGate(request) {
   const token = request.headers.get("x-hw-auth") || null;
   const data = await readTokenData(token);
-  // Live ceremony token; photo-scope cookies don't qualify (same posture
-  // as the wipe gate — triage is not a photo surface).
-  if (!data || data.scope === "photos" || typeof data.expires !== "number" || Date.now() > data.expires) {
+  // Live, unscoped ceremony token; no scoped token qualifies (same posture
+  // as the wipe gate: a new scope is refused by default).
+  if (!data || data.scope || typeof data.expires !== "number" || Date.now() > data.expires) {
+    return NextResponse.json({ error: "Passkey authentication required", requiresAuth: true }, { status: 401 });
+  }
+  // The account the token was minted for. No handle is named here.
+  const identity = await resolveTokenIdentity(data, null, Date.now());
+  if (!identity) {
     return NextResponse.json({ error: "Passkey authentication required", requiresAuth: true }, { status: 401 });
   }
   // Admin recognition: the token must be the boss's. Server-side ONLY —
   // the client admin flag is a UI hint.
   //
-  // FAILS CLOSED when ADMIN_PROFILE is unset (deep audit 2026-07-26). The
-  // check used to be `if (process.env.ADMIN_PROFILE && ...)`, so an absent,
+  // FAILS CLOSED when both ADMIN_ACCOUNT_ID and ADMIN_PROFILE are unset
+  // (deep audit 2026-07-26). The check used to be
+  // `if (process.env.ADMIN_PROFILE && ...)`, so an absent,
   // empty or mistyped env var silently opened this wing to ANY passkey
   // holder — every bug report, with submitter names and free text, plus
   // triage mutation. That is the same failure shape as the 2026-07-09
@@ -48,11 +54,11 @@ async function ceremonyGate(request) {
   // Dev convenience is preserved deliberately and narrowly: outside
   // production an unset var still opens the wing, so a local checkout with
   // no env file remains usable.
-  if (!process.env.ADMIN_PROFILE) {
+  if (!process.env.ADMIN_ACCOUNT_ID && !process.env.ADMIN_PROFILE) {
     if (process.env.NODE_ENV === "production") {
       return NextResponse.json({ error: "Admin only" }, { status: 403 });
     }
-  } else if (!isAdminProfile(data.profile)) {
+  } else if (!isAdminIdentity(identity)) {
     return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
   return null;

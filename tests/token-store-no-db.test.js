@@ -17,6 +17,6 @@ describe("token store without a DB", () => {
   it("no token reads as valid", async () => {
     const { readTokenData, verifyAuthToken } = await import("../lib/auth-server.js");
     expect(await readTokenData("anything")).toBeNull();
-    expect(await verifyAuthToken("sam", "anything")).toBe(false);
+    expect(await verifyAuthToken("sam", "anything")).toBeNull();
   });
 });

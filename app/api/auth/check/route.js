@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { serverError } from "@/lib/api-errors";
 import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
-import { readJsonByPrefix } from "@/lib/blob-utils";
 import { hasUsablePasskey, credentialRpId } from "@/lib/auth-server";
 import { acceptedRpIds } from "@/lib/origin";
-import { normaliseProfile } from "@/lib/profile-name";
-import { credentialsPrefix } from "@/lib/storage-keys";
+import { dbResolveHandle } from "@/lib/identity-store";
+import { readCredentialSet } from "@/lib/credential-store";
 import { consentRecord } from "@/lib/consent";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
@@ -22,8 +21,6 @@ export const preferredRegion = "lhr1";
 // passkey exists. Never `at`: this route is unauthenticated, so whoever types
 // the name must not learn when consent was given.
 
-const normalise = normaliseProfile;
-
 export async function GET(request) {
   const limited = rateLimit(request, "auth-check", 60) || await rateLimitShared(request, "auth-check", 60);
   if (limited) return limited;
@@ -34,7 +31,10 @@ export async function GET(request) {
       return NextResponse.json({ error: "No profile" }, { status: 400 });
     }
 
-    const credData = await readJsonByPrefix(credentialsPrefix(normalise(profile)));
+    // The account holding this name, its passkeys from the credential index
+    // (Blob doc as fallback). No account reads as no passkey.
+    const account = await dbResolveHandle(profile);
+    const credData = account ? await readCredentialSet(account) : null;
     // "Can they still get in", not "is there a record".
     const accepted = acceptedRpIds();
     const has = hasUsablePasskey(credData, accepted);

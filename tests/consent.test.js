@@ -99,7 +99,9 @@ describe("only verified ceremonies stamp consent", () => {
       expect(read(f).match(/deleteByPrefix\([^)]*\)/g), f).toEqual(["deleteByPrefix(challengeKey)"]);
     }
     const reg = read("app/api/auth/register-verify/route.js");
-    expect(reg.match(/^import .* from "@vercel\/blob";$/gm)).toEqual(['import { list } from "@vercel/blob";']);
+    // put: only the reclaim's no-overwrite claim marker. Never del.
+    expect(reg.match(/^import .* from "@vercel\/blob";$/gm)).toEqual(['import { put } from "@vercel/blob";']);
+    expect(reg).not.toContain("allowOverwrite");
   });
 });
 
