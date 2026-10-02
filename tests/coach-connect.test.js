@@ -32,10 +32,10 @@ describe("connections endpoint", () => {
   const src = readFileSync(resolve(__dirname, "../app/api/sync/connections/route.js"), "utf8");
   it("rides the sync sign-in and never the photos scope", () => {
     expect(src).toContain('request.cookies.get("hw_sync")');
-    expect(src).toContain('return !data.scope || data.scope === "sync";');
+    expect(src).toContain('return !data.scope || data.scope === "sync" ? identity : null;');
   });
   it("disconnect revokes, never deletes", () => {
-    expect(src).toContain("revokeGrantFor(store, profile, disconnect)");
+    expect(src).toContain("revokeGrantFor(store, identity, disconnect)");
     expect(src).not.toMatch(/DELETE|del\(/);
   });
 });

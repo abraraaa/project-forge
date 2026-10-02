@@ -73,7 +73,7 @@ describe("resolveClient", () => {
     await resolveClient(store, URL_ID, { fetchImpl: fakeFetch(DOC), now: Date.now() });
     const verifier = "v".repeat(50);
     const challenge = createHash("sha256").update(verifier).digest("base64url");
-    const { code } = await issueCode(store, { clientId: URL_ID, profile: "sam", credentialId: "cred", redirectUri: DOC.redirect_uris[0], codeChallenge: challenge, codeChallengeMethod: "S256" });
+    const { code } = await issueCode(store, { clientId: URL_ID, accountId: "hwa_" + "a".repeat(26), profile: "sam", credentialId: "cred", redirectUri: DOC.redirect_uris[0], codeChallenge: challenge, codeChallengeMethod: "S256" });
     const r = await exchangeCode(store, { code, clientId: URL_ID, redirectUri: DOC.redirect_uris[0], codeVerifier: verifier });
     expect(r.tokens?.access_token).toBeTruthy();
   });

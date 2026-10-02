@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
-import { readTokenData } from "@/lib/auth-server";
+import { readTokenData, resolveTokenIdentity } from "@/lib/auth-server";
 import { issueCode } from "@/lib/oauth";
 import { neonOAuthStore } from "@/lib/oauth-store";
 import { resolveClient } from "@/lib/oauth-cimd";
 import { checkAuthorizeParams, consentFromToken, redirectWith } from "@/lib/oauth-http";
 import { credentialExists } from "@/lib/oauth-credentials";
-import { normaliseProfile } from "@/lib/profile-name";
 import { serverError } from "@/lib/api-errors";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
@@ -15,8 +14,9 @@ export const preferredRegion = "lhr1";
 // POST /api/oauth/consent — the /connect page calls this after Face ID.
 //   { authToken, profile, params: <the /connect query>, approve: boolean }
 // → { redirect } — the browser goes back to the AI with a code, or with
-// access_denied. The passkey comes from the server's token record, never
-// from the request body.
+// access_denied. The account and the passkey come from the server's token
+// record, never from the request body; `profile` (the handle) must resolve
+// to that same account.
 export async function POST(request) {
   const limited = rateLimit(request, "oauth-consent", 10) || await rateLimitShared(request, "oauth-consent", 10);
   if (limited) return limited;
@@ -37,14 +37,16 @@ export async function POST(request) {
       return NextResponse.json({ redirect: redirectWith(a.redirectUri, { error: "access_denied", state: a.state }) });
     }
 
-    const name = normaliseProfile(profile);
-    const consent = consentFromToken(await readTokenData(authToken), name, Date.now());
-    if (!consent || !(await credentialExists(name, consent.credentialId))) {
+    const now = Date.now();
+    const tokenData = await readTokenData(authToken);
+    const id = typeof profile === "string" && profile ? await resolveTokenIdentity(tokenData, profile, now) : null;
+    const consent = consentFromToken(tokenData, now);
+    if (!id || !consent || !(await credentialExists(id, consent.credentialId))) {
       return NextResponse.json({ error: "Face ID didn't go through. Try again.", requiresAuth: true }, { status: 401 });
     }
 
     const r = await issueCode(store, {
-      clientId: client.id, profile: name, credentialId: consent.credentialId,
+      clientId: client.id, accountId: id.accountId, profile: id.storageKey, credentialId: consent.credentialId,
       redirectUri: a.redirectUri, codeChallenge: a.codeChallenge, codeChallengeMethod: "S256",
       scope: a.scope, resource: a.resource,
     });

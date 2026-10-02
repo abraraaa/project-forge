@@ -1,6 +1,21 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { memoryStore, registerClient, issueCode, exchangeCode } from "../lib/oauth.js";
+
+// The /mcp route's I/O: an in-memory OAuth store, the account and credential
+// index, the profile read. Pure tool tests below never touch these.
+const route = { store: memoryStore(), accounts: new Map(), creds: new Map(), doc: null };
+vi.mock("../lib/oauth-store.js", () => ({ neonOAuthStore: async () => route.store }));
+vi.mock("../lib/identity-store.js", () => ({
+  dbGetAccount: vi.fn(async (id) => route.accounts.get(id) || null),
+  dbAccountByStorageKey: vi.fn(async (sk) => [...route.accounts.values()].find((a) => a.storageKey === sk) || null),
+  dbListCredentials: vi.fn(async (id) => route.creds.get(id) || []),
+  dbResolveHandle: vi.fn(async () => null),
+}));
+vi.mock("../lib/blob-utils.js", () => ({ readJsonByPrefix: vi.fn(async () => route.doc) }));
+vi.mock("../lib/db.js", async (orig) => ({ ...(await orig()), dbReadProfile: vi.fn(async () => ({ meta: {}, history: [] })) }));
 import { handleMcp, runTool, weekOn, validMainLifts, PROTOCOL_VERSIONS } from "../lib/mcp-server.js";
 import { SESSIONS, EXERCISE_POOLS, applyRotationToSession, applyMainLiftsToSession, applyFocusToSession } from "../lib/programme.js";
 
@@ -136,11 +151,11 @@ describe("tools", () => {
 describe("/mcp route", () => {
   const src = readFileSync(resolve(__dirname, "../app/mcp/route.js"), "utf8");
   it("demands a bearer token and points 401s at the resource metadata", () => {
-    expect(src).toContain('verifyAccessToken(store, token, { audience: MCP_RESOURCE, kind: "ai", credentialExists })');
+    expect(src).toContain('verifyAccessToken(store, token, { audience: MCP_RESOURCE, kind: "ai", credentialExists, resolveGrant: grantIdentity })');
     expect(src).toContain('error="insufficient_scope"');
     expect(src).toContain('resource_metadata="${ISSUER}/.well-known/oauth-protected-resource/mcp"');
   });
-  it("reads only the token's profile, and never photos", () => {
+  it("reads only the grant's storage key, and never photos", () => {
     expect(src).toContain("dbReadProfile(who.profile)");
     expect(src).not.toMatch(/photo|@vercel\/blob|dbUpsert|dbInsert|dbDelete/i);
   });
@@ -261,5 +276,73 @@ describe("programme loads read the way the session screen reads them", () => {
       { load: async () => ({ meta: {}, history: [{ date: "x", blocks: "abc" }] }), now },
     );
     expect(r.result.isError).toBe(true);
+  });
+});
+
+describe("/mcp reads the grant's account by its storage key", () => {
+  const A = "hwa_" + "a".repeat(26);
+  const B = "hwa_" + "b".repeat(26);
+  const REDIRECT = "https://claude.ai/cb";
+  const verifier = "v".repeat(50);
+  const NATIVE = "heatwayve.app";
+  let dbReadProfile;
+
+  const account = (id, storageKey, deletedAt = null) => route.accounts.set(id, { id, storageKey, deletedAt, roles: ["lifter"], plan: "free" });
+  async function connect({ accountId, profile, credentialId = "k1", legacy = false }) {
+    const { client } = await registerClient(route.store, { redirect_uris: [REDIRECT] });
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const { code } = await issueCode(route.store, { clientId: client.id, accountId, profile, credentialId, redirectUri: REDIRECT, codeChallenge: challenge, codeChallengeMethod: "S256" });
+    const { tokens } = await exchangeCode(route.store, { code, clientId: client.id, redirectUri: REDIRECT, codeVerifier: verifier });
+    if (legacy) for (const g of await route.store.listGrants({ accountId, storageKey: profile })) g.accountId = null;
+    return tokens.access_token;
+  }
+  const call = async (token) => {
+    const { POST } = await import("../app/mcp/route.js");
+    return POST(new Request("https://heatwayve.app/mcp", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "training_snapshot", arguments: {} } }),
+    }));
+  };
+
+  beforeEach(async () => {
+    route.store = memoryStore(); route.accounts.clear(); route.creds.clear(); route.doc = null;
+    ({ dbReadProfile } = await import("../lib/db.js"));
+    vi.mocked(dbReadProfile).mockClear();
+  });
+
+  it("a pre-account grant {profile: \"sam\", no account id} reads \"sam\", exactly as before", async () => {
+    account(A, "sam");
+    route.creds.set(A, [{ id: "k1", publicKey: "pk", rpId: NATIVE }]);
+    const res = await call(await connect({ accountId: A, profile: "sam", legacy: true }));
+    expect(res.status).toBe(200);
+    expect(vi.mocked(dbReadProfile).mock.calls).toEqual([["sam"]]);
+  });
+
+  it("an account grant reads that account's storage key", async () => {
+    account(B, B);
+    route.creds.set(B, [{ id: "k2", publicKey: "pk", rpId: NATIVE }]);
+    const res = await call(await connect({ accountId: B, profile: B, credentialId: "k2" }));
+    expect(res.status).toBe(200);
+    expect(vi.mocked(dbReadProfile).mock.calls).toEqual([[B]]);
+  });
+
+  it("after the name is reclaimed, the old holder's grant still reads only the old holder's data", async () => {
+    account(A, "sam");
+    account(B, B); // B now holds the handle "sam"
+    route.creds.set(A, [{ id: "k1", publicKey: "pk", rpId: NATIVE }]);
+    route.creds.set(B, [{ id: "k2", publicKey: "pk", rpId: NATIVE }]);
+    await call(await connect({ accountId: A, profile: "sam", legacy: true }));
+    expect(vi.mocked(dbReadProfile).mock.calls).toEqual([["sam"]]);
+  });
+
+  it("a passkey indexed on another account, or a closed account, gets 401 and no read", async () => {
+    account(A, "sam");
+    route.creds.set(B, [{ id: "k1", publicKey: "pk", rpId: NATIVE }]);
+    expect((await call(await connect({ accountId: A, profile: "sam" }))).status).toBe(401);
+    account(A, "sam", "2026-10-01T00:00:00Z");
+    route.creds.set(A, [{ id: "k1", publicKey: "pk", rpId: NATIVE }]);
+    expect((await call(await connect({ accountId: A, profile: "sam" }))).status).toBe(401);
+    expect(vi.mocked(dbReadProfile)).not.toHaveBeenCalled();
   });
 });

@@ -40,15 +40,16 @@ describe("consent needs a fresh Face ID naming its passkey", () => {
   const now = Date.parse("2026-09-24T12:00:00Z");
   const tok = { profile: "sam", expires: now + 3600e3, authAt: new Date(now - 60e3).toISOString(), credentialId: "cred1" };
   it("accepts a fresh, full-scope ceremony token", () => {
-    expect(consentFromToken(tok, "sam", now)).toEqual({ credentialId: "cred1" });
+    expect(consentFromToken(tok, now)).toEqual({ credentialId: "cred1" });
   });
-  it("refuses stale, scoped, foreign, credential-less or expired tokens", () => {
-    expect(consentFromToken({ ...tok, authAt: new Date(now - CONSENT_FRESH_MS - 1).toISOString() }, "sam", now)).toBeNull();
-    expect(consentFromToken({ ...tok, scope: "sync" }, "sam", now)).toBeNull();
-    expect(consentFromToken(tok, "alex", now)).toBeNull();
-    expect(consentFromToken({ ...tok, credentialId: undefined }, "sam", now)).toBeNull();
-    expect(consentFromToken({ ...tok, expires: now - 1 }, "sam", now)).toBeNull();
-    expect(consentFromToken(null, "sam", now)).toBeNull();
+  // Whose token it is is the route's check (resolveTokenIdentity on the
+  // name); see tests/oauth-credentials.test.js for the foreign-token cases.
+  it("refuses stale, scoped, credential-less or expired tokens", () => {
+    expect(consentFromToken({ ...tok, authAt: new Date(now - CONSENT_FRESH_MS - 1).toISOString() }, now)).toBeNull();
+    expect(consentFromToken({ ...tok, scope: "sync" }, now)).toBeNull();
+    expect(consentFromToken({ ...tok, credentialId: undefined }, now)).toBeNull();
+    expect(consentFromToken({ ...tok, expires: now - 1 }, now)).toBeNull();
+    expect(consentFromToken(null, now)).toBeNull();
   });
 });
 
@@ -70,7 +71,9 @@ describe("discovery", () => {
 describe("consent route trusts the server's passkey, not the request", () => {
   const src = readFileSync(resolve(__dirname, "../app/api/oauth/consent/route.js"), "utf8");
   it("takes credentialId from the token record only", () => {
-    expect(src).toContain("consentFromToken(await readTokenData(authToken)");
+    expect(src).toContain("const tokenData = await readTokenData(authToken);");
+    expect(src).toContain("resolveTokenIdentity(tokenData, profile, now)");
+    expect(src).toContain("consentFromToken(tokenData, now)");
     expect(src).toContain("credentialId: consent.credentialId");
     expect(src).not.toMatch(/body\.credentialId|params\.credentialId/);
   });
