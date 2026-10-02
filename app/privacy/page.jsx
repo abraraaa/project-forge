@@ -7,7 +7,7 @@ import { T, DISPLAY } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
 
 const URL = "https://heatwayve.app/privacy";
-export const UPDATED = "30 September 2026";
+export const UPDATED = "2 October 2026";
 export const CONTACT = "ab@heatwayve.app";
 export const ICO_REG = "ZC257208";
 
@@ -86,7 +86,7 @@ const SECTIONS = [
   {
     h: "How long we keep it",
     list: [
-      "Your name and training — until you delete your profile. Training can't be removed one session at a time on our servers.",
+      "Your training — until you delete your profile. Training can't be removed one session at a time on our servers. Your name stays on a closed record, so no one else's data is ever attached to it.",
       "Photos — until you delete them or your profile.",
       "Backups — refreshed daily and weekly, deleted with your profile. Our database provider keeps a short restore history that expires on its own.",
       "Sign-in records — each works for 30 days at most. The records (your profile name and dates) stay until you delete your profile.",

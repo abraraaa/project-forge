@@ -2,8 +2,9 @@
 // tests/local-device-keys.test.js
 // ─────────────────────────────────────────────────────────────────────────────
 // programmeBlock and weekConfig are per profile (forge:<profile>:…). The
-// device-wide keys they used to live at are copied into each profile on first
-// access and never removed.
+// device-wide keys they used to live at are copied, on first access, into each
+// profile that was already on the device, and never removed. A profile added
+// to the device later starts from the defaults.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -34,8 +35,8 @@ function expectDeviceKeysUntouched() {
 beforeEach(() => {
   window.localStorage.setItem("forge:programmeBlock", DEVICE_PB_RAW);
   window.localStorage.setItem("forge:weekConfig", DEVICE_WEEK_RAW);
-  P.add("A");
-  P.add("B");
+  // A and B were on this device while the keys were device-wide.
+  window.localStorage.setItem("forge:profiles", JSON.stringify(["A", "B"]));
   P.setActive("A");
 });
 
@@ -143,5 +144,66 @@ describe("single-profile device: same values, same sync payload", () => {
     // Restore for the afterEach invariant.
     window.localStorage.setItem("forge:programmeBlock", DEVICE_PB_RAW);
     window.localStorage.setItem("forge:weekConfig", DEVICE_WEEK_RAW);
+  });
+});
+
+describe("a profile added to the device later starts fresh", () => {
+  const DEFAULT_PB = { number: 1, config: {}, history: {} };
+
+  it("a new profile reads the defaults, not the device-wide programme or schedule", () => {
+    P.add("C");
+    expect(P.list()).toEqual(["A", "B", "C"]);
+    expect(PB.get("C")).toMatchObject(DEFAULT_PB);
+    expect(W.get("C")).toBe(null);
+    expect(W.getHistory("C")).toBe(null);
+    const meta = getLocalProfile("C").meta;
+    expect(meta.programmeBlock).toMatchObject(DEFAULT_PB);
+    expect(meta.userWeek).toBe(null);
+    expect(raw("forge:C:programmeBlock")).toBe(null);
+    expect(raw("forge:C:weekConfig")).toBe(null);
+    // The profiles that were already here still adopt.
+    expect(PB.get("A").number).toBe(4);
+    expect(W.getHistory("B")).toEqual(DEVICE_HISTORY);
+  });
+
+  it("the new profile's own saves land in its keys, and nobody else's", () => {
+    P.add("C");
+    PB.save({ ...PB.get("C"), number: 2 }, { profile: "C" });
+    W.save(ALT_WEEK, { profile: "C", effectiveFrom: "2026-02-02" });
+    expect(PB.get("C").number).toBe(2);
+    expect(W.getHistory("C")).toHaveLength(1);
+    expect(PB.get("A").number).toBe(4);
+    expect(W.getHistory("A")).toEqual(DEVICE_HISTORY);
+  });
+
+  it("re-adding a name already on the list changes nothing: it still adopts", () => {
+    P.add("A");
+    expect(P.list()).toEqual(["A", "B"]);
+    expect(raw("forge:A:deviceKeysAdopted_v1")).toBe(null);
+    expect(PB.get("A").number).toBe(4);
+  });
+
+  it("a profile wiped from the device and added again starts fresh", () => {
+    expect(PB.get("A").number).toBe(4);
+    // ProfileScreen's local wipe: the profile's keys, then the list entry.
+    PROFILE_SUFFIXES.forEach((s) => window.localStorage.removeItem(`forge:A:${s}`));
+    window.localStorage.setItem("forge:profiles", JSON.stringify(["B"]));
+    P.add("A");
+    expect(PB.get("A")).toMatchObject(DEFAULT_PB);
+    expect(W.get("A")).toBe(null);
+  });
+
+  it("an account signing in on this device takes its own pulled programme, not the device's", async () => {
+    P.add("D");
+    P.setActive("D");
+    // The account's own block is BEHIND the device-wide one: a copy would win the merge.
+    const remotePb = { number: 2, startDate: "2026-02-02", config: { b: "y" }, history: {}, updatedAt: "2026-02-02T00:00:00.000Z" };
+    vi.stubGlobal("fetch", async (url, opts = {}) => ({
+      ok: true, status: 200,
+      json: async () => (opts.method ? {} : { meta: { programmeBlock: remotePb, userWeek: null }, history: [] }),
+    }));
+    await backgroundSync("D");
+    expect(PB.get("D")).toMatchObject({ number: 2, config: { b: "y" } });
+    expect(W.getHistory("D")).toBe(null);
   });
 });

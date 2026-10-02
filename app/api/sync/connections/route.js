@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { readTokenData, isTokenValid } from "@/lib/auth-server";
+import { readTokenData, resolveTokenIdentity } from "@/lib/auth-server";
 import { neonOAuthStore } from "@/lib/oauth-store";
 import { revokeGrantFor } from "@/lib/oauth";
-import { normaliseProfile } from "@/lib/profile-name";
 import { serverError } from "@/lib/api-errors";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
@@ -17,13 +16,16 @@ export const dynamic = "force-dynamic";
 //   GET  /api/sync/connections?profile=N                 -> { connections: [...] }
 //   POST /api/sync/connections  { profile, disconnect }  -> { ok }
 
+// The caller's identity (token resolved to the account holding `profile`),
+// or null.
 async function gate(request, profile) {
   const header = request.headers.get("x-hw-auth") || null;
   const cookie = request.cookies.get("hw_sync")?.value || null;
   const data = await readTokenData(header || cookie);
-  if (!isTokenValid(data, profile, Date.now())) return false;
+  const identity = await resolveTokenIdentity(data, profile, Date.now());
+  if (!identity) return null;
   // Full-scope ceremony token, or the sync-scope cookie. Never photos.
-  return !data.scope || data.scope === "sync";
+  return !data.scope || data.scope === "sync" ? identity : null;
 }
 
 const denied = () => NextResponse.json({ error: "Sign in to manage connections", requiresAuth: true }, { status: 401 });
@@ -33,10 +35,11 @@ export async function GET(request) {
   if (limited) return limited;
   try {
     const profile = new URL(request.url).searchParams.get("profile") || "";
-    if (!profile || !(await gate(request, profile))) return denied();
+    const identity = profile ? await gate(request, profile) : null;
+    if (!identity) return denied();
     const store = await neonOAuthStore();
     if (!store) return NextResponse.json({ connections: [] });
-    const rows = await store.listGrants(normaliseProfile(profile));
+    const rows = await store.listGrants(identity);
     return NextResponse.json(
       { connections: rows.map((g) => ({ id: g.id, name: g.clientName || "AI assistant", since: g.createdAt, lastRead: g.lastUsedAt })) },
       { headers: { "Cache-Control": "no-store" } },
@@ -51,10 +54,11 @@ export async function POST(request) {
   if (limited) return limited;
   try {
     const { profile, disconnect } = await request.json().catch(() => ({}));
-    if (!profile || typeof disconnect !== "string" || !(await gate(request, profile))) return denied();
+    const identity = profile && typeof disconnect === "string" ? await gate(request, profile) : null;
+    if (!identity) return denied();
     const store = await neonOAuthStore();
     if (!store) return NextResponse.json({ error: "Unavailable" }, { status: 503 });
-    const ok = await revokeGrantFor(store, profile, disconnect);
+    const ok = await revokeGrantFor(store, identity, disconnect);
     return ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Not found" }, { status: 404 });
   } catch (e) {
     return serverError(e, { label: "connections-write" });

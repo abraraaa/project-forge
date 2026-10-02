@@ -72,7 +72,7 @@ describe("route + db shapes (code)", () => {
     const branch = route.slice(route.indexOf('searchParams.get("since")'), route.indexOf("// DB-first"));
     expect(branch).toContain("Invalid cursor");
     expect(branch).toContain("Delta sync unavailable");
-    expect(branch).toContain("dbReadProfileSince(normalise(profile), since)");
+    expect(branch).toContain("dbReadProfileSince(gate.profile, since)");
     expect(branch).not.toContain("readLatestLegacy");
   });
 

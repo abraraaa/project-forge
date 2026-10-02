@@ -16,11 +16,23 @@
 //   4. The guard precedes every destructive call, with nothing between.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { describe, it, expect, vi } from "vitest";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { isTokenValid } from "../lib/auth-server.js";
+import { isTokenValid, resolveTokenIdentity } from "../lib/auth-server.js";
+import { dbGetAccount, dbAccountByStorageKey, dbResolveHandle } from "../lib/identity-store.js";
+
+// A live account for "sarah" exists, so a refusal below can only come from
+// the record's shape, never from a missing account.
+vi.mock("../lib/identity-store.js", () => {
+  const sarah = { id: "hwa_" + "s".repeat(26), storageKey: "sarah", roles: ["lifter"], plan: "free", deletedAt: null };
+  return {
+    dbGetAccount: vi.fn(async () => sarah),
+    dbAccountByStorageKey: vi.fn(async () => sarah),
+    dbResolveHandle: vi.fn(async () => ({ ...sarah, accountId: sarah.id, handle: "sarah" })),
+  };
+});
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const routeSrc = readFileSync(resolve(root, "app/api/sync/route.js"), "utf8");
@@ -40,7 +52,7 @@ describe("wipe gate — credential resolution is safe and positive", () => {
     // readTokenData encodes, and reads the same store mintAuthToken writes
     // to. Mint and read must never disagree about which store is authoritative.
     expect(deleteSrc).toContain("await readTokenData(authToken)");
-    expect(deleteSrc).toContain("isTokenValid(tokenData, profile, Date.now())");
+    expect(deleteSrc).toContain("resolveTokenIdentity(tokenData, profile, Date.now())");
   });
 
   it("rejects a structurally-similar object that is not a minted token", () => {
@@ -57,6 +69,15 @@ describe("wipe gate — credential resolution is safe and positive", () => {
     expect(Date.now() > snapshotAsToken.expires).toBe(false);
     // isTokenValid requires expires to BE a number.
     expect(isTokenValid(snapshotAsToken, "sarah", Date.now())).toBe(false);
+  });
+
+  it("the gate's own predicate refuses it on shape, before any lookup", async () => {
+    const snapshotAsToken = { profile: "sarah", snappedAt: "2026-07-26T03:00:00.000Z", meta: {}, history: [] };
+    expect(await resolveTokenIdentity(snapshotAsToken, "sarah", Date.now())).toBeNull();
+    expect(await resolveTokenIdentity({ ...snapshotAsToken, expires: "9999999999999" }, "sarah", Date.now())).toBeNull();
+    for (const reader of [dbGetAccount, dbAccountByStorageKey, dbResolveHandle]) expect(reader).not.toHaveBeenCalled();
+    // The same record with a numeric expiry does resolve: the refusal above was the shape rule.
+    expect(await resolveTokenIdentity({ ...snapshotAsToken, expires: Date.now() + 60_000 }, "sarah", Date.now())).toMatchObject({ storageKey: "sarah" });
   });
 
   it("isTokenValid still accepts a genuine, unexpired, correctly-bound token", () => {
@@ -76,9 +97,65 @@ describe("wipe gate — fails closed, always", () => {
     // An absent token is refused before anything destructive is reached.
     const tokenGuard = deleteSrc.indexOf("if (!authToken)");
     expect(tokenGuard).toBeGreaterThan(-1);
-    for (const destructive of ["dbDeleteProfile", "snapshotPaths(", "del(blobs.map"]) {
-      expect(deleteSrc.indexOf(destructive)).toBeGreaterThan(tokenGuard);
+    const scopeGuard = deleteSrc.indexOf("if (tokenData.scope)");
+    expect(scopeGuard).toBeGreaterThan(tokenGuard);
+    for (const destructive of ["dbDeleteToken(", "del(photoBlobs)", "dbDeleteProfile", "snapshotPaths(", "del(junk.map", "dbCloseAccount("]) {
+      expect(deleteSrc.indexOf(destructive), destructive).toBeGreaterThan(scopeGuard);
     }
+  });
+
+  it("everything after the gate keys by the resolved account, never the requested name", () => {
+    const body = deleteSrc.slice(deleteSrc.indexOf("if (tokenData.scope)"));
+    expect(body).toContain("const sk = id.storageKey;");
+    expect(body).not.toMatch(/normalise\(profile\)/);
+    // The interim refusal of id-keyed accounts is gone: the wipe reaches them.
+    expect(deleteSrc).not.toContain("cannot be deleted yet");
+  });
+
+  it("photos go by the account's own index rows, read before the rows are deleted", () => {
+    const rowsRead = deleteSrc.indexOf("await dbListPhotos(sk)");
+    expect(rowsRead).toBeGreaterThan(-1);
+    expect(deleteSrc).toContain(".filter((p) => typeof p === \"string\" && p.startsWith(photosPrefix(sk)))");
+    expect(deleteSrc.indexOf("del(photoBlobs)")).toBeGreaterThan(rowsRead);
+    expect(deleteSrc.indexOf("dbDeleteProfile(sk)")).toBeGreaterThan(deleteSrc.indexOf("del(photoBlobs)"));
+  });
+
+  it("the folder sweep deletes only enumerated file patterns, and the close runs last", () => {
+    // No unconditional prefix delete: every listed blob is matched first.
+    expect(deleteSrc).not.toMatch(/del\(blobs\.map|del\(listed/);
+    expect(deleteSrc).toContain("WIPE_FILE_RES.some((re) => re.test(b.pathname.slice(dir.length)))");
+    const res = routeSrc.slice(routeSrc.indexOf("const WIPE_FILE_RES = ["));
+    expect(res.slice(0, res.indexOf("];")).split("\n").slice(1).map((l) => l.trim()).filter(Boolean)).toEqual([
+      "/^meta\\.json$/,",
+      "/^history\\.json$/,",
+      "/^meta-[^/]+\\.json$/,",
+      "/^history-[^/]+\\.json$/,",
+      "/^credentials[^/]*\\.json$/,",
+    ]);
+    const close = deleteSrc.indexOf("dbCloseAccount(id.accountId, sk)");
+    for (const step of ["del(photoBlobs)", "dbDeleteProfile(sk)", "del([snaps.daily, snaps.weekly])", "del(junk.map"]) {
+      expect(deleteSrc.indexOf(step), step).toBeLessThan(close);
+    }
+  });
+
+  it("the close only UPDATEs grants, handles and accounts, and deletes only the account's credentials rows", () => {
+    const store = readFileSync(resolve(root, "lib/identity-store.js"), "utf8");
+    const fn = store.slice(store.indexOf("export async function dbCloseAccount"));
+    const body = fn.slice(0, fn.indexOf("\n}"));
+    expect([...body.matchAll(/\b(UPDATE|DELETE FROM|INSERT INTO) (\w+)/g)].map((m) => `${m[1]} ${m[2]}`)).toEqual([
+      "UPDATE oauth_grants", "UPDATE handles", "UPDATE accounts", "DELETE FROM credentials",
+    ]);
+    expect(body).toContain("DELETE FROM credentials WHERE account_id = ${accountId}`");
+  });
+
+  it("repo-wide, no code deletes account or handle rows", () => {
+    const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = resolve(dir, e.name);
+      return e.isDirectory() ? walk(p) : /\.(js|jsx|mjs)$/.test(e.name) ? [p] : [];
+    });
+    const files = [...walk(resolve(root, "lib")), ...walk(resolve(root, "app"))];
+    expect(files.length).toBeGreaterThan(20);
+    for (const f of files) expect(readFileSync(f, "utf8"), f).not.toMatch(/DELETE\s+FROM\s+(accounts|handles)\b/i);
   });
 
   it("a passkey-less profile is told to set one up, not silently wiped", () => {

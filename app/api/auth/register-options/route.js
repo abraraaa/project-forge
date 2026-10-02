@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { serverError } from "@/lib/api-errors";
 import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
-import { list } from "@vercel/blob";
 import crypto from "crypto";
-import { hasChallengeSecret, issueChallenge, rpConfigFromRequest } from "@/lib/auth-server";
+import { hasChallengeSecret, issueChallenge, rpConfigFromRequest, isReclaimOfLapsedProfile } from "@/lib/auth-server";
 import { normaliseProfile } from "@/lib/profile-name";
-import { profileDir } from "@/lib/storage-keys";
+import { dbResolveHandle } from "@/lib/identity-store";
+import { readCredentialSet, reclaimUserId } from "@/lib/credential-store";
+import { newWebauthnUserId } from "@/lib/identity";
+import { entitled } from "@/lib/entitlements";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -25,29 +27,45 @@ export async function POST(request) {
       return NextResponse.json({ error: "No profile" }, { status: 400 });
     }
 
-    // Check if profile exists (must exist to register a passkey)
-    const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
-    if (!blobs.length) {
+    // The account holding this name (must exist to register a passkey).
+    const account = await dbResolveHandle(profile);
+    if (!account) {
       return NextResponse.json(
         { error: "Profile not found. Create a profile first." },
         { status: 404 }
       );
     }
 
-    // User handle (WebAuthn user.id) — derived from the profile name; also the
-    // challenge-blob key in the fallback path.
+    // A lapsed handle (passkeys on file, none usable) is reclaimed as a NEW
+    // account at verify; trainer handles never lapse. Decided from the same
+    // set verify reads (the doc included whatever the sign-in fallback says),
+    // so the two calls agree.
+    const { credentials } = await readCredentialSet(account, { doc: true });
+    const lapsed = isReclaimOfLapsedProfile({ credentials }) && !entitled(account, "handle.neverLapse");
+
+    // The challenge-blob key (fallback path) stays derived from the name: the
+    // pre-account user.id formula, which is no longer the user.id itself.
     const userId = crypto.createHash("sha256").update(normalise(profile)).digest("base64url");
 
     // Challenge: signed & stateless when CHALLENGE_SECRET is set (no blob
     // round-trip → no "No pending authentication" race); otherwise fall back
     // to the short-lived challenge blob. See lib/auth-server.js.
+    // WebAuthn user.id: the account's own. On a reclaim the new account does
+    // not exist yet, so it is derived from the challenge (stateless) or carried
+    // in the challenge blob, and verify records the same value.
     let challenge;
+    let webauthnUserId = account.webauthnUserId;
     if (hasChallengeSecret()) {
-      challenge = issueChallenge(profile, "reg");
+      // The ceremony is signed in, so verify can only record this user.id.
+      challenge = issueChallenge(profile, lapsed ? "reclaim" : "reg");
+      if (lapsed) webauthnUserId = reclaimUserId(challenge);
     } else {
       challenge = crypto.randomBytes(32).toString("base64url");
+      if (lapsed) webauthnUserId = newWebauthnUserId();
       const { put } = await import("@vercel/blob");
-      await put(`forge/challenges/${userId}`, JSON.stringify({ challenge, profile: normalise(profile), expires: Date.now() + 120000 }), {
+      await put(`forge/challenges/${userId}`, JSON.stringify({
+        challenge, profile: normalise(profile), expires: Date.now() + 120000, ...(lapsed ? { userId: webauthnUserId } : null),
+      }), {
         access: "private",
         contentType: "application/json",
         addRandomSuffix: false,
@@ -65,7 +83,7 @@ export async function POST(request) {
         id: rpId,
       },
       user: {
-        id: userId,
+        id: webauthnUserId,
         name: normalise(profile),
         displayName: profile,
       },

@@ -3,13 +3,15 @@ import { serverError } from "@/lib/api-errors";
 import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import crypto from "crypto";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
-import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
+import { readJsonDirect, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
 import { rpConfigFromRequest, verifyAuthToken, hasUsablePasskey, isReclaimOfLapsedProfile, hasChallengeSecret, verifyChallenge, mintAuthToken } from "@/lib/auth-server";
-import { dbRetirePhotos } from "@/lib/db";
 import { normaliseProfile } from "@/lib/profile-name";
-import { credentialsPrefix, credentialsPath } from "@/lib/storage-keys";
+import { credentialsPrefix, credentialsPath, metaPath } from "@/lib/storage-keys";
 import { acceptedConsentVersion } from "@/lib/consent";
-import { list } from "@vercel/blob";
+import { indexRegistration, readCredentialSet, reclaimUserId, credentialHolder, credentialMirrorOpen, IDENTITY_BLOB_FALLBACK } from "@/lib/credential-store";
+import { dbResolveHandle, dbReclaimHandle } from "@/lib/identity-store";
+import { entitled } from "@/lib/entitlements";
+import { put } from "@vercel/blob";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -34,6 +36,10 @@ export const preferredRegion = "lhr1";
 // consent (optional) is stamped on the profile's credentials doc only after
 // the attestation verifies; an unknown version is ignored. On a first-passkey
 // (bootstrap) claim it proves only that whoever claimed this name agreed.
+//
+// A lapsed handle (passkeys on file, none usable) is not handed over: the
+// registrant gets a NEW account with its own storage key, and the previous
+// account keeps every byte of its data. Trainer handles never lapse.
 
 const normalise = normaliseProfile;
 // Credentials paths come from lib/storage-keys. addRandomSuffix inserts
@@ -54,9 +60,9 @@ export async function POST(request) {
     const userId = crypto.createHash("sha256").update(normalise(profile)).digest("base64url");
     const challengeKey = `forge/challenges/${userId}`;
     let expectedChallenge;
-    if (stateless) {
-      expectedChallenge = (c) => verifyChallenge(c, profile, "reg");
-    } else {
+    /** @type {string | undefined} user.id register-options carried for a reclaim (blob mode) */
+    let carriedUserId;
+    if (!stateless) {
       const challengeData = await readJsonDirect(challengeKey);
       if (!challengeData) {
         return NextResponse.json({ error: "No pending registration" }, { status: 400 });
@@ -68,31 +74,56 @@ export async function POST(request) {
         return NextResponse.json({ error: "Profile mismatch" }, { status: 400 });
       }
       expectedChallenge = challengeData.challenge;
+      carriedUserId = typeof challengeData.userId === "string" ? challengeData.userId : undefined;
+    }
+
+    // The account holding this name.
+    const account = await dbResolveHandle(profile);
+    if (!account) {
+      return NextResponse.json({ error: "Profile not found. Create a profile first." }, { status: 404 });
     }
 
     // Anti-stuffing gate: adding a credential to a profile that already holds a
     // VERIFIABLE passkey requires proving control of an existing one. Keyless
-    // legacy credentials do not count as protection (see lib/auth-server.js),
-    // so a legacy user can re-register freely and heal into a real credential.
-    const read = await readJsonByPrefix(credentialsPrefix(normalise(profile)));
+    // legacy credentials do not count as protection (see lib/auth-server.js);
+    // a profile holding only those has lapsed, and registering reclaims the
+    // name as a new account (below).
+    // The doc is read whatever the sign-in fallback says: the gate must see
+    // every passkey on file, and the mirror write below replaces this doc.
+    const set = await readCredentialSet(account, { probe: true, doc: true });
+    const read = set.blobDoc;
     // readJsonByPrefix returns null for BOTH "no doc" and "read threw". A doc
     // that exists but won't read must not be treated as empty: the gate below
-    // would be skipped and the write would replace every passkey on it.
+    // could be skipped, and the mirror write would sweep the unread doc.
     if (read === null) {
-      let present = true;
-      try { present = (await list({ prefix: credentialsPrefix(normalise(profile)) })).blobs.length > 0; } catch { present = true; }
-      if (present) {
+      if (set.blobUnreadable) {
         return NextResponse.json({ error: "Couldn't read this profile's passkeys. Try again in a moment." }, { status: 503 });
       }
     }
-    const existing = read || { credentials: [] };
+    // What stands before this registration: the doc's keys, the account's
+    // passkeys (index plus doc).
+    const existing = { ...(read || {}), credentials: set.credentials };
+    const neverLapse = entitled(account, "handle.neverLapse");
     // From the credentials as they stand, before this registration.
-    const reclaim = isReclaimOfLapsedProfile(existing);
+    const reclaim = isReclaimOfLapsedProfile(existing) && !neverLapse;
     // hasUsablePasskey: a legacy-only profile has no ceremony left to prove
-    // control with once the rpId retires, so it reverts to the bootstrap claim.
-    if (hasUsablePasskey(existing)) {
-      const ok = await verifyAuthToken(profile, authToken);
-      if (!ok) {
+    // control with once the rpId retires, so it reverts to the bootstrap claim
+    // (as a new account). A trainer's never does.
+    const protectedNow = hasUsablePasskey(existing) || (neverLapse && existing.credentials.length > 0);
+    // Options made the same reclaim-or-not call and baked the matching user.id
+    // into the passkey: the signed challenge names it, the challenge blob
+    // carries it. A call that has flipped since (e.g. across the rpId sunset)
+    // fails here and the client starts over, so the recorded user handle is
+    // always the one the passkey holds.
+    if (stateless) {
+      const ceremony = reclaim ? "reclaim" : "reg";
+      expectedChallenge = (c) => verifyChallenge(c, profile, ceremony);
+    } else if (!reclaim && carriedUserId) {
+      return NextResponse.json({ error: "Registration expired" }, { status: 400 });
+    }
+    if (protectedNow) {
+      const id = await verifyAuthToken(profile, authToken);
+      if (!id || id.accountId !== account.id) {
         return NextResponse.json(
           {
             error: "This profile is already protected by a passkey. Authenticate with your existing passkey before adding another.",
@@ -123,6 +154,13 @@ export async function POST(request) {
     }
 
     const vc = verification.registrationInfo.credential;
+    // A credential id the index already holds for another account (or, on a
+    // reclaim, for anyone) fails the ceremony before any write: WebAuthn has
+    // the RP refuse an id it already holds.
+    const holder = await credentialHolder(vc.id);
+    if (holder && (reclaim || holder !== account.id)) {
+      return NextResponse.json({ error: "Registration could not be verified" }, { status: 400 });
+    }
     const newCredential = {
       id: vc.id,
       // Uint8Array → base64url for JSON storage; decoded back on login.
@@ -134,36 +172,94 @@ export async function POST(request) {
       rpId: verification.registrationInfo.rpID || rpConfigFromRequest(request).rpId,
     };
 
-    // Keep other REAL credentials (minus any id collision), DROP keyless legacy
-    // placeholders — a successful real registration supersedes them so the
-    // profile ends up with only verifiable credentials.
-    const kept = existing.credentials.filter((c) => c && c.publicKey && c.id !== vc.id);
-    // Consent belongs to the person, so it carries across their passkeys —
-    // but not across a reclaim, where the registrant never proved they are
-    // the person who gave it. Same version already on file: keep its date.
-    // A new version replaces the old record in place (lib/consent.js).
-    // On a reclaim `...existing` still hands every OTHER top-level key to the
-    // new claimant; a future per-person key needs the same reset as consent.
+    // Consent belongs to the person, so it carries across their passkeys.
+    // Same version already on file: keep its date. A new version replaces the
+    // old record in place (lib/consent.js). A reclaim carries nothing over.
     const consentVersion = acceptedConsentVersion(consent);
-    const priorConsent = reclaim ? undefined : existing.consent;
+    const priorConsent = reclaim ? undefined : set.consent ?? undefined;
     const nextConsent = consentVersion && priorConsent?.version !== consentVersion
       ? { version: consentVersion, at: new Date().toISOString() }
       : priorConsent;
-    // Spread first: every other top-level key on the doc survives this write.
-    const updated = { ...existing, credentials: [...kept, newCredential], consent: nextConsent };
 
-    // Write the new credentials blob FIRST, then sweep the old one — a
-    // failure in between leaves two readable copies, never zero (audit #6;
-    // the old delete-then-write order could destroy every passkey).
-    await writeJsonReplacingPrefix(credentialsPrefix(normalise(profile)), credentialsPath(normalise(profile)), updated);
-
-    // Retire the previous holder's photo rows. An UPDATE, not a delete —
-    // recovery is the same statement in reverse. After the credential write,
-    // so a failed registration never moves anything.
+    /** @type {{ accountId: string, storageKey: string }} */
+    let target;
     if (reclaim) {
+      // The user.id register-options baked in: derived from this ceremony's
+      // (now verified) challenge, or carried in the challenge blob.
+      let userHandle = carriedUserId;
+      if (stateless) {
+        const clientData = JSON.parse(Buffer.from(credential.response.clientDataJSON, "base64url").toString("utf8"));
+        userHandle = reclaimUserId(clientData.challenge);
+      }
+      if (!userHandle) {
+        return NextResponse.json({ error: "Registration expired" }, { status: 400 });
+      }
+      // One transaction: release the lapsed holder's handle row (UPDATE of
+      // released_at), create the new account, its handle and this credential.
+      // The previous account and everything keyed to it stay as they are.
+      const made = await dbReclaimHandle({
+        handle: profile,
+        display: String(profile).trim(),
+        fromAccountId: account.id,
+        webauthnUserId: userHandle,
+        consent: nextConsent,
+        credential: newCredential,
+      });
+      if (!made || made.taken !== false) {
+        return NextResponse.json({ error: "Name taken", exists: true }, { status: 409 });
+      }
+      target = { accountId: made.accountId, storageKey: made.storageKey };
+      // Mirror doc and claim marker under the NEW storage key: a fresh prefix,
+      // so neither write can reach the previous holder's blobs. The account
+      // and its passkey are already committed, and the index is what sign-in
+      // reads, so neither failure fails the registration.
       try {
-        await dbRetirePhotos(normalise(profile), new Date().toISOString());
-      } catch { /* a claimed profile must not fail over its predecessor's index */ }
+        if (credentialMirrorOpen()) await writeJsonReplacingPrefix(credentialsPrefix(target.storageKey), credentialsPath(target.storageKey), {
+          credentials: [newCredential], consent: nextConsent,
+        });
+      } catch (e) {
+        console.error("[forge:reclaim-mirror]", e?.message || e);
+      }
+      try {
+        // Seeds displayName into meta on first push, as a claim does. No overwrite.
+        await put(metaPath(target.storageKey), JSON.stringify({
+          displayName: String(profile).trim(),
+          claimedAt: new Date().toISOString(),
+          weights: {},
+          reps: {},
+          streak: { count: 0, lastDate: null },
+        }), { access: "private", contentType: "application/json", addRandomSuffix: false });
+      } catch (e) {
+        console.error("[forge:reclaim-marker]", e?.message || e);
+      }
+    } else {
+      target = { accountId: account.id, storageKey: account.storageKey };
+      // Mirror doc, today's shape: keep other REAL credentials (minus any id
+      // collision), DROP keyless legacy placeholders. Spread first: every
+      // other top-level key on the doc survives this write.
+      const kept = (Array.isArray(read?.credentials) ? read.credentials : []).filter((c) => c && c.publicKey && c.id !== vc.id);
+      const updated = { ...existing, credentials: [...kept, newCredential], consent: nextConsent };
+
+      // Write the new credentials blob FIRST, then sweep the old one — a
+      // failure in between leaves two readable copies, never zero (audit #6;
+      // the old delete-then-write order could destroy every passkey).
+      const writeMirror = () => writeJsonReplacingPrefix(credentialsPrefix(account.storageKey), credentialsPath(account.storageKey), updated);
+      // Credential index (Neon): INSERT the credential on this account with the
+      // user.id register-options handed out, and mirror the consent onto it.
+      const index = () => indexRegistration(account, newCredential, { userHandle: account.webauthnUserId, consent: nextConsent });
+      if (IDENTITY_BLOB_FALLBACK) {
+        // Sign-in also reads the doc: it goes first, and an index failure
+        // never fails the registration.
+        await writeMirror();
+        try { await index(); } catch (e) { console.error("[forge:credential-index]", e?.message || e); }
+      } else {
+        // Sign-in reads only the index: it takes the passkey first, so a
+        // failed INSERT leaves no doc-only passkey behind. The mirror is best-effort.
+        await index();
+        if (credentialMirrorOpen()) {
+          try { await writeMirror(); } catch (e) { console.error("[forge:credential-mirror]", e?.message || e); }
+        }
+      }
     }
 
     // Consume the challenge (blob mode only — stateless challenges aren't stored).
@@ -173,7 +269,7 @@ export async function POST(request) {
     // Without this the flow would be "register a passkey → now sign in with
     // it" — two ceremonies back to back for one intent. The user just proved
     // control of this profile with an authenticator; that IS the ceremony.
-    const syncToken = await mintAuthToken({ profile, ttlMs: 30 * 86400000, scope: "sync" });
+    const syncToken = await mintAuthToken({ identity: target, ttlMs: 30 * 86400000, scope: "sync" });
     const res = NextResponse.json({ ok: true, credentialId: vc.id, rpId: newCredential.rpId });
     res.cookies.set("hw_sync", syncToken, {
       // 30 days, matching the token TTL and the gate's sliding refresh —

@@ -155,6 +155,8 @@ function IdentityBackfill({ profile }) {
         <Row label="retired photo keys skipped" value={plan.skipped.retiredPhotoKeys} dim />
         <Row label="self-test leftovers skipped" value={plan.skipped.selftestKeys ?? 0} dim />
         <Row label="excluded by owner" value={plan.skipped.excludedKeys ?? 0} dim />
+        <Row label="closed accounts skipped" value={plan.skipped.closedAccounts?.length ?? 0} dim />
+        <Row label="released handles not re-reserved" value={plan.skipped.releasedHandles?.length ?? 0} dim />
         <Row label="database" value={plan.db ? "connected" : "NOT configured"} dim={plan.db} />
         {plan.accounts.map((a) => (
           <Row key={`a-${a.storageKey}`} label={`account · ${a.storageKey}`}

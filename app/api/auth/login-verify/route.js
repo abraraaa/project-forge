@@ -4,12 +4,14 @@ import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { put } from "@vercel/blob";
 import crypto from "crypto";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
-import { readJsonDirect, readJsonByPrefix, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
-import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge, mintAuthToken, isAdminProfile } from "@/lib/auth-server";
+import { readJsonDirect, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
+import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge, mintAuthToken, isAdminIdentity } from "@/lib/auth-server";
 import { LEGACY_RP_ID, passkeyNudgeUrgent, daysUntilPasskeySunset } from "@/lib/origin";
 import { normaliseProfile } from "@/lib/profile-name";
 import { credentialsPrefix, credentialsPath } from "@/lib/storage-keys";
 import { acceptedConsentVersion } from "@/lib/consent";
+import { indexSignIn, readCredentialSet, credentialMirrorDoc } from "@/lib/credential-store";
+import { dbResolveHandle } from "@/lib/identity-store";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -64,10 +66,12 @@ export async function POST(request) {
       expectedChallenge = challengeData.challenge;
     }
 
-    // Find the stored credential this assertion claims to be.
-    const credData = await readJsonByPrefix(credentialsPrefix(normalise(profile)));
-    const matchingCred = credData?.credentials?.find((c) => c.id === credential.id);
-    if (!matchingCred) {
+    // Find the stored credential this assertion claims to be: on the account
+    // holding this name, from the credential index (Blob doc as fallback).
+    const account = await dbResolveHandle(profile);
+    const set = account ? await readCredentialSet(account) : null;
+    const matchingCred = set?.credentials.find((c) => c && c.id === credential.id);
+    if (!account || !set || !matchingCred) {
       return NextResponse.json({ error: "Unknown credential" }, { status: 400 });
     }
     if (!matchingCred.publicKey) {
@@ -112,13 +116,19 @@ export async function POST(request) {
     const newCounter = verification.authenticationInfo.newCounter;
     // Backfill the rpId the library matched, riding the counter write.
     const verifiedRpId = verification.authenticationInfo.rpID || null;
-    const counterChanged = typeof newCounter === "number" && newCounter !== matchingCred.counter;
-    const rpIdChanged = !!verifiedRpId && matchingCred.rpId !== verifiedRpId;
     // Consent rides the same write. Already on file at this version: nothing to stamp.
     const consentVersion = acceptedConsentVersion(consent);
-    const stampConsent = !!consentVersion && credData.consent?.version !== consentVersion;
+    const stampConsent = !!consentVersion && set.consent?.version !== consentVersion;
     let consentRecorded = !!consentVersion && !stampConsent;
-    if (counterChanged || rpIdChanged || stampConsent) {
+    let stampedConsent = null;
+
+    // Blob mirror: today's write, under today's condition, on today's doc,
+    // while the dual-write window is open.
+    const credData = await credentialMirrorDoc(account, set);
+    const docCred = credData?.credentials?.find((c) => c && c.id === matchingCred.id);
+    const counterChanged = !!docCred && typeof newCounter === "number" && newCounter !== docCred.counter;
+    const rpIdChanged = !!docCred && !!verifiedRpId && docCred.rpId !== verifiedRpId;
+    if (credData && (counterChanged || rpIdChanged || stampConsent)) {
       try {
         const updated = {
           // Spread first: consent and any other top-level key survive the counter write.
@@ -135,16 +145,33 @@ export async function POST(request) {
           ...(stampConsent ? { consent: { version: consentVersion, at: new Date().toISOString() } } : null),
         };
         // Write-first, sweep-after — see audit #6 / writeJsonReplacingPrefix.
-        await writeJsonReplacingPrefix(credentialsPrefix(normalise(profile)), credentialsPath(normalise(profile)), updated);
-        if (stampConsent) consentRecorded = true;
+        await writeJsonReplacingPrefix(credentialsPrefix(account.storageKey), credentialsPath(account.storageKey), updated);
+        if (stampConsent) { consentRecorded = true; stampedConsent = updated.consent; }
       } catch {
         // A counter-persist failure must not deny an otherwise-valid login.
       }
+    } else if (!credData && stampConsent) {
+      // No doc to mirror onto: the account is the only record.
+      stampedConsent = { version: consentVersion, at: new Date().toISOString() };
     }
+
+    // Credential index (Neon): counter, rpId and last_used_at on every
+    // verified sign-in (clone detection reads this counter), plus the consent
+    // this sign-in stamped. A failure here never denies the login.
+    try {
+      await indexSignIn(account, matchingCred.id, { counter: newCounter, rpId: verifiedRpId, consent: stampedConsent });
+      // No doc: the account write that just succeeded is the record.
+      if (!credData && stampedConsent) consentRecorded = true;
+    } catch (e) {
+      console.error("[forge:credential-index]", e?.message || e);
+    }
+
+    // The account this ceremony proved control of; every token below is minted for it.
+    const identity = { accountId: account.id, storageKey: account.storageKey };
 
     // Mint the short-lived ceremony token (Rec 11b: DB row; blob only as
     // the no-DB dev fallback — see mintAuthToken).
-    const authToken = await mintAuthToken({ profile, ttlMs: 3600000, credentialId: matchingCred.id }); // 1 hour
+    const authToken = await mintAuthToken({ identity, ttlMs: 3600000, credentialId: matchingCred.id }); // 1 hour
 
     // Consume the challenge (blob mode only — stateless challenges are not
     // stored, and expire on their own).
@@ -158,7 +185,7 @@ export async function POST(request) {
     // Secure, SameSite=Strict, and PATH-SCOPED to /api/photos so it never
     // even accompanies any other request. scope:"photos" is rejected by the
     // wipe gate — destructive ops keep fresh short-lived ceremonies.
-    const photoToken = await mintAuthToken({ profile, ttlMs: 7 * 86400000, scope: "photos" });
+    const photoToken = await mintAuthToken({ identity, ttlMs: 7 * 86400000, scope: "photos" });
 
     // Sync-scope cookie (J1, 2026-07-26). Sync is AMBIENT — visibility
     // change, reconnect, every mutation — so it cannot ride the in-memory
@@ -168,7 +195,7 @@ export async function POST(request) {
     // path rejects every scoped token, so this cookie can read and write a
     // profile but can never destroy one. Sliding 7 days — same window as
     // hw_photos: any active day rotates it, so a device in use never re-auths.
-    const syncToken = await mintAuthToken({ profile, ttlMs: 30 * 86400000, scope: "sync" });
+    const syncToken = await mintAuthToken({ identity, ttlMs: 30 * 86400000, scope: "sync" });
 
     // A legacy-rpId login is a credential that stops working at the sunset.
     const onLegacyCredential = verifiedRpId === LEGACY_RP_ID;
@@ -177,7 +204,7 @@ export async function POST(request) {
       ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600,
       // Single-admin recognition: a UI hint only — every admin surface
       // re-verifies the token's profile server-side.
-      admin: isAdminProfile(profile),
+      admin: isAdminIdentity(identity),
       // Present only when the request carried an accepted consent claim.
       ...(consentVersion ? { consentRecorded } : null),
       ...(onLegacyCredential

@@ -15,11 +15,26 @@
 // cannot possibly carry a token.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { isTokenValid } from "../lib/auth-server.js";
+import { normaliseProfile } from "../lib/profile-name.js";
+
+// Two accounts: sarah (storage key "sarah") and mallory. The store is mocked
+// at its readers; resolveTokenIdentity and matchTokenIdentity run for real.
+const SARAH = { id: "hwa_" + "s".repeat(26), storageKey: "sarah", roles: ["lifter"], plan: "free", deletedAt: null };
+const MALLORY = { id: "hwa_" + "m".repeat(26), storageKey: "mallory", roles: ["lifter"], plan: "free", deletedAt: null };
+const ACCOUNTS = [SARAH, MALLORY];
+vi.mock("../lib/identity-store.js", () => ({
+  dbGetAccount: async (id) => ACCOUNTS.find((a) => a.id === id) || null,
+  dbAccountByStorageKey: async (sk) => ACCOUNTS.find((a) => a.storageKey === sk) || null,
+  dbResolveHandle: async (name) => {
+    const a = ACCOUNTS.find((x) => x.storageKey === normaliseProfile(name));
+    return a ? { ...a, accountId: a.id, handle: a.storageKey } : null;
+  },
+}));
+const { resolveTokenIdentity } = await import("../lib/auth-server.js");
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const route = readFileSync(resolve(root, "app/api/sync/route.js"), "utf8");
@@ -60,15 +75,35 @@ describe("the gate is ON for every verb that touches a profile's data", () => {
     }
   });
 
-  it("the gate compares the TOKEN's profile to the REQUESTED profile", () => {
+  it("the gate binds the TOKEN's account to the REQUESTED profile", async () => {
     // The /api/photos contract: no seam between what was authorised and what
-    // gets used. isTokenValid does the binding; the gate must call it.
-    expect(route).toContain("isTokenValid(data, profile, Date.now())");
+    // gets used. resolveTokenIdentity does the binding; the gate must call it.
+    expect(route).toContain("resolveTokenIdentity(data, profile, Date.now())");
     const now = Date.now();
-    const t = { profile: "sarah", expires: now + 1000, scope: "sync" };
-    expect(isTokenValid(t, "sarah", now)).toBe(true);
-    expect(isTokenValid(t, "SARAH", now)).toBe(true);   // normalised, not naive
-    expect(isTokenValid(t, "mallory", now)).toBe(false); // the whole point
+    const legacy = { profile: "sarah", expires: now + 1000, scope: "sync" };
+    expect((await resolveTokenIdentity(legacy, "sarah", now))?.storageKey).toBe("sarah");
+    expect((await resolveTokenIdentity(legacy, "SARAH", now))?.storageKey).toBe("sarah"); // normalised, not naive
+    expect(await resolveTokenIdentity(legacy, "mallory", now)).toBeNull();                // the whole point
+    const minted = { profile: "sarah", accountId: SARAH.id, expires: now + 1000, scope: "sync" };
+    expect((await resolveTokenIdentity(minted, "sarah", now))?.accountId).toBe(SARAH.id);
+    expect(await resolveTokenIdentity(minted, "mallory", now)).toBeNull();
+    // A row naming one account cannot borrow another's storage key.
+    expect(await resolveTokenIdentity({ ...minted, accountId: MALLORY.id }, "sarah", now)).toBeNull();
+    expect(await resolveTokenIdentity({ ...legacy, expires: now - 1 }, "sarah", now)).toBeNull();
+  });
+
+  it("past the gate, GET and PUT key by the gate's storage key, never the raw param", () => {
+    // Once storage keys stop being names, a re-normalised param would read and
+    // write some other key than the one the gate authorised.
+    for (const verb of ["GET", "PUT"]) {
+      const body = section(verb);
+      const after = body.slice(body.indexOf("await syncGate(request, profile)"));
+      expect(after, verb).not.toContain("normalise(profile)");
+      expect(after, verb).toContain("gate.profile");
+    }
+    expect(route).toContain("return { profile: identity.storageKey, identity, refresh };");
+    // Rotation mints for the resolved account, not for a name.
+    expect(route).toMatch(/mintAuthToken\(\{\s*identity, ttlMs: SYNC_TTL_MS, scope: "sync"/);
   });
 });
 
@@ -167,6 +202,13 @@ describe("the nightly self-test proves the gate is live in the deployed build", 
   it("asserts an ungated read is refused, then carries a token", () => {
     const s = readFileSync(resolve(root, "app/api/cron/sync-selftest/route.js"), "utf8");
     expect(s).toContain("ungated GET is refused (J1 gate live)");
+    // A token belongs to an account, so the claim (which creates it) comes
+    // before the mint.
+    const body = s.slice(s.indexOf("try {"), s.indexOf("} finally {"));
+    expect(body.indexOf("ungated GET is refused")).toBeLessThan(body.indexOf("POST claims the name"));
+    expect(body.indexOf("re-claim 409s")).toBeLessThan(body.indexOf("SELFTEST_TOKEN = await mintAuthToken"));
+    expect(body).toContain("claimed-but-unwritten GET serves the claim marker");
+    expect(body).not.toContain("unwritten profile GET 404s");
     expect(s).toContain("x-hw-auth");
     // Direct handler invocation uses a plain Request (no cookie jar) — the
     // header path is the only one available to it, which is the point.

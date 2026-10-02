@@ -1,7 +1,7 @@
 import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { verifyAccessToken, MCP_RESOURCE, SCOPE_READ } from "@/lib/oauth";
 import { neonOAuthStore } from "@/lib/oauth-store";
-import { credentialExists } from "@/lib/oauth-credentials";
+import { credentialExists, grantIdentity } from "@/lib/oauth-credentials";
 import { handleMcp } from "@/lib/mcp-server";
 import { dbReadProfile } from "@/lib/db";
 import { ISSUER } from "@/lib/oauth-http";
@@ -11,7 +11,8 @@ export const preferredRegion = "lhr1";
 export const dynamic = "force-dynamic";
 
 // /mcp — Streamable HTTP, stateless, JSON responses only (no SSE stream).
-// Bearer token from /oauth/token; the token names the profile. Read only.
+// Bearer token from /oauth/token; its grant names the account, read by the
+// account's storage key. Read only.
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -52,7 +53,7 @@ export async function POST(request) {
 
   const store = await neonOAuthStore();
   if (!store) return json({ error: "temporarily_unavailable" }, 503);
-  const who = await verifyAccessToken(store, token, { audience: MCP_RESOURCE, kind: "ai", credentialExists });
+  const who = await verifyAccessToken(store, token, { audience: MCP_RESOURCE, kind: "ai", credentialExists, resolveGrant: grantIdentity });
   if (!who) return unauthorized();
   if (!String(who.scope || "").split(" ").includes(SCOPE_READ)) {
     return json({ error: "insufficient_scope" }, 403, {

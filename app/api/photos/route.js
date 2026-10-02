@@ -4,11 +4,11 @@ import { serverError as apiError } from "@/lib/api-errors";
 const serverError = (e, opts = {}) => apiError(e, { label: "photos", ...opts });
 import { rateLimit } from "@/lib/rate-limit";
 import { put, get, list, del } from "@vercel/blob";
-import { isTokenValid, readTokenData, mintAuthToken } from "@/lib/auth-server";
+import { resolveTokenIdentity, readTokenData, mintAuthToken } from "@/lib/auth-server";
 import { hasDb, dbUpsertPhoto, dbListPhotos, dbDeletePhoto, dbGetPhoto, dbHasRetiredPhotos } from "@/lib/db";
 import { isJpegBytes, jpegWithinBounds, PHOTO_MAX_UPLOAD_BYTES } from "@/lib/photos";
 import { normaliseProfile } from "@/lib/profile-name";
-import { photoPath } from "@/lib/storage-keys";
+import { photoPath, photosPrefix } from "@/lib/storage-keys";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -32,11 +32,14 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Same character rules as validateProfile in the sync route: control chars
 // and path separators are rejected; spaces/hyphens are legal profile names.
-// Expressed via code points (not regex escapes) to keep this file free of
-// unusual literals.
+// Separators and dot-only names are tested on the normalised key, which is
+// what paths are built from. Expressed via code points (not regex escapes)
+// to keep this file free of unusual literals.
 function isBadProfileName(name) {
   if (typeof name !== "string" || name.trim().length === 0 || name.length > 64) return true;
-  for (const ch of name) {
+  const key = normalise(name);
+  if (!key || [...key].every((ch) => ch === ".")) return true;
+  for (const ch of name + key) {
     const c = ch.codePointAt(0);
     if (c < 32 || c === 127 || ch === "/" || ch === "\\") return true;
   }
@@ -44,7 +47,14 @@ function isBadProfileName(name) {
 }
 
 // Deterministic, overwrite-in-place (house pattern): one photo per local day.
-// The path comes from lib/storage-keys (photoPath), fed the normalised name.
+// The path comes from lib/storage-keys (photoPath), fed the gate's storage
+// key verbatim. Never normalise it again: normaliseProfile is not idempotent
+// for every input, and a second pass could land on another account's key.
+// Every stored key is a fixed point (claims refuse any other), so this is the
+// name-keyed era's path byte for byte.
+
+// A stored blob_path is served or deleted only inside the account's own prefix.
+const ownsPath = (g, path) => typeof path === "string" && path.startsWith(photosPrefix(g.profile));
 
 // Sliding 7-day cookie window (boss call, 2026-07-21): a secure device that
 // keeps being used never re-auths — any active day past ROTATE_AFTER mints a
@@ -82,7 +92,10 @@ async function gate(request) {
   const cookieToken = request.cookies.get("hw_photos")?.value || null;
   const token = headerToken || cookieToken;
   const data = await readTokenData(token);
-  if (!isTokenValid(data, profile, Date.now())) {
+  // The token's account must be the one holding the named profile. Scope-blind
+  // here: the cookie's path scoping keeps it on this route.
+  const identity = await resolveTokenIdentity(data, profile, Date.now());
+  if (!identity) {
     return { fail: NextResponse.json({ error: "Passkey authentication required", requiresAuth: true }, { status: 401 }) };
   }
   // Sliding rotation — cookie-carried photo-scope tokens only.
@@ -100,12 +113,13 @@ async function gate(request) {
     const withinCap = Number.isFinite(authAge) && authAge < PHOTO_ABSOLUTE_CAP_MS;
     if ((!Number.isFinite(age) || age > ROTATE_AFTER_MS) && withinCap) {
       refresh = await mintAuthToken({
-        profile, ttlMs: PHOTO_TTL_MS, scope: "photos",
+        identity, ttlMs: PHOTO_TTL_MS, scope: "photos",
         authAt: data.authAt || data.createdAt || null,
       });
     }
   }
-  return { profile: normalise(profile), date, url, refresh };
+  // profile = the account's storage key, which every index row and path uses.
+  return { profile: identity.storageKey, identity, date, url, refresh };
 }
 
 export async function POST(request) {
@@ -131,7 +145,7 @@ export async function POST(request) {
     const bwRaw = request.headers.get("x-hw-bodyweight");
     const bodyweightAt = bwRaw !== null && Number.isFinite(Number(bwRaw)) ? Number(bwRaw) : null;
 
-    const path = photoPath(normalise(g.profile), g.date);
+    const path = photoPath(g.profile, g.date);
     await put(path, Buffer.from(buf.buffer, buf.byteOffset, buf.byteLength), {
       access: "private",
       contentType: "image/jpeg",
@@ -165,7 +179,7 @@ export async function GET(request) {
     // The index decides what is fetchable, not the path formula: a recomputed
     // path is guessable a date at a time.
     const row = await dbGetPhoto(g.profile, g.date);
-    if (!row?.blob_path) {
+    if (!row?.blob_path || !ownsPath(g, row.blob_path)) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     const result = await get(row.blob_path, { access: "private" });
@@ -204,11 +218,14 @@ export async function DELETE(request) {
     if (!row?.blob_path) {
       return withCookie(NextResponse.json({ ok: true, deleted: null }), g);
     }
+    // A row pointing outside the account's own prefix: refuse, delete nothing.
+    if (!ownsPath(g, row.blob_path)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const path = row.blob_path;
-    // Index row FIRST (same asymmetry as the profile wipe): a surviving blob
-    // with no index row is invisible and overwritable; a surviving index row
-    // with no blob would 404 in the scrubber forever.
-    await dbDeletePhoto(g.profile, g.date);
+    // Blob FIRST, then the index row (the wipe's order): if the blob delete
+    // fails the row survives, so a retry finds it and finishes the job. Row
+    // first would orphan the image on a failed del, unreachable by any retry.
     try {
       const { blobs } = await list({ prefix: path });
       const exact = blobs.filter((b) => b.pathname === path);
@@ -216,6 +233,7 @@ export async function DELETE(request) {
     } catch (e) {
       return serverError(e, { label: "photos-delete" });
     }
+    await dbDeletePhoto(g.profile, g.date);
     return withCookie(NextResponse.json({ ok: true, deleted: g.date }), g);
   } catch (e) {
     return serverError(e);

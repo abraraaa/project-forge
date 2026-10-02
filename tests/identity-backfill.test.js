@@ -292,6 +292,97 @@ describe("identity backfill — rules", () => {
   });
 });
 
+// After a lapsed name is reclaimed: the old account keeps storage key "sam"
+// with its handle released; the reclaimer is a new id-keyed account (storage
+// key === id) now holding "sam", with its own blob dir and rows.
+const A = `hwa_${"a".repeat(26)}`;
+const B = `hwa_${"b".repeat(26)}`;
+const PK_RECLAIM = "pQECAyYgASFYIFAKEPUBLICKEYRECLAIM00000000000000000000";
+const postReclaim = () => {
+  const input = census();
+  input.blobs.push(blob(B, "meta.json", "2026-10-02T08:00:00.000Z"), blob(B, "credentials-z.json", "2026-10-02T08:00:00.000Z"));
+  input.credentialDocs[B] = { doc: { credentials: [cred("credRECLAIM-003", PK_RECLAIM, { rpId: "heatwayve.app" })] } };
+  input.dbNames = { ...input.dbNames, sessions: ["sam", B], meta: ["sam", B], auth_tokens: ["sam", B] };
+  input.existing = {
+    accounts: [{ id: A, storage_key: "sam" }, { id: B, storage_key: B }],
+    handles: [{ handle: "sam", account_id: B }],
+    credentials: [
+      { id: "credNATIVE-0001", account_id: A }, { id: "credLEGACY-0002", account_id: A },
+      { id: "credRECLAIM-003", account_id: B },
+    ],
+  };
+  return input;
+};
+
+describe("identity backfill — after a reclaim", () => {
+  it("plans 0 conflicts and 0 creates", () => {
+    const { plan, writes } = buildIdentityBackfill(postReclaim());
+    expect(plan.conflicts).toEqual([]);
+    expect(counts(plan)).toEqual({ accounts: 0, handles: 0, credentials: 0 });
+    expect(writes).toEqual({ accounts: [], handles: [], credentials: [] });
+    const empty = createHash("sha256").update(JSON.stringify({ accounts: [], handles: [], credentials: [] })).digest("hex");
+    expect(plan.planHash).toBe(empty);
+  });
+
+  it("the id-keyed account is present, plans no handle row; the old name is reported released", () => {
+    const plan = planIdentityBackfill(postReclaim());
+    expect(plan.accounts.map((a) => [a.storageKey, a.status])).toEqual([[B, "present"], ["sam", "present"]]);
+    expect(plan.handles).toEqual([]);
+    expect(plan.skipped.releasedHandles).toEqual([{ key: "sam", heldBy: B }]);
+    expect(plan.credentials.map((c) => [c.storageKey, c.status])).toEqual([[B, "present"], ["sam", "present"], ["sam", "present"]]);
+    expect(plan.anomalies).toEqual([]);
+  });
+
+  it("a name with no account of its own, held by another account, is still a conflict", () => {
+    const input = postReclaim();
+    input.existing.accounts = input.existing.accounts.filter((a) => a.id !== A);
+    input.existing.credentials = input.existing.credentials.filter((c) => c.account_id !== A);
+    const plan = planIdentityBackfill(input);
+    expect(reasons(plan)).toEqual(["sam:live handle on another account"]);
+  });
+
+  it("an id-shaped key that is no account's storage key is still a conflict", () => {
+    const input = postReclaim();
+    input.existing.accounts = input.existing.accounts.filter((a) => a.id !== B);
+    input.existing.handles = [];
+    input.existing.credentials = input.existing.credentials.filter((c) => c.account_id !== B);
+    const plan = planIdentityBackfill(input);
+    expect(reasons(plan)).toEqual([`${B}:collides with account-id shape`]);
+  });
+});
+
+describe("identity backfill — after a wipe", () => {
+  // The wipe keeps unrecognised files and retired photos, so the folder can outlive it.
+  it("a closed name-keyed account with a kept file plans no handle and no credential", () => {
+    const input = census();
+    input.blobs = [blob("sam", "photos/2026-09-01.jpg", "2026-09-01T07:00:00.000Z")];
+    input.credentialDocs = {};
+    input.dbNames = { sessions: [], meta: [], photos: [], auth_tokens: [], oauth_grants: ["sam"], oauth_codes: [] };
+    input.existing = { accounts: [{ id: A, storage_key: "sam", deleted_at: "2026-10-02T09:00:00.000Z" }], handles: [], everHeld: [A], credentials: [] };
+    const { plan, writes } = buildIdentityBackfill(input);
+    expect(plan.conflicts).toEqual([]);
+    expect(counts(plan)).toEqual({ accounts: 0, handles: 0, credentials: 0 });
+    expect(writes).toEqual({ accounts: [], handles: [], credentials: [] });
+    expect(plan.skipped.closedAccounts).toEqual(["sam"]);
+  });
+
+  it("a lapsed name whose reclaimer wiped is not handed back to the lapsed account", () => {
+    const input = postReclaim();
+    input.blobs = input.blobs.filter((b) => !b.pathname.includes(B));
+    delete input.credentialDocs[B];
+    input.dbNames = { ...input.dbNames, sessions: ["sam"], meta: ["sam"], auth_tokens: ["sam"] };
+    input.existing.accounts = [{ id: A, storage_key: "sam" }, { id: B, storage_key: B, deleted_at: "2026-10-02T09:00:00.000Z" }];
+    input.existing.handles = [];
+    input.existing.everHeld = [A, B];
+    input.existing.credentials = input.existing.credentials.filter((c) => c.account_id !== B);
+    const { plan, writes } = buildIdentityBackfill(input);
+    expect(plan.conflicts).toEqual([]);
+    expect(counts(plan)).toEqual({ accounts: 0, handles: 0, credentials: 0 });
+    expect(writes).toEqual({ accounts: [], handles: [], credentials: [] });
+    expect(plan.skipped.releasedHandles).toEqual([{ key: "sam", heldBy: null }]);
+  });
+});
+
 describe("self-test leftovers", () => {
   it("never become accounts, handles or orphans; counted once per key", async () => {
     const { buildIdentityBackfill } = await import("../lib/identity-backfill.js");

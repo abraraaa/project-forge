@@ -7,11 +7,41 @@
 // dims, JPEG magic) is tested directly.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { NextRequest } from "next/server";
 import { computeTargetDims, isJpegBytes, jpegDims, jpegWithinBounds, firstFitting, PHOTO_ENCODE_LADDER, PHOTO_MAX_EDGE, PHOTO_MAX_UPLOAD_BYTES } from "../lib/photos.js";
+
+// DELETE behaviour: the index and Blob as in-memory maps, the gate's token
+// lookup stubbed to one live identity. Only the route under test is real.
+const mem = { rows: new Map(), blobs: new Map(), failDel: 0 };
+vi.mock("@/lib/auth-server", () => ({
+  readTokenData: vi.fn(async (t) => (t === "t" ? { scope: "photos" } : null)),
+  resolveTokenIdentity: vi.fn(async (data) => (data ? { storageKey: "sam" } : null)),
+  mintAuthToken: vi.fn(async () => null),
+}));
+vi.mock("@/lib/db", () => ({
+  hasDb: () => true,
+  dbUpsertPhoto: vi.fn(async () => {}),
+  dbListPhotos: vi.fn(async () => []),
+  dbHasRetiredPhotos: vi.fn(async () => false),
+  dbGetPhoto: vi.fn(async (p, d) => mem.rows.get(`${p}|${d}`) || null),
+  dbDeletePhoto: vi.fn(async (p, d) => mem.rows.delete(`${p}|${d}`)),
+}));
+vi.mock("@vercel/blob", () => ({
+  put: vi.fn(async () => ({})),
+  get: vi.fn(async () => null),
+  list: vi.fn(async ({ prefix }) => ({
+    blobs: [...mem.blobs.keys()].filter((p) => p.startsWith(prefix)).map((p) => ({ pathname: p, url: `https://blob/${p}` })),
+  })),
+  del: vi.fn(async (urls) => {
+    if (mem.failDel > 0) { mem.failDel--; throw new Error("blob store unavailable"); }
+    for (const u of [].concat(urls)) mem.blobs.delete(String(u).replace("https://blob/", ""));
+  }),
+}));
+vi.mock("@/lib/rate-limit", () => ({ rateLimit: () => null }));
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -63,7 +93,7 @@ describe("photos route — privacy contract (code shape)", () => {
     // Each handler body must call gate() before doing work.
     expect((src.match(/await gate\(request\)/g) || []).length).toBe(verbs.length);
     expect(src).toContain("readTokenData");
-    expect(src).toContain("isTokenValid");
+    expect(src).toContain("resolveTokenIdentity(data, profile, Date.now())");
   });
 
   it("token travels in a header, never a URL", () => {
@@ -74,7 +104,7 @@ describe("photos route — privacy contract (code shape)", () => {
   it("date is regex-locked before path interpolation (no traversal)", () => {
     expect(src).toMatch(/DATE_RE\.test\(date\)/);
     // The interpolation lives in lib/storage-keys; the route only passes the locked date.
-    expect(src).toContain("photoPath(normalise(g.profile), g.date)");
+    expect(src).toContain("photoPath(g.profile, g.date)");
     expect(readFileSync(resolve(root, "lib/storage-keys.js"), "utf8")).toMatch(/\$\{date\}\.jpg/);
   });
 
@@ -182,12 +212,15 @@ describe("P4 — session tokens, delete verb, scrubber additions (code shape)", 
     expect(s).not.toMatch(/sessionStorage\.|document\.cookie/);
     expect(s).not.toMatch(/localStorage\.setItem\([^)]*token/i); // a token can never ride this path
   });
-  it("DELETE verb exists, gated, index-row-first", () => {
+  it("DELETE verb exists, gated, blob-first then index row", () => {
     const s = readFileSync(resolve(root, "app/api/photos/route.js"), "utf8");
     expect(s).toContain("export async function DELETE");
     const del = s.slice(s.indexOf("export async function DELETE"));
     expect(del).toContain("await gate(request)");
-    expect(del.indexOf("dbDeletePhoto")).toBeLessThan(del.indexOf("del(exact"));
+    expect(del.indexOf("del(exact")).toBeLessThan(del.indexOf("dbDeletePhoto"));
+    // Still exactly one blob delete and one row delete.
+    expect(del.match(/\bdel\(/g)).toHaveLength(1);
+    expect(del.match(/dbDeletePhoto\(/g)).toHaveLength(1);
   });
   it("photo flows route through the cached ceremony, not raw authenticate", () => {
     const bw = readFileSync(resolve(root, "components/BodyweightEditModal.jsx"), "utf8");
@@ -310,5 +343,44 @@ describe("firstFitting — size steps down, never refuses", () => {
   it("every step stays within the server's accepted edge", () => {
     for (const s of PHOTO_ENCODE_LADDER) expect(s.edge).toBeLessThanOrEqual(PHOTO_MAX_EDGE);
     expect(PHOTO_ENCODE_LADDER[0]).toEqual({ edge: PHOTO_MAX_EDGE, quality: 0.85 });
+  });
+});
+
+describe("photos DELETE is retry-safe", () => {
+  const PATH = "forge/profiles/sam/photos/2026-09-01.jpg";
+  const req = () => new NextRequest("https://heatwayve.app/api/photos?profile=sam&date=2026-09-01", { method: "DELETE", headers: { "x-hw-auth": "t" } });
+  let photos;
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mem.rows = new Map([["sam|2026-09-01", { blob_path: PATH }]]);
+    mem.blobs = new Map([[PATH, "x"]]);
+    mem.failDel = 0;
+    photos = await import("@/app/api/photos/route");
+  });
+
+  it("a failed blob delete keeps the index row and returns 500", async () => {
+    mem.failDel = 1;
+    const res = await photos.DELETE(req());
+    expect(res.status).toBe(500);
+    expect(mem.rows.has("sam|2026-09-01")).toBe(true);
+    expect(mem.blobs.has(PATH)).toBe(true);
+  });
+
+  it("a retry after the failure removes both blob and row", async () => {
+    mem.failDel = 1;
+    expect((await photos.DELETE(req())).status).toBe(500);
+    const res = await photos.DELETE(req());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, deleted: "2026-09-01" });
+    expect(mem.blobs.has(PATH)).toBe(false);
+    expect(mem.rows.has("sam|2026-09-01")).toBe(false);
+  });
+
+  it("a retry after the blob went but the row stayed clears the row", async () => {
+    mem.blobs.clear();
+    const res = await photos.DELETE(req());
+    expect(res.status).toBe(200);
+    expect(mem.rows.has("sam|2026-09-01")).toBe(false);
   });
 });

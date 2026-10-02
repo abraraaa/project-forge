@@ -1,13 +1,15 @@
 import { put, list, del, get } from "@vercel/blob";
 import { rateLimit } from "@/lib/rate-limit";
 import { mergeMeta, mergeHistories, mergeMetaFields, fieldClosure } from "@/lib/sync-merge";
-import { readJsonByPrefix } from "@/lib/blob-utils";
-import { hasRealPasskey, readTokenData, isTokenValid, mintAuthToken } from "@/lib/auth-server";
-import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbDeleteToken, dbReadProfileSince, dbReadMetaFields, dbCursorNow } from "@/lib/db";
+import { hasRealPasskey, readTokenData, resolveTokenIdentity, mintAuthToken } from "@/lib/auth-server";
+import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbDeleteToken, dbReadProfileSince, dbReadMetaFields, dbCursorNow, dbListPhotos } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { serverError as apiError } from "@/lib/api-errors";
 import { normaliseProfile } from "@/lib/profile-name";
-import { metaPath, historyPath, profileDir, credentialsPrefix, snapshotPaths } from "@/lib/storage-keys";
+import { metaPath, historyPath, profileDir, photosPrefix, snapshotPaths } from "@/lib/storage-keys";
+import { dbResolveHandle, dbAccountByStorageKey, dbClaimHandle, dbCloseAccount, CLAIM_MODE } from "@/lib/identity-store";
+import { countIndexedCredentials, readCredentialSet } from "@/lib/credential-store";
+import { IDENTITY_BLOB_FALLBACK, RESERVED_HANDLE_RE } from "@/lib/identity";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -18,9 +20,10 @@ export const preferredRegion = "lhr1";
 
 const serverError = (e, opts = {}) => apiError(e, { label: "sync", ...opts });
 
-// Blob layout (case-insensitive — path uses lowercase, display name lives in meta):
-//   forge/profiles/{lowerName}/meta.json    — weights, reps, streak, programmeBlock, displayName
-//   forge/profiles/{lowerName}/history.json — full session history (append-only)
+// Blob layout, under the account's storage key (the normalised name for
+// name-keyed accounts, the account id for id-keyed ones; display name lives in meta):
+//   forge/profiles/{storageKey}/meta.json    — weights, reps, streak, programmeBlock, displayName
+//   forge/profiles/{storageKey}/history.json — full session history (append-only)
 //
 // Store access: PRIVATE.
 // Requires @vercel/blob@^2 (adds private-store support + get() for auth'd reads).
@@ -35,8 +38,10 @@ const serverError = (e, opts = {}) => apiError(e, { label: "sync", ...opts });
 // forms (café NFC vs NFD) resolve to DIFFERENT profiles — a squatting and
 // impersonation surface on a namespace where the NAME is the identity.
 const normalise = normaliseProfile;
-// Blob paths come from lib/storage-keys, fed the normalised name (the storage
-// key). profileDir's trailing slash is load-bearing: list() is a prefix match.
+// Blob paths come from lib/storage-keys, fed the storage key: the gate's
+// resolved one for gated requests (the wipe included), the normalised name
+// for name lookups (availability). profileDir's trailing slash is
+// load-bearing: list() is a prefix match.
 
 // Identifies legacy addRandomSuffix blobs from the broken era — pathnames of
 // the form `…/meta-XXXX.json` and `…/history-XXXX.json`. Used for one-shot
@@ -45,6 +50,17 @@ const normalise = normaliseProfile;
 // new deterministic blob has been written).
 const LEGACY_META_RE    = /\/meta-[^/]+\.json$/;
 const LEGACY_HISTORY_RE = /\/history-[^/]+\.json$/;
+
+// The files a profile wipe deletes from the account's folder, matched against
+// the pathname after the folder (so anchored to it). Enumerated, never "all":
+// photos go by their index rows, and anything unrecognised is kept.
+const WIPE_FILE_RES = [
+  /^meta\.json$/,
+  /^history\.json$/,
+  /^meta-[^/]+\.json$/,
+  /^history-[^/]+\.json$/,
+  /^credentials[^/]*\.json$/,
+];
 
 // ─── Input validation ─────────────────────────────────────────────────────
 // Profile name validation is the single highest-leverage guard on this API.
@@ -64,6 +80,7 @@ const LEGACY_HISTORY_RE = /\/history-[^/]+\.json$/;
 const PROFILE_MAX_LEN = 64;     // hard ceiling — UI suggests 32
 const CONTROL_CHARS_RE = /[\u0000-\u001F\u007F]/;
 const PATH_SEPS_RE     = /[/\\]/;
+const DOTS_ONLY_RE     = /^\.+$/;
 
 function validateProfile(rawName) {
   if (typeof rawName !== "string") {
@@ -79,7 +96,13 @@ function validateProfile(rawName) {
   if (CONTROL_CHARS_RE.test(trimmed)) {
     return { ok: false, reason: "Profile contains control characters" };
   }
-  if (PATH_SEPS_RE.test(trimmed)) {
+  // Paths are built from the normalised key, so the path rules below test the
+  // key, not the input: NFKC folds e.g. U+2025 to ".." and U+FF0F to "/".
+  const key = normalise(trimmed);
+  if (!key) {
+    return { ok: false, reason: "Profile is empty" };
+  }
+  if (PATH_SEPS_RE.test(trimmed) || PATH_SEPS_RE.test(key)) {
     return { ok: false, reason: "Profile contains path separators" };
   }
   // Dot-only names ("." / ".." / "...") — defence in depth. encodeURIComponent
@@ -87,10 +110,16 @@ function validateProfile(rawName) {
   // segment. Whether the platform collapses it is a property of someone else's
   // code that could change without notice; the wipe gate's traversal (fixed in
   // #251) is what that assumption cost last time.
-  if (/^\.+$/.test(trimmed)) {
+  if (DOTS_ONLY_RE.test(key)) {
     return { ok: false, reason: "Profile name cannot be dots" };
   }
-  return { ok: true, normalised: normalise(trimmed), displayName: trimmed };
+  // The key must be a fixed point of normaliseProfile (NFKC runs before
+  // lowercasing, so a few base+mark pairs are not): a key that moves on a
+  // second pass could collide with another person's key.
+  if (normalise(key) !== key) {
+    return { ok: false, reason: "Profile contains characters that can't be used" };
+  }
+  return { ok: true, normalised: key, displayName: trimmed };
 }
 
 // Body size guard — reject > 5MB request bodies before parsing. A typical
@@ -119,10 +148,10 @@ async function safeReadJson(request) {
 }
 
 // ─── The sync gate ──────────────────────────────────────────────────────────
-// The contract, matching /api/photos: the credential's STORED profile is
-// compared against the REQUESTED profile, and every path below is derived from
-// the gate's normalised value — no seam between what was authorised and what
-// gets used. Keep it that way.
+// The contract, matching /api/photos: the token resolves to an account, the
+// REQUESTED profile (a handle) must resolve to that same account, and every
+// key below is the gate's storage key — no seam between what was authorised
+// and what gets used. Keep it that way.
 //
 // Deliberately pre-identity, and must stay open:
 //   · POST (name claim) — the bootstrap; you cannot hold a credential for a
@@ -157,7 +186,8 @@ const withSyncCookie = (res, g) => {
 
 /**
  * Resolve and verify the caller for a profile-scoped sync request.
- * Returns { profile } on success (plus `refresh` when the cookie slid), or
+ * Returns { profile: storageKey, identity } on success (plus `refresh` when
+ * the cookie slid), or
  * { fail: NextResponse } — never a bare boolean, so a caller cannot mistake
  * a falsy result for permission.
  */
@@ -169,7 +199,10 @@ async function syncGate(request, profile) {
   const cookieToken = request.cookies?.get?.(SYNC_COOKIE)?.value || null;
   const token = headerToken || cookieToken;
   const data = await readTokenData(token);
-  if (!isTokenValid(data, profile, Date.now())) {
+  // A 401 for a name held by another account too, so a device holding one
+  // profile's cookie re-runs the ceremony for the other.
+  const identity = await resolveTokenIdentity(data, profile, Date.now());
+  if (!identity) {
     return {
       fail: NextResponse.json(
         { error: "Sign in to sync this profile", requiresAuth: true },
@@ -198,12 +231,12 @@ async function syncGate(request, profile) {
     const withinCap = Number.isFinite(authAge) && authAge < SYNC_ABSOLUTE_CAP_MS;
     if ((!Number.isFinite(age) || age > SYNC_ROTATE_AFTER_MS) && withinCap) {
       refresh = await mintAuthToken({
-        profile, ttlMs: SYNC_TTL_MS, scope: "sync",
+        identity, ttlMs: SYNC_TTL_MS, scope: "sync",
         authAt: data.authAt || data.createdAt || null,
       });
     }
   }
-  return { profile: normalise(profile), refresh };
+  return { profile: identity.storageKey, identity, refresh };
 }
 
 // Read a private blob's JSON body via the SDK's authenticated get().
@@ -293,12 +326,17 @@ export async function GET(request) {
   }
 
   try {
-    // The check=1 endpoint still uses list because it needs to know if ANY
-    // blob exists for this profile name (including legacy suffixed ones —
-    // we don't want to release a name that was previously claimed under the
-    // old broken scheme).
+    // Availability: a live handle first. While blobsHoldName(), ANY blob
+    // under the name's prefix also counts, legacy suffixed ones included, so
+    // a name no account row covers is never offered as free.
     if (check) {
-      const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
+      // Reserved names (account-id prefix) can never be claimed: report taken.
+      if (RESERVED_HANDLE_RE.test(normalise(profile))) return NextResponse.json({ exists: true });
+      const held = await dbResolveHandle(profile);
+      if (held) return NextResponse.json({ exists: !(await unfinishedClaim(held)) });
+      const { blobs } = blobsHoldName()
+        ? await list({ prefix: profileDir(normalise(profile)) })
+        : { blobs: [] };
       return NextResponse.json({ exists: blobs.length > 0 });
     }
 
@@ -321,7 +359,7 @@ export async function GET(request) {
       if (!hasDb()) {
         return NextResponse.json({ error: "Delta sync unavailable" }, { status: 503 });
       }
-      const delta = await dbReadProfileSince(normalise(profile), since);
+      const delta = await dbReadProfileSince(gate.profile, since);
       return withSyncCookie(NextResponse.json({ delta: true, ...delta }), gate);
     }
 
@@ -329,7 +367,7 @@ export async function GET(request) {
     // fallback. A DB failure degrades to the blob path — never a 500 here.
     if (hasDb()) {
       try {
-        const fromDb = await dbReadProfile(normalise(profile));
+        const fromDb = await dbReadProfile(gate.profile);
         if (fromDb) return withSyncCookie(NextResponse.json(fromDb), gate);
       } catch (e) {
         console.error("[forge:sync GET] db read failed, falling back to blob:", e?.message || e);
@@ -340,8 +378,8 @@ export async function GET(request) {
     // expected case for any profile written after the addRandomSuffix bug
     // was fixed.
     const [metaDirect, historyDirect] = await Promise.all([
-      readJson(metaPath(normalise(profile))),
-      readJson(historyPath(normalise(profile))),
+      readJson(metaPath(gate.profile)),
+      readJson(historyPath(gate.profile)),
     ]);
 
     // Both deterministic paths returned data: serve the blob. GET never
@@ -358,7 +396,7 @@ export async function GET(request) {
     // this profile has never been written under the new scheme (legacy
     // suffixed blobs only), or partially migrated. List once and fall
     // back to the latest legacy blob for whichever side is missing.
-    const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
+    const { blobs } = await list({ prefix: profileDir(gate.profile) });
 
     // Read-failure guard (audit #13, same class as PUT's #7): a null read
     // for a blob the LIST says exists is a transient failure, not absence.
@@ -366,8 +404,8 @@ export async function GET(request) {
     // profile — the client would then treat real data as gone. 503 lets
     // the client retry instead.
     const existsInList = (path) => blobs.some((b) => b.pathname === path);
-    if ((metaDirect === null && existsInList(metaPath(normalise(profile)))) ||
-        (historyDirect === null && existsInList(historyPath(normalise(profile))))) {
+    if ((metaDirect === null && existsInList(metaPath(gate.profile))) ||
+        (historyDirect === null && existsInList(historyPath(gate.profile)))) {
       return NextResponse.json(
         { error: "Blob present but unreadable — retry" },
         { status: 503 },
@@ -439,7 +477,7 @@ export async function PUT(request) {
       return NextResponse.json({ error: "Empty delta" }, { status: 400 });
     }
     try {
-      const norm = normalise(profile);
+      const norm = gate.profile;
       const cursor = await dbCursorNow();
       const closure = fieldClosure(Object.keys(incoming));
       const existing = await dbReadMetaFields(norm, closure);
@@ -463,19 +501,19 @@ export async function PUT(request) {
   // blobs — read-only, with the #7 unreadable-guard intact.
   if (hasDb()) {
     try {
-      const norm = normalise(profile);
+      const norm = gate.profile;
       const fromDb = await dbReadProfile(norm);
       let baseMeta = fromDb?.meta || null;
       let baseHistory = fromDb?.history || null;
       if (!fromDb) {
-        const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
+        const { blobs } = await list({ prefix: profileDir(gate.profile) });
         const blobExists = (path) => blobs.some((b) => b.pathname === path);
-        const meta = await readJson(metaPath(normalise(profile)));
-        if (meta === null && blobExists(metaPath(normalise(profile)))) {
+        const meta = await readJson(metaPath(gate.profile));
+        if (meta === null && blobExists(metaPath(gate.profile))) {
           return NextResponse.json({ error: "Meta blob unreadable — refusing to overwrite; retry" }, { status: 503 });
         }
-        let history = await readJson(historyPath(normalise(profile)));
-        if (history === null && blobExists(historyPath(normalise(profile)))) {
+        let history = await readJson(historyPath(gate.profile));
+        if (history === null && blobExists(historyPath(gate.profile))) {
           return NextResponse.json({ error: "History blob unreadable — refusing to overwrite; retry" }, { status: 503 });
         }
         if (!Array.isArray(history)) history = await readLatestLegacy(blobs, LEGACY_HISTORY_RE);
@@ -508,7 +546,7 @@ export async function PUT(request) {
     // List once up-front to identify legacy suffixed blobs for cleanup +
     // history-merge fallback. Cheap — single API call, used by everything
     // that follows.
-    const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
+    const { blobs } = await list({ prefix: profileDir(gate.profile) });
 
     // ── Meta write (merge with remote — audit S3) ───────────────
     // History always merged server-side; meta used to overwrite wholesale,
@@ -531,8 +569,8 @@ export async function PUT(request) {
     const blobExists = (path) => blobs.some((b) => b.pathname === path);
 
     if (data.meta) {
-      const existingMeta = await readJson(metaPath(normalise(profile)));
-      if (existingMeta === null && blobExists(metaPath(normalise(profile)))) {
+      const existingMeta = await readJson(metaPath(gate.profile));
+      if (existingMeta === null && blobExists(metaPath(gate.profile))) {
         return NextResponse.json(
           { error: "Meta blob unreadable — refusing to overwrite; retry" },
           { status: 503 },
@@ -543,7 +581,7 @@ export async function PUT(request) {
         : data.meta;
       const stamped = { ...mergedMeta, syncedAt: new Date().toISOString() };
       await put(
-        metaPath(normalise(profile)),
+        metaPath(gate.profile),
         JSON.stringify(stamped),
         { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false },
       );
@@ -556,8 +594,8 @@ export async function PUT(request) {
     // profiles that only have data in the broken-suffix scheme). Merge
     // by record id and write deterministic.
     if (Array.isArray(data.history)) {
-      let existing = await readJson(historyPath(normalise(profile)));
-      if (existing === null && blobExists(historyPath(normalise(profile)))) {
+      let existing = await readJson(historyPath(gate.profile));
+      if (existing === null && blobExists(historyPath(gate.profile))) {
         // Same guard as meta: an unreadable-but-present history blob must not
         // be treated as empty — the union merge would then "merge" from
         // nothing and drop every record this device doesn't hold.
@@ -577,7 +615,7 @@ export async function PUT(request) {
       const merged = mergeHistories(existing, data.history);
 
       await put(
-        historyPath(normalise(profile)),
+        historyPath(gate.profile),
         JSON.stringify(merged),
         { access: "private", contentType: "application/json", allowOverwrite: true, addRandomSuffix: false },
       );
@@ -600,9 +638,38 @@ export async function PUT(request) {
   }
 }
 
+// Whether blobs under a name's own prefix make it taken. Always while the
+// blob fallback is on, and always without a DB. Also were claims keyed by
+// the name (CLAIM_MODE not "claim"): a claim would then adopt that prefix,
+// so data no account row covers must keep its name taken.
+const blobsHoldName = () => IDENTITY_BLOB_FALLBACK || !hasDb() || CLAIM_MODE !== "claim";
+
+// A claim whose account committed but whose marker put then failed (a Blob
+// error) leaves the claimant holding a name their retry would refuse. The
+// next claim of the name (normally that retry) finishes it, on the same
+// account, as today's blob-only claim would have let it. Only an account that
+// never progressed: a claim keyed by its own id (or, from before cutover, by
+// its own handle), made within the retry window, with no consent on record,
+// nothing under its prefix and no passkey indexed. Anything older or used
+// stays taken: the account's webauthn user id and consent must never pass to
+// whoever claims next.
+const CLAIM_RETRY_WINDOW_MS = 15 * 60 * 1000;
+/** @param {{ id: string, origin: string, kind: string, storageKey: string, handle: string, consent?: any, createdAt?: string | null }} held */
+async function unfinishedClaim(held) {
+  const ownKey = (held.origin === "claim" && held.storageKey === held.id)
+    || (held.origin === "precutover_claim" && held.storageKey === held.handle);
+  if (!ownKey || held.kind !== "primary") return false;
+  if (held.consent != null) return false;
+  const age = Date.now() - Date.parse(String(held.createdAt));
+  if (!(age >= 0 && age <= CLAIM_RETRY_WINDOW_MS)) return false;
+  const { blobs } = await list({ prefix: profileDir(held.storageKey) });
+  if (blobs.length > 0) return false;
+  return (await countIndexedCredentials(held.id)) === 0;
+}
+
 // POST /api/sync — name claim endpoint.
-// Reserves a name with a minimal meta blob so subsequent existence checks resolve.
-// Called immediately on profile creation so concurrent devices see the claim.
+// Creates an account holding the name, plus a minimal meta blob (the claim
+// marker) under the account's storage key. Called immediately on profile creation so concurrent devices see the claim.
 // Body: { profile: string, displayName: string }
 // Returns 409 if the name is already taken.
 export async function POST(request) {
@@ -626,22 +693,49 @@ export async function POST(request) {
     resolvedDisplay = dv.displayName;
   }
 
+  // Account ids own the "hwa_" prefix; no handle or display name may take it.
+  const handle = normalise(profile);
+  if (RESERVED_HANDLE_RE.test(handle) || RESERVED_HANDLE_RE.test(normalise(resolvedDisplay))) {
+    return NextResponse.json({ error: "That name is reserved" }, { status: 400 });
+  }
+  const taken = () => NextResponse.json({ error: "Name taken", exists: true }, { status: 409 });
+
   try {
-    // Existence check stays list-based so it catches legacy suffixed
-    // blobs from the broken-suffix era — a name claimed previously under
-    // that scheme should still be treated as taken.
-    const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
-    if (blobs.length > 0) {
-      return NextResponse.json({ error: "Name taken", exists: true }, { status: 409 });
+    // Taken = a live handle, or (while blobsHoldName()) any blob under the
+    // name's prefix, legacy suffixed ones included.
+    // The store normalises: pass the raw name. normaliseProfile is not
+    // idempotent (NFKC runs before lowercasing), so re-normalising `handle`
+    // could land on a different key from the one every route writes under.
+    // A held handle whose claim never got its marker is finished, not refused.
+    const held = await dbResolveHandle(profile);
+    let sk;
+    if (held) {
+      if (!(await unfinishedClaim(held))) return taken();
+      sk = held.storageKey;
+    } else {
+      if (blobsHoldName()) {
+        const { blobs } = await list({ prefix: profileDir(handle) });
+        if (blobs.length > 0) return taken();
+      }
+
+      // Account + live handle in one transaction. A concurrent claim of the
+      // same name loses on the live-handle index and writes nothing. The
+      // storage key is the new account's id (CLAIM_MODE "claim"; "precutover"
+      // keyed it by the handle). Storage keys are never reassigned, so a name
+      // still keying a closed or lapsed account is claimed keyed by the new
+      // id in either mode. null = no DB (dev): blob-only, by name.
+      const mode = CLAIM_MODE === "claim" || (await dbAccountByStorageKey(handle)) ? "claim" : CLAIM_MODE;
+      const claim = await dbClaimHandle({ handle: profile, display: resolvedDisplay, mode });
+      if (claim?.taken) return taken();
+      sk = claim?.taken === false ? claim.storageKey : handle;
     }
 
-    // Deterministic write. allowOverwrite stays false (default) — this is
-    // a claim, not an update, and the list check above already proved the
-    // name is free. If a concurrent claim races, the put errors and the
-    // race-loser gets a 500; the UI's claim flow treats that as "try
-    // again" / "name taken" anyway.
+    // The claim marker: seeds displayName into meta on first push. No
+    // overwrite: this is a claim, not an update. Without a DB a racing claim
+    // makes this put error and the loser gets a 500, which the UI treats as
+    // "try again" / "name taken".
     await put(
-      metaPath(normalise(profile)),
+      metaPath(sk),
       JSON.stringify({
         displayName: resolvedDisplay,
         claimedAt: new Date().toISOString(),
@@ -658,13 +752,14 @@ export async function POST(request) {
   }
 }
 
-// DELETE /api/sync?profile=Name&authToken=xxx
-// Nukes all cloud data for a profile: meta, history, credentials, the lot.
-// Releases the name so it can be claimed again.
-//
-// If the profile has passkeys registered, requires a valid authToken from
-// successful passkey authentication. Profiles without passkeys can still
-// be deleted freely (legacy behaviour for migration).
+// DELETE /api/sync?profile=Name (X-HW-Auth: ceremony token)
+// Deletes a profile's cloud data under its account's storage key: its photos
+// (by its own index rows), its DB rows, its two snapshots and the enumerated
+// files in its folder (meta, history, legacy suffixed copies, credentials
+// docs). Anything else in the folder is kept and counted. Then closes the
+// account: grants revoked, handles released (the name is free), consent
+// cleared, passkey rows deleted. Requires a fresh, unscoped passkey ceremony
+// token; a profile with no passkey must register one first.
 export async function DELETE(request) {
   const limited = rateLimit(request, "sync-delete", 10);
   if (limited) return limited;
@@ -693,7 +788,7 @@ export async function DELETE(request) {
     //     satisfied every check: it is truthy; `Date.now() > undefined` is
     //     false (NaN comparison, not a rejection); it has no `scope`; and
     //     its `profile` field matches. An anonymous caller could wipe anyone.
-    //     readTokenData() encodes the token, and isTokenValid() requires
+    //     readTokenData() encodes the token, and resolveTokenIdentity() requires
     //     `typeof expires === "number"` — either one alone kills that trick.
     //
     //  2. NO-PASSKEY PASS-THROUGH: the gate only ran `if (hasPasskeys)`, so
@@ -710,7 +805,9 @@ export async function DELETE(request) {
     // meant no DB-minted token could ever satisfy this gate, so the
     // legitimate passkey-protected wipe was broken in production.
     if (!authToken) {
-      const credData = await readJsonByPrefix(credentialsPrefix(normalise(profile)));
+      // The hint reads the passkeys of the account holding the name now.
+      const account = await dbResolveHandle(profile);
+      const credData = account ? await readCredentialSet(account) : null;
       return NextResponse.json(
         hasRealPasskey(credData)
           ? { error: "Passkey authentication required", requiresAuth: true }
@@ -720,7 +817,8 @@ export async function DELETE(request) {
     }
 
     const tokenData = await readTokenData(authToken);
-    if (!isTokenValid(tokenData, profile, Date.now())) {
+    const id = await resolveTokenIdentity(tokenData, profile, Date.now());
+    if (!id) {
       return NextResponse.json(
         { error: "Invalid or expired auth token", requiresAuth: true },
         { status: 401 },
@@ -741,16 +839,33 @@ export async function DELETE(request) {
         { status: 401 },
       );
     }
+    // Everything below keys by the account's storage key, never the name.
+    // Order: every step before the close can fail and be retried (the
+    // account, its handle and its passkeys survive until the last step).
+    const sk = id.storageKey;
 
     // Consume the used ceremony token (its DB row). Same announced
     // behaviour — the wipe path has always deleted its ceremony token.
     try { await dbDeleteToken(authToken); } catch {}
 
-    // Proceed with deletion. DB rows go too (announced 2026-07-19, wipe
-    // protocol): same user-initiated, passkey-gated scope as the blob
-    // deletes below — enumerated tables, single profile, nothing else.
+    let deleted = 0;
     if (hasDb()) {
-      try { await dbDeleteProfile(normalise(profile)); }
+      // Photo blobs by the account's OWN index rows, read before the rows go;
+      // each path must sit under its own photos prefix. A previous holder's
+      // retired rows are keyed elsewhere, so their blobs are never matched.
+      const rows = await dbListPhotos(sk);
+      const photoBlobs = rows
+        .map((r) => r.blob_path)
+        .filter((p) => typeof p === "string" && p.startsWith(photosPrefix(sk)));
+      if (photoBlobs.length) {
+        try { await del(photoBlobs); }
+        catch (e) { return serverError(e, { label: "sync-delete-photos" }); }
+        deleted += photoBlobs.length;
+      }
+      // DB rows go too (announced 2026-07-19, wipe protocol): same
+      // user-initiated, passkey-gated scope as the blob deletes below —
+      // enumerated tables, one storage key, nothing else.
+      try { await dbDeleteProfile(sk); }
       catch (e) {
         // Refuse a half-wipe: if DB rows survive while blobs die, the next
         // GET would serve the "deleted" profile straight back from the DB.
@@ -761,7 +876,7 @@ export async function DELETE(request) {
     // with the profile (announced with PR C, wipe protocol): two EXACT
     // enumerated paths, same user-initiated passkey-gated scope as
     // everything above. Best-effort — a missing snapshot is not an error.
-    const snaps = snapshotPaths(normalise(profile));
+    const snaps = snapshotPaths(sk);
     try {
       await del([snaps.daily, snaps.weekly]);
     } catch (e) {
@@ -772,18 +887,36 @@ export async function DELETE(request) {
       console.error(`[forge:sync-delete] snapshot delete failed: ${e?.message || e}`);
     }
 
-    const { blobs } = await list({ prefix: profileDir(normalise(profile)) });
-    if (!blobs.length) {
-      return NextResponse.json({ ok: true, deleted: 0 });
+    // The rest of the folder: only the enumerated file patterns, anchored to
+    // this folder. Anything else under it is kept and counted.
+    const dir = profileDir(sk);
+    const listed = [];
+    let cursor;
+    do {
+      const page = await list({ prefix: dir, cursor });
+      listed.push(...page.blobs);
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor);
+    const junk = listed.filter((b) => b.pathname.startsWith(dir) && WIPE_FILE_RES.some((re) => re.test(b.pathname.slice(dir.length))));
+    if (junk.length) {
+      try {
+        await del(junk.map((b) => b.url));
+      } catch (e) {
+        return serverError(e, { label: "sync-delete" });
+      }
+      deleted += junk.length;
     }
 
-    try {
-      await del(blobs.map(b => b.url));
-    } catch (e) {
-      return serverError(e, { label: "sync-delete" });
+    // Close the account LAST (lib/identity-store.js dbCloseAccount): revoke
+    // its AI grants, release its handles, close it and clear its consent,
+    // delete its passkey rows. One transaction; a failure leaves it open and
+    // the wipe retryable.
+    if (hasDb()) {
+      try { await dbCloseAccount(id.accountId, sk); }
+      catch (e) { return serverError(e, { label: "sync-delete-close" }); }
     }
 
-    return NextResponse.json({ ok: true, deleted: blobs.length });
+    return NextResponse.json({ ok: true, deleted, kept: listed.length - junk.length });
   } catch (e) {
     return serverError(e);
   }

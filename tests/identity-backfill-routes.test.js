@@ -2,7 +2,8 @@
 // /diag-sync) only reads; apply is disabled by default, needs a fresh admin
 // ceremony and the exact planHash, refuses on any conflict, and only ever
 // INSERTs … ON CONFLICT DO NOTHING. Nothing returned carries a public key or
-// a full credential id.
+// a full credential id. The admin is recognised by the account the token
+// resolves to (ADMIN_ACCOUNT_ID, else ADMIN_PROFILE as a storage key).
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -24,10 +25,13 @@ function fakeQuery(q, v) {
   let m = q.match(/^SELECT DISTINCT profile FROM (\w+)$/);
   if (m) return (names[m[1]] || []).map((profile) => ({ profile }));
   if (/^SELECT profile, value FROM meta WHERE field = 'displayName'$/.test(q)) return state.display;
-  if (/^SELECT id, storage_key FROM accounts$/.test(q)) return state.accounts.map(({ id, storage_key }) => ({ id, storage_key }));
-  if (/^SELECT handle, account_id FROM handles WHERE released_at IS NULL$/.test(q)) return state.handles.map(({ handle, account_id }) => ({ handle, account_id }));
+  if (/^SELECT id, storage_key, deleted_at FROM accounts$/.test(q)) return state.accounts.map(({ id, storage_key, deleted_at = null }) => ({ id, storage_key, deleted_at }));
+  if (/^SELECT DISTINCT account_id FROM handles$/.test(q)) return [...new Set(state.handles.map((h) => h.account_id))].map((account_id) => ({ account_id }));
+  if (/^SELECT handle, account_id FROM handles WHERE released_at IS NULL$/.test(q)) return state.handles.filter((h) => !h.released_at).map(({ handle, account_id }) => ({ handle, account_id }));
   if (/^SELECT id, account_id FROM credentials$/.test(q)) return state.credentials.map(({ id, account_id }) => ({ id, account_id }));
   const bySk = (sk) => state.accounts.find((a) => a.storage_key === sk);
+  if (/^SELECT \* FROM accounts WHERE id = \? LIMIT 1$/.test(q)) return state.accounts.filter((a) => a.id === v[0]);
+  if (/^SELECT \* FROM accounts WHERE storage_key = \? LIMIT 1$/.test(q)) return state.accounts.filter((a) => a.storage_key === v[0]);
   if (/^\s*INSERT INTO accounts\b/.test(q)) {
     const [id, sk, webauthn_user_id, consent] = v;
     if (bySk(sk)) return [];
@@ -37,14 +41,14 @@ function fakeQuery(q, v) {
   if (/^\s*INSERT INTO handles\b/.test(q)) {
     const [handle, display, claimed_at, sk] = v;
     const a = bySk(sk);
-    if (!a || state.handles.some((h) => h.handle === handle)) return [];
+    if (!a || a.deleted_at || state.handles.some((h) => h.handle === handle && !h.released_at)) return [];
     state.handles.push({ handle, account_id: a.id, display, claimed_at });
     return [{ id: state.handles.length }];
   }
   if (/^\s*INSERT INTO credentials\b/.test(q)) {
     const [id, public_key, counter, transports, rp_id, user_handle, created_at, sk] = v;
     const a = bySk(sk);
-    if (!a || state.credentials.some((c) => c.id === id)) return [];
+    if (!a || a.deleted_at || state.credentials.some((c) => c.id === id)) return [];
     state.credentials.push({ id, account_id: a.id, public_key, counter, transports, rp_id, user_handle, created_at });
     return [{ id }];
   }
@@ -70,6 +74,8 @@ const PK2 = "pQECAyYgASFYIPUBLICKEYTWOtheforgedBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
 const ID1 = "AAAAcredentialOneFullIdentifier111111";
 const ID2 = "BBBBcredentialTwoFullIdentifier222222";
 const CRED_PATH = "forge/profiles/sam/credentials-x1.json";
+const ADMIN_ID = "hwa_" + "b".repeat(26);
+const BOB_ID = "hwa_" + "c".repeat(26);
 
 function fixture() {
   blobs = [
@@ -87,14 +93,23 @@ function fixture() {
     },
   };
   names = { sessions: ["sam"], meta: ["sam"], photos: ["sam"], auth_tokens: ["sam"], oauth_grants: [], oauth_codes: [] };
-  state = { accounts: [], handles: [], credentials: [], display: [{ profile: "sam", value: "Sam" }] };
+  // The owner and one other lifter already hold accounts with no data rows,
+  // so the census plan (sam only) is unchanged by them.
+  state = {
+    accounts: [
+      { id: ADMIN_ID, storage_key: "boss", roles: ["lifter"], plan: "free", deleted_at: null },
+      { id: BOB_ID, storage_key: "bob", roles: ["lifter"], plan: "free", deleted_at: null },
+    ],
+    handles: [], credentials: [], display: [{ profile: "sam", value: "Sam" }],
+  };
 }
+const SEEDED = 2;
 
 const NOW = Date.now();
 function token(name, row) {
   tokens.set(sha(name), {
-    profile: "sam", expires: NOW + 3600000, scope: null, created_at: new Date(NOW).toISOString(),
-    auth_at: new Date(NOW - 10000).toISOString(), credential_id: ID1, account_id: null, ...row,
+    profile: "boss", expires: NOW + 3600000, scope: null, created_at: new Date(NOW).toISOString(),
+    auth_at: new Date(NOW - 10000).toISOString(), credential_id: ID1, account_id: ADMIN_ID, ...row,
   });
   return name;
 }
@@ -118,16 +133,19 @@ beforeEach(() => {
   token("photo-token", { scope: "photos" });
   token("expired-token", { expires: NOW - 1 });
   token("stale-token", { auth_at: new Date(NOW - 20 * 60000).toISOString() });
-  token("bob-token", { profile: "bob" });
+  token("legacy-admin-token", { account_id: null }); // pre-cutover row: resolves by storage key
+  token("bob-token", { profile: "bob", account_id: BOB_ID });
+  token("ghost-token", { profile: "ghost", account_id: null }); // no account holds this storage key
+  delete process.env.ADMIN_PROFILE;
   process.env.DATABASE_URL = "postgres://fake";
   process.env.CRON_SECRET = "s3cret";
-  process.env.ADMIN_PROFILE = "sam";
+  process.env.ADMIN_ACCOUNT_ID = ADMIN_ID;
   process.env.IDENTITY_BACKFILL_APPLY = "1";
   logs = [];
   vi.spyOn(console, "log").mockImplementation((...a) => { logs.push(a.join(" ")); });
 });
 afterEach(() => {
-  for (const k of ["DATABASE_URL", "CRON_SECRET", "ADMIN_PROFILE", "IDENTITY_BACKFILL_APPLY"]) delete process.env[k];
+  for (const k of ["DATABASE_URL", "CRON_SECRET", "ADMIN_ACCOUNT_ID", "ADMIN_PROFILE", "IDENTITY_BACKFILL_APPLY"]) delete process.env[k];
   vi.restoreAllMocks();
 });
 
@@ -197,17 +215,44 @@ describe("identity backfill dry-run — CRON_SECRET route", () => {
 describe("identity backfill dry-run — owner view on /diag-sync", () => {
   const view = async (tok) => (await adminView()).GET(req("/api/diag/identity-backfill/admin", { headers: tok ? { "x-hw-auth": tok } : {} }));
 
-  it("401 without a token, with a scoped, photo or expired token", async () => {
-    for (const t of [null, "nope", "scoped-token", "photo-token", "expired-token"]) {
+  it("401 without a token, with a scoped, photo or expired token, or one no account holds", async () => {
+    for (const t of [null, "nope", "scoped-token", "photo-token", "expired-token", "ghost-token"]) {
       expect((await view(t)).status).toBe(401);
     }
     expect(writes()).toEqual([]);
   });
 
-  it("403 for anyone but ADMIN_PROFILE, and when ADMIN_PROFILE is unset (fails closed)", async () => {
+  it("admin by account id: the token's account must be ADMIN_ACCOUNT_ID", async () => {
+    expect((await view("good-token")).status).toBe(200);
+    expect((await view("legacy-admin-token")).status).toBe(200); // legacy row, same account
     expect((await view("bob-token")).status).toBe(403);
-    delete process.env.ADMIN_PROFILE;
+    process.env.ADMIN_ACCOUNT_ID = BOB_ID;
+    process.env.ADMIN_PROFILE = "boss"; // the id wins over the fallback
     expect((await view("good-token")).status).toBe(403);
+    expect(writes()).toEqual([]);
+  });
+
+  it("admin by legacy ADMIN_PROFILE: matched against the resolved storage key", async () => {
+    delete process.env.ADMIN_ACCOUNT_ID;
+    process.env.ADMIN_PROFILE = "Boss";
+    expect((await view("legacy-admin-token")).status).toBe(200);
+    expect((await view("good-token")).status).toBe(200);
+    expect((await view("bob-token")).status).toBe(403);
+    process.env.ADMIN_PROFILE = "ghost"; // names a storage key no account holds
+    expect((await view("ghost-token")).status).toBe(401);
+    expect(writes()).toEqual([]);
+  });
+
+  it("a token whose account is closed is refused, even under ADMIN_PROFILE", async () => {
+    delete process.env.ADMIN_ACCOUNT_ID;
+    process.env.ADMIN_PROFILE = "boss";
+    state.accounts[0].deleted_at = new Date(NOW - 1000).toISOString();
+    expect((await view("legacy-admin-token")).status).toBe(401);
+  });
+
+  it("403 when both ADMIN_ACCOUNT_ID and ADMIN_PROFILE are unset (fails closed)", async () => {
+    delete process.env.ADMIN_ACCOUNT_ID;
+    for (const t of ["good-token", "legacy-admin-token", "bob-token"]) expect((await view(t)).status).toBe(403);
   });
 
   it("the admin reads the same safe plan, plus whether apply is on", async () => {
@@ -240,6 +285,11 @@ describe("identity backfill apply — source", () => {
     expect(sqls).toHaveLength(3);
     for (const s of sqls) expect(s).toMatch(/^\s*INSERT INTO (accounts|handles|credentials)\b[\s\S]*ON CONFLICT[\s\S]*DO NOTHING/);
   });
+  it("never attaches a handle or credential to a closed account", () => {
+    const sqls = [...code(src).matchAll(/q`([^`]*)`/g)].map((m) => m[1]).filter((s) => /FROM accounts a/.test(s));
+    expect(sqls).toHaveLength(2);
+    for (const s of sqls) expect(s).toMatch(/WHERE a\.storage_key = \$\{\w+\.storageKey\} AND a\.deleted_at IS NULL/);
+  });
 });
 
 describe("identity backfill apply — gates", () => {
@@ -258,20 +308,30 @@ describe("identity backfill apply — gates", () => {
     expect(calls).toEqual([]);
   });
 
-  it("401 for no, unknown, scoped, expired or stale (not fresh) ceremony tokens; zero writes", async () => {
+  it("401 for no, unknown, scoped, expired, stale (not fresh) or account-less ceremony tokens; zero writes", async () => {
     const hash = await currentHash();
-    for (const t of [null, "nope", "scoped-token", "photo-token", "expired-token", "stale-token"]) {
+    for (const t of [null, "nope", "scoped-token", "photo-token", "expired-token", "stale-token", "ghost-token"]) {
       expect((await post(t, { confirm: hash })).status).toBe(401);
     }
     expect(writes()).toEqual([]);
   });
 
-  it("403 for a non-admin, or with ADMIN_PROFILE unset", async () => {
+  it("403 for a non-admin account, or with both ADMIN_ACCOUNT_ID and ADMIN_PROFILE unset", async () => {
     const hash = await currentHash();
     expect((await post("bob-token", { confirm: hash })).status).toBe(403);
-    delete process.env.ADMIN_PROFILE;
+    delete process.env.ADMIN_ACCOUNT_ID;
     expect((await post("good-token", { confirm: hash })).status).toBe(403);
+    expect((await post("legacy-admin-token", { confirm: hash })).status).toBe(403);
     expect(writes()).toEqual([]);
+  });
+
+  it("the legacy ADMIN_PROFILE fallback admits the owner's legacy ceremony token", async () => {
+    delete process.env.ADMIN_ACCOUNT_ID;
+    process.env.ADMIN_PROFILE = "boss";
+    const hash = await currentHash();
+    calls.length = 0;
+    expect((await post("legacy-admin-token", { confirm: hash })).status).toBe(200);
+    expect(writes()).toHaveLength(4);
   });
 
   it("400 without a hash-shaped confirm", async () => {
@@ -327,8 +387,8 @@ describe("identity backfill apply — happy path", () => {
     expect(w).toHaveLength(4);
     for (const s of w) expect(s.q).toMatch(/^\s*INSERT INTO (accounts|handles|credentials)\b[\s\S]*ON CONFLICT[\s\S]*DO NOTHING/);
 
-    expect(state.accounts).toHaveLength(1);
-    const acct = state.accounts[0];
+    expect(state.accounts).toHaveLength(SEEDED + 1);
+    const acct = state.accounts[SEEDED];
     expect(acct.id).toMatch(/^hwa_[a-z2-7]{26}$/);
     expect(acct.storage_key).toBe("sam");
     expect(acct.webauthn_user_id).not.toBe(createHash("sha256").update("sam").digest("base64url"));
@@ -360,7 +420,46 @@ describe("identity backfill apply — happy path", () => {
     const again = await post("good-token", { confirm: after.planHash });
     expect(await again.json()).toEqual({ applied: true, inserted: { accounts: 0, handles: 0, credentials: 0 } });
     expect(writes()).toEqual([]);
-    expect(state.accounts).toHaveLength(1);
+    expect(state.accounts).toHaveLength(SEEDED + 1);
     expect(state.credentials).toHaveLength(2);
+  });
+});
+
+describe("identity backfill — never re-reserves a released name", () => {
+  const SAM_ID = "hwa_" + "d".repeat(26);
+  const post = async (tok, body) =>
+    (await apply()).POST(req("/api/diag/identity-backfill/apply", { method: "POST", headers: { "x-hw-auth": tok }, body }));
+  const dry = async () =>
+    (await (await dryRun()).GET(req("/api/diag/identity-backfill", { headers: { authorization: "Bearer s3cret" } }))).json();
+
+  it("a closed account whose files outlived the wipe gets no handle and no passkey back", async () => {
+    state.accounts.push({ id: SAM_ID, storage_key: "sam", deleted_at: new Date(NOW - 60000).toISOString() });
+    state.handles.push({ handle: "sam", account_id: SAM_ID, released_at: new Date(NOW - 60000).toISOString() });
+    const plan = await dry();
+    expect(plan.skipped.closedAccounts).toEqual(["sam"]);
+    expect(plan.counts).toEqual({
+      accounts: { create: 0, present: 1, conflict: 0 },
+      handles: { create: 0, present: 0, conflict: 0 },
+      credentials: { create: 0, present: 0, conflict: 0 },
+    });
+    calls.length = 0;
+    expect(await (await post("good-token", { confirm: plan.planHash })).json())
+      .toEqual({ applied: true, inserted: { accounts: 0, handles: 0, credentials: 0 } });
+    expect(writes()).toEqual([]);
+    expect(state.handles.filter((h) => !h.released_at)).toEqual([]);
+  });
+
+  it("an open account whose handle lapsed and was released plans no handle row", async () => {
+    state.accounts.push({ id: SAM_ID, storage_key: "sam", deleted_at: null });
+    state.handles.push({ handle: "sam", account_id: SAM_ID, released_at: new Date(NOW - 60000).toISOString() });
+    state.credentials.push({ id: ID1, account_id: SAM_ID }, { id: ID2, account_id: SAM_ID });
+    const plan = await dry();
+    expect(plan.skipped.releasedHandles).toEqual([{ key: "sam", heldBy: null }]);
+    expect(plan.handles).toEqual([]);
+    expect(plan.counts.handles).toEqual({ create: 0, present: 0, conflict: 0 });
+    calls.length = 0;
+    expect(await (await post("good-token", { confirm: plan.planHash })).json())
+      .toEqual({ applied: true, inserted: { accounts: 0, handles: 0, credentials: 0 } });
+    expect(state.handles.filter((h) => !h.released_at)).toEqual([]);
   });
 });

@@ -89,15 +89,19 @@ describe("one token store — the DB, and nothing else", () => {
 describe("admin wing fails closed in production", () => {
   const bugs = read("app/api/bugs/route.js");
 
-  it("an unset ADMIN_PROFILE does not open the wing in production", () => {
+  it("unset admin env vars do not open the wing in production", () => {
     // Behaviour must not change as a side effect of an env-var being unset —
     // the 2026-07-09 failure shape. Unset means refuse, not open.
-    expect(bugs).toMatch(/if \(!process\.env\.ADMIN_PROFILE\)/);
+    expect(bugs).toMatch(/if \(!process\.env\.ADMIN_ACCOUNT_ID && !process\.env\.ADMIN_PROFILE\)/);
     expect(bugs).toMatch(/NODE_ENV === "production"[\s\S]{0,140}status: 403/);
   });
 
-  it("admin is still derived from the TOKEN's profile, never the client", () => {
-    expect(bugs).toContain("isAdminProfile(data.profile)");
+  it("admin is still derived from the TOKEN, never the client", () => {
+    // The identity comes from the token's own record (no handle from the
+    // request is consulted), and admin is decided on that identity.
+    expect(bugs).toContain("resolveTokenIdentity(data, null, Date.now())");
+    expect(bugs).toContain("isAdminIdentity(identity)");
+    expect(bugs).not.toMatch(/isAdmin\w*\([^)]*body|isAdmin\w*\([^)]*searchParams/);
   });
 });
 

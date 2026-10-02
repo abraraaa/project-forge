@@ -71,17 +71,21 @@ export async function GET(request) {
 
   try {
     // Gate first: an ungated read must 401, proving J1's gate is live in the
-    // deployed build. THEN mint and proceed — if this check ever passes with
-    // data instead, the gate has regressed and the run fails loudly.
+    // deployed build. If this check ever passes with data instead, the gate
+    // has regressed and the run fails loudly.
     check("ungated GET is refused (J1 gate live)", (await syncGET(new Request(`${BASE}?profile=${encodeURIComponent(profile)}`))).status === 401);
-    SELFTEST_TOKEN = await mintAuthToken({ profile, ttlMs: 600000, scope: "sync" });
-
-    check("unwritten profile GET 404s", (await syncGET(getReq({ profile }))).status === 404);
 
     const before = await (await syncGET(getReq({ profile, check: "1" }))).json();
     check("check=1 free before claim", before.exists === false);
     check("POST claims the name", (await syncPOST(jsonReq("POST", { profile, displayName: profile }))).status === 200);
     check("re-claim 409s", (await syncPOST(jsonReq("POST", { profile, displayName: profile }))).status === 409);
+
+    // THEN mint: a token belongs to an account, and the claim created it.
+    SELFTEST_TOKEN = await mintAuthToken({ profile, ttlMs: 600000, scope: "sync" });
+
+    // A claimed name with nothing pushed yet serves its claim marker.
+    const claimed = await syncGET(getReq({ profile }));
+    check("claimed-but-unwritten GET serves the claim marker", claimed.status === 200 && (await claimed.json())?.meta?.displayName === profile);
 
     const meta = { displayName: profile, weights: { "Hex Bar Deadlift": 110 }, reps: {}, streak: { count: 3, lastDate: "2026-07-04" } };
     const history = [{ id: "2026-07-01T10:00:00.000Z", date: "2026-07-01", type: "strength" }];
