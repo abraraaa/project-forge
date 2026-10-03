@@ -1,8 +1,7 @@
 import "./globals.css";
 import { Bodoni_Moda, Familjen_Grotesk, Spline_Sans_Mono } from "next/font/google";
-import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import AnalyticsScrubbed from "@/components/AnalyticsScrubbed";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import ThemeFollower from "@/components/ThemeFollower";
 import PressPoint from "@/components/PressPoint";
@@ -296,8 +295,8 @@ export default function RootLayout({ children }) {
             resolve at all, and the bottom sheets rely on the home-indicator
             inset. The standalone env(safe-area-inset-top) padding on
             .forge-page keeps content clear of whatever the system reserves. */}
-        <Analytics />
-        <SpeedInsights />
+        {/* Analytics never sees a URL fragment or a share code. */}
+        <AnalyticsScrubbed />
       </body>
     </html>
   );
