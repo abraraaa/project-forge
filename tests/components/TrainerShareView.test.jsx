@@ -169,6 +169,45 @@ describe("TrainerShareView: sharing", () => {
     expect(document.activeElement).toBe(h1);
   });
 
+  it("Stop sharing keeps focus while it works: aria-disabled, never disabled", async () => {
+    server.status = status({ sharing: sharing() });
+    await renderView();
+    const stop = screen.getByText("Stop sharing").closest("button");
+    stop.focus();
+    let release;
+    fetchWithTimeout.mockImplementationOnce(() => new Promise((done) => { release = done; }));
+    await act(async () => { fireEvent.click(stop); });
+    expect(stop.textContent).toBe("One moment");
+    expect(stop.getAttribute("aria-disabled")).toBe("true");
+    expect(stop.disabled).toBe(false);
+    expect(document.activeElement).toBe(stop);
+    // A second tap while it works sends nothing more.
+    await act(async () => { fireEvent.click(stop); });
+    expect(fetchWithTimeout.mock.calls.filter(([, o]) => o?.method === "POST")).toHaveLength(1);
+    server.status = status();
+    await act(async () => { release({ ok: true, status: 200, json: async () => ({ ok: true }) }); });
+    expect(screen.getByText("Stopped. Jo can't see your training now.")).toBeTruthy();
+  });
+
+  it("paused: Not now on a fresh code goes back to the paused share, not to Profile", async () => {
+    server.status = status({ sharing: sharing({ live: false }) });
+    server.peek = { trainer: { name: "Jo" }, expiresAt: 1 };
+    await renderView();
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("The code your trainer showed you"), { target: { value: "ABCD0EFGH1JK" } });
+    });
+    expect(screen.getByText("Share with Jo")).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByText("Not now")); });
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(screen.getByText("Paused. Jo can't see your training right now. Stop sharing, or ask Jo for a fresh code.")).toBeTruthy();
+    expect(screen.getByLabelText("The code your trainer showed you").value).toBe("");
+    expect(screen.queryByText("Share with Jo")).toBeNull();
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1.textContent).toBe("Jo");
+    expect(document.activeElement).toBe(h1);
+  });
+
   it("a paused share says so without a reason, and keeps Stop", async () => {
     server.status = status({ sharing: sharing({ live: false }) });
     await renderView();
@@ -211,6 +250,38 @@ describe("TrainerShareView: no trainer", () => {
     expect(notice.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("'Got it' posts the notice as seen and hides it; a notice with no ref offers none", async () => {
+    server.status = status({ ended: { ref: "hwg_old", name: "Max", at: Date.parse("2026-09-20T10:00:00Z"), by: "trainer" } });
+    await renderView();
+    expect(screen.getByText("Max stopped seeing your training on 20 September.")).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByText("Got it")); });
+    expect(server.posts).toEqual([{ profile: "sam", seen: "hwg_old" }]);
+    expect(screen.queryByText(/Max stopped seeing/)).toBeNull();
+    expect(screen.queryByText("Got it")).toBeNull();
+    // The code entry stays, and takes focus.
+    expect(document.activeElement).toBe(screen.getByLabelText("The code your trainer showed you"));
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Add a trainer");
+    cleanup();
+    server.status = status({ ended: { name: "Max", at: NOW - DAY, by: "closed" } });
+    await renderView();
+    expect(screen.getByText("Max's account has closed. They no longer see your training.")).toBeTruthy();
+    expect(screen.queryByText("Got it")).toBeNull();
+  });
+
+  it("'Got it' with no code entry here: focus lands on the line that replaces the notice", async () => {
+    server.status = status({ open: false, ended: { ref: "hwg_old", name: "Max", at: Date.parse("2026-09-20T10:00:00Z"), by: "trainer" } });
+    await renderView();
+    const btn = screen.getByRole("button", { name: "Got it" });
+    // A full-size tap target, pressed like the page's other buttons.
+    expect(btn.style.minHeight).toBe("44px");
+    expect(btn.className).toContain("forge-press");
+    btn.focus();
+    await act(async () => { fireEvent.click(btn); });
+    expect(server.posts).toEqual([{ profile: "sam", seen: "hwg_old" }]);
+    expect(screen.queryByText(/Max stopped seeing/)).toBeNull();
+    expect(document.activeElement).toBe(screen.getByText("No trainer sees your training."));
+  });
+
   it("shows the ended notice: by account closure", async () => {
     server.status = status({ ended: { name: "Max", at: NOW - DAY, by: "closed" } });
     await renderView();
@@ -228,6 +299,17 @@ describe("TrainerShareView: no trainer", () => {
     await renderView();
     expect(screen.getByRole("status").textContent).toBe("Couldn't reach Heatwayve. Try again.");
     expect(screen.queryByText("Stop sharing")).toBeNull();
+  });
+
+  it.each([
+    [429, { error: "Too many requests" }, "Too many tries. Wait a minute and try again."],
+    [401, { error: "Sign in to see your trainer", requiresAuth: true }, "Sign in again to see your trainer."],
+    [500, { error: "Internal error: SENTINEL" }, "Something went wrong. Try again."],
+  ])("a %i on the status reads in the house voice, never the server's words", async (code, body, copy) => {
+    fetchWithTimeout.mockResolvedValueOnce({ ok: false, status: code, json: async () => body });
+    await renderView();
+    expect(screen.getByRole("status").textContent).toBe(copy);
+    expect(document.body.textContent).not.toContain(body.error);
   });
 
   it("with no active profile, goes home and fetches nothing", async () => {

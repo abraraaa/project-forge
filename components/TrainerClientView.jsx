@@ -349,7 +349,8 @@ function RhythmCell({ week, early }) {
       <span style={SR_ONLY}>Week of {isoDayMonth(week.mondayIso)}: {text}</span>
       <span aria-hidden="true" style={{ display: "block" }}>
         {figure && <span style={{ display: "block", fontFamily: T.measured, fontSize: 12 }}>{figure}</span>}
-        {note && <span style={{ display: "block", fontSize: 10, marginTop: figure ? 2 : 0, overflowWrap: "anywhere" }}>{note}</span>}
+        {/* Breaks between words only: "paused" never splits. */}
+        {note && <span style={{ display: "block", fontSize: 10, marginTop: figure ? 2 : 0 }}>{note}</span>}
       </span>
     </li>
   );

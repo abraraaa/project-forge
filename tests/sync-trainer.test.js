@@ -2,7 +2,8 @@
 // The Neon driver is faked with small in-memory tables, so dbClientShare, the
 // Neon OAuth store and revokeGrantFor run for real and every statement is
 // captured. Sign-in is faked at readTokenData / resolveTokenIdentity.
-// The only write allowed: the client's stop, an UPDATE of revoked_at.
+// The only writes allowed: the client's stop, an UPDATE of revoked_at, and
+// "Got it" on the ended notice, an UPDATE of notice_seen_at.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { readFileSync } from "node:fs";
@@ -46,7 +47,7 @@ vi.mock("@neondatabase/serverless", () => ({
       const text = strings.join("?");
       if (/^\s*(CREATE|ALTER)\b/.test(text)) return [];
       calls.push({ q: text, v });
-      if (/^SELECT g\.id, g\.created_at, g\.revoked_at, g\.revoked_by, g\.consent_version, g\.looks, g\.look_count,/.test(text)) {
+      if (/^SELECT g\.id, g\.created_at, g\.revoked_at, g\.revoked_by, g\.consent_version, g\.looks, g\.look_count, g\.notice_seen_at,/.test(text)) {
         return clientShareRow(v[0]);
       }
       if (/^SELECT \* FROM oauth_grants WHERE id = \?$/.test(text)) {
@@ -57,6 +58,12 @@ vi.mock("@neondatabase/serverless", () => ({
         const g = db.grants.find((x) => x.id === v[1] && x.revoked_at == null);
         if (g) g.revoked_at = v[0];
         return [];
+      }
+      if (/^UPDATE oauth_grants SET notice_seen_at = \?\s+WHERE id = \? AND account_id = \? AND kind = 'trainer' AND revoked_at IS NOT NULL AND notice_seen_at IS NULL\s+RETURNING id$/.test(text)) {
+        const g = db.grants.find((x) => x.id === v[1] && x.account_id === v[2] && x.kind === "trainer" && x.revoked_at != null && x.notice_seen_at == null);
+        if (!g) return [];
+        g.notice_seen_at = v[0];
+        return [{ id: g.id }];
       }
       throw new Error(`unexpected SQL: ${text}`);
     };
@@ -95,7 +102,7 @@ const trainerGrant = (id, client, trainer, extra = {}) => ({
   id, client_id: "hw:trainer", account_id: client, profile: client === A ? "sk-abe" : "sk-bea", credential_id: `cred-${client}`,
   scope: "trainer:read", kind: "trainer", resource: "https://heatwayve.app/trainer", trainer_account_id: trainer,
   consent_version: "2026-10", created_at: SINCE, revoked_at: null, revoked_by: null, looks: [], look_count: 0,
-  last_used_at: null, expires_at: null, ...extra,
+  last_used_at: null, expires_at: null, notice_seen_at: null, ...extra,
 });
 const aiGrant = (id, client, extra = {}) => ({
   id, client_id: "hwc_x", account_id: client, profile: "sk-abe", credential_id: `cred-${client}`, scope: "training:read",
@@ -218,7 +225,7 @@ describe("GET /api/sync/trainer: status", () => {
 
   it("ended by the trainer: a notice with the name, when and by whom, for 30 days only", async () => {
     db.grants = [trainerGrant("hwg_t1", A, T, { revoked_at: NOW - 2 * DAY, revoked_by: "trainer" })];
-    expect(await status()).toMatchObject({ sharing: null, ended: { name: "Tia", at: NOW - 2 * DAY, by: "trainer" } });
+    expect(await status()).toMatchObject({ sharing: null, ended: { ref: "hwg_t1", name: "Tia", at: NOW - 2 * DAY, by: "trainer" } });
     db.grants[0].revoked_at = NOW - 31 * DAY;
     expect((await status()).ended).toBeNull();
   });
@@ -228,7 +235,7 @@ describe("GET /api/sync/trainer: status", () => {
     db.handles = db.handles.map((h) => (h.account_id === T ? { ...h, released_at: NOW - DAY } : h));
     db.handles.push({ handle: "tia", display: "TIA-NEW", account_id: id26("z"), kind: "primary", released_at: null });
     db.grants = [trainerGrant("hwg_t1", A, T, { revoked_at: NOW - DAY, revoked_by: "closed" })];
-    expect((await status()).ended).toEqual({ name: "Tia", at: NOW - DAY, by: "closed" });
+    expect((await status()).ended).toEqual({ ref: "hwg_t1", name: "Tia", at: NOW - DAY, by: "closed" });
   });
 
   it("no notice when the client stopped it or switched trainer", async () => {
@@ -363,6 +370,68 @@ describe("POST /api/sync/trainer: stop", () => {
   });
 });
 
+describe("POST /api/sync/trainer: the ended notice, seen", () => {
+  it("'Got it' is one UPDATE of notice_seen_at on the client's own ended grant; the notice stays gone", async () => {
+    db.grants = [trainerGrant("hwg_t1", A, T, { revoked_at: NOW - 2 * DAY, revoked_by: "trainer", looks: [{ k: "v", at: NOW - 3 * DAY }], look_count: 1 })];
+    expect((await status()).ended).toMatchObject({ ref: "hwg_t1", name: "Tia" });
+    calls.length = 0;
+    const res = await post({ profile: "abe", seen: "hwg_t1" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(await res.json()).toEqual({ ok: true });
+    const w = writes();
+    expect(w).toHaveLength(1);
+    expect(w[0].q.replace(/\s+/g, " ")).toBe(
+      "UPDATE oauth_grants SET notice_seen_at = ? WHERE id = ? AND account_id = ? AND kind = 'trainer' "
+      + "AND revoked_at IS NOT NULL AND notice_seen_at IS NULL RETURNING id",
+    );
+    expect(w[0].v.slice(1)).toEqual(["hwg_t1", A]);
+    const g = db.grants[0];
+    expect(g.notice_seen_at).toBeGreaterThan(0);
+    // The ending itself and the log are untouched.
+    expect([g.revoked_at, g.revoked_by, g.looks, g.look_count]).toEqual([NOW - 2 * DAY, "trainer", [{ k: "v", at: NOW - 3 * DAY }], 1]);
+    expect(await status()).toMatchObject({ sharing: null, ended: null });
+    // Seen twice: nothing left to mark.
+    expect((await post({ profile: "abe", seen: "hwg_t1" })).status).toBe(404);
+  });
+
+  it("closure notices are dismissed the same way; the 30-day age-out still holds when never seen", async () => {
+    db.grants = [trainerGrant("hwg_t1", A, T, { revoked_at: NOW - DAY, revoked_by: "closed" })];
+    expect((await post({ profile: "abe", seen: "hwg_t1" })).status).toBe(200);
+    expect((await status()).ended).toBeNull();
+    db.grants = [trainerGrant("hwg_t2", A, T, { revoked_at: NOW - 31 * DAY, revoked_by: "trainer" })];
+    expect((await status()).ended).toBeNull();
+  });
+
+  it("a live grant, another client's, an AI grant or a malformed id is not found and marks nothing", async () => {
+    db.grants = [
+      trainerGrant("hwg_live", A, T),
+      trainerGrant("hwg_b", B, T, { revoked_at: NOW - DAY, revoked_by: "trainer" }),
+      aiGrant("hwg_ai", A, { revoked_at: NOW - DAY }),
+    ];
+    for (const seen of ["hwg_live", "hwg_b", "hwg_ai", "hwg_nope", "", 42, null, "x".repeat(129)]) {
+      expect((await post({ profile: "abe", seen })).status, String(seen)).toBe(404);
+    }
+    expect(db.grants.map((g) => g.notice_seen_at ?? null)).toEqual([null, null, null]);
+    expect(db.grants.map((g) => g.revoked_at)).toEqual([null, NOW - DAY, NOW - DAY]);
+  });
+
+  it("refuses without the sync sign-in, and never on a photos or trainer token", async () => {
+    db.grants = [trainerGrant("hwg_t1", A, T, { revoked_at: NOW - DAY, revoked_by: "trainer" })];
+    for (const [token, profile] of [[null, "abe"], ["tok-abe-photos", "abe"], ["tok-abe-trainer", "abe"], ["tok-abe", "tia"]]) {
+      expect((await post({ profile, seen: "hwg_t1" }, token)).status).toBe(401);
+    }
+    expect(calls).toEqual([]);
+    expect(db.grants[0].notice_seen_at).toBeNull();
+  });
+
+  it("without a database: 503, nothing written", async () => {
+    delete process.env.DATABASE_URL;
+    expect((await post({ profile: "abe", seen: "hwg_t1" })).status).toBe(503);
+    expect(calls).toEqual([]);
+  });
+});
+
 describe("source pins", () => {
   const root = resolve(__dirname, "..");
   const read = (f) => readFileSync(resolve(root, f), "utf8");
@@ -388,10 +457,10 @@ describe("source pins", () => {
 
   it("dbClientShare is one SELECT, pinned", () => {
     const src = read("lib/trainer-store.js");
-    const fn = src.slice(src.indexOf("export async function dbClientShare"));
+    const fn = src.slice(src.indexOf("export async function dbClientShare"), src.indexOf("export async function dbSeenEndedNotice"));
     expect(fn.match(/q`/g)).toHaveLength(1);
     expect(fn.slice(fn.indexOf("q`") + 2, fn.indexOf("`;")).replace(/\s+/g, " ").trim()).toBe(
-      "SELECT g.id, g.created_at, g.revoked_at, g.revoked_by, g.consent_version, g.looks, g.look_count, "
+      "SELECT g.id, g.created_at, g.revoked_at, g.revoked_by, g.consent_version, g.looks, g.look_count, g.notice_seen_at, "
       + "EXISTS (SELECT 1 FROM accounts a JOIN credentials c ON c.account_id = a.id "
       + "WHERE a.id = g.account_id AND a.deleted_at IS NULL AND c.id = g.credential_id AND c.rp_id = 'heatwayve.app') AS client_live, "
       + "t.roles AS trainer_roles, t.plan AS trainer_plan, t.trainer_terms, t.deleted_at AS trainer_deleted_at, h.handle, h.display "

@@ -3,7 +3,7 @@ import { readTokenData, resolveTokenIdentity, shareOpenFor, trainerOpenFor } fro
 import { neonOAuthStore } from "@/lib/oauth-store";
 import { revokeGrantFor } from "@/lib/oauth";
 import { entitled } from "@/lib/entitlements";
-import { dbClientShare } from "@/lib/trainer-store";
+import { dbClientShare, dbSeenEndedNotice } from "@/lib/trainer-store";
 import { json, noStore } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
 
@@ -17,6 +17,9 @@ export const dynamic = "force-dynamic";
 //   POST /api/sync/trainer { profile, stop } -> { ok }. Stop is revokeGrantFor, an UPDATE of
 //        revoked_at on the client's own trainer grant (revoked_by stays null: the client
 //        ended it). It only reduces access, so it needs no Face ID. Nothing is deleted.
+//   POST /api/sync/trainer { profile, seen } -> { ok }. "Got it" on the ended notice:
+//        dbSeenEndedNotice, an UPDATE of notice_seen_at on the client's own ended
+//        trainer grant. Nothing is deleted.
 
 // The caller's identity, or null. The connections gate, verbatim: a
 // full-scope ceremony token or the sync-scope cookie, never another scope.
@@ -55,9 +58,16 @@ export async function POST(request) {
   const limited = rateLimit(request, "sync-trainer-write", 20);
   if (limited) return noStore(limited);
   try {
-    const { profile, stop } = await request.json().catch(() => ({}));
+    const { profile, stop, seen } = await request.json().catch(() => ({}));
     const identity = typeof profile === "string" && profile ? await gate(request, profile) : null;
     if (!identity) return denied();
+    if (stop === undefined && seen !== undefined) {
+      if (typeof seen !== "string" || !seen || seen.length > 128) return json({ error: "Not found" }, 404);
+      // Only the owner's own ended trainer grant, once.
+      const done = await dbSeenEndedNotice(identity.accountId, seen, Date.now());
+      if (done === null) return json({ error: "Unavailable" }, 503);
+      return done ? json({ ok: true }) : json({ error: "Not found" }, 404);
+    }
     if (typeof stop !== "string" || !stop || stop.length > 128) return json({ error: "Not found" }, 404);
     const store = await neonOAuthStore();
     if (!store) return json({ error: "Unavailable" }, 503);

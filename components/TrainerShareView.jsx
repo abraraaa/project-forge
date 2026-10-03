@@ -9,13 +9,13 @@
 // never typed.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { T, DISPLAY } from "@/lib/tokens";
 import { Fade } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import ShareApprove from "@/components/ShareApprove";
+import ShareApprove, { APPROVE_COPY } from "@/components/ShareApprove";
 import { P } from "@/lib/storage";
 import { withNavTransition } from "@/lib/nav-transitions";
 import { ago } from "@/lib/coach-connect";
@@ -24,6 +24,8 @@ import { fetchWithTimeout } from "@/lib/net";
 const LOG_SHOWN = 20;
 const OFFLINE = "Couldn't reach Heatwayve. Try again.";
 const NOT_STOPPED = "That didn't go through. Try again.";
+const SIGN_IN = "Sign in again to see your trainer.";
+const WENT_WRONG = "Something went wrong. Try again.";
 const focusOnMount = (el) => { el?.focus(); };
 
 const longDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long" });
@@ -40,13 +42,16 @@ function rosterDayLabel(day, now) {
   return Number.isFinite(t) ? dayLabel.format(new Date(t)) : "";
 }
 
-/** @returns {Promise<{ ok: true, body: any } | { ok: false, error: string }>} */
+/**
+ * The share status. A refusal is worded here, never in the server's words.
+ * @returns {Promise<{ ok: true, body: any } | { ok: false, error: string }>}
+ */
 async function fetchShare(profile) {
   try {
     const res = await fetchWithTimeout(`/api/sync/trainer?profile=${encodeURIComponent(profile)}`);
     const body = await res.json().catch(() => ({}));
     if (res.ok) return { ok: true, body };
-    return { ok: false, error: body?.error || OFFLINE };
+    return { ok: false, error: res.status === 429 ? APPROVE_COPY.slowDown : res.status === 401 ? SIGN_IN : WENT_WRONG };
   } catch {
     return { ok: false, error: OFFLINE };
   }
@@ -63,6 +68,11 @@ export default function TrainerShareView() {
   // A fresh code approved while paused: the reload names the new share, and
   // its heading takes focus.
   const [arrived, setArrived] = useState(false);
+  // "Not now" on a fresh code while paused: a new approval, back on the paused share.
+  const [approveKey, setApproveKey] = useState(0);
+  const headRef = useRef(/** @type {HTMLHeadingElement | null} */ (null));
+  // The ended notice the client dismissed this visit.
+  const [seen, setSeen] = useState(/** @type {string | null} */ (null));
 
   useEffect(() => {
     if (!current) return undefined;
@@ -111,6 +121,25 @@ export default function TrainerShareView() {
     setStopping(false);
   };
 
+  const onPausedCancel = () => {
+    setApproveKey((k) => k + 1);
+    headRef.current?.focus();
+  };
+
+  // "Got it": the notice goes now. Write: POST { seen } -> dbSeenEndedNotice,
+  // an UPDATE of notice_seen_at on the client's own ended grant. If it
+  // doesn't get through, the notice shows again next time, nothing more.
+  const onSeen = (ref) => {
+    setSeen(ref);
+    fetchWithTimeout("/api/sync/trainer", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile: current, seen: ref }),
+    }).catch(() => {});
+    // Focus moves on to the code field, the next thing here. Without one,
+    // the "No trainer" line that replaces the notice takes it as it mounts.
+    document.getElementById("hw-share-code")?.focus();
+  };
+
   const onApproved = async () => {
     const next = await fetchShare(current);
     if (next.ok) { setArrived(true); setState(next); }
@@ -131,7 +160,7 @@ export default function TrainerShareView() {
       <>
         <Fade d={0}>
           {kicker}
-          {h1(who, arrived ? focusOnMount : undefined)}
+          {h1(who, arrived ? focusOnMount : headRef)}
           {sharing.live ? (
             <>
               <p style={line}>Sees your sessions, sets and how you felt for the last 24 weeks, and your main-lift trend and bests for 12 months. Read only.</p>
@@ -141,7 +170,8 @@ export default function TrainerShareView() {
             <p style={{ ...line, marginBottom: 28 }}>Paused. {who} can&apos;t see your training right now. Stop sharing, or ask {who} for a fresh code.</p>
           )}
           {/* One tap, no confirm: stopping only takes access away. */}
-          <button type="button" onClick={onStop} disabled={stopping} className="forge-press forge-tint"
+          {/* aria-disabled, not disabled: the button keeps focus while it works. */}
+          <button type="button" onClick={onStop} aria-disabled={stopping} className="forge-press forge-tint"
             style={{ width: "100%", height: 52, background: "none", border: `1px solid ${T.rule}`, borderRadius: T.r, cursor: "pointer", fontFamily: T.text, fontSize: 15, fontWeight: 500, color: T.ink, opacity: stopping ? 0.6 : 1 }}>
             {stopping ? "One moment" : "Stop sharing"}
           </button>
@@ -149,7 +179,7 @@ export default function TrainerShareView() {
           {/* Paused: a fresh code from them (or someone new) goes in here. */}
           {!sharing.live && body.open && (
             <div style={{ marginTop: 20 }}>
-              <ShareApprove name={current} level={2} onApproved={onApproved} onDone={toProfile} onCancel={toProfile}
+              <ShareApprove key={approveKey} name={current} level={2} onApproved={onApproved} onDone={toProfile} onCancel={onPausedCancel}
                 lead={<p style={{ ...line, color: T.ink }}>Got a fresh code from {who}?</p>} />
             </div>
           )}
@@ -192,12 +222,20 @@ export default function TrainerShareView() {
       <p role="status" tabIndex={-1} ref={focusOnMount} style={{ ...line, color: T.ink, marginBottom: 20, outline: "none" }}>
         Stopped. {stopped} can&apos;t see your training now.
       </p>
-    ) : ended ? (
-      <p style={{ ...line, marginBottom: 20 }}>
-        {ended.by === "closed"
-          ? `${ended.name}'s account has closed. They no longer see your training.`
-          : `${ended.name} stopped seeing your training on ${longDate.format(new Date(ended.at))}.`}
-      </p>
+    ) : ended && !(ended.ref && seen === ended.ref) ? (
+      <div style={{ marginBottom: 20 }}>
+        <p style={{ ...line, margin: 0 }}>
+          {ended.by === "closed"
+            ? `${ended.name}'s account has closed. They no longer see your training.`
+            : `${ended.name} stopped seeing your training on ${longDate.format(new Date(ended.at))}.`}
+        </p>
+        {ended.ref && (
+          <button type="button" onClick={() => onSeen(ended.ref)} className="forge-press"
+            style={{ minHeight: 44, background: "none", border: "none", padding: "0 2px", cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2 }}>
+            Got it
+          </button>
+        )}
+      </div>
     ) : null;
     content = (
       <Fade d={0}>
@@ -205,7 +243,9 @@ export default function TrainerShareView() {
         {body.open ? (
           // ShareApprove carries the page heading: "Add a trainer", then whose code it is.
           <ShareApprove name={current} title="Add a trainer" lead={notice} onDone={toProfile} onCancel={toProfile} />
-        ) : notice || <p style={line}>No trainer sees your training.</p>}
+        ) : notice || (
+          <p tabIndex={-1} ref={seen ? focusOnMount : undefined} style={{ ...line, outline: "none" }}>No trainer sees your training.</p>
+        )}
       </Fade>
     );
   } else if (state && "error" in state) {

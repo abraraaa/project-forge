@@ -8,16 +8,16 @@
 // this browser is already signed in, the approval can be finished here too.
 //
 // The code arrives in the URL fragment, which never reaches the server. It is
-// read once on mount and the fragment is dropped from the address bar. The
-// code lives in React state only; the one storage read is P.getActive(), for
-// the signed-in name.
+// read on mount (and again if another link lands while the page is open) and
+// the fragment is dropped from the address bar. The code lives in React state
+// only; the one storage read is P.getActive(), for the signed-in name.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from "react";
 import { T, DISPLAY } from "@/lib/tokens";
 import { Fade } from "@/components/ui";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import ShareApprove from "@/components/ShareApprove";
+import ShareApprove, { APPROVE_COPY } from "@/components/ShareApprove";
 import { P } from "@/lib/storage";
 import { fetchWithTimeout } from "@/lib/net";
 import { normaliseCode, formatCode } from "@/lib/trainer-code";
@@ -35,7 +35,7 @@ export const SHARE_PAGE_COPY = Object.freeze({
   copyFailed: "Couldn't reach the clipboard. Try again.",
   noCode: "Got a code?",
   noCodeLine: "Type it in the app: Profile, then Add a trainer.",
-  miss: "That code didn't work. Check it, or ask your trainer for a fresh one.",
+  miss: APPROVE_COPY.miss,
 });
 
 // The fragment as typed: a spaced or "·" code arrives percent-encoded.
@@ -79,31 +79,44 @@ async function canShareHere(profile) {
 }
 
 export default function ShareView() {
-  // Read once, before the fragment is dropped below.
-  const [code] = useState(() => (typeof window === "undefined" ? null : normaliseCode(fragment())));
+  // Read before the fragment is dropped below.
+  // One per link opened: `n` moves on each one, even when the code repeats,
+  // so the same link opened again starts over too.
+  const [link, setLink] = useState(() => ({ code: typeof window === "undefined" ? null : normaliseCode(fragment()), n: 0 }));
+  const code = link.code;
   const [me] = useState(() => (typeof window === "undefined" ? null : P.getActive()));
   const [trainer, setTrainer] = useState(/** @type {{ name: string } | { miss: true } | null} */ (null));
   const [signedIn, setSignedIn] = useState(false);
   const [copied, setCopied] = useState(/** @type {"ok" | "fail" | null} */ (null));
+  // Approved here: the code is used, so it and the in-app steps go.
+  const [approved, setApproved] = useState(false);
 
   // The code stays out of the address bar, history and anything that reads the URL later.
   useEffect(() => {
     if (window.location.hash) window.history.replaceState(null, "", "/share");
+    // Another link opened while this page is up: that code, from the start.
+    const onHash = () => {
+      const next = normaliseCode(fragment());
+      window.history.replaceState(null, "", "/share");
+      setLink((l) => ({ code: next, n: l.n + 1 })); setTrainer(null); setCopied(null); setApproved(false);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
   useEffect(() => {
-    if (!code) return undefined;
+    if (!link.code) return undefined;
     let off = false;
-    peekCode(code).then((r) => { if (!off) setTrainer(r); });
+    peekCode(link.code).then((r) => { if (!off) setTrainer(r); });
     return () => { off = true; };
-  }, [code]);
+  }, [link]);
 
   useEffect(() => {
-    if (!code || !me) return undefined;
+    if (!link.code || !me) return undefined;
     let off = false;
     canShareHere(me).then((ok) => { if (!off) setSignedIn(ok); });
     return () => { off = true; };
-  }, [code, me]);
+  }, [link, me]);
 
   const onCopy = async () => {
     if (!code) return;
@@ -128,28 +141,32 @@ export default function ShareView() {
             <Fade d={0} opaque>
               {kicker}
               {h1(name ? `${name}'s code` : SHARE_PAGE_COPY.anyone)}
-              <div style={{ padding: "18px 2px", borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}` }}>
-                <div style={{ fontFamily: T.measured, fontSize: 22, letterSpacing: "0.06em", color: T.ink, userSelect: "all", WebkitUserSelect: "all", marginBottom: 14 }}>
-                  {formatCode(code)}
+              {!approved && (
+                <div style={{ padding: "18px 2px", borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}` }}>
+                  <div style={{ fontFamily: T.measured, fontSize: 22, letterSpacing: "0.06em", color: T.ink, userSelect: "all", WebkitUserSelect: "all", marginBottom: 14 }}>
+                    {formatCode(code)}
+                  </div>
+                  {/* Quiet: the approval below, when there is one, holds the commit. */}
+                  <button type="button" onClick={onCopy} className="forge-press forge-tint"
+                    style={{ width: "100%", height: 48, background: "none", border: `1px solid ${T.rule}`, borderRadius: T.r, cursor: "pointer", fontFamily: T.text, fontSize: 15, fontWeight: 500, color: T.ink }}>
+                    {copied === "ok" ? SHARE_PAGE_COPY.copied : SHARE_PAGE_COPY.copy}
+                  </button>
+                  <div role="status" aria-live="polite" style={{ fontSize: 12, color: T.ink2, marginTop: 10, minHeight: 16, lineHeight: 1.5 }}>
+                    {miss ? SHARE_PAGE_COPY.miss : copied === "fail" ? SHARE_PAGE_COPY.copyFailed : copied === "ok" ? SHARE_PAGE_COPY.copied : ""}
+                  </div>
                 </div>
-                {/* Quiet: the approval below, when there is one, holds the commit. */}
-                <button type="button" onClick={onCopy} className="forge-press forge-tint"
-                  style={{ width: "100%", height: 48, background: "none", border: `1px solid ${T.rule}`, borderRadius: T.r, cursor: "pointer", fontFamily: T.text, fontSize: 15, fontWeight: 500, color: T.ink }}>
-                  {copied === "ok" ? SHARE_PAGE_COPY.copied : SHARE_PAGE_COPY.copy}
-                </button>
-                <div role="status" aria-live="polite" style={{ fontSize: 12, color: T.ink2, marginTop: 10, minHeight: 16, lineHeight: 1.5 }}>
-                  {miss ? SHARE_PAGE_COPY.miss : copied === "fail" ? SHARE_PAGE_COPY.copyFailed : ""}
-                </div>
-              </div>
+              )}
             </Fade>
-            <Fade d={80}>
-              <div style={{ padding: "18px 2px 0" }}>{steps}</div>
-            </Fade>
+            {!approved && (
+              <Fade d={80}>
+                <div style={{ padding: "18px 2px 0" }}>{steps}</div>
+              </Fade>
+            )}
             {signedIn && name && (
               <Fade d={0}>
-                <div style={{ marginTop: 36, paddingTop: 22, borderTop: `1px solid ${T.rule}` }}>
-                  <div style={{ fontSize: 13, color: T.ink2, marginBottom: 14, overflowWrap: "anywhere" }}>Or share from here, as {me}</div>
-                  <ShareApprove name={me} code={code} level={2} />
+                <div style={approved ? undefined : { marginTop: 36, paddingTop: 22, borderTop: `1px solid ${T.rule}` }}>
+                  {!approved && <div style={{ fontSize: 13, color: T.ink2, marginBottom: 14, overflowWrap: "anywhere" }}>Or share from here, as {me}</div>}
+                  <ShareApprove key={link.n} name={me} code={code} level={2} onApproved={() => setApproved(true)} />
                 </div>
               </Fade>
             )}

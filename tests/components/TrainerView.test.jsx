@@ -10,13 +10,17 @@
 //   - 403 needsTerms asks to agree again; 503 says not open yet;
 //   - roster rows render every signal variant;
 //   - the invite sheet shows the code, polls, flips to "is in" and reloads
-//     the roster; cancel and share link;
+//     the roster; cancel and share link; the QR of the share link shows
+//     only while the code works;
 //   - opening a client keeps the URL and puts only an index in history; a
 //     404 reads "Not shared with you now."; a late reply for an earlier
 //     client never fills the pane; remove names and posts the same client,
 //     and a failed remove says so; Forward after a reorder opens nothing;
 //     sign out posts what it should;
-//   - a final invite status (used, cancelled) stops polling for good.
+//   - a final invite status (used, cancelled) stops polling for good;
+//   - an invite reply after the sheet closed, or behind a newer issue, is
+//     dropped; a terms change while a client opens leaves no pane behind;
+//   - the upgrade panel names the trainer by the server's name once known.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -27,6 +31,7 @@ import { dirname, resolve } from "node:path";
 import { projectForTrainer } from "../../lib/trainer-view.js";
 import { todayLocalIso, addDaysIso } from "../../lib/dates.js";
 import { TRAINER_TERMS_VERSION } from "../../lib/trainer-terms.js";
+import { encodeQr, qrToSvgPath } from "../../lib/qr.js";
 
 const { server, auth } = vi.hoisted(() => ({
   server: { calls: [], routes: {} },
@@ -514,6 +519,31 @@ describe("TrainerView: the invite sheet", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("shows the share link as a QR above the code while it works, and drops it on cancel", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(issuedAt);
+    signedIn();
+    inviteRoutes();
+    await mount();
+    await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
+    await flush();
+    const dialog = screen.getByRole("dialog");
+    const qr = within(dialog).getByRole("img", { name: "QR code for the share link" });
+    const { size, modules } = encodeQr(`https://heatwayve.app/share#${CODE}`);
+    expect(qr.querySelector("path").getAttribute("d")).toBe(qrToSvgPath(modules, size));
+    expect([qr.getAttribute("width"), qr.getAttribute("height")]).toEqual(["185", "185"]);
+    // The code sits beneath it.
+    const code = dialog.querySelector("[data-code]");
+    expect(qr.compareDocumentPosition(code) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(dialog).getByText("Share link")).toBeTruthy();
+    await act(async () => { fireEvent.click(within(dialog).getByText("Cancel code")); });
+    await flush();
+    expect(within(dialog).getByRole("status").textContent).toBe("Cancelled. This code no longer works.");
+    expect(within(dialog).queryByRole("img", { name: "QR code for the share link" })).toBeNull();
+    expect(dialog.querySelector("[data-qr]")).toBeNull();
+    expect(dialog.querySelector("[data-code]").textContent).toBe("ABCD 0EFG H1JK");
+  });
+
   it("an issue that is not open yet says so", async () => {
     signedIn();
     server.routes["POST /api/trainer/invite"] = { status: 503, body: { error: "Not open yet." } };
@@ -521,5 +551,100 @@ describe("TrainerView: the invite sheet", () => {
     await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
     await flush();
     expect(within(screen.getByRole("dialog")).getByText("Not open yet.")).toBeTruthy();
+  });
+});
+
+describe("TrainerView: the terms change under an open session", () => {
+  it("a 403 needsTerms on a client leaves no half-open pane: after agreeing, the roster comes back clean", async () => {
+    signedIn();
+    server.routes["POST /api/trainer/client"] = { status: 403, body: { needsTerms: true } };
+    server.routes["POST /api/trainer/upgrade"] = { status: 200, body: { ok: true, name: "Coach Kim" } };
+    const { container } = await mount();
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("The Trainer Terms changed");
+    expect(window.history.state?.view).not.toBe("client");
+    typeName("coachkim");
+    fireEvent.click(screen.getByText("Agree with Face ID"));
+    await flush();
+    expect(screen.getByText("Add a client")).toBeTruthy();
+    expect(container.firstChild.getAttribute("data-view")).toBe("roster");
+    expect(screen.queryByText("One moment")).toBeNull();
+    expect(screen.getByText("Pick a client to see their training.")).toBeTruthy();
+    expect(screen.getByText("Alex", { selector: "span" }).closest("button").getAttribute("aria-current")).toBeNull();
+    // The same client opens again from the roster.
+    server.routes["POST /api/trainer/client"] = { status: 200, body: { client: { name: "Alex", since: 0 }, view: clientView() } };
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    expect(screen.getByText("Alex", { selector: "h1" })).toBeTruthy();
+  });
+
+  it("names the trainer as clients see them: the server's name, not what was typed", async () => {
+    let session = false;
+    server.routes["POST /api/trainer/clients"] = () => (session
+      ? { status: 200, body: { me: { name: "Coach Kim" }, clients: SIGNALS } }
+      : { status: 401, body: {} });
+    server.routes["POST /api/trainer/session"] = () => { session = true; return { status: 200, body: { ok: true, name: "Coach Kim" } }; };
+    server.routes["POST /api/trainer/client"] = { status: 403, body: { needsTerms: true } };
+    await mount();
+    typeName("  COACHKIM ");
+    fireEvent.click(screen.getByText("Sign in with Face ID"));
+    await flush();
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    expect(screen.getByText("Clients see you as Coach Kim.")).toBeTruthy();
+    expect(screen.queryByText(/Clients see you as COACHKIM/)).toBeNull();
+  });
+});
+
+describe("TrainerView: invite replies in order", () => {
+  // Each issue waits until the test answers it.
+  function heldIssues() {
+    const held = [];
+    server.routes["POST /api/trainer/invite"] = (b) => (b.action === "issue"
+      ? new Promise((done) => held.push(done)) : { status: 200, body: { ok: true } });
+    server.routes["GET /api/trainer/invite"] = { status: 200, body: { status: "pending", expiresAt: Date.now() + 3_600_000 } };
+    const code = (c) => ({ status: 200, body: { code: c, expiresAt: Date.now() + 3_600_000 } });
+    return { held, code };
+  }
+
+  it("a reply that lands after Done never reopens the sheet", async () => {
+    signedIn();
+    const { held, code } = heldIssues();
+    await mount();
+    await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
+    expect(within(screen.getByRole("dialog")).getByText("One moment")).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("dialog")).getByText("Done"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await act(async () => { held[0](code("ABCD0EFGH1JK")); });
+    await flush();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("a reply that lands after the scrim closes it never reopens the sheet, nor an error", async () => {
+    signedIn();
+    const { held } = heldIssues();
+    await mount();
+    await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
+    fireEvent.click(document.querySelector(".forge-scrim"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await act(async () => { held[0]({ status: 503, body: { error: "Not open yet." } }); });
+    await flush();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("of two issues in flight, only the later one fills the sheet", async () => {
+    signedIn();
+    const { held, code } = heldIssues();
+    await mount();
+    await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
+    await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
+    expect(held).toHaveLength(2);
+    await act(async () => { held[1](code("ZZZZ0EFGH1JK")); });
+    await flush();
+    expect(screen.getByRole("dialog").querySelector("[data-code]").textContent).toBe("ZZZZ 0EFG H1JK");
+    await act(async () => { held[0](code("ABCD0EFGH1JK")); });
+    await flush();
+    expect(screen.getByRole("dialog").querySelector("[data-code]").textContent).toBe("ZZZZ 0EFG H1JK");
   });
 });

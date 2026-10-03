@@ -10,7 +10,8 @@
 //   - set lines: "100 × 5, 5, 5 · RPE 8, 8, 8.5", RIR when RPE is missing,
 //     bodyweight as reps or proven added kg;
 //   - 24 rhythm cells, the oldest 16 behind the narrow disclosure;
-//   - a breather shows as paused, never its reason;
+//   - a breather shows as paused, never its reason; a cell's note never
+//     breaks inside a word; a travel session says so, and "Away" never shows;
 //   - "Stop seeing" asks first, then hands back to the dashboard;
 //   - the source never imports sessionCount or the device store.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,6 +160,30 @@ describe("TrainerClientView", () => {
     expect(rhythmCellText({ ...w, partial: true, plannedSoFar: 2, done: 1 })).toBe("1 of 2 so far");
     expect(rhythmCellText({ ...w, planned: 0, plannedResting: 3, done: 0 })).toBe("paused");
     expect(rhythmCellText({ ...w, planned: 1, plannedResting: 2, done: 1 })).toBe("1/1 · part paused");
+  });
+
+  it("a rhythm cell's note breaks between words only, never inside one", () => {
+    const meta = { breaks: [{ id: "b1", start: ago(30), endedAt: ago(16), reason: "injured" }] };
+    render(<TrainerClientView client={client} view={view(history(), meta)}/>);
+    const notes = [...document.querySelectorAll("ol.forge-wide-rhythm li > span[aria-hidden] > span")]
+      .filter((n) => /^(so far|paused|part paused)$/.test(n.textContent));
+    expect(notes.map((n) => n.textContent)).toEqual(expect.arrayContaining(["so far", "paused"]));
+    for (const n of notes) {
+      expect(n.style.overflowWrap).toBe("");
+      expect(n.getAttribute("style")).not.toMatch(/overflow-wrap|word-break/);
+    }
+  });
+
+  it("marks a travel session as one, and never says Away", () => {
+    const hist = history();
+    hist[0] = rec(1, { travel: true });
+    const meta = { breaks: [{ id: "b1", start: ago(40), endedAt: ago(34), reason: "travelling" }] };
+    render(<TrainerClientView client={client} view={view(hist, meta)}/>);
+    const rows = [...document.querySelectorAll("[data-session]")];
+    expect(rows[0].textContent).toContain("Travel session");
+    expect(rows.filter((r) => r.textContent.includes("Travel session"))).toHaveLength(1);
+    expect(document.body.textContent).not.toMatch(/\bAway\b/i);
+    expect(document.body.textContent).not.toMatch(/travelling/i);
   });
 
   it("shows a breather as paused, never why", () => {

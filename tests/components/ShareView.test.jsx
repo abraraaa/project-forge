@@ -7,14 +7,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 
 const { server } = vi.hoisted(() => ({
-  server: { peek: null, status: null, calls: [] },
+  server: { peek: null, status: null, calls: [], mounts: 0 },
 }));
 
-vi.mock("@/components/ShareApprove", () => ({
-  default: (props) => (
-    <div data-testid="share-approve" data-name={props.name} data-code={props.code} />
-  ),
-}));
+vi.mock("@/components/ShareApprove", async (importOriginal) => {
+  const { useState } = await import("react");
+  // data-mount: which mount this is, so a fresh approval shows as a new number.
+  function Stub(props) {
+    const [mount] = useState(() => ++server.mounts);
+    return (
+      <div data-testid="share-approve" data-name={props.name} data-code={props.code} data-mount={mount}>
+        <button type="button" onClick={() => props.onApproved?.()}>stub: approved</button>
+      </div>
+    );
+  }
+  return { ...(await importOriginal()), default: Stub };
+});
 vi.mock("@/lib/net", () => ({
   fetchWithTimeout: vi.fn(async (url, opts) => {
     server.calls.push({ url, method: opts?.method || "GET", body: opts?.body ? JSON.parse(opts.body) : null });
@@ -28,7 +36,11 @@ vi.mock("@/lib/net", () => ({
 }));
 
 import ShareView, { SHARE_PAGE_COPY } from "../../components/ShareView.jsx";
+import { APPROVE_COPY } from "@/components/ShareApprove";
 import { P } from "@/lib/storage";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 
 const CODE = "ABCD0FGH1KMN";
 const hit = (name = "Jo") => ({ status: 200, body: { trainer: { name }, expiresAt: 1 } });
@@ -40,6 +52,7 @@ beforeEach(() => {
   server.peek = hit();
   server.status = SIGNED_OUT;
   server.calls = [];
+  server.mounts = 0;
 });
 afterEach(() => {
   cleanup();
@@ -102,6 +115,8 @@ describe("ShareView: the code from the link", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Copy code" })); });
     expect(writeText).toHaveBeenCalledWith(CODE);
     expect(screen.getByRole("button", { name: "Copied" })).toBeTruthy();
+    // Said in the status line too, so a screen reader hears it.
+    expect(screen.getByRole("status").textContent).toBe("Copied");
   });
 
   it("says so when the clipboard refuses", async () => {
@@ -131,7 +146,57 @@ describe("ShareView: the code from the link", () => {
   });
 });
 
+describe("ShareView: another link while the page is open", () => {
+  it("a hashchange reads the new code, peeks it, and drops the fragment again", async () => {
+    await openShare(`#${CODE}`);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Jo's code");
+    server.peek = hit("Kim");
+    await act(async () => {
+      window.history.replaceState(null, "", "/share#zzzz-0fgh-1kmn");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(screen.getByText("ZZZZ 0FGH 1KMN")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Kim's code");
+    expect(server.calls.filter((c) => c.url === "/api/share/peek").map((c) => c.body)).toEqual([{ code: CODE }, { code: "ZZZZ0FGH1KMN" }]);
+    expect(window.location.hash).toBe("");
+  });
+
+  it("the same link opened again peeks again, keeps the name, and starts a fresh approval", async () => {
+    P.setActive("sam");
+    server.status = signedIn();
+    await openShare(`#${CODE}`);
+    expect(screen.getByTestId("share-approve").dataset.mount).toBe("1");
+    await act(async () => { fireEvent.click(screen.getByText("stub: approved")); });
+    expect(screen.queryByText("ABCD 0FGH 1KMN")).toBeNull();
+    await act(async () => {
+      window.history.replaceState(null, "", `/share#${CODE}`);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Jo's code");
+    expect(screen.getByText("ABCD 0FGH 1KMN")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy code" })).toBeTruthy();
+    // A new approval for the new link, not the finished one.
+    expect(screen.getByTestId("share-approve").dataset.mount).toBe("2");
+    expect(server.calls.filter((c) => c.url === "/api/share/peek")).toHaveLength(2);
+    expect(window.location.hash).toBe("");
+  });
+});
+
 describe("ShareView: finishing here", () => {
+  it("once approved here, the used code, Copy code and the in-app steps go", async () => {
+    P.setActive("sam");
+    server.status = signedIn();
+    await openShare(`#${CODE}`);
+    expect(screen.getByText("ABCD 0FGH 1KMN")).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByText("stub: approved")); });
+    expect(screen.queryByText("ABCD 0FGH 1KMN")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy code" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "In the app" })).toBeNull();
+    expect(screen.queryByText(/Or share from here/)).toBeNull();
+    // The approval stays, on its done step.
+    expect(screen.getByTestId("share-approve")).toBeTruthy();
+  });
+
   it("shows the approval when this browser is signed in and may add a trainer", async () => {
     P.setActive("sam");
     server.status = signedIn();
@@ -163,6 +228,14 @@ describe("ShareView: finishing here", () => {
     server.status = signedIn({ open: false });
     await openShare(`#${CODE}`);
     expect(screen.queryByTestId("share-approve")).toBeNull();
+  });
+});
+
+describe("ShareView: copy", () => {
+  it("the miss line is the approval's own, not a copy of it", () => {
+    expect(SHARE_PAGE_COPY.miss).toBe(APPROVE_COPY.miss);
+    const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../components/ShareView.jsx"), "utf8");
+    expect(src).not.toContain("That code didn't work");
   });
 });
 

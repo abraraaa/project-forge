@@ -2,7 +2,7 @@
 // tiers), the schedule as runs, and the look ring's JS mirror. Pure; no DB.
 import { describe, it, expect } from "vitest";
 import {
-  projectForTrainer, projectBreaks, scheduleRuns, runsWeekFor, nextLooks, trainerToday,
+  projectForTrainer, projectBreaks, scheduleRuns, runsWeekFor, nextLooks, trainerToday, rosterSignal,
   VIEW_KEYS, DETAIL_DAYS, TREND_DAYS,
 } from "@/lib/trainer-view";
 import { mainLiftTrend, readinessBreakdown } from "@/lib/analytics";
@@ -476,5 +476,18 @@ describe("trainerToday", () => {
     expect(trainerToday("2026-02-31", now)).toBe("2026-10-03");
     expect(trainerToday("2026-10-03T00:00", now)).toBe("2026-10-03");
     expect(trainerToday(undefined, now)).toBe("2026-10-03");
+  });
+});
+
+describe("rosterSignal: the last date", () => {
+  const today = "2026-10-03";
+  const row = (lastDate) => ({ recent: [], lastDate, userWeek: null, breaks: null });
+  it("an impossible but well-formed date reads as no date, not a day that rolled over", () => {
+    expect(rosterSignal(row("2026-09-30"), today).lastTrainedDaysAgo).toBe(3);
+    // "2026-02-30" would parse as 2 March and print "Last trained 215 days ago".
+    for (const bad of ["2026-02-30", "2026-09-31", "2026-13-01", "2026-00-10", "2025-02-29"]) {
+      expect(rosterSignal(row(bad), today).lastTrainedDaysAgo, bad).toBeNull();
+    }
+    expect(rosterSignal(row("2024-02-29"), "2024-03-01").lastTrainedDaysAgo).toBe(1);
   });
 });

@@ -25,6 +25,7 @@ import { todayLocalIso } from "@/lib/dates";
 import { formatCode, shareUrl } from "@/lib/trainer-code";
 import { TRAINER_TERMS_COPY, TRAINER_TERMS_VERSION } from "@/lib/trainer-terms";
 import TrainerClientView, { Nums, msDayMonth } from "@/components/TrainerClientView";
+import QrCode from "@/components/QrCode";
 
 const POLL_MS = 3000;
 const POLL_FOR_MS = 20 * 60_000;
@@ -32,6 +33,8 @@ const POLL_FOR_MS = 20 * 60_000;
 const CEREMONY_REUSE_MS = 4 * 60_000;
 const FACE_ID_FAILED = "Face ID didn't go through. Try again.";
 const WENT_WRONG = "Something went wrong. Try again.";
+// A share link is a 37-module symbol with its quiet zone: 5 px a module.
+const QR_PX = 185;
 
 /** JSON in, { status, body } out; status 0 when the network failed. */
 async function call(path, body) {
@@ -122,10 +125,21 @@ export default function TrainerView() {
   const entryRef = useRef(/** @type {string | null} */ (null));
 
   const [invite, setInvite] = useState(null); // { code, expiresAt, issuedAt } | { error } | { issuing: true }
+  // Only the latest issue may fill the sheet; closing it drops any reply still out.
+  const inviteSeq = useRef(0);
 
   const reset = () => {
     setMe(null); setClients([]); setOpen(null); setPane(null); setInvite(null);
-    ceremony.current = null; paneSeq.current += 1; entryRef.current = null;
+    ceremony.current = null; paneSeq.current += 1; inviteSeq.current += 1; entryRef.current = null;
+  };
+
+  // The terms changed under an open session: no client stays half-open, so
+  // the roster comes back clean once they agree again.
+  const toTerms = () => {
+    paneSeq.current += 1; entryRef.current = null;
+    setOpen(null); setPane(null);
+    if (window.history.state?.view === "client") window.history.replaceState({}, "");
+    setPhase("terms");
   };
 
   const fetchRoster = () => call("/api/trainer/clients", { today: todayLocalIso() });
@@ -138,7 +152,7 @@ export default function TrainerView() {
     } else if (r.status === 401) {
       reset(); setPhase("signedOut");
     } else if (r.status === 403 && r.body.needsTerms) {
-      setPhase("terms");
+      toTerms();
     } else if (phase !== "roster") {
       setPhase("error");
     }
@@ -177,7 +191,12 @@ export default function TrainerView() {
     if (!c) { setBusy(false); return; }
     const r = await call("/api/trainer/session", { authToken: c.token, profile: c.name });
     setBusy(false);
-    if (r.status === 200) { ceremony.current = null; await loadRoster(); return; }
+    if (r.status === 200) {
+      ceremony.current = null;
+      if (typeof r.body.name === "string") setMe(r.body.name);
+      await loadRoster();
+      return;
+    }
     if (r.status === 403 && r.body.notTrainer) { setPhase("upgrade"); return; }
     if (r.status === 403 && r.body.needsTerms) { setPhase("terms"); return; }
     if (r.status === 409 && r.body.needsNativePasskey) { setLegacy(true); return; }
@@ -231,7 +250,7 @@ export default function TrainerView() {
     if (r.status === 200 && r.body.view) setPane({ ref: c.ref, state: "ready", client: r.body.client, view: r.body.view });
     else if (r.status === 404) setPane({ ref: c.ref, state: "missing" });
     else if (r.status === 401) { reset(); setPhase("signedOut"); }
-    else if (r.status === 403 && r.body.needsTerms) setPhase("terms");
+    else if (r.status === 403 && r.body.needsTerms) toTerms();
     else setPane({ ref: c.ref, state: "error" });
   };
 
@@ -282,8 +301,10 @@ export default function TrainerView() {
   // ── The invite ────────────────────────────────────────────────────────────
 
   const issue = async () => {
+    const seq = ++inviteSeq.current;
     setInvite({ issuing: true });
     const r = await call("/api/trainer/invite", { action: "issue" });
+    if (seq !== inviteSeq.current) return;
     if (r.status === 200 && r.body.code) {
       setInvite({ code: r.body.code, expiresAt: r.body.expiresAt, issuedAt: Date.now() });
     } else if (r.status === 401) {
@@ -292,6 +313,7 @@ export default function TrainerView() {
       setInvite({ error: r.status === 503 ? "Not open yet." : (r.body.error || WENT_WRONG) });
     }
   };
+  const closeInvite = () => { inviteSeq.current += 1; setInvite(null); };
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -326,7 +348,7 @@ export default function TrainerView() {
             </>
           )}
           {(phase === "upgrade" || phase === "terms") && (
-            <UpgradePanel terms={phase === "terms"} who={who} askName={phase === "terms" && !who}
+            <UpgradePanel terms={phase === "terms"} who={me || who} askName={phase === "terms" && !who}
               nameRef={nameRef} busy={busy} onAgree={agree}/>
           )}
           {legacy && (
@@ -420,7 +442,7 @@ export default function TrainerView() {
       </div>
 
       {invite && (
-        <InviteSheet invite={invite} onIssue={issue} onClose={() => setInvite(null)} onUsed={loadRoster}/>
+        <InviteSheet invite={invite} onIssue={issue} onClose={closeInvite} onUsed={loadRoster}/>
       )}
     </div>
   );
@@ -561,10 +583,16 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
         {invite.error && <div role="status" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5 }}>{invite.error}</div>}
         {code && (
           <>
+            {/* The QR only while the code works. The quiet zone sits inside the
+                svg, so pulling it left lines the modules up with the text. */}
+            {state === "pending" && (
+              <div data-qr="" style={{ margin: "-8px 0 2px -20px", width: QR_PX }}>
+                <QrCode text={shareUrl(code)} width={QR_PX} height={QR_PX}/>
+              </div>
+            )}
             <div data-code="" style={{ fontFamily: T.measured, fontSize: 22, letterSpacing: "0.06em", color: T.ink, margin: "0 0 14px", opacity: state === "pending" ? 1 : 0.45 }}>
               {formatCode(code)}
             </div>
-            {/* The QR of shareUrl(code) sits here once it has passed a device scan. */}
             <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "0 0 4px" }}>
               In Heatwayve, they go to Profile → Add a trainer and type this code. Works once, until <span style={{ fontFamily: T.measured }}>{clockTime(invite.expiresAt)}</span>.
             </p>

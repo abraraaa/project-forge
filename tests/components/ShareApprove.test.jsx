@@ -223,3 +223,61 @@ describe("ShareApprove: approval", () => {
     expect(screen.queryByText(/You'll approve as/)).toBeNull();
   });
 });
+
+describe("ShareApprove: a stale peek", () => {
+  const original = fetchWithTimeout.getMockImplementation();
+  afterEach(() => { fetchWithTimeout.mockImplementation(original); });
+
+  // Each peek waits until the test answers it; approvals answer from server.approve.
+  function heldPeeks() {
+    const held = [];
+    fetchWithTimeout.mockImplementation(async (url, opts) => {
+      if (url !== "/api/share/peek") return original(url, opts);
+      const code = JSON.parse(opts.body).code;
+      const [status, body] = await new Promise((done) => held.push({ code, done }));
+      return { ok: status >= 200 && status < 300, status, json: async () => body };
+    });
+    return {
+      held,
+      answer: async (code, reply) => { await act(async () => { held.find((h) => h.code === code).done(reply); }); },
+    };
+  }
+  const OTHER = "ZZZZ0EFGH1JK";
+
+  it("an earlier code's answer arriving after a newer one never takes over", async () => {
+    const { held, answer } = heldPeeks();
+    render(<ShareApprove name="sam" />);
+    await type(CODE);
+    await type(OTHER);
+    expect(held.map((h) => h.code)).toEqual([CODE, OTHER]);
+    await answer(OTHER, [200, { trainer: { name: "Kim" }, expiresAt: 1 }]);
+    expect(screen.getByText("Kim wants to see your training")).toBeTruthy();
+    await answer(CODE, HIT);
+    expect(screen.getByText("Kim wants to see your training")).toBeTruthy();
+    expect(screen.queryByText(/Jo/)).toBeNull();
+    // Sharing goes to the code on screen.
+    server.approve = [[200, { ok: true }]];
+    await tap("Share with Kim");
+    expect(calls("/api/share/approve")[0]).toMatchObject({ code: OTHER });
+  });
+
+  it("a hit for a code since edited away opens nothing", async () => {
+    const { answer } = heldPeeks();
+    render(<ShareApprove name="sam" />);
+    await type(CODE);
+    await type("ABCD 0EF");
+    await answer(CODE, HIT);
+    expect(screen.queryByText(/wants to see your training/)).toBeNull();
+    expect(field().value).toBe("ABCD 0EF");
+  });
+
+  it("a miss for a code since edited away says nothing", async () => {
+    const { answer } = heldPeeks();
+    render(<ShareApprove name="sam" />);
+    await type(CODE);
+    await type("ABCD 0EF");
+    await answer(CODE, MISS);
+    expect(screen.queryByText(MISS[1].error)).toBeNull();
+    expect(screen.getByText("Next").closest("button").disabled).toBe(true);
+  });
+});

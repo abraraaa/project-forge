@@ -117,6 +117,34 @@ describe("trainer store: invites", () => {
   });
 });
 
+describe("trainer store: the ended notice, seen", () => {
+  beforeEach(() => { calls.length = 0; reply = () => []; process.env.DATABASE_URL = "postgres://fake"; });
+  afterEach(() => { delete process.env.DATABASE_URL; });
+
+  it("dbSeenEndedNotice is one UPDATE of notice_seen_at, scoped to the client's own ended trainer grant", async () => {
+    reply = () => [{ id: "hwg_t1" }];
+    expect(await s.dbSeenEndedNotice(T, "hwg_t1", NOW)).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(flat(calls[0].q)).toBe(
+      "UPDATE oauth_grants SET notice_seen_at = ? WHERE id = ? AND account_id = ? AND kind = 'trainer' "
+      + "AND revoked_at IS NOT NULL AND notice_seen_at IS NULL RETURNING id",
+    );
+    expect(calls[0].values).toEqual([NOW, "hwg_t1", T]);
+    reply = () => [];
+    expect(await s.dbSeenEndedNotice(T, "hwg_t1", NOW)).toBe(false);
+    delete process.env.DATABASE_URL;
+    expect(await s.dbSeenEndedNotice(T, "hwg_t1", NOW)).toBeNull();
+  });
+
+  it("dbClientShare: a seen notice is not shown again; the seen time comes back", async () => {
+    const row = { id: "hwg_t1", created_at: NOW - 9e8, revoked_at: NOW - 86_400_000, revoked_by: "trainer", handle: "tia", display: "Tia" };
+    reply = () => [{ ...row, notice_seen_at: null }];
+    expect(await s.dbClientShare(T, NOW)).toEqual({ sharing: null, ended: { ref: "hwg_t1", name: "Tia", at: NOW - 86_400_000, by: "trainer" }, noticeSeenAt: null });
+    reply = () => [{ ...row, notice_seen_at: String(NOW - 1000) }];
+    expect(await s.dbClientShare(T, NOW)).toEqual({ sharing: null, ended: null, noticeSeenAt: NOW - 1000 });
+  });
+});
+
 describe("trainer files: no destructive SQL, every UPDATE named", () => {
   const root = resolve(__dirname, "..");
   const read = (f) => readFileSync(resolve(root, f), "utf8");
@@ -131,12 +159,17 @@ describe("trainer files: no destructive SQL, every UPDATE named", () => {
     for (const f of FILES) expect(read(f), f).not.toMatch(/\bDELETE\b|\bDROP\b|\bTRUNCATE\b|\bdel\(|removeItem/);
   });
 
-  it("trainer-store's writes are exactly the invite upsert, the cancel UPDATE, the approve transaction, the look ring, the trainer's remove and the roster ring", () => {
+  it("trainer-store's writes are exactly the invite upsert, the cancel UPDATE, the approve transaction, the look ring, the trainer's remove, the roster ring and the notice seen", () => {
     const src = read("lib/trainer-store.js");
     const writes = [...src.matchAll(/q`\s*(INSERT INTO \w+|UPDATE \w+)/g)].map((m) => m[1]);
     expect(writes).toEqual(["INSERT INTO trainer_invites", "UPDATE trainer_invites",
       "UPDATE trainer_invites", "UPDATE oauth_grants", "INSERT INTO oauth_grants",
-      "UPDATE oauth_grants", "UPDATE oauth_grants", "UPDATE oauth_grants"]);
+      "UPDATE oauth_grants", "UPDATE oauth_grants", "UPDATE oauth_grants", "UPDATE oauth_grants"]);
+    // Each one is named in the header's write list.
+    const header = src.slice(0, src.indexOf("import "));
+    for (const fn of ["dbIssueInvite", "dbCancelInvite", "dbApproveTrainer", "dbLogFullLook", "dbRosterSignals", "dbRemoveByTrainer", "dbSeenEndedNotice"]) {
+      expect(header).toContain(`· ${fn}:`);
+    }
   });
 
   it("the invite route writes only through the store, and returns the code from issue alone", () => {
