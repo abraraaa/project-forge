@@ -113,7 +113,12 @@ const nextConfig = {
       ],
     }, {
       // Trainer and share surfaces are personal and signed-in; never indexed.
-      source: "/(trainer|share)",
+      source: "/trainer/:path*",
+      headers: [
+        { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+      ],
+    }, {
+      source: "/share",
       headers: [
         { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
       ],

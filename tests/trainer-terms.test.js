@@ -1,6 +1,7 @@
 // Trainer Terms and share consent: copy pinned with its version, the server
 // validators, the launch switches, and the public-name rule.
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { existsSync } from "node:fs";
 import {
   TRAINER_LIVE, TRAINER_TERMS_VERSION, KNOWN_TRAINER_TERMS_VERSIONS, TRAINER_TERMS_COPY,
   acceptedTrainerTermsVersion, isCurrentTrainerTerms,
@@ -33,6 +34,11 @@ describe("trainer terms", () => {
     expect(Object.isFrozen(TRAINER_TERMS_COPY)).toBe(true);
     expect(Object.isFrozen(TRAINER_TERMS_COPY.summary)).toBe(true);
     for (const v of strings(TRAINER_TERMS_COPY)) expect(v).not.toMatch(/server/i);
+  });
+
+  it("the Terms link opens a page that exists", () => {
+    expect(TRAINER_TERMS_COPY.href).toBe("/trainer/terms");
+    expect(existsSync(new URL(`../app${TRAINER_TERMS_COPY.href}/page.jsx`, import.meta.url))).toBe(true);
   });
 
   it("accepts only the current version, as a string on an object", () => {

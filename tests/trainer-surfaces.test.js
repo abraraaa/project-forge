@@ -31,7 +31,8 @@ describe("the three pages are thin, unindexed shells", () => {
       expect(shells).toMatch(new RegExp(`export const ${name} = dynamic\\(\\(\\) => import\\("@/components/[A-Za-z]+"\\), \\{\\n  ssr: false,`));
     }
     const cfg = read("next.config.mjs");
-    expect(cfg).toContain('source: "/(trainer|share)",');
+    expect(cfg).toContain('source: "/trainer/:path*",');
+    expect(cfg).toContain('source: "/share",');
     expect(cfg).toContain('source: "/profile/trainer",');
   });
 });
