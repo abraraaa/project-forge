@@ -129,7 +129,11 @@ describe("consent is claimed only where the line shows", () => {
       const src = read(f);
       const calls = src.match(/authenticatePasskey\(([^()]|\([^()]*\))*\)/g) || [];
       expect(calls.length, f).toBe((src.match(/authenticatePasskey\(/g) || []).length);
-      for (const c of calls) if (c.slice(20, -1).replace(/\([^()]*\)/g, "").includes(",")) hits.push(`${f}: ${c}`);
+      for (const c of calls) {
+        const inner = c.slice(20, -1).replace(/\([^()]*\)/g, "");
+        if (/^[^,]+,\s*\{\s*quiet:\s*true\s*\}\s*$/.test(inner)) continue; // a quiet trainer or share ceremony claims nothing
+        if (inner.includes(",")) hits.push(`${f}: ${c}`);
+      }
     }
     expect(hits).toHaveLength(1);
     expect(hits[0]).toMatch(/^components\/ProfileScreen\.jsx: /);
