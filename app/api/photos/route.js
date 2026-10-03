@@ -92,10 +92,11 @@ async function gate(request) {
   const cookieToken = request.cookies.get("hw_photos")?.value || null;
   const token = headerToken || cookieToken;
   const data = await readTokenData(token);
-  // The token's account must be the one holding the named profile. Scope-blind
-  // here: the cookie's path scoping keeps it on this route.
+  // The token's account must be the one holding the named profile, and the
+  // token must be a ceremony token (unscoped) or the photo cookie's own scope.
+  // Any other scope (sync, trainer) is refused here, before any photo read or write.
   const identity = await resolveTokenIdentity(data, profile, Date.now());
-  if (!identity) {
+  if (!identity || (data.scope && data.scope !== "photos")) {
     return { fail: NextResponse.json({ error: "Passkey authentication required", requiresAuth: true }, { status: 401 }) };
   }
   // Sliding rotation — cookie-carried photo-scope tokens only.

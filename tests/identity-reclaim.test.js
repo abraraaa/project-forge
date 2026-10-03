@@ -324,7 +324,9 @@ describe("a lapsed lifter's handle is reclaimed as a new account", () => {
     const opts = await options();
     expect((await register(opts.challenge)).status).toBe(200);
     const B = db.accounts[1];
-    const bTok = [...tokens.keys()][0];
+    // Photos take B's unscoped ceremony token (as login-verify issues), not the sync token.
+    tokens.set("tB", { ...[...tokens.values()][0], scope: undefined });
+    const bTok = "tB";
     const url = (q) => `https://heatwayve.app/api/photos?profile=Sam${q}`;
     const as = (method, q, body) => new NextRequest(url(q), { method, headers: { "x-hw-auth": bTok }, body });
     const own = `forge/profiles/${B.id}/photos/2026-09-01.jpg`;
