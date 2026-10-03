@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { rateLimit, rateLimitShared, sharedBucket, clientIp, _resetRateLimiter } from "../lib/rate-limit.js";
+import { rateLimit, rateLimitShared, failureGate, sharedBucket, clientIp, _resetRateLimiter } from "../lib/rate-limit.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -121,5 +121,111 @@ describe("rateLimitShared (Neon-backed, bounded)", () => {
     const q = () => Promise.reject(new Error("down"));
     expect(await rateLimitShared(req("2.2.2.2"), "t", 0, { q })).toBeNull();
     expect(await rateLimitShared(req("2.2.2.2"), "t", 0, { q: null })).toBeNull();
+  });
+});
+
+describe("failureGate (durable failure count per account, fails CLOSED)", () => {
+  const HOUR = 3_600_000;
+  const NOW = 1_790_000_123_456; // mid-hour
+  const HOUR_START = Math.floor(NOW / HOUR) * HOUR;
+  // Fake Neon tag: the rate_buckets SELECT and upsert, schema DDL ignored.
+  const fakeDb = () => {
+    const rows = new Map();
+    const texts = [];
+    const q = (strings, ...v) => {
+      const text = strings.join("?");
+      if (/^\s*(CREATE|ALTER)\b/.test(text)) return Promise.resolve([]);
+      texts.push(text);
+      if (text.startsWith("SELECT count FROM rate_buckets")) {
+        const r = rows.get(v[0]);
+        return Promise.resolve(r && r.window_start === v[1] ? [{ count: r.count }] : []);
+      }
+      if (text.includes("INSERT INTO rate_buckets")) {
+        const [bucket, windowStart] = v;
+        const r = rows.get(bucket);
+        const count = r && r.window_start === windowStart ? r.count + 1 : 1;
+        rows.set(bucket, { window_start: windowStart, count });
+        return Promise.resolve([{ count }]);
+      }
+      return Promise.reject(new Error(`unexpected SQL: ${text}`));
+    };
+    return { q, rows, texts };
+  };
+  const opts = (q, now = NOW) => ({ q, now, windowMs: HOUR, limited: "Too many tries.", unavailable: "Unavailable." });
+
+  it("no database: blocked with a 503, and strike() refuses", async () => {
+    const g = await failureGate("f", "acct", 10, opts(null));
+    expect(g.blocked?.status).toBe(503);
+    expect(await g.blocked?.json()).toEqual({ error: "Unavailable." });
+    await expect(g.strike()).rejects.toThrow();
+  });
+
+  it("a counter read that throws: blocked with a 503", async () => {
+    const q = () => Promise.reject(new Error("down"));
+    const g = await failureGate("f", "acct", 10, opts(q));
+    expect(g.blocked?.status).toBe(503);
+  });
+
+  it("contrast: rateLimitShared with the same throwing store lets the request through", async () => {
+    const q = () => Promise.reject(new Error("down"));
+    expect(await rateLimitShared({ headers: new Headers() }, "f", 0, { q })).toBeNull();
+    expect(await rateLimitShared({ headers: new Headers() }, "f", 0, { q: null })).toBeNull();
+  });
+
+  it("counts only strikes: below the limit passes, at the limit 429 until the clock hour turns", async () => {
+    const { q, rows } = fakeDb();
+    for (let k = 0; k < 9; k++) {
+      const g = await failureGate("f", "acct", 10, opts(q));
+      expect(g.blocked).toBeNull();
+      await g.strike();
+    }
+    // Checking does not count.
+    for (let k = 0; k < 5; k++) expect((await failureGate("f", "acct", 10, opts(q))).blocked).toBeNull();
+    await (await failureGate("f", "acct", 10, opts(q))).strike();
+    const g = await failureGate("f", "acct", 10, opts(q));
+    expect(g.blocked?.status).toBe(429);
+    expect(await g.blocked?.json()).toEqual({ error: "Too many tries." });
+    expect(Number(g.blocked?.headers.get("Retry-After"))).toBe(Math.ceil((HOUR_START + HOUR - NOW) / 1000));
+    // Still blocked at the last millisecond of the hour, open at the turn.
+    expect((await failureGate("f", "acct", 10, opts(q, HOUR_START + HOUR - 1))).blocked?.status).toBe(429);
+    expect((await failureGate("f", "acct", 10, opts(q, HOUR_START + HOUR))).blocked).toBeNull();
+    // One row per bucket, reset in place: the store never grows past it.
+    expect(rows.size).toBe(1);
+    expect([...rows.keys()]).toEqual([sharedBucket("f", "acct")]);
+  });
+
+  it("the window is the aligned clock hour, read and written alike", async () => {
+    const { q, texts } = fakeDb();
+    const calls = [];
+    const spy = (strings, ...v) => { calls.push(v); return q(strings, ...v); };
+    const g = await failureGate("f", "acct", 10, opts(spy));
+    await g.strike();
+    const real = calls.filter((v) => v.length);
+    expect(real[0]).toEqual([sharedBucket("f", "acct"), HOUR_START]);
+    expect(real[1]).toEqual([sharedBucket("f", "acct"), HOUR_START]);
+    expect(texts[0].replace(/\s+/g, " ").trim()).toBe("SELECT count FROM rate_buckets WHERE bucket = ? AND window_start = ?");
+  });
+
+  it("strike() is the rateLimitShared upsert, text for text, and throws when the write fails", async () => {
+    const a = fakeDb();
+    await rateLimitShared({ headers: new Headers() }, "f", 10, { q: a.q, id: "acct", now: NOW, windowMs: HOUR });
+    const b = fakeDb();
+    await (await failureGate("f", "acct", 10, opts(b.q))).strike();
+    const upsert = (t) => t.find((x) => x.includes("INSERT INTO rate_buckets"));
+    expect(upsert(b.texts)).toBe(upsert(a.texts));
+    expect(upsert(b.texts)).toMatch(/rate_buckets\.window_start = EXCLUDED\.window_start THEN rate_buckets\.count \+ 1/);
+    expect(b.rows.get(sharedBucket("f", "acct"))).toEqual(a.rows.get(sharedBucket("f", "acct")));
+
+    let reads = 0;
+    const flaky = (strings, ...v) => {
+      const text = strings.join("?");
+      if (text.includes("INSERT INTO rate_buckets")) return Promise.reject(new Error("down"));
+      if (text.startsWith("SELECT count")) reads++;
+      return Promise.resolve([]);
+    };
+    const g = await failureGate("f", "acct", 10, opts(flaky));
+    expect(g.blocked).toBeNull();
+    expect(reads).toBe(1);
+    await expect(g.strike()).rejects.toThrow("down");
   });
 });

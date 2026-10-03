@@ -111,6 +111,22 @@ const nextConfig = {
       headers: [
         { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
       ],
+    }, {
+      // Trainer and share surfaces are personal and signed-in; never indexed.
+      source: "/trainer/:path*",
+      headers: [
+        { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+      ],
+    }, {
+      source: "/share",
+      headers: [
+        { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+      ],
+    }, {
+      source: "/profile/trainer",
+      headers: [
+        { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+      ],
     }];
   },
   async redirects() {

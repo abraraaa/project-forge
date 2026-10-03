@@ -234,6 +234,37 @@ describe("tokens are audience-bound (MCP spec)", () => {
   });
 });
 
+// A trainer share is owned by the client like an AI grant, so ownership alone
+// would list it under Connected AIs.
+const TRAINER_GRANT = { id: "hwg_trainer", clientId: "hw:trainer", accountId: A, profile: "sam", credentialId: "cred-1", scope: "trainer:read",
+  createdAt: 2_000_000, kind: "trainer", resource: "https://heatwayve.app/trainer", expiresAt: null, trainerAccountId: B };
+
+describe("Connected AIs list AI grants only", () => {
+  it("a trainer grant never appears; a legacy grant with no kind still does", async () => {
+    const { store, tokens, now } = await connected();
+    const [ai] = await store.listGrants(SAM);
+    const before = { ...ai };
+    await store.putGrant(TRAINER_GRANT);
+    expect((await store.listGrants(SAM)).map((g) => g.id)).toEqual([ai.id]);
+    // The AI row itself comes back unchanged.
+    expect(await store.listGrants(SAM)).toEqual([before]);
+    ai.kind = undefined; // as a row from before the kind column reads back
+    expect((await store.listGrants(SAM)).map((g) => g.id)).toEqual([ai.id]);
+    expect(await verifyAccessToken(store, tokens.access_token, AI, now)).not.toBeNull();
+  });
+
+  it("an AI disconnect cannot end a trainer share, even by its id", async () => {
+    const { store, now } = await connected();
+    await store.putGrant(TRAINER_GRANT);
+    const owner = { accountId: A, storageKey: "sam" };
+    expect(await revokeGrantFor(store, owner, TRAINER_GRANT.id, now, { kind: "ai" })).toBe(false);
+    expect((await store.getGrant(TRAINER_GRANT.id)).revokedAt).toBeFalsy();
+    // Without a kind, the owner's Stop path still ends it.
+    expect(await revokeGrantFor(store, owner, TRAINER_GRANT.id, now)).toBe(true);
+    expect((await store.getGrant(TRAINER_GRANT.id)).revokedAt).toBe(now);
+  });
+});
+
 describe("the Neon store carries account_id", () => {
   afterEach(() => { delete process.env.DATABASE_URL; seen.length = 0; nextRows = () => []; });
   const store = async () => {
@@ -267,5 +298,30 @@ describe("the Neon store carries account_id", () => {
     const q = stmt(/FROM oauth_grants g/);
     expect(q.text.replace(/\s+/g, " ")).toContain("WHERE (g.account_id = ? OR (g.account_id IS NULL AND g.profile = ?)) AND g.revoked_at IS NULL");
     expect(q.values.slice(0, 2)).toEqual([A, "sam"]);
+  });
+
+  it("lists AI grants only, with a missing kind read as AI", async () => {
+    const s = await store();
+    nextRows = () => [{ id: "g", client_name: "Claude", kind: null, created_at: "5", last_used_at: null }];
+    expect(await s.listGrants(SAM)).toEqual([{ id: "g", clientName: "Claude", kind: "ai", createdAt: 5, lastUsedAt: null }]);
+    const q = stmt(/FROM oauth_grants g/);
+    expect(q.text.replace(/\s+/g, " ")).toContain("AND g.revoked_at IS NULL AND COALESCE(g.kind, 'ai') = 'ai' AND (g.expires_at IS NULL OR g.expires_at > ?) ORDER BY");
+  });
+
+  it("agrees with the memory store over AI, legacy and trainer rows", async () => {
+    const grants = [
+      { id: "g-ai", clientId: "c", accountId: A, profile: "sam", credentialId: "k", scope: "s", createdAt: 3, kind: "ai" },
+      { id: "g-legacy", clientId: "c", accountId: A, profile: "sam", credentialId: "k", scope: "s", createdAt: 2, kind: null },
+      { ...TRAINER_GRANT, createdAt: 1 },
+    ];
+    const mem = memoryStore();
+    for (const g of grants) await mem.putGrant(g);
+    // The fake applies the kind predicate only when the statement carries it.
+    const rows = grants.map((g) => ({ id: g.id, kind: g.kind, created_at: g.createdAt }));
+    nextRows = (text) => (text.includes("COALESCE(g.kind, 'ai') = 'ai'") ? rows.filter((r) => (r.kind ?? "ai") === "ai") : rows);
+    const s = await store();
+    const neonIds = (await s.listGrants(SAM)).map((g) => g.id);
+    expect(neonIds).toEqual(["g-ai", "g-legacy"]);
+    expect((await mem.listGrants(SAM)).map((g) => g.id)).toEqual(neonIds);
   });
 });

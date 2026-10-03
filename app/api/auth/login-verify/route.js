@@ -18,7 +18,7 @@ export const preferredRegion = "lhr1";
 
 // Verify WebAuthn authentication and mint a short-lived auth token.
 // POST /api/auth/login-verify
-// Body: { profile, credential: { id, rawId, type, response: { clientDataJSON, authenticatorData, signature, userHandle } }, consent?: { version } }
+// Body: { profile, credential: { id, rawId, type, response: { clientDataJSON, authenticatorData, signature, userHandle } }, consent?: { version }, quiet?: true }
 //
 // The assertion signature is now REALLY verified against the stored public key
 // (over authenticatorData ‖ SHA-256(clientDataJSON)), along with the challenge,
@@ -31,6 +31,9 @@ export const preferredRegion = "lhr1";
 // consent (optional): the existing-holder confirm — stamped on the credentials
 // doc only after the assertion verifies, riding the counter write, whose sweep
 // deletes every older blob under the credentials prefix.
+// quiet (optional, exactly true): a trainer or share ceremony, often on a
+// shared laptop. The passkey is verified and the ceremony token returned as
+// usual, but no photo or sync token is minted and no cookie is set.
 
 const normalise = normaliseProfile;
 
@@ -38,7 +41,8 @@ export async function POST(request) {
   const limited = rateLimit(request, "auth-login", 20) || await rateLimitShared(request, "auth-login", 20);
   if (limited) return limited;
   try {
-    const { profile, credential, consent } = await request.json();
+    const { profile, credential, consent, quiet: quietBody } = await request.json();
+    const quiet = quietBody === true;
     if (!profile || !credential) {
       return NextResponse.json({ error: "Missing profile or credential" }, { status: 400 });
     }
@@ -185,7 +189,7 @@ export async function POST(request) {
     // Secure, SameSite=Strict, and PATH-SCOPED to /api/photos so it never
     // even accompanies any other request. scope:"photos" is rejected by the
     // wipe gate — destructive ops keep fresh short-lived ceremonies.
-    const photoToken = await mintAuthToken({ identity, ttlMs: 7 * 86400000, scope: "photos" });
+    const photoToken = quiet ? null : await mintAuthToken({ identity, ttlMs: 7 * 86400000, scope: "photos" });
 
     // Sync-scope cookie (J1, 2026-07-26). Sync is AMBIENT — visibility
     // change, reconnect, every mutation — so it cannot ride the in-memory
@@ -195,7 +199,7 @@ export async function POST(request) {
     // path rejects every scoped token, so this cookie can read and write a
     // profile but can never destroy one. Sliding 7 days — same window as
     // hw_photos: any active day rotates it, so a device in use never re-auths.
-    const syncToken = await mintAuthToken({ identity, ttlMs: 30 * 86400000, scope: "sync" });
+    const syncToken = quiet ? null : await mintAuthToken({ identity, ttlMs: 30 * 86400000, scope: "sync" });
 
     // A legacy-rpId login is a credential that stops working at the sunset.
     const onLegacyCredential = verifiedRpId === LEGACY_RP_ID;
@@ -217,6 +221,8 @@ export async function POST(request) {
           }
         : null),
     });
+    // Quiet: the ceremony token in the body is all this device keeps.
+    if (quiet) return res;
     res.cookies.set("hw_photos", photoToken, {
       httpOnly: true, secure: true, sameSite: "strict", path: "/api/photos", maxAge: 7 * 86400,
     });
