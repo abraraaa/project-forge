@@ -908,9 +908,10 @@ export async function DELETE(request) {
     }
 
     // Close the account LAST (lib/identity-store.js dbCloseAccount): revoke
-    // its AI grants, release its handles, close it and clear its consent,
-    // delete its passkey rows. One transaction; a failure leaves it open and
-    // the wipe retryable.
+    // its grants (AI, and any trainer share it gave), release its handles,
+    // close it and clear its consent, delete its passkey rows, revoke the
+    // trainer grants naming it as trainer.
+    // One transaction; a failure leaves it open and the wipe retryable.
     if (hasDb()) {
       try { await dbCloseAccount(id.accountId, sk); }
       catch (e) { return serverError(e, { label: "sync-delete-close" }); }

@@ -61,6 +61,14 @@ function run(state, { q, values }) {
     }
     return [];
   }
+  // The trainer-side revoke: grants that name the closing account as trainer.
+  if (s === "UPDATE oauth_grants SET revoked_at = ?, revoked_by = 'closed' WHERE kind = 'trainer' AND trainer_account_id = ? AND revoked_at IS NULL") {
+    const [at, t] = values;
+    for (const g of state.grants) {
+      if (g.kind === "trainer" && g.trainer_account_id === t && g.revoked_at == null) Object.assign(g, { revoked_at: at, revoked_by: "closed" });
+    }
+    return [];
+  }
   if (s === "UPDATE handles SET released_at = now() WHERE account_id = ? AND released_at IS NULL") {
     for (const r of state.handles) if (r.account_id === values[0] && r.released_at == null) r.released_at = "now";
     return [];
@@ -258,6 +266,7 @@ describe("wiping a backfilled account (storage key = its handle)", () => {
       expect.stringMatching(/^UPDATE handles SET released_at = now\(\) WHERE account_id/),
       "UPDATE accounts SET deleted_at = now(), consent = NULL WHERE id = ?",
       "DELETE FROM credentials WHERE account_id = ?",
+      "UPDATE oauth_grants SET revoked_at = ?, revoked_by = 'closed' WHERE kind = 'trainer' AND trainer_account_id = ? AND revoked_at IS NULL",
     ] }]);
     const [a, m] = db.accounts;
     expect(a).toMatchObject({ id: A, deleted_at: "now", consent: null });
@@ -265,6 +274,24 @@ describe("wiping a backfilled account (storage key = its handle)", () => {
     expect(db.handles.map((h) => [h.handle, h.released_at])).toEqual([["sam", "now"], ["mallory", null]]);
     expect(db.credentials.map((c) => c.account_id)).toEqual([M]);
     expect(Object.fromEntries(db.grants.map((g) => [g.id, g.revoked_at != null]))).toEqual({ "g-acct": true, "g-legacy": true, "g-other": false, "g-sammy": false });
+  });
+
+  it("revokes live trainer grants naming the account as trainer, stamped 'closed'; others are untouched", async () => {
+    seedSam({ unknown: false });
+    const T = "hwa_" + "t".repeat(26);
+    const share = (id, accountId, trainer, extra = {}) => db.grants.push({ id, account_id: accountId, profile: accountId, kind: "trainer", trainer_account_id: trainer, revoked_at: null, revoked_by: null, ...extra });
+    share("t-to-sam", M, A);
+    share("t-old", B, A, { revoked_at: 5, revoked_by: "client" });
+    share("t-unrelated", T, M);
+    share("t-own", A, M); // sam's own share as a client: ended by the account-scoped revoke
+    ceremony("w", A, "sam");
+    expect((await wipe("sam", "w")).status).toBe(200);
+    const at = db.grants.find((g) => g.id === "g-acct").revoked_at;
+    const byId = Object.fromEntries(db.grants.map((g) => [g.id, [g.revoked_at, g.revoked_by ?? null]]));
+    expect(byId["t-to-sam"]).toEqual([at, "closed"]);
+    expect(byId["t-old"]).toEqual([5, "client"]);
+    expect(byId["t-unrelated"]).toEqual([null, null]);
+    expect(byId["t-own"]).toEqual([at, null]);
   });
 
   it("a previous holder's retired photo and every unknown file under the folder survive", async () => {
