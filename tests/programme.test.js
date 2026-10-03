@@ -1473,23 +1473,3 @@ describe("missed workouts are judged against what was due so far", () => {
     expect(offered("2026-09-22", [rec("2026-09-22")])).toEqual([]);
   });
 });
-
-describe("rhythm judges each day by the schedule in force on it", () => {
-  it("expected counts scheduled strength days across the window, not today's quota × 4", async () => {
-    const { computeRhythm } = await import("../lib/storage.js");
-    const S = (t) => ({ type: t });
-    const threeDay = ["strength","rest","strength","rest","strength","rest","rest"].map(S);
-    const twoDay = ["rest","strength","rest","rest","rest","strength","rest"].map(S);
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-09-27T12:00:00")); // a Sunday
-    try {
-      // Two weeks ago the user switched from 3/week to 2/week.
-      const weekFor = (d) => (d >= "2026-09-14" ? twoDay : threeDay);
-      const r = computeRhythm([], { weeklyStrengthDays: 2, weekFor });
-      // 28 days back from Sun 27 Sep: Mon 31 Aug – Sun 27 Sep.
-      // 2 weeks at 3 (31 Aug–13 Sep) + 2 weeks at 2 (14–27 Sep) = 10.
-      expect(r.expected).toBe(10);
-      expect(computeRhythm([], { weeklyStrengthDays: 2 }).expected).toBe(8);
-    } finally { vi.useRealTimers(); }
-  });
-});

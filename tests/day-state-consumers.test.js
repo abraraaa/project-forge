@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import {
+  isStrengthRecord,
   makeDayContext, resolveDay, resolveRange, owedDays, sessionsFrom, beginSessionIdx,
 } from "../lib/day-state.js";
 import { addDaysIso, mondayIndex, mondayOfWeekIso } from "../lib/dates.js";
@@ -160,5 +161,16 @@ describe("week edits re-resolve today", () => {
       const body = src.slice(start, src.indexOf("\n  };", start));
       expect(body, name).toMatch(/\bbumpDays\(\);/);
     }
+  });
+});
+
+describe("the Back at it gap", () => {
+  it("SessionHost recognises a prior strength day by the day-state rule, letter-only records included", () => {
+    const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../components/SessionHost.jsx"), "utf8");
+    expect(src).toMatch(/import \{ isStrengthRecord \} from "@\/lib\/day-state";/);
+    expect(src).toMatch(/\.filter\(r => r\?\.date && isStrengthRecord\(r\)\)/);
+    expect(src).not.toMatch(/startsWith\("strength"\)/);
+    // A travel session logged under its letter counts as training, as it does on the home week.
+    expect(isStrengthRecord({ date: "2026-09-21", session: "travel_b", scheduledLetter: "B" })).toBe(true);
   });
 });
