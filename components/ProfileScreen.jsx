@@ -48,6 +48,18 @@ const NAME_MAX_LEN = 64;
 // re-focus on every render).
 const focusOnMount = (el) => { el?.focus(); };
 
+// The "Your trainer" row, from GET /api/sync/trainer (ProfileView), or null
+// when there is nothing to show.
+const shortDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+function trainerRowFor(share) {
+  if (!share) return null;
+  const { sharing, ended, open } = share;
+  if (sharing?.name) return { title: sharing.name, sub: sharing.live ? "Sees your training · read only" : "Paused" };
+  if (ended?.name && Number.isFinite(ended.at)) return { title: ended.name, sub: `Ended ${shortDate.format(new Date(ended.at))}` };
+  if (open) return { title: "Add a trainer", sub: "Type the code they show you" };
+  return null;
+}
+
 // Sun · Auto · Moon — the appearance switch. Selection is the card
 // (§12.3, turned horizontal): three cells on the ground, the chosen one
 // lifts to surface with the whisper elevation. Sun and moon are drawn
@@ -87,7 +99,7 @@ function ThemeSwitch({ value, onChange }) {
   );
 }
 
-export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,mainLifts={},onOpenBreather=null,resting=false,restingReason=null,onEndBreather=null}){
+export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,mainLifts={},onOpenBreather=null,resting=false,restingReason=null,onEndBreather=null,trainerShare=null}){
   const [name,setName]=useState("");
   // Per-profile preference. State carries the profile it was read for and
   // adjusts DURING render when the shown profile changes (the derived-state
@@ -392,6 +404,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   // upgrade card owns the slot while it shows. Off entirely until
   // EXISTING_HOLDER_CONSENT_TAP is switched on (see lib/consent.js).
   const consentKnown = current ? profileConsent[current] : undefined;
+  const trainerRow = trainerRowFor(trainerShare);
   const askConsent = EXISTING_HOLDER_CONSENT_TAP && !!current && webAuthnSupported && profileHasPasskey[current] === true
     && !upgrade?.needed && consentKnown !== undefined && !isCurrentConsent(consentKnown);
 
@@ -709,6 +722,26 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
+      {/* Your trainer: beside AI coaching. Server truth only (ProfileView
+          fetches it); nothing shows when signed out or offline. */}
+      {current && trainerRow && (
+        <Fade d={234}>
+          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>Your trainer</div>
+        </Fade>
+      )}
+      {current && trainerRow && (
+        <Fade d={235}>
+          <Link href="/profile/trainer"
+            style={{padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,textDecoration:"none",color:"inherit"}}>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink,overflowWrap:"anywhere"}}>{trainerRow.title}</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{trainerRow.sub}</div>
+            </div>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
+          </Link>
+        </Fade>
+      )}
+
       {current && (
         <Fade d={236}>
           <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>Training</div>
@@ -912,6 +945,19 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && (
         <Fade d={295}>
           <SyncNowRow profile={current} hasPasskey={profileHasPasskey[current]} />
+        </Fade>
+      )}
+
+      {current && trainerShare?.trainerOpen && (
+        <Fade d={295}>
+          <Link href="/trainer"
+            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>For trainers</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{trainerShare.trainer ? "See clients who share with you" : "Set up as a trainer"}</div>
+            </div>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
+          </Link>
         </Fade>
       )}
 

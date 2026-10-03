@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// Profile row order: AI coaching is the first logged-in section; the breather
-// row stays in the Training group, above Account/passkey.
+// Profile row order: AI coaching is the first logged-in section, Your trainer
+// sits under it, above Training; the breather row stays in the Training
+// group, above Account/passkey.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
@@ -28,13 +29,18 @@ const expectOrder = (els) => {
 const base = { existing: ["sam"], current: "sam", onActivate: vi.fn(), onCancel: vi.fn(),
   bodyweight: 80, setBwEditOpen: vi.fn(), onEditFocus: vi.fn() };
 
+// GET /api/sync/trainer, as ProfileView passes it on.
+const share = (over = {}) => ({ open: true, trainerOpen: false, trainer: false, sharing: null, ended: null, ...over });
+
 describe("Profile: AI coaching placement", () => {
-  it("renders AI coaching above Training, breather under Training, then Passkey", async () => {
-    render(<ProfileScreen {...base} onOpenBreather={vi.fn()} />);
+  it("renders AI coaching, then Your trainer, above Training, breather under Training, then Passkey", async () => {
+    render(<ProfileScreen {...base} onOpenBreather={vi.fn()} trainerShare={share()} />);
     const passkey = await screen.findByText("Passkey enabled");
     expectOrder([
       screen.getByText("AI coaching"),
       screen.getByText("Talk it through"),
+      screen.getByText("Your trainer"),
+      screen.getByText("Add a trainer"),
       screen.getByText("Training"),
       screen.getByText("Training focus"),
       screen.getByText("Main lifts"),
@@ -58,5 +64,40 @@ describe("Profile: AI coaching placement", () => {
       screen.getByText("Account"),
       passkey,
     ]);
+  });
+});
+
+describe("Profile: Your trainer row", () => {
+  const row = (title) => screen.getByText(title).closest("a");
+
+  it.each([
+    ["sharing, live", share({ sharing: { ref: "g", name: "Jo", since: 1, live: true, looks: [], lookCount: 0 } }), "Jo", "Sees your training · read only"],
+    ["sharing, paused", share({ sharing: { ref: "g", name: "Jo", since: 1, live: false, looks: [], lookCount: 0 } }), "Jo", "Paused"],
+    ["ended by the trainer", share({ ended: { name: "Max", at: Date.parse("2026-09-20T12:00:00Z"), by: "trainer" } }), "Max", /^Ended 20 Sept?$/],
+    ["none, open", share(), "Add a trainer", "Type the code they show you"],
+  ])("%s", async (_, trainerShare, title, sub) => {
+    render(<ProfileScreen {...base} trainerShare={trainerShare} />);
+    await screen.findByText("Passkey enabled");
+    expect(row(title).getAttribute("href")).toBe("/profile/trainer");
+    expect(row(title).textContent.replace(title, "")).toMatch(sub instanceof RegExp ? sub : new RegExp(`^${sub}$`));
+  });
+
+  it("shows nothing when signed out or offline, or when sharing isn't open and there is no trainer", async () => {
+    const { rerender } = render(<ProfileScreen {...base} trainerShare={null} />);
+    await screen.findByText("Passkey enabled");
+    expect(screen.queryByText("Your trainer")).toBeNull();
+    rerender(<ProfileScreen {...base} trainerShare={share({ open: false })} />);
+    expect(screen.queryByText("Your trainer")).toBeNull();
+    expect(screen.queryByText("Add a trainer")).toBeNull();
+  });
+
+  it("the For trainers row shows under Account only when the trainer side is open", async () => {
+    const { rerender } = render(<ProfileScreen {...base} trainerShare={share()} />);
+    await screen.findByText("Passkey enabled");
+    expect(screen.queryByText("For trainers")).toBeNull();
+    rerender(<ProfileScreen {...base} trainerShare={share({ trainerOpen: true, trainer: true })} />);
+    expect(screen.getByText("See clients who share with you")).toBeTruthy();
+    expect(row("For trainers").getAttribute("href")).toBe("/trainer");
+    expectOrder([screen.getByText("Account"), screen.getByText("For trainers"), screen.getByText("Device")]);
   });
 });
