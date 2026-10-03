@@ -590,7 +590,8 @@ describe("SQL and source pins", () => {
 
   it("every trainer route runs in lhr1, is dynamic, and never returns e.message", () => {
     const routes = walk("app/api/trainer").filter((f) => f.endsWith("route.js"));
-    expect(routes.sort()).toEqual(["app/api/trainer/invite/route.js", "app/api/trainer/session/end/route.js", "app/api/trainer/session/route.js", "app/api/trainer/upgrade/route.js"]);
+    expect(routes.sort()).toEqual(["app/api/trainer/client/route.js", "app/api/trainer/clients/route.js", "app/api/trainer/invite/route.js",
+      "app/api/trainer/session/end/route.js", "app/api/trainer/session/route.js", "app/api/trainer/upgrade/route.js"]);
     for (const f of routes) {
       const s = read(f);
       expect(s, f).toContain('export const preferredRegion = "lhr1";');

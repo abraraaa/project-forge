@@ -131,11 +131,12 @@ describe("trainer files: no destructive SQL, every UPDATE named", () => {
     for (const f of FILES) expect(read(f), f).not.toMatch(/\bDELETE\b|\bDROP\b|\bTRUNCATE\b|\bdel\(|removeItem/);
   });
 
-  it("trainer-store's writes are exactly the invite upsert, the cancel UPDATE and the approve transaction", () => {
+  it("trainer-store's writes are exactly the invite upsert, the cancel UPDATE, the approve transaction, the look ring, the trainer's remove and the roster ring", () => {
     const src = read("lib/trainer-store.js");
     const writes = [...src.matchAll(/q`\s*(INSERT INTO \w+|UPDATE \w+)/g)].map((m) => m[1]);
     expect(writes).toEqual(["INSERT INTO trainer_invites", "UPDATE trainer_invites",
-      "UPDATE trainer_invites", "UPDATE oauth_grants", "INSERT INTO oauth_grants"]);
+      "UPDATE trainer_invites", "UPDATE oauth_grants", "INSERT INTO oauth_grants",
+      "UPDATE oauth_grants", "UPDATE oauth_grants", "UPDATE oauth_grants"]);
   });
 
   it("the invite route writes only through the store, and returns the code from issue alone", () => {

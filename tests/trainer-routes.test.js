@@ -1,0 +1,485 @@
+// Trainer read routes: one client's view and the client list. The Neon driver
+// is faked with small in-memory tables, so the gate, the store, db.js's
+// profile read and the routes run for real and every statement is captured.
+// The only writes allowed: the full-look ring UPDATE, the trainer's remove
+// UPDATE and the gate's daily session INSERT. Nothing is ever deleted.
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { NextRequest } from "next/server";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const DAY = 86400000;
+const hash = (t) => createHash("sha256").update(String(t)).digest("hex");
+const id26 = (c) => "hwa_" + c.repeat(26);
+const T = id26("t"); // trainer
+const N = id26("n"); // another trainer
+const A = id26("a"); // client "abe"
+const C = id26("c"); // client "cara"
+const X = id26("x"); // client whose account closed
+const P = id26("p"); // client whose approving passkey is gone
+const O = id26("o"); // client of the other trainer
+
+const db = { tokens: new Map(), accounts: new Map(), handles: [], credentials: [], grants: [], meta: [], sessions: [] };
+const calls = [];
+let failOn = null;
+let logMisses = false; // the look UPDATE matches nothing (revoked between the join and the log)
+
+const liveGrant = (g, t) => {
+  const a = db.accounts.get(g.account_id);
+  return g.kind === "trainer" && g.trainer_account_id === t && g.revoked_at == null && a && a.deleted_at == null
+    && db.credentials.some((c) => c.id === g.credential_id && c.account_id === g.account_id && c.rp_id === "heatwayve.app");
+};
+
+vi.mock("@neondatabase/serverless", () => ({
+  neon: () => async (strings, ...v) => {
+    const q = strings.join("?");
+    if (/^\s*(CREATE|ALTER)\b/.test(q)) return [];
+    calls.push({ q, v });
+    if (failOn && failOn.test(q)) throw new Error("db down");
+    if (/^\s*SELECT profile, expires, scope, created_at, auth_at, credential_id, account_id FROM auth_tokens/.test(q)) {
+      const r = db.tokens.get(v[0]) ?? (v[1] != null ? db.tokens.get(v[1]) : undefined);
+      return r ? [{ ...r }] : [];
+    }
+    if (/^\s*INSERT INTO auth_tokens/.test(q)) {
+      const [token, profile, expires, scope, created_at, auth_at, credential_id, account_id] = v;
+      if (!db.tokens.has(token)) db.tokens.set(token, { profile, expires, scope, created_at, auth_at, credential_id, account_id });
+      return [];
+    }
+    if (/^\s*SELECT \* FROM accounts WHERE id = \? LIMIT 1$/.test(q)) {
+      const a = db.accounts.get(v[0]);
+      return a ? [{ ...a }] : [];
+    }
+    if (/AS cred_live/.test(q)) {
+      const [cred, acct] = v;
+      const a = db.accounts.get(acct);
+      if (!a) return [];
+      const live = db.credentials.some((c) => c.id === cred && c.account_id === a.id && c.rp_id === "heatwayve.app");
+      return [{ roles: a.roles, plan: a.plan, trainer_terms: a.trainer_terms, deleted_at: a.deleted_at, cred_live: live }];
+    }
+    if (/^\s*SELECT handle, display FROM handles/.test(q)) {
+      const h = db.handles.find((x) => x.account_id === v[0] && x.released_at == null);
+      return h ? [{ handle: h.handle, display: h.display }] : [];
+    }
+    if (/^\s*SELECT g\.id, g\.profile, g\.scope, g\.created_at, g\.last_used_at, h\.handle, h\.display\s+FROM oauth_grants g/.test(q)) {
+      const [t, ref] = v;
+      return db.grants
+        .filter((g) => liveGrant(g, t) && (ref === undefined || g.id === ref))
+        .sort((a, b) => b.created_at - a.created_at)
+        .map((g) => {
+          const h = db.handles.find((x) => x.account_id === g.account_id && x.released_at == null);
+          return { id: g.id, profile: g.profile, scope: g.scope, created_at: String(g.created_at),
+            last_used_at: g.last_used_at == null ? null : String(g.last_used_at), handle: h?.handle ?? null, display: h?.display ?? null };
+        });
+    }
+    if (/^\s*UPDATE oauth_grants SET\s+looks = CASE/.test(q)) {
+      if (logMisses) return [];
+      const now = v[0];
+      const [ref, t] = v.slice(-2);
+      const g = db.grants.find((x) => x.id === ref && x.kind === "trainer" && x.trainer_account_id === t && x.revoked_at == null);
+      if (!g) return [];
+      // The SQL, by hand: both CASEs read the row as it was.
+      const top = g.looks?.[0];
+      const coalesce = top?.k === "v" && Number(top.at) > now - 900000;
+      g.looks = coalesce ? [{ ...top, at: now }, ...g.looks.slice(1)] : [{ k: "v", at: now }, ...(g.looks ?? [])].slice(0, 20);
+      g.look_count = (g.look_count ?? 0) + (coalesce ? 0 : 1);
+      g.last_used_at = v[4];
+      return [{ id: g.id }];
+    }
+    if (/^\s*UPDATE oauth_grants SET revoked_at = \?, revoked_by = 'trainer'\s+WHERE id = \? AND kind = 'trainer' AND trainer_account_id = \? AND revoked_at IS NULL RETURNING id$/.test(q)) {
+      const [now, ref, t] = v;
+      const g = db.grants.find((x) => x.id === ref && x.kind === "trainer" && x.trainer_account_id === t && x.revoked_at == null);
+      if (!g) return [];
+      g.revoked_at = now;
+      g.revoked_by = "trainer";
+      return [{ id: g.id }];
+    }
+    if (/^\s*SELECT now\(\) AS t$/.test(q)) return [{ t: new Date() }];
+    if (/^\s*SELECT field, value FROM meta WHERE profile = \?$/.test(q)) {
+      return db.meta.filter((m) => m.profile === v[0]).map(({ field, value }) => ({ field, value }));
+    }
+    if (/^\s*SELECT record FROM sessions WHERE profile = \? ORDER BY id$/.test(q)) {
+      return db.sessions.filter((s) => s.profile === v[0]).sort((a, b) => a.id.localeCompare(b.id)).map((s) => ({ record: s.record }));
+    }
+    throw new Error(`unexpected SQL: ${q}`);
+  },
+}));
+vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(() => null), rateLimitShared: vi.fn(async () => null) }));
+// The roster's log and read have their own fake and tests (tests/trainer-roster.test.js).
+vi.mock("@/lib/trainer-store", async (importOriginal) => ({ ...(await importOriginal()), dbRosterSignals: vi.fn(async () => null) }));
+
+const { POST: clientPOST } = await import("@/app/api/trainer/client/route");
+const { POST: clientsPOST } = await import("@/app/api/trainer/clients/route");
+const { TRAINER_COOKIE } = await import("@/lib/trainer-session");
+const { TRAINER_TERMS_VERSION } = await import("@/lib/trainer-terms");
+const { dbLogFullLook } = await import("@/lib/trainer-store");
+const { rateLimit, rateLimitShared } = await import("@/lib/rate-limit");
+
+const CURRENT = { version: TRAINER_TERMS_VERSION, at: "2026-10-01T00:00:00.000Z", adult: true };
+const account = (id, sk, roles, trainer_terms = null) => ({
+  id, storage_key: sk, webauthn_user_id: "u-" + sk, roles, plan: "free", consent: null, trainer_terms,
+  origin: "claim", created_at: null, lapsed_at: null, deleted_at: null,
+});
+let seq = 0;
+const session = (acct, cred, { scope = "trainer", ageMs = 60_000, ttlMs = 14 * DAY } = {}) => {
+  const token = `tok-${++seq}`;
+  db.tokens.set(hash(token), {
+    profile: db.accounts.get(acct).storage_key, expires: Date.now() + ttlMs - ageMs, scope,
+    created_at: new Date(Date.now() - ageMs).toISOString(), auth_at: new Date(Date.now() - ageMs).toISOString(),
+    credential_id: cred, account_id: acct,
+  });
+  return token;
+};
+const grant = (id, client, trainer, cred, extra = {}) => ({
+  id, client_id: "hw:trainer", account_id: client, profile: db.accounts.get(client).storage_key, credential_id: cred,
+  scope: "trainer:read", kind: "trainer", trainer_account_id: trainer, created_at: 1_790_000_000_000,
+  revoked_at: null, revoked_by: null, looks: [], look_count: 0, last_used_at: null, ...extra,
+});
+const writes = () => calls.filter((c) => /^\s*(INSERT|UPDATE|DELETE)\b/.test(c.q));
+const dataReads = () => calls.filter((c) => /FROM (meta|sessions)\b/.test(c.q));
+const H = "https://heatwayve.app/api/trainer";
+const cookie = (t) => (t ? { cookie: `${TRAINER_COOKIE}=${t}` } : {});
+const post = (handler, path, token, body, headers = {}) => handler(new NextRequest(`${H}/${path}`, {
+  method: "POST", headers: { "content-type": "application/json", ...cookie(token), ...headers }, body: JSON.stringify(body),
+}));
+const view = (token, body) => post(clientPOST, "client", token, body);
+const list = (token, body = { today: "2026-10-03" }) => post(clientsPOST, "clients", token, body);
+const NOT_SHARED = JSON.stringify({ error: "Not shared with you now." });
+
+// Every field the trainer must never see, under its real name, with a sentinel value.
+const TODAY = new Date().toISOString().slice(0, 10);
+const daysAgo = (n) => { const d = new Date(`${TODAY}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); };
+const plantedRecord = (date, time) => ({
+  id: `${date}T${time}.000Z`, date, dow: 3, profileName: "SENTINEL-profileName", schemaVersion: 3,
+  loggedTz: "SENTINEL/Zone", loggedTzOffset: 777.11, session: "strength-a", blockNumber: 4, weekStart: date,
+  scheduledLetter: "A", mesocyclePhase: "SENTINEL-phase", readiness: "cooked", readinessReason: "SENTINEL-readinessReason",
+  bodyweight: 777.22, hoursSlept: 777.33, daysSinceLast: 777.44, startedAt: 1777777777777, duration: 777.55,
+  retrospective: "SENTINEL-retro", notes: "SENTINEL-notes", comment: "SENTINEL-comment",
+  summary: { totalVolume: 777.66, avgRir: 777.77 },
+  blocks: [{
+    id: "SENTINEL-blockId", type: "main", intent: "SENTINEL-intent",
+    exercises: [{
+      name: "Barbell Back Squat", muscle: "Quads", loadType: "barbell", swapped: true, fromPool: "SENTINEL-pool",
+      tempo: "SENTINEL-tempo", prescribed: { weight: 777.88 }, summary: { totalVolume: 777.99 },
+      sets: [{ weight: 100, reps: 5, rpe: 8, rir: 2, loadType: "barbell", bodyweightUsed: 81.37, effectiveLoad: 778.11,
+        est1rm: 778.22, volume: 778.33, tempo: "SENTINEL-setTempo", reach: true }],
+    }, {
+      name: "Pull-up", muscle: "Back", loadType: "bodyweight",
+      sets: [{ weight: 10, reps: 6, rpe: 9, rir: 1, loadType: "bodyweight", bodyweightUsed: 81.37, effectiveLoad: 91.37, est1rm: 778.44, volume: 778.55 }],
+    }],
+  }],
+});
+const PLANTED_META = {
+  displayName: "SENTINEL-displayName", bodyweight: 779.11, bodyweightLog: [{ date: TODAY, kg: 779.22 }],
+  trainingState: { note: "SENTINEL-trainingState" }, weights: { "Barbell Back Squat": 779.33 }, streak: 779.44,
+  photos: ["SENTINEL-photo.jpg"], addedLoads: { "Pull-up": { kg: 779.55 } },
+  breaks: [{ id: "2026-09-01T08:15:16.000Z", start: daysAgo(3), reason: "injured", endedAt: null }],
+  userWeek: [{ editedAt: "2026-03-03T09:41:27.000Z", effectiveFrom: "2026-03-02", week: [
+    { type: "strength" }, { type: "rest" }, { type: "strength" }, { type: "rest" }, { type: "strength" }, { type: "zone2" }, { type: "rest" }] }],
+};
+const FORBIDDEN = ["SENTINEL", "777.", "778.", "779.", "81.37", "injured", "07:13:42", "09:41:27", "08:15:16", "1777777777777"];
+
+beforeEach(() => {
+  calls.length = 0;
+  failOn = null;
+  logMisses = false;
+  db.tokens.clear();
+  db.accounts = new Map([
+    [T, account(T, "tia", ["lifter", "trainer"], CURRENT)],
+    [N, account(N, "nia", ["lifter", "trainer"], CURRENT)],
+    [A, account(A, "sk-abe", ["lifter"])],
+    [C, account(C, "sk-cara", ["lifter"])],
+    [X, { ...account(X, "sk-xan", ["lifter"]), deleted_at: "2026-09-30T00:00:00.000Z" }],
+    [P, account(P, "sk-pia", ["lifter"])],
+    [O, account(O, "sk-oli", ["lifter"])],
+  ]);
+  db.handles = [
+    { handle: "tia", display: "Tia", account_id: T, released_at: null },
+    { handle: "nia", display: "Nia", account_id: N, released_at: null },
+    { handle: "abe", display: "Abe", account_id: A, released_at: null },
+    { handle: "cara", display: "Cara", account_id: C, released_at: null },
+    { handle: "xan", display: "Xan", account_id: X, released_at: null },
+    { handle: "pia", display: "Pia", account_id: P, released_at: null },
+    { handle: "oli", display: "Oli", account_id: O, released_at: null },
+  ];
+  db.credentials = [
+    { id: "cT", account_id: T, rp_id: "heatwayve.app" },
+    { id: "cN", account_id: N, rp_id: "heatwayve.app" },
+    { id: "cA", account_id: A, rp_id: "heatwayve.app" },
+    { id: "cC", account_id: C, rp_id: "heatwayve.app" },
+    { id: "cX", account_id: X, rp_id: "heatwayve.app" },
+    { id: "cP", account_id: P, rp_id: "forge-legacy.vercel.app" },
+    { id: "cO", account_id: O, rp_id: "heatwayve.app" },
+  ];
+  db.grants = [
+    grant("hwg_cara", C, T, "cC", { created_at: 1_790_000_000_000 }),
+    grant("hwg_abe", A, T, "cA", { created_at: 1_790_100_000_000, last_used_at: 1_790_200_000_000 }),
+    grant("hwg_old", A, T, "cA", { revoked_at: 1_789_000_000_000, revoked_by: null }),
+    grant("hwg_xan", X, T, "cX"),
+    grant("hwg_pia", P, T, "cP"),
+    grant("hwg_oli", O, N, "cO"),
+  ];
+  db.meta = Object.entries(PLANTED_META).map(([field, value]) => ({ profile: "sk-cara", field, value }));
+  db.sessions = [daysAgo(1), daysAgo(200)].map((d, i) => {
+    const record = plantedRecord(d, i ? "18:02:03" : "07:13:42");
+    return { profile: "sk-cara", id: record.id, record };
+  });
+  process.env.DATABASE_URL = "postgres://fake";
+  vi.mocked(rateLimit).mockClear();
+  vi.mocked(rateLimitShared).mockClear();
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
+afterEach(() => {
+  delete process.env.DATABASE_URL;
+});
+
+describe("POST /api/trainer/client", () => {
+  it("logs the look, then reads the client's profile by its storage key, then answers with the projection only", async () => {
+    const res = await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const body = await res.json();
+    expect(Object.keys(body).sort()).toEqual(["client", "view"]);
+    expect(body.client).toEqual({ name: "Cara", since: 1_790_000_000_000 });
+    expect(Object.keys(body.view).sort()).toEqual(["breaks", "schedule", "sessions", "tops", "window"]);
+    for (const k of ["meta", "history", "scopes", "scope", "profile", "ref", "cursor"]) {
+      expect(body, k).not.toHaveProperty(k);
+      expect(body.view, k).not.toHaveProperty(k);
+    }
+    expect(body.view.sessions).toHaveLength(1);
+    expect(body.view.tops).toHaveLength(1);
+    expect(body.view.breaks).toEqual([{ start: daysAgo(3), endedAt: null }]);
+
+    // Order: the ring UPDATE comes before either data read, and the reads are by the grant's storage key.
+    const iLog = calls.findIndex((c) => /^\s*UPDATE oauth_grants SET\s+looks = CASE/.test(c.q));
+    const reads = dataReads();
+    expect(iLog).toBeGreaterThan(-1);
+    expect(reads).toHaveLength(2);
+    for (const r of reads) {
+      expect(calls.indexOf(r)).toBeGreaterThan(iLog);
+      expect(r.v).toEqual(["sk-cara"]);
+    }
+    // Only the look was written.
+    expect(writes().map((w) => w.q.trim().slice(0, 20))).toEqual(["UPDATE oauth_grants "]);
+    const g = db.grants.find((x) => x.id === "hwg_cara");
+    expect(g.look_count).toBe(1);
+    expect(g.looks).toHaveLength(1);
+    expect(g.looks[0].k).toBe("v");
+    expect(g.last_used_at).toBe(g.looks[0].at);
+  });
+
+  it("never sends photos, bodyweight, sleep, breather reasons, start times, notes or any planted field", async () => {
+    const res = await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY });
+    const text = await res.text();
+    for (const f of FORBIDDEN) expect(text, f).not.toContain(f);
+    // The data reads touch meta and sessions only: never photos.
+    expect(calls.some((c) => /photo/i.test(c.q))).toBe(false);
+  });
+
+  it("one 404, byte for byte, for revoked, closed, dead passkey, another trainer's client, unknown and missing; nothing logged, nothing read", async () => {
+    const t = session(T, "cT");
+    const bodies = [];
+    for (const ref of ["hwg_old", "hwg_xan", "hwg_pia", "hwg_oli", "hwg_nope", undefined, 42]) {
+      calls.length = 0;
+      const res = await view(t, { ref, today: TODAY });
+      expect(res.status, String(ref)).toBe(404);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      bodies.push(await res.text());
+      expect(writes(), String(ref)).toEqual([]);
+      expect(dataReads(), String(ref)).toEqual([]);
+    }
+    expect(new Set(bodies)).toEqual(new Set([NOT_SHARED]));
+  });
+
+  it("a removed grant answers the same 404 straight after", async () => {
+    const t = session(T, "cT");
+    expect((await post(clientsPOST, "clients", t, { remove: "hwg_cara" })).status).toBe(200);
+    const res = await view(t, { ref: "hwg_cara", today: TODAY });
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe(NOT_SHARED);
+  });
+
+  it("if the look can't be logged: 503 and the client's data is never read", async () => {
+    failOn = /^\s*UPDATE oauth_grants SET\s+looks = CASE/;
+    const res = await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY });
+    expect(res.status).toBe(503);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.json()).toEqual({ error: "Something went wrong. Try again." });
+    expect(dataReads()).toEqual([]);
+  });
+
+  it("a grant revoked between the check and the log (0 rows): 404 and nothing read", async () => {
+    logMisses = true;
+    const res = await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY });
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe(NOT_SHARED);
+    expect(dataReads()).toEqual([]);
+  });
+
+  it("only the trainer cookie admits: none, a lifter-scoped header token, or a non-trainer is refused before any lookup", async () => {
+    const lifter = session(C, "cC", { scope: null });
+    for (const res of [
+      await view(null, { ref: "hwg_cara" }),
+      await post(clientPOST, "client", null, { ref: "hwg_cara" }, { "x-hw-auth": session(T, "cT") }),
+      await view(lifter, { ref: "hwg_cara" }),
+      await view(session(C, "cC"), { ref: "hwg_cara" }),
+    ]) {
+      expect(res.status).toBe(401);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+    }
+    expect(calls.some((c) => /FROM oauth_grants|UPDATE oauth_grants/.test(c.q))).toBe(false);
+    expect(dataReads()).toEqual([]);
+  });
+
+  it("limits: 60 a minute per IP, 300 a day per grant", async () => {
+    await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY });
+    expect(vi.mocked(rateLimit).mock.calls[0].slice(1)).toEqual(["trainer-client", 60]);
+    const [, route, n, opts] = vi.mocked(rateLimitShared).mock.calls[0];
+    expect([route, n, opts]).toEqual(["trainer-client", 300, { windowMs: DAY, id: "hwg_cara" }]);
+  });
+
+  it("an out-of-range today falls back to the server's UTC date", async () => {
+    const res = await view(session(T, "cT"), { ref: "hwg_cara", today: "2020-01-01" });
+    expect((await res.json()).view.window.to).toBe(TODAY);
+  });
+});
+
+describe("the look ring on the grant row", () => {
+  it("full looks within 15 minutes coalesce; the ring keeps 20 and the count keeps every look", async () => {
+    const t0 = 1_800_000_000_000;
+    expect(await dbLogFullLook("hwg_cara", T, t0)).toBe(true);
+    expect(await dbLogFullLook("hwg_cara", T, t0 + 14 * 60_000)).toBe(true);
+    const g = db.grants.find((x) => x.id === "hwg_cara");
+    expect(g.looks).toEqual([{ k: "v", at: t0 + 14 * 60_000 }]);
+    expect(g.look_count).toBe(1);
+    expect(await dbLogFullLook("hwg_cara", T, t0 + 30 * 60_000)).toBe(true);
+    expect(g.looks).toHaveLength(2);
+    expect(g.look_count).toBe(2);
+    for (let i = 1; i <= 25; i++) await dbLogFullLook("hwg_cara", T, t0 + 30 * 60_000 + i * 16 * 60_000);
+    expect(g.looks).toHaveLength(20);
+    expect(g.look_count).toBe(27);
+    expect(g.looks[0].at).toBe(t0 + 30 * 60_000 + 25 * 16 * 60_000);
+  });
+
+  it("another trainer's grant, or a revoked one, is never logged on", async () => {
+    expect(await dbLogFullLook("hwg_oli", T, Date.now())).toBe(false);
+    expect(await dbLogFullLook("hwg_old", T, Date.now())).toBe(false);
+    expect(db.grants.find((x) => x.id === "hwg_oli").looks).toEqual([]);
+    expect(db.grants.find((x) => x.id === "hwg_old").looks).toEqual([]);
+  });
+});
+
+describe("POST /api/trainer/clients: list", () => {
+  it("the trainer's live clients by name: ref, name, since, lastLooked; signal (null here: the roster is stubbed), no training data, nothing written", async () => {
+    const res = await list(session(T, "cT"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const body = await res.json();
+    expect(body).toEqual({
+      me: { name: "Tia" },
+      clients: [
+        { ref: "hwg_abe", name: "Abe", since: 1_790_100_000_000, lastLooked: 1_790_200_000_000, signal: null },
+        { ref: "hwg_cara", name: "Cara", since: 1_790_000_000_000, lastLooked: null, signal: null },
+      ],
+    });
+    expect(writes()).toEqual([]);
+    expect(dataReads()).toEqual([]);
+  });
+
+  it("limits: 30 a minute per IP, 600 a day per trainer", async () => {
+    await list(session(T, "cT"));
+    expect(vi.mocked(rateLimit).mock.calls[0].slice(1)).toEqual(["trainer-clients", 30]);
+    const [, route, n, opts] = vi.mocked(rateLimitShared).mock.calls[0];
+    expect([route, n, opts]).toEqual(["trainer-clients", 600, { windowMs: DAY, id: T }]);
+  });
+
+  it("signed out: 401, no lookup", async () => {
+    const res = await list(null);
+    expect(res.status).toBe(401);
+    expect(calls.some((c) => /oauth_grants/.test(c.q))).toBe(false);
+  });
+});
+
+describe("POST /api/trainer/clients: remove", () => {
+  it("ends the grant by UPDATE revoked_at, revoked_by 'trainer'; the row stays and leaves the list", async () => {
+    const t = session(T, "cT");
+    const res = await post(clientsPOST, "clients", t, { remove: "hwg_cara" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(await res.json()).toEqual({ ok: true });
+    const w = writes();
+    expect(w).toHaveLength(1);
+    expect(w[0].v.slice(1)).toEqual(["hwg_cara", T]);
+    const g = db.grants.find((x) => x.id === "hwg_cara");
+    expect(g.revoked_by).toBe("trainer");
+    expect(g.revoked_at).toBe(w[0].v[0]);
+    expect(db.grants).toHaveLength(6);
+    expect((await (await list(t)).json()).clients.map((c) => c.ref)).toEqual(["hwg_abe"]);
+    expect(vi.mocked(rateLimit).mock.calls[0].slice(1)).toEqual(["trainer-clients-remove", 20]);
+  });
+
+  it("another trainer's client, an ended grant, unknown or malformed: 404 and nothing changes", async () => {
+    const t = session(T, "cT");
+    const before = JSON.stringify(db.grants);
+    for (const ref of ["hwg_oli", "hwg_old", "hwg_nope", null, 7]) {
+      const res = await post(clientsPOST, "clients", t, { remove: ref });
+      expect(res.status, String(ref)).toBe(404);
+      expect(await res.text()).toBe(NOT_SHARED);
+    }
+    expect(JSON.stringify(db.grants)).toBe(before);
+  });
+});
+
+describe("SQL pins", () => {
+  const norm = (s) => s.replace(/\s+/g, " ").trim();
+  const run = async (fn) => { calls.length = 0; await fn(); return calls; };
+
+  it("liveness: one join on the open client account and its native approving passkey; with a ref, that grant only", async () => {
+    const BASE = "SELECT g.id, g.profile, g.scope, g.created_at, g.last_used_at, h.handle, h.display FROM oauth_grants g"
+      + " JOIN accounts a ON a.id = g.account_id AND a.deleted_at IS NULL"
+      + " JOIN credentials c ON c.id = g.credential_id AND c.account_id = g.account_id AND c.rp_id = 'heatwayve.app'"
+      + " LEFT JOIN handles h ON h.account_id = g.account_id AND h.kind = 'primary' AND h.released_at IS NULL"
+      + " WHERE g.kind = 'trainer' AND g.trainer_account_id = ? AND g.revoked_at IS NULL";
+    const t = session(T, "cT");
+    const all = (await run(() => list(t))).find((c) => /FROM oauth_grants g/.test(c.q));
+    expect(norm(all.q)).toBe(`${BASE} ORDER BY g.created_at DESC`);
+    expect(all.v).toEqual([T]);
+    const one = (await run(() => view(t, { ref: "hwg_cara", today: TODAY }))).find((c) => /FROM oauth_grants g/.test(c.q));
+    expect(norm(one.q)).toBe(`${BASE} AND g.id = ? ORDER BY g.created_at DESC`);
+    expect(one.v).toEqual([T, "hwg_cara"]);
+  });
+
+  it("the full-look statement: 15-minute coalesce on both looks and look_count, ring of 20, scoped to this trainer's live grant", async () => {
+    const now = 1_800_000_000_000;
+    const c = (await run(() => dbLogFullLook("hwg_cara", T, now))).find((x) => /UPDATE oauth_grants/.test(x.q));
+    expect(norm(c.q)).toBe(norm(`UPDATE oauth_grants SET
+      looks = CASE
+        WHEN looks->0->>'k' = 'v' AND (looks->0->>'at')::bigint > ?::bigint - 900000
+          THEN jsonb_set(looks, '{0,at}', to_jsonb(?::bigint))
+        ELSE jsonb_path_query_array(
+          jsonb_build_array(jsonb_build_object('k', 'v', 'at', ?::bigint)) || COALESCE(looks, '[]'::jsonb),
+          '$[0 to 19]')
+      END,
+      look_count = CASE
+        WHEN looks->0->>'k' = 'v' AND (looks->0->>'at')::bigint > ?::bigint - 900000
+          THEN COALESCE(look_count, 0)
+        ELSE COALESCE(look_count, 0) + 1
+      END,
+      last_used_at = ?
+    WHERE id = ? AND kind = 'trainer' AND trainer_account_id = ? AND revoked_at IS NULL
+    RETURNING id`));
+    expect(c.v).toEqual([now, now, now, now, now, "hwg_cara", T]);
+  });
+
+  it("the routes write only through the store and never DELETE", () => {
+    const root = resolve(__dirname, "..");
+    for (const f of ["app/api/trainer/client/route.js", "app/api/trainer/clients/route.js"]) {
+      const src = readFileSync(resolve(root, f), "utf8");
+      expect(src, f).not.toMatch(/\bq`|\bsql\(|\bDELETE\b|\bdel\(/);
+    }
+    // The client route reads the profile only after the log statement.
+    const src = readFileSync(resolve(root, "app/api/trainer/client/route.js"), "utf8");
+    expect(src.indexOf("await dbLogFullLook(")).toBeGreaterThan(-1);
+    expect(src.indexOf("await dbReadProfile(")).toBeGreaterThan(src.indexOf("await dbLogFullLook("));
+  });
+});
