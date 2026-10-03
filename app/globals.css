@@ -342,6 +342,40 @@ html[data-mode="dark"] .forge-page {
   }
 }
 
+/* What the wide shape folds at each tier. Under 640 one column shows at a
+   time (data-view on the shell: the roster, or the open client), the
+   rhythm shows its latest 8 weeks behind a disclosure, and one lift chart
+   is open. 640-1023: rhythm rows of 12, roster lines on one line. 1024+:
+   rhythm rows of 8, as it sits in the pane's left column. A solo panel
+   (signed out, the upgrade) keeps the phone column at every width. */
+.forge-wide-solo { grid-column: 1 / -1; width: 100%; max-width: 430px; margin: 0 auto; }
+.forge-wide-rhythm {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+@media (max-width: 639.98px) {
+  .forge-wide[data-view="roster"] > .forge-wide-main,
+  .forge-wide[data-view="client"] > .forge-wide-roster { display: none; }
+  .forge-wide-mw-only { display: none; }
+  .forge-wide-rhythm:not([data-earlier]) > .forge-wide-rhythm-early { display: none; }
+  .forge-wide-lift:not([data-open]) .forge-wide-lift-detail { display: none; }
+}
+@media (min-width: 640px) {
+  .forge-wide-roster { padding-right: 24px; }
+  .forge-wide-n-only { display: none; }
+  .forge-wide-rhythm { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+}
+@media (min-width: 640px) and (max-width: 1023.98px) {
+  .forge-wide-signal { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+@media (min-width: 1024px) {
+  .forge-wide-rhythm { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+}
+
 /* ─── Modal scrims (Safari 26 chrome-safe) ─────────────────────────────────
    Every sheet/dialog scrim is position:fixed inset:0 — it borders both
    viewport edges, and Safari 26 samples a fixed edge element's OWN
