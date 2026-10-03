@@ -80,3 +80,19 @@ export const SessionShell = dynamic(() => import("@/components/SessionHost"), {
   ssr: false,
   loading: FieldBeat,
 });
+
+// Trainer surfaces: the dashboard, the client's trainer page and the share link page.
+export const TrainerShell = dynamic(() => import("@/components/TrainerView"), {
+  ssr: false,
+  loading: FieldBeat,
+});
+
+export const TrainerShareShell = dynamic(() => import("@/components/TrainerShareView"), {
+  ssr: false,
+  loading: FieldBeat,
+});
+
+export const ShareShell = dynamic(() => import("@/components/ShareView"), {
+  ssr: false,
+  loading: FieldBeat,
+});
