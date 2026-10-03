@@ -130,3 +130,70 @@ describe("viewport contract — the shell owns the viewport (ratcheted)", () => 
     expect(offenders, `only .forge-page/layout may pad the status bar: ${offenders.join(", ")}`).toEqual([]);
   });
 });
+
+// The wide shape (.forge-wide): a screen that uses the width still owns no
+// height. It takes the side insets and the two breakpoints, and nothing else.
+describe("globals.css — the wide shape", () => {
+  const css = readFileSync(resolve(root, "app/globals.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  // Innermost rules with the @media prelude they sit in ("" at top level).
+  const rules = [];
+  const stack = [];
+  let start = 0;
+  for (let i = 0; i < css.length; i++) {
+    if (css[i] === "{") {
+      stack.push(css.slice(start, i).trim());
+      start = i + 1;
+    } else if (css[i] === "}") {
+      const sel = stack.pop();
+      const body = css.slice(start, i).trim();
+      if (sel !== undefined && !sel.startsWith("@")) {
+        rules.push({ media: stack.filter((s) => s.startsWith("@media")).join(" "), sel, body });
+      }
+      start = i + 1;
+    }
+  }
+  const wide = rules.filter((r) => /\.forge-wide\b/.test(r.sel));
+  const at = (media, sel) => wide.filter((r) => r.media === media && r.sel === sel).map((r) => r.body).join(";");
+
+  it("owns the side safe-area insets", () => {
+    expect(at("", ".forge-wide")).toMatch(
+      /padding-inline:\s*max\(16px,\s*env\(safe-area-inset-left\)\)\s+max\(16px,\s*env\(safe-area-inset-right\)\)/,
+    );
+  });
+
+  it("stacks under 640, centred at 560", () => {
+    const base = at("", ".forge-wide");
+    expect(base).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s*;/);
+    expect(base).toMatch(/max-width:\s*560px/);
+    expect(base).toMatch(/margin:\s*0 auto/);
+  });
+
+  it("640-1023: a 248px roster beside the pane, divided by a hairline", () => {
+    expect(at("@media (min-width: 640px)", ".forge-wide")).toMatch(/grid-template-columns:\s*248px minmax\(0,\s*1fr\)/);
+    expect(at("@media (min-width: 640px)", ".forge-wide-roster")).toMatch(/border-right:\s*1px solid var\(--rule\)/);
+  });
+
+  it("1024+: a 304px roster, the pane in two columns, capped at 1360", () => {
+    const w = at("@media (min-width: 1024px)", ".forge-wide");
+    expect(w).toMatch(/grid-template-columns:\s*304px minmax\(0,\s*1fr\)/);
+    expect(w).toMatch(/max-width:\s*1360px/);
+    expect(at("@media (min-width: 1024px)", ".forge-wide-pane")).toMatch(
+      /grid-template-columns:\s*minmax\(0,\s*1fr\) minmax\(0,\s*1fr\)/,
+    );
+  });
+
+  it("the pane runs two columns only at 1024+", () => {
+    const pane = wide.filter((r) => r.sel.includes(".forge-wide-pane"));
+    expect(pane.map((r) => r.media)).toEqual(["@media (min-width: 1024px)"]);
+  });
+
+  it("sets no height, no top inset, and nothing sticky or fixed", () => {
+    expect(wide.length).toBeGreaterThanOrEqual(5);
+    for (const r of wide) {
+      expect(r.body, r.sel).not.toMatch(/(?:^|[;\s{])(?:min-|max-)?height\s*:/);
+      expect(r.body, r.sel).not.toMatch(/safe-area-inset-(?:top|bottom)/);
+      expect(r.body, r.sel).not.toMatch(/position\s*:\s*(?:sticky|fixed)/);
+      expect(r.body, r.sel).not.toMatch(/\d(?:s|l|d)?vh\b/);
+    }
+  });
+});

@@ -313,6 +313,35 @@ html[data-mode="dark"] .forge-page {
   min-height: 0;
 }
 
+/* Wide shape: a scroll-shape screen that uses the width (the trainer
+   dashboard). It owns the side insets, because viewportFit cover puts a
+   landscape phone's content under the sensor housing, and the breakpoints.
+   It sets no height and no top inset, and nothing in it is sticky: the page
+   scrolls as one document at every width.
+   < 640 stacked, centred at 560 · 640-1023 roster 248 + pane ·
+   1024+ roster 304 + pane, whose .forge-wide-pane runs two columns. */
+.forge-wide {
+  display: grid;
+  gap: 32px;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 560px;
+  margin: 0 auto;
+  padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
+}
+@media (min-width: 640px) {
+  .forge-wide { grid-template-columns: 248px minmax(0, 1fr); max-width: none; }
+  /* The column divide is a hairline on the roster, not a card. */
+  .forge-wide-roster { border-right: 1px solid var(--rule); }
+}
+@media (min-width: 1024px) {
+  .forge-wide { grid-template-columns: 304px minmax(0, 1fr); max-width: 1360px; }
+  .forge-wide-pane {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 32px;
+  }
+}
+
 /* ─── Modal scrims (Safari 26 chrome-safe) ─────────────────────────────────
    Every sheet/dialog scrim is position:fixed inset:0 — it borders both
    viewport edges, and Safari 26 samples a fixed edge element's OWN
