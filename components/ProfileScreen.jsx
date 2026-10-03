@@ -703,10 +703,11 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </div>
       </Fade>}
 
-      {/* AI coaching: first logged-in section, above Training. */}
+      {/* Coaching: first logged-in section, above Training. Who helps you
+          train: your AI, your trainer, and for trainers their clients. */}
       {current && (
         <Fade d={230}>
-          <div style={{marginTop:36,marginBottom:2,fontSize:13,color:T.ink3}}>AI coaching</div>
+          <div style={{marginTop:36,marginBottom:2,fontSize:13,color:T.ink3}}>Coaching</div>
         </Fade>
       )}
       {current && (
@@ -722,20 +723,28 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
-      {/* Your trainer: beside AI coaching. Server truth only (ProfileView
-          fetches it); nothing shows when signed out or offline. */}
-      {current && trainerRow && (
-        <Fade d={234}>
-          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>Your trainer</div>
-        </Fade>
-      )}
+      {/* Your trainer: server truth only (ProfileView fetches it); nothing
+          shows when signed out or offline. */}
       {current && trainerRow && (
         <Fade d={235}>
           <Link href="/profile/trainer"
-            style={{padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,textDecoration:"none",color:"inherit"}}>
+            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,textDecoration:"none",color:"inherit"}}>
             <div style={{minWidth:0}}>
               <div style={{fontSize:15,fontWeight:500,color:T.ink,overflowWrap:"anywhere"}}>{trainerRow.title}</div>
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{trainerRow.sub}</div>
+            </div>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
+          </Link>
+        </Fade>
+      )}
+
+      {current && trainerShare?.trainerOpen && (
+        <Fade d={235}>
+          <Link href="/trainer"
+            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>For trainers</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{trainerShare.trainer ? "See clients who share with you" : "Set up as a trainer"}</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
@@ -945,19 +954,6 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && (
         <Fade d={295}>
           <SyncNowRow profile={current} hasPasskey={profileHasPasskey[current]} />
-        </Fade>
-      )}
-
-      {current && trainerShare?.trainerOpen && (
-        <Fade d={295}>
-          <Link href="/trainer"
-            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
-            <div>
-              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>For trainers</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{trainerShare.trainer ? "See clients who share with you" : "Set up as a trainer"}</div>
-            </div>
-            <Glyph name="arrowRight" size={13} color={T.ink3}/>
-          </Link>
         </Fade>
       )}
 

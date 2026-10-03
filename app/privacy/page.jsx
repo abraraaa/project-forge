@@ -69,7 +69,7 @@ const SECTIONS = [
       "Vercel Blob — private file storage in London for passkey public keys, progress photos, backups, and older copies of some profiles' training.",
       "YouTube — demo videos embed in privacy-enhanced mode. Opening one connects your browser to Google, under its own privacy policy. Some links open YouTube itself, where its usual terms and cookies apply.",
       "Buy Me a Coffee — if you tip, that happens on their site under their policy. They may pass us your supporter name and message.",
-      "An AI you connect — what it reads is handled under that AI's own terms. Disconnect it any time in AI coaching, on your profile. Removing the passkey that approved it ends the connection too.",
+      "An AI you connect — what it reads is handled under that AI's own terms. Disconnect it any time under Coaching, on your profile. Removing the passkey that approved it ends the connection too.",
       "A trainer you add — sees only what's set out below, and is responsible for what they do with it.",
     ],
     p: [

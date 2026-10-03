@@ -112,7 +112,7 @@ describe("privacy notice stays true", () => {
   });
 
   it("an AI connection ends in the app, not by email", () => {
-    expect(page).toContain("Disconnect it any time in AI coaching, on your profile.");
+    expect(page).toContain("Disconnect it any time under Coaching, on your profile.");
     expect(page).not.toContain("email us to end it sooner");
     expect(read("components/CoachView.jsx")).toContain('"Disconnect"');
     expect(read("app/api/sync/connections/route.js")).toMatch(/disconnect/);

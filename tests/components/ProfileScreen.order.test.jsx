@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-// Profile row order: AI coaching is the first logged-in section, Your trainer
+// Profile row order: Coaching is the first logged-in section (your AI, your
+// trainer, and for trainers their clients); Your trainer
 // sits under it, above Training; the breather row stays in the Training
 // group, above Account/passkey.
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -32,14 +33,13 @@ const base = { existing: ["sam"], current: "sam", onActivate: vi.fn(), onCancel:
 // GET /api/sync/trainer, as ProfileView passes it on.
 const share = (over = {}) => ({ open: true, trainerOpen: false, trainer: false, sharing: null, ended: null, ...over });
 
-describe("Profile: AI coaching placement", () => {
-  it("renders AI coaching, then Your trainer, above Training, breather under Training, then Passkey", async () => {
+describe("Profile: Coaching placement", () => {
+  it("renders Coaching, then the trainer row, above Training, breather under Training, then Passkey", async () => {
     render(<ProfileScreen {...base} onOpenBreather={vi.fn()} trainerShare={share()} />);
     const passkey = await screen.findByText("Passkey enabled");
     expectOrder([
-      screen.getByText("AI coaching"),
+      screen.getByText("Coaching"),
       screen.getByText("Talk it through"),
-      screen.getByText("Your trainer"),
       screen.getByText("Add a trainer"),
       screen.getByText("Training"),
       screen.getByText("Training focus"),
@@ -57,7 +57,7 @@ describe("Profile: AI coaching placement", () => {
     render(<ProfileScreen {...base} resting onEndBreather={vi.fn()} />);
     const passkey = await screen.findByText("Passkey enabled");
     expectOrder([
-      screen.getByText("AI coaching"),
+      screen.getByText("Coaching"),
       screen.getByText("Training"),
       screen.getByText("Bodyweight"),
       screen.getByText("On a breather"),
@@ -85,19 +85,19 @@ describe("Profile: Your trainer row", () => {
   it("shows nothing when signed out or offline, or when sharing isn't open and there is no trainer", async () => {
     const { rerender } = render(<ProfileScreen {...base} trainerShare={null} />);
     await screen.findByText("Passkey enabled");
-    expect(screen.queryByText("Your trainer")).toBeNull();
+    expect(screen.queryByText("Add a trainer")).toBeNull();
     rerender(<ProfileScreen {...base} trainerShare={share({ open: false })} />);
-    expect(screen.queryByText("Your trainer")).toBeNull();
+    expect(screen.queryByText("Add a trainer")).toBeNull();
     expect(screen.queryByText("Add a trainer")).toBeNull();
   });
 
-  it("the For trainers row shows under Account only when the trainer side is open", async () => {
+  it("the For trainers row shows under Coaching only when the trainer side is open", async () => {
     const { rerender } = render(<ProfileScreen {...base} trainerShare={share()} />);
     await screen.findByText("Passkey enabled");
     expect(screen.queryByText("For trainers")).toBeNull();
     rerender(<ProfileScreen {...base} trainerShare={share({ trainerOpen: true, trainer: true })} />);
     expect(screen.getByText("See clients who share with you")).toBeTruthy();
     expect(row("For trainers").getAttribute("href")).toBe("/trainer");
-    expectOrder([screen.getByText("Account"), screen.getByText("For trainers"), screen.getByText("Device")]);
+    expectOrder([screen.getByText("Coaching"), screen.getByText("For trainers"), screen.getByText("Training"), screen.getByText("Account")]);
   });
 });
