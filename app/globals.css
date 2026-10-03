@@ -653,19 +653,24 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   will-change: transform, opacity;
 }
 
-/* (3) Header compression. The page headline shrinks + dims once you start
-   reading down, and returns near the top. A STATE on a fixed 240ms curve,
-   not scrubbed to scroll position: scrubbing over a short page ran the whole
-   move in a frame or two and pulsed with Safari's toolbar and the end-of-
-   page bounce (2026-09-25). Same feel at every page length, no padding.
-   html[data-scrolled] comes from components/ScrollState.jsx (hysteresis:
-   on past 24px, off above 8px). */
-.home-headline {
-  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms cubic-bezier(0.22, 1, 0.36, 1);
+/* (3) Header compression — scrubbed to the finger on the compositor. The
+   headline shrinks + dims across 8px→56px of root scroll: still for the
+   first 8px (toolbar jitter, top rubber band), complete by 56px so short
+   pages finish it. Outside @supports it stays at rest. */
+@keyframes headline-compress {
+  from { transform: none; opacity: 1; }
+  to   { transform: scale(0.94) translateY(-6px); opacity: 0.72; }
 }
-html[data-scrolled] .home-headline {
-  transform: scale(0.94) translateY(-6px);
-  opacity: 0.72;
+@keyframes headline-dim {
+  from { opacity: 1; }
+  to   { opacity: 0.72; }
+}
+@supports (animation-timeline: scroll()) {
+  .home-headline {
+    animation: headline-compress linear both;
+    animation-timeline: scroll(root);
+    animation-range: 8px 56px;
+  }
 }
 
 /* (4) Surface — detail data fades/slides in on engagement. Each Lab
@@ -722,9 +727,11 @@ html[data-scrolled] .home-headline {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .home-headline { transition: opacity 240ms linear; }
-  html[data-scrolled] .home-headline { transform: none; }
+/* Reduced motion: the headline dims with scroll but never moves. */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: reduce) {
+    .home-headline { animation-name: headline-dim; }
+  }
 }
 
 /* Breathe hook class — rest ring. Kept as a class so reduced-motion can

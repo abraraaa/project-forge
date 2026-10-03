@@ -1,14 +1,15 @@
 // tests/rpe-numeric.test.js
 // ─────────────────────────────────────────────────────────────────────────────
 // The RPE capture contract. The track drags a continuous 6–10 value in 0.5
-// steps; the record keeps THAT number. Records carry number-or-string by
-// era — enum-era records never migrate, numeric records never re-band.
-// The invariant: what the user dragged is what every surface reads back.
+// steps; the record keeps THAT number. New writes are always numeric (a
+// label maps to its number); labels survive only in enum-era records, which
+// never migrate. The invariant: what the user dragged is what every surface
+// reads back.
 // The capture point (EffortPanel) and the set ledger are rendered in
 // tests/components/SessionScreen.surface.test.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -90,16 +91,75 @@ describe("the round trip that used to be lossy", () => {
     const top = rec.blocks[0].exercises[0].summary.topSet;
     expect(top.rpe).toBe(9);
   });
+});
 
-  it("an enum-era set is untouched — no migration, no re-band", () => {
+describe("logSet stores a number or null, never a label", () => {
+  const one = (fields) => {
     const draft = newDraftLog({ profileName: "t", session: "strength-a", blockNumber: 1, readiness: "normal" });
-    logSet(draft, {
-      blockId: "b1", blockType: "main", exerciseName: "Squat", muscle: "quads",
-      weight: 100, reps: 5, rpe: "normal",
-    });
-    const set = draft.blocks.b1.exercises.Squat.sets[0];
-    expect(set.rpe).toBe("normal");
-    expect(set.rir).toBe(2);
+    logSet(draft, { blockId: "b1", blockType: "main", exerciseName: "Squat", muscle: "quads", weight: 100, reps: 5, ...fields });
+    return draft.blocks.b1.exercises.Squat.sets[0];
+  };
+
+  it("an enum-era label maps to its number; its RIR is unchanged", () => {
+    for (const [label, rpe, rir] of [["easy", 7, 3], ["normal", 8, 2], ["hard", 9, 1], ["cooked", 10, 0], ["limit", 10, 0]]) {
+      const set = one({ rpe: label });
+      expect(set.rpe).toBe(rpe);
+      expect(set.rir).toBe(rir);
+    }
+  });
+
+  it("the retro picker's numbers are what logSet stores for its labels", () => {
+    // ForgeApp's per-exercise effort picker shows easy/normal/cooked as RPE
+    // marks; a retro set must store the RPE its mark showed.
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const src = readFileSync(resolve(root, "components/ForgeApp.jsx"), "utf8");
+    const opts = [...src.matchAll(/\{id:"(easy|normal|cooked)",\s*label:"\w+",\s*rpe:(\d+(?:\.\d+)?)\}/g)];
+    expect(opts.map((m) => m[1])).toEqual(["easy", "normal", "cooked"]);
+    for (const [, label, rpe] of opts) expect(one({ rpe: label }).rpe).toBe(Number(rpe));
+  });
+
+  it("an unrecognised label stores null, not the label", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const set = one({ rpe: "brutal" });
+    warn.mockRestore();
+    expect(set.rpe).toBe(null);
+    expect(set.rir).toBe(null);
+  });
+
+  it("a caller-supplied RIR derives a numeric RPE (clamped to the 0–3 band)", () => {
+    expect(one({ rir: 1 }).rpe).toBe(9);
+    expect(one({ rir: 2.5 }).rpe).toBe(7.5);
+    expect(one({ rir: 5 }).rpe).toBe(7);
+    expect(one({ rir: 0, rpe: "easy" }).rpe).toBe(10);   // RIR wins over a label
+    expect(one({ rir: 3, rpe: 9 }).rpe).toBe(9);         // a dragged number wins over both
+  });
+
+  it("NaN in either field never reaches the record", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const a = one({ rpe: NaN });
+    warn.mockRestore();
+    expect(a.rpe).toBe(null);
+    expect(a.rir).toBe(null);
+    const b = one({ rpe: 8.5, rir: NaN });
+    expect(b.rpe).toBe(8.5);
+    expect(b.rir).toBe(1.5);
+    const c = one({ rpe: "normal", rir: NaN });
+    expect(c.rpe).toBe(8);
+    expect(c.rir).toBe(2);
+  });
+
+  it("no effort at all stores null", () => {
+    const set = one({});
+    expect(set.rpe).toBe(null);
+    expect(set.rir).toBe(null);
+  });
+
+  it("finalise carries the mapped number into the topSet summary", () => {
+    const draft = newDraftLog({ profileName: "t", session: "strength-a", blockNumber: 1, readiness: "normal" });
+    logSet(draft, { blockId: "b1", blockType: "main", exerciseName: "Squat", muscle: "quads", weight: 100, reps: 5, rpe: "cooked" });
+    const top = finaliseDraft(draft).blocks[0].exercises[0].summary.topSet;
+    expect(top.rpe).toBe(10);
+    expect(top.rir).toBe(0);
   });
 });
 

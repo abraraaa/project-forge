@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
-  WEEK, SESSIONS, projectStrengthDaySessions, nextStrengthIdx,
+  WEEK, SESSIONS,
   rotationDiff, pushHistoryBlock, computeRotationStimulusDelta,
   dedupeRotationConfig,
   ROTATION_AUTO, DEFAULT_FOCUS, // Retrospective logging helpers (compute past-date programme metadata + missing-day detection)
@@ -18,12 +18,12 @@ import {
   newDraftLog, logSet, finaliseDraft, D, TS,
   startingWeightForLift,
 } from "@/lib/storage";
-import { makeDayContext, resolveRange, sessionsFrom, owedDays, trainingRhythm } from "@/lib/day-state";
+import { makeDayContext, resolveRange, sessionsFrom, owedDays, trainingRhythm, beginSessionIdx } from "@/lib/day-state";
 import { useTodayIso } from "@/lib/use-today-iso";
 import { nudgeAbsence, weeklySlotsFromWeek } from "@/lib/absence";
 import { isHeatwayveOrigin, migrationWindowOpen, hasPreFlipStory } from "@/lib/origin";
 import { activeBreak } from "@/lib/breaks";
-import { todayLocalIso, mondayIndex, jsDow, mondayOfWeekIso, addDaysIso } from "@/lib/dates";
+import { todayLocalIso, jsDow, mondayOfWeekIso, addDaysIso } from "@/lib/dates";
 import InstallWalkthrough, { canWalkthroughInstall } from "@/components/InstallWalkthrough";
 import { getThemePreference, stampTheme } from "@/lib/theme";
 import BreatherModal from "@/components/BreatherModal";
@@ -301,13 +301,6 @@ export default function ForgeApp(){
   // without a reload. Falls back to the default WEEK when nothing is stored.
   const [userWeek, setUserWeek] = useState(() => W.get() || WEEK);
 
-  // The A/B/C letters come from the CYCLE (what you last trained), not from
-  // the weekday. Anchored on today so the strip reads as the true upcoming
-  // order. See projectStrengthDaySessions in lib/programme.js.
-  const strengthDaySessions = useMemo(
-    () => projectStrengthDaySessions(userWeek, history, mondayIndex(new Date())),
-    [userWeek, history],
-  );
   // ONE day context per render (lib/day-state.js): every date's plan as it
   // stood, what was actually done, coverage and breathers. The strip, the
   // headline and the done ticks all read it, so they can't disagree.
@@ -365,24 +358,19 @@ export default function ForgeApp(){
     pushNow(activeProfile);
   }, [activeProfile]);
   const [weekEditorOpen, setWeekEditorOpen] = useState(false);
-  // A schedule edit changes what "satisfied" means for the whole week
-  // (a manual tick only counts against its own type), so the completion
-  // projection must re-run HERE, not just at profile load — without this,
-  // marking cardio done and then flipping today to strength left the day
-  // reading "done" and Begin unreachable until a full reload (boss report,
-  // 2026-08-04).
-  const refreshDayProjection = bumpDays;
+  // A schedule edit changes what "done" means (a tick satisfies only its own
+  // type), so both handlers re-key the day context, not just profile load.
   const handleSaveWeek = (newWeek) => {
     W.saveEdit(newWeek);
     setUserWeek(W.get() || WEEK); // re-read so state mirrors the persisted/normalised shape
-    refreshDayProjection();
+    bumpDays();
     setWeekEditorOpen(false);
     pushNow(activeProfile);
   };
   const handleResetWeek = () => {
     W.reset();
     setUserWeek(WEEK);
-    refreshDayProjection();
+    bumpDays();
     setWeekEditorOpen(false);
     pushNow(activeProfile);
   };
@@ -751,10 +739,8 @@ export default function ForgeApp(){
   );
   }
 
-  // Derive today's session index for HomeScreen
-  const todayIdx = mondayIndex(new Date());
-  // Rest day but the user starts anyway → still the next in the cycle.
-  const todaySessionIdx = strengthDaySessions[todayIdx] ?? nextStrengthIdx(history);
+  // The session Begin starts — off the same day context as the home preview.
+  const todaySessionIdx = beginSessionIdx(dayCtx);
 
   // Pure rotation preview — computes a candidate config without touching
   // state. Used by the preview sheet so users can see the proposed picks
@@ -1012,7 +998,7 @@ export default function ForgeApp(){
             bodyweight: bodyweight,
             weight: w,
             reps: r,
-            rpe: exEntry.rpe || "normal",     // single RPE applied to all sets
+            rpe: exEntry.rpe || "normal",     // picker label, one for all sets; logSet stores its number (easy 7 · normal 8 · cooked 10)
             prescribed: exEntry.prescribed,
             tempo: null,
             blockIntent: exEntry.blockIntent || null,

@@ -48,6 +48,7 @@ import { unfinishedBlocks, leadExerciseName } from "@/lib/session-progress";
 import { pickFlashLine, isPullMovement } from "@/lib/set-flash";
 import { EXERCISE_ANATOMY } from "@/lib/exercise-anatomy";
 import { todayLocalIso, daysBetween } from "@/lib/dates";
+import { isStrengthRecord } from "@/lib/day-state";
 import { T } from "@/lib/tokens";
 import { haptic } from "@/lib/a11y";
 import { withNavTransition } from "@/lib/nav-transitions";
@@ -669,7 +670,7 @@ export default function SessionHost() {
       // "Back at it" gap — read the newest strength record BEFORE appending.
       {
         const prior = H.get(profile)
-          .filter(r => r?.date && String(r.session || "").startsWith("strength"))
+          .filter(r => r?.date && isStrengthRecord(r))
           .map(r => r.date).sort().pop();
         if (prior) {
           const gap = daysBetween(prior, todayLocalIso());

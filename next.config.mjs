@@ -12,6 +12,9 @@ const nextConfig = {
   // `next build` (the compiler runs there, NOT in vitest) plus a deployed
   // smoke pass — vitest passing does NOT exercise the compiler transform.
   reactCompiler: true,
+  // `next dev` would otherwise append its own agent-rules block to CLAUDE.md
+  // on every start; that file is the collaboration contract, not Next's.
+  agentRules: false,
   // View Transitions (PR3 3f). Makes App Router navigations run as React
   // transitions so the <ViewTransition> boundary in app/layout.jsx animates
   // route changes (home ↔ /session ↔ /performance ↔ /profile) with the same

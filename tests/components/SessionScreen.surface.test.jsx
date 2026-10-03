@@ -112,7 +112,34 @@ describe("effort is captured and read back as the number that was dragged", () =
     })} />);
     const text = flat(document.body.textContent);
     expect(text).toContain("100 kg × 5 at 8.5");
-    expect(text).toContain("100 kg × 5 at 9.5");
+    expect(text).toContain("100 kg × 5 at 10");
+  });
+
+  it("old stored data with a NaN or unknown RPE renders without throwing and never prints NaN", () => {
+    render(<SessionScreen {...props({
+      setNum: 4,
+      loggedSets: [
+        { weight: 100, reps: 5, rpe: NaN },
+        { weight: 100, reps: 5, rpe: "normal" },
+        { weight: 100, reps: 5, rpe: "brutal" },
+      ],
+    })} />);
+    const text = flat(document.body.textContent);
+    expect(text).not.toMatch(/NaN/);
+    expect(text).toContain("100 kg × 5 at 8");
+    expect(text).not.toMatch(/100 kg × 5 at brutal/);
+  });
+
+  it("\"last time\" reads a stored effort by the one read path, a NaN top set included", () => {
+    // Top set carries NaN; the session's effort comes from another set's number.
+    const history = [{ id: "2026-09-21T10:00:00.000Z", date: "2026-09-21", blocks: [{ exercises: [
+      { name: squat.name, sets: [{ weight: 90, reps: 5, rpe: 9 }, { weight: 110, reps: 5, rpe: NaN }] }] }] }];
+    render(<SessionScreen {...props({ history })} />);
+    const text = flat(document.body.textContent);
+    expect(text).not.toMatch(/NaN/);
+    expect(text).toContain("110 × 5 @ 9");
+    fireEvent.click(screen.getByLabelText(/Recent history for/));
+    expect(flat(screen.getByRole("dialog").textContent)).not.toMatch(/NaN/);
   });
 });
 
