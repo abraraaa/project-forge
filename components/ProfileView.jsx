@@ -29,6 +29,15 @@ import ProfileScreen from "@/components/ProfileScreen";
 import FocusPickerSheet from "@/components/FocusPickerSheet";
 import BreatherModal from "@/components/BreatherModal";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { fetchWithTimeout } from "@/lib/net";
+
+/** The trainer share for the Profile row, or null (signed out, offline). */
+async function fetchTrainerShare(profile) {
+  try {
+    const res = await fetchWithTimeout(`/api/sync/trainer?profile=${encodeURIComponent(profile)}`);
+    return res.ok ? await res.json() : null;
+  } catch { return null; }
+}
 
 export default function ProfileView() {
   const router = useRouter();
@@ -69,6 +78,15 @@ export default function ProfileView() {
     Bk.end(current);
     setActiveBreather(null);
     pushNow(current);
+  }, [current]);
+
+  // "Your trainer": only what the server says; nothing is kept on the device.
+  const [trainerShare, setTrainerShare] = useState(null);
+  useEffect(() => {
+    if (!current) return undefined;
+    let off = false;
+    fetchTrainerShare(current).then((share) => { if (!off) setTrainerShare(share); });
+    return () => { off = true; };
   }, [current]);
 
   // Settings surface needs an active profile — a deep link without one goes
@@ -125,6 +143,7 @@ export default function ProfileView() {
         resting={!!activeBreather}
         restingReason={activeBreather?.reason || null}
         onEndBreather={handleEndBreather}
+        trainerShare={trainerShare}
       />
       {focusPickerOpen && (
         <FocusPickerSheet current={userFocus} onSave={handleSaveFocus} onCancel={() => setFocusPickerOpen(false)} />

@@ -58,7 +58,7 @@ export async function POST(request) {
     if (!identity) return denied();
     const store = await neonOAuthStore();
     if (!store) return NextResponse.json({ error: "Unavailable" }, { status: 503 });
-    const ok = await revokeGrantFor(store, identity, disconnect);
+    const ok = await revokeGrantFor(store, identity, disconnect, Date.now(), { kind: "ai" });
     return ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Not found" }, { status: 404 });
   } catch (e) {
     return serverError(e, { label: "connections-write" });

@@ -31,6 +31,32 @@ describe("identity schema (ensureSchema)", () => {
     }
   });
 
+  it("adds the trainer columns (the ended notice's seen time among them), the one-active-trainer index and the invite slot table", () => {
+    for (const s of [
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS trainer_terms JSONB",
+      "ALTER TABLE oauth_grants ADD COLUMN IF NOT EXISTS trainer_account_id TEXT",
+      "ALTER TABLE oauth_grants ADD COLUMN IF NOT EXISTS consent_version TEXT",
+      "ALTER TABLE oauth_grants ADD COLUMN IF NOT EXISTS revoked_by TEXT",
+      "ALTER TABLE oauth_grants ADD COLUMN IF NOT EXISTS looks JSONB",
+      "ALTER TABLE oauth_grants ADD COLUMN IF NOT EXISTS look_count INTEGER",
+      "ALTER TABLE oauth_grants ADD COLUMN IF NOT EXISTS notice_seen_at BIGINT",
+      "CREATE UNIQUE INDEX IF NOT EXISTS oauth_grants_one_trainer ON oauth_grants (account_id) WHERE kind = 'trainer' AND revoked_at IS NULL",
+      "CREATE INDEX IF NOT EXISTS oauth_grants_trainer ON oauth_grants (trainer_account_id) WHERE kind = 'trainer' AND revoked_at IS NULL",
+      "CREATE UNIQUE INDEX IF NOT EXISTS trainer_invites_code ON trainer_invites (code_hash)",
+    ]) expect(statements).toContain(s);
+    const invites = statements.find((s) => s.startsWith("CREATE TABLE IF NOT EXISTS trainer_invites ("));
+    expect(invites?.split("\n").slice(1, -1).map((l) => l.trim())).toEqual([
+      "trainer_account_id TEXT PRIMARY KEY,",
+      "code_hash TEXT NOT NULL,",
+      "issued_at BIGINT NOT NULL,",
+      "expires_at BIGINT NOT NULL,",
+      "used_at BIGINT,",
+      "grant_id TEXT",
+    ]);
+    // The access log lives on the grant row as a bounded ring, not in a table of its own.
+    expect(slice).not.toMatch(/trainer_access_log|read_count/);
+  });
+
   it("contains no destructive or rewriting verb", () => {
     expect(slice).not.toMatch(/\bDROP\b|ALTER COLUMN|\bDELETE\b|\bUPDATE\b/);
   });

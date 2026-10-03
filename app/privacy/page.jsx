@@ -7,7 +7,7 @@ import { T, DISPLAY } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
 
 const URL = "https://heatwayve.app/privacy";
-export const UPDATED = "2 October 2026";
+export const UPDATED = "3 October 2026";
 export const CONTACT = "ab@heatwayve.app";
 export const ICO_REG = "ZC257208";
 
@@ -43,20 +43,21 @@ const SECTIONS = [
       "Usage and performance — page views, load times, and an anonymous count of finished sessions, through Vercel Web Analytics and Speed Insights. No name attached, no cookies, nothing that follows you across other sites.",
       "Your IP address — briefly, to stop abuse, and in our hosting provider's logs.",
       "An AI you connect, if you do — which app, which passkey approved it, and when it last read. It reads your training (never photos) only when you ask it to.",
+      "A trainer you add, if you do — who they are, when sharing started and ended, and when they looked. See \"A trainer you add\" below.",
       "Anything you email us, if you do.",
     ],
   },
   {
     h: "Health information",
     p: [
-      "Readiness and its reasons, breaks (including \"injured or ill\"), bodyweight, training and photos can say something about your health, which UK law treats as special category data. We only use it with your explicit consent, and only to run Heatwayve for you. You give it when you add a passkey. If you added one before 29 September 2026, you gave it by entering your data, and we'll ask you once, on your profile, to confirm. Withdraw consent any time by deleting your profile (photos can also be deleted one by one in the Locker Room).",
+      "Readiness and its reasons, breaks (including \"injured or ill\"), bodyweight, training and photos can say something about your health, which UK law treats as special category data. We only use it with your explicit consent, and only to run Heatwayve for you and to share it with a trainer you add. You give it when you add a passkey. If you added one before 29 September 2026, you gave it by entering your data, and we'll ask you once, on your profile, to confirm. Withdraw consent any time by deleting your profile (photos can also be deleted one by one in the Locker Room). For a trainer, you give it when you approve them, and withdraw it by stopping sharing.",
     ],
   },
   {
     h: "Our lawful bases",
     list: [
       "Providing the app you asked for (contract) — your name, passkey and training.",
-      "Explicit consent — health information and progress photos.",
+      "Explicit consent — health information, progress photos, and sharing with a trainer you add.",
       "Legitimate interests — keeping the service secure and working (rate limiting, logs), measuring performance, and handling bug reports and emails.",
     ],
   },
@@ -68,7 +69,8 @@ const SECTIONS = [
       "Vercel Blob — private file storage in London for passkey public keys, progress photos, backups, and older copies of some profiles' training.",
       "YouTube — demo videos embed in privacy-enhanced mode. Opening one connects your browser to Google, under its own privacy policy. Some links open YouTube itself, where its usual terms and cookies apply.",
       "Buy Me a Coffee — if you tip, that happens on their site under their policy. They may pass us your supporter name and message.",
-      "An AI you connect — what it reads is handled under that AI's own terms. Removing the passkey that approved it ends the connection; email us to end it sooner.",
+      "An AI you connect — what it reads is handled under that AI's own terms. Disconnect it any time in AI coaching, on your profile. Removing the passkey that approved it ends the connection too.",
+      "A trainer you add — sees only what's set out below, and is responsible for what they do with it.",
     ],
     p: [
       "Our providers are US companies and may access data from outside the UK. Where they do, it's under UK-approved safeguards, such as the UK Extension to the EU–US Data Privacy Framework or the UK International Data Transfer Addendum.",
@@ -76,9 +78,20 @@ const SECTIONS = [
     ],
   },
   {
+    h: "A trainer you add",
+    list: [
+      "You add a trainer yourself, with the code they show you and your passkey. That approval is your consent to share; no one else can give it for you.",
+      "They see your last 24 weeks of training in full — sessions, sets, weights, reps, effort and how you felt — and your main-lift trend and bests over 12 months. Their client list shows when you last trained, your sessions this week against your plan, and your recent rhythm. Breathers show as paused.",
+      "They never see your photos, bodyweight, sleep, why you took a breather, what time of day you trained, or your notes.",
+      "Each look, and a once-a-day check-in from their client list, shows on your profile. Stop sharing in one tap, and they lose access straight away.",
+      "What your trainer does with what they see is their responsibility. Under the Trainer Terms, they use it only to coach you and keep it private.",
+      "Nothing is deleted when sharing ends. The record of it keeps its dates: who, when it started and ended, and the last 20 looks. It never holds your training.",
+    ],
+  },
+  {
     h: "Cookies and on-device storage",
     list: [
-      "One strictly necessary cookie keeps sync signed in; a second keeps photos unlocked. Each renews while you use the app and lapses after 30 days (sync) or 7 days (photos) unused. Neither tracks you.",
+      "One strictly necessary cookie keeps sync signed in; a second keeps photos unlocked. Each renews while you use the app and lapses after 30 days (sync) or 7 days (photos) unused. If you're a trainer, a third keeps your trainer dashboard signed in; it lapses after 14 days unused, or 30 days after you signed in, whichever comes first. None of them tracks you.",
       "Your training is kept in your browser's storage on your device. Photos you view may sit briefly in your browser's cache.",
       "No advertising or tracking cookies. If you open a demo video, YouTube may set its own.",
     ],
@@ -91,6 +104,7 @@ const SECTIONS = [
       "Backups — refreshed daily and weekly, deleted with your profile. Our database provider keeps a short restore history that expires on its own.",
       "Sign-in records — each works for 30 days at most. The records (your profile name and dates) stay until you delete your profile.",
       "AI connections — the record of which app you connected (never your training) stays after you delete your profile, and can't read anything once your profile and passkey are gone. Ask and we'll remove it.",
+      "Trainer sharing — the record of it (who, the dates, the last 20 looks, never your training) stays after sharing ends and after you delete your profile.",
       "Bug reports — not removed when you delete your profile. Ask and we'll delete yours.",
       "Server logs, which can include your profile name — kept briefly by our hosting provider.",
       "No passkey? Your name (and anything synced before 27 July 2026) stays until you add one and delete your profile, or email us.",

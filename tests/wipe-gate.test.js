@@ -143,7 +143,7 @@ describe("wipe gate — fails closed, always", () => {
     const fn = store.slice(store.indexOf("export async function dbCloseAccount"));
     const body = fn.slice(0, fn.indexOf("\n}"));
     expect([...body.matchAll(/\b(UPDATE|DELETE FROM|INSERT INTO) (\w+)/g)].map((m) => `${m[1]} ${m[2]}`)).toEqual([
-      "UPDATE oauth_grants", "UPDATE handles", "UPDATE accounts", "DELETE FROM credentials",
+      "UPDATE oauth_grants", "UPDATE handles", "UPDATE accounts", "DELETE FROM credentials", "UPDATE oauth_grants",
     ]);
     expect(body).toContain("DELETE FROM credentials WHERE account_id = ${accountId}`");
   });

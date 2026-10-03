@@ -313,6 +313,69 @@ html[data-mode="dark"] .forge-page {
   min-height: 0;
 }
 
+/* Wide shape: a scroll-shape screen that uses the width (the trainer
+   dashboard). It owns the side insets, because viewportFit cover puts a
+   landscape phone's content under the sensor housing, and the breakpoints.
+   It sets no height and no top inset, and nothing in it is sticky: the page
+   scrolls as one document at every width.
+   < 640 stacked, centred at 560 · 640-1023 roster 248 + pane ·
+   1024+ roster 304 + pane, whose .forge-wide-pane runs two columns. */
+.forge-wide {
+  display: grid;
+  gap: 32px;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 560px;
+  margin: 0 auto;
+  padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
+}
+@media (min-width: 640px) {
+  .forge-wide { grid-template-columns: 248px minmax(0, 1fr); max-width: none; }
+  /* The column divide is a hairline on the roster, not a card. */
+  .forge-wide-roster { border-right: 1px solid var(--rule); }
+}
+@media (min-width: 1024px) {
+  .forge-wide { grid-template-columns: 304px minmax(0, 1fr); max-width: 1360px; }
+  .forge-wide-pane {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 32px;
+  }
+}
+
+/* What the wide shape folds at each tier. Under 640 one column shows at a
+   time (data-view on the shell: the roster, or the open client), the
+   rhythm shows its latest 8 weeks behind a disclosure, and one lift chart
+   is open. 640-1023: rhythm rows of 12, roster lines on one line. 1024+:
+   rhythm rows of 8, as it sits in the pane's left column. A solo panel
+   (signed out, the upgrade) keeps the phone column at every width. */
+.forge-wide-solo { grid-column: 1 / -1; width: 100%; max-width: 430px; margin: 0 auto; }
+.forge-wide-rhythm {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+@media (max-width: 639.98px) {
+  .forge-wide[data-view="roster"] > .forge-wide-main,
+  .forge-wide[data-view="client"] > .forge-wide-roster { display: none; }
+  .forge-wide-mw-only { display: none; }
+  .forge-wide-rhythm:not([data-earlier]) > .forge-wide-rhythm-early { display: none; }
+  .forge-wide-lift:not([data-open]) .forge-wide-lift-detail { display: none; }
+}
+@media (min-width: 640px) {
+  .forge-wide-roster { padding-right: 24px; }
+  .forge-wide-n-only { display: none; }
+  .forge-wide-rhythm { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+}
+@media (min-width: 640px) and (max-width: 1023.98px) {
+  .forge-wide-signal { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+@media (min-width: 1024px) {
+  .forge-wide-rhythm { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+}
+
 /* ─── Modal scrims (Safari 26 chrome-safe) ─────────────────────────────────
    Every sheet/dialog scrim is position:fixed inset:0 — it borders both
    viewport edges, and Safari 26 samples a fixed edge element's OWN
