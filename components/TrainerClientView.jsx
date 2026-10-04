@@ -3,7 +3,8 @@
 // components/TrainerClientView.jsx
 // ─────────────────────────────────────────────────────────────────────────────
 // One client's training, as their trainer sees it: the pane of /trainer.
-// Read only. Every number is computed here from the projection the trainer
+// With `self`, the trainer's own training through the same projection: no
+// sharing dates, no looks, nothing to stop. Read only. Every number is computed here from the projection the trainer
 // routes send (lib/trainer-view.js projectForTrainer), with the same pure
 // functions the client's own Lab uses. Nothing about the viewer's own device
 // is read. Sessions carry synthetic ids, so nothing here parses an id as a
@@ -135,11 +136,13 @@ const quietBtn = {
  *   lastLooked?: number | null,
  *   now?: number,
  *   onRemove?: () => Promise<boolean> | boolean | void,
+ *   self?: boolean,
  * }} props
  */
-export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove }) {
+export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false }) {
   const name = client?.name || null;
-  const title = name || "Your client";
+  const title = self ? "You" : name || "Your client";
+  const they = self ? "you" : "they";
   const todayIso = view?.window?.to;
   const from = view?.window?.from;
   const sessions = useMemo(() => (Array.isArray(view?.sessions) ? view.sessions : []), [view]);
@@ -181,20 +184,21 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
     else setConfirming(false);
   };
 
-  const looked = agoText(lastLooked, now);
+  const looked = self ? null : agoText(lastLooked, now);
+  const since = self ? null : client?.since;
   const sentenceName = name || "They";
 
   return (
     <div style={{ fontFamily: T.text, color: T.ink }}>
       {/* 1. Header */}
-      <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>Shared with you</div>
+      <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>{self ? "Your training" : "Shared with you"}</div>
       <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" }}>{title}</h1>
       <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>
         Read only. Sessions from the last 24 weeks; main lifts over 12 months.
       </p>
       <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "6px 0 0" }}>
-        {client?.since ? <>Sharing since <Nums text={msDayMonth(client.since)}/></> : null}
-        {client?.since && looked ? " · " : null}
+        {since ? <>Sharing since <Nums text={msDayMonth(since)}/></> : null}
+        {since && looked ? " · " : null}
         {looked ? <>You last looked <Nums text={looked}/></> : null}
       </p>
 
@@ -204,7 +208,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
           {resting && (
             <div style={section} data-section="breather">
               <div style={{ fontSize: 13, color: T.ink3, marginBottom: 4 }}>On a breather</div>
-              <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5 }}>Paused for now. Their numbers are holding.</div>
+              <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5 }}>Paused for now. {self ? "Your" : "Their"} numbers are holding.</div>
             </div>
           )}
 
@@ -247,7 +251,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
         <div>
           {/* 5. How they felt: always shown */}
           <div style={section} data-section="felt">
-            <div style={kicker}>How they felt</div>
+            <div style={kicker}>How {they} felt</div>
             {felt.total > 0 ? (
               <div style={{ fontSize: 14, color: T.ink }}>
                 <Nums text={`Fresh ${felt.fresh} · Normal ${felt.normal} · Cooked ${felt.cooked}`}/>
@@ -255,7 +259,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
             ) : (
               <div style={{ fontSize: 13, color: T.ink2 }}>Nothing logged in the last 24 weeks.</div>
             )}
-            <div style={{ fontSize: 12, color: T.ink3, marginTop: 6 }}>Each session shows how they felt; sets show RPE or RIR.</div>
+            <div style={{ fontSize: 12, color: T.ink3, marginTop: 6 }}>Each session shows how {they} felt; sets show RPE or RIR.</div>
           </div>
 
           {/* 6. Under minimum: only when flagged */}
@@ -285,17 +289,19 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
         </div>
       </div>
 
-      {/* 8. Footer */}
-      <div style={{ marginTop: 40, paddingTop: 16, borderTop: `1px solid ${T.rule}` }}>
-        <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 12px" }}>
-          Read only. {sentenceName} can stop sharing any time.
-        </p>
-        <button type="button" onClick={() => setConfirming(true)} className="forge-press forge-tint" style={quietBtn}>
-          {name ? `Stop seeing ${name}'s training` : "Stop seeing their training"}
-        </button>
-      </div>
+      {/* 8. Footer: a client's only. Nothing to stop on your own. */}
+      {!self && (
+        <div style={{ marginTop: 40, paddingTop: 16, borderTop: `1px solid ${T.rule}` }}>
+          <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 12px" }}>
+            Read only. {sentenceName} can stop sharing any time.
+          </p>
+          <button type="button" onClick={() => setConfirming(true)} className="forge-press forge-tint" style={quietBtn}>
+            {name ? `Stop seeing ${name}'s training` : "Stop seeing their training"}
+          </button>
+        </div>
+      )}
 
-      {confirming && (
+      {confirming && !self && (
         <div onKeyDown={onKeyDown} onClick={closeConfirm} className="forge-scrim" style={{ overscrollBehavior: "contain", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
           <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="trainer-stop-title" tabIndex={-1}
             onClick={(e) => e.stopPropagation()} className="forge-sheet-ground forge-vellum"

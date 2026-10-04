@@ -5,7 +5,8 @@
 // /trainer: the trainer's dashboard. Signed out it asks for a Heatwayve name
 // and a quiet Face ID (no lifter cookies are left on this device); a new
 // trainer accepts the Trainer Terms here. Signed in it lists the clients who
-// share with them, opens one at a time in the pane, and shows an invite code.
+// share with them under the trainer's own training (the "You" row), opens one
+// at a time in the pane, and shows an invite code.
 //
 // Layout is the wide shell (.forge-wide in globals.css): the roster column
 // and the client pane, one at a time under 640. The URL stays /trainer;
@@ -24,6 +25,7 @@ import { fetchWithTimeout } from "@/lib/net";
 import { todayLocalIso } from "@/lib/dates";
 import { formatCode, shareUrl } from "@/lib/trainer-code";
 import { TRAINER_TERMS_COPY, TRAINER_TERMS_VERSION } from "@/lib/trainer-terms";
+import { SELF_REF } from "@/lib/trainer-view";
 import TrainerClientView, { Nums, msDayMonth } from "@/components/TrainerClientView";
 import QrCode from "@/components/QrCode";
 
@@ -35,6 +37,9 @@ const FACE_ID_FAILED = "Face ID didn't go through. Try again.";
 const WENT_WRONG = "Something went wrong. Try again.";
 // A share link is a 37-module symbol with its quiet zone: 5 px a module.
 const QR_PX = 185;
+// The trainer's own training: the roster's pinned first row. Its history
+// entry says self rather than holding an index.
+const SELF_ROW = Object.freeze({ ref: SELF_REF, name: null, lastLooked: null });
 
 /** JSON in, { status, body } out; status 0 when the network failed. */
 async function call(path, body) {
@@ -96,6 +101,15 @@ const linkBtn = {
 const kickerStyle = { fontSize: 13, color: T.ink2, marginBottom: 8 };
 /** @type {import("react").CSSProperties} */
 const h1Style = { ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" };
+/** A roster row's button. @param {boolean} current @returns {import("react").CSSProperties} */
+const rowStyle = (current) => ({
+  display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 8px", background: current ? T.press : "none",
+  border: "none", borderRadius: T.rSm, cursor: "pointer", textAlign: "left", fontFamily: T.text, color: T.ink,
+});
+/** @type {import("react").CSSProperties} */
+const rowTitle = { display: "block", fontSize: 15, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+/** @type {import("react").CSSProperties} */
+const rowLine = { display: "block", fontSize: 12, color: T.ink3, marginTop: 3, lineHeight: 1.45 };
 
 export default function TrainerView() {
   // loading · signedOut · upgrade (not a trainer yet) · terms (terms changed) · error · roster
@@ -113,9 +127,9 @@ export default function TrainerView() {
   const [me, setMe] = useState(null);
   const [clients, setClients] = useState([]);
   const [loadedAt, setLoadedAt] = useState(0);
-  // The open client: { i, ref, name, lastLooked } and its pane state.
+  // The open client (or SELF_ROW, i -1): { i, ref, name, lastLooked } and its pane state.
   const [open, setOpen] = useState(null);
-  const [pane, setPane] = useState(null); // { ref, state: 'loading' | 'missing' | 'error' } | { ref, state: 'ready', client, view }
+  const [pane, setPane] = useState(null); // { ref, state: 'loading' | 'missing' | 'error' } | { ref, state: 'ready', client, view, self }
   const mainRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   // Only the latest pane request may fill the pane; an earlier reply that
   // lands late is dropped.
@@ -247,24 +261,25 @@ export default function TrainerView() {
     window.requestAnimationFrame?.(() => mainRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" }));
     const r = await call("/api/trainer/client", { ref: c.ref, today: todayLocalIso() });
     if (seq !== paneSeq.current) return;
-    if (r.status === 200 && r.body.view) setPane({ ref: c.ref, state: "ready", client: r.body.client, view: r.body.view });
+    if (r.status === 200 && r.body.view) setPane({ ref: c.ref, state: "ready", client: r.body.client, view: r.body.view, self: r.body.self === true });
     else if (r.status === 404) setPane({ ref: c.ref, state: "missing" });
     else if (r.status === 401) { reset(); setPhase("signedOut"); }
     else if (r.status === 403 && r.body.needsTerms) toTerms();
     else setPane({ ref: c.ref, state: "error" });
   };
 
-  const openClient = (i) => {
-    const c = clients[i];
+  const openRow = (i, c) => {
     if (!c || open?.ref === c.ref) return;
     // One entry for "a client is open": switching clients replaces it, so
     // Back always returns to no selection.
-    const state = { view: "client", i };
+    const state = c === SELF_ROW ? { view: "client", self: true } : { view: "client", i };
     if (window.history.state?.view === "client") window.history.replaceState(state, "");
     else window.history.pushState(state, "");
     entryRef.current = c.ref;
     showClient(i, c);
   };
+  const openClient = (i) => openRow(i, clients[i]);
+  const openSelf = () => openRow(-1, SELF_ROW);
 
   const closeClient = () => {
     if (window.history.state?.view === "client") window.history.back();
@@ -273,7 +288,7 @@ export default function TrainerView() {
 
   const onPop = useEffectEvent((e) => {
     const st = e.state;
-    const c = st?.view === "client" ? clients[st.i] : null;
+    const c = st?.view !== "client" ? null : st.self === true ? SELF_ROW : clients[st.i];
     if (c && c.ref === entryRef.current) {
       if (open?.ref !== c.ref) showClient(st.i, c);
     } else {
@@ -365,6 +380,7 @@ export default function TrainerView() {
   }
 
   const selected = open ? clients.findIndex((c) => c.ref === open.ref) : -1;
+  const selfOpen = open?.ref === SELF_REF;
   const shown = open && pane?.ref === open.ref ? pane : null;
   return (
     <div {...root} data-view={open ? "client" : "roster"}>
@@ -375,21 +391,33 @@ export default function TrainerView() {
           style={{ ...commitBtn, marginTop: 14, marginBottom: 20 }}>
           Add a client
         </button>
+        {/* Your own training, pinned first; a hairline sets it apart from clients. */}
+        <div data-self-row="" style={{ borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}` }}>
+          <button type="button" onClick={openSelf} aria-current={selfOpen ? "true" : undefined}
+            className="forge-press forge-tint" style={rowStyle(selfOpen)}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={rowTitle}>Your training</span>
+              <span style={rowLine}>Read only here</span>
+            </span>
+            <span className="forge-wide-n-only" style={{ flexShrink: 0, lineHeight: 0 }}>
+              <Glyph name="arrowRight" size={12} color={T.ink3}/>
+            </span>
+          </button>
+        </div>
         {clients.length === 0 ? (
-          <p className="forge-wide-n-only" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6 }}>{EMPTY_ROSTER}</p>
+          <p className="forge-wide-n-only" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: "14px 0 0" }}>{EMPTY_ROSTER}</p>
         ) : (
-          <ul aria-label="Clients" style={{ listStyle: "none", margin: 0, padding: 0, borderTop: `1px solid ${T.rule}` }}>
+          <ul aria-label="Clients" style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {clients.map((c, i) => {
               const line = signalText(c.signal, c.since);
               const current = i === selected;
               return (
                 <li key={c.ref} style={{ borderBottom: `1px solid ${T.ruleFaint}` }}>
                   <button type="button" onClick={() => openClient(i)} aria-current={current ? "true" : undefined}
-                    className="forge-press forge-tint"
-                    style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 8px", background: current ? T.press : "none", border: "none", borderRadius: T.rSm, cursor: "pointer", textAlign: "left", fontFamily: T.text, color: T.ink }}>
+                    className="forge-press forge-tint" style={rowStyle(current)}>
                     <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "block", fontSize: 15, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || "Your client"}</span>
-                      <span className="forge-wide-signal" title={line} style={{ display: "block", fontSize: 12, color: T.ink3, marginTop: 3, lineHeight: 1.45 }}>
+                      <span style={rowTitle}>{c.name || "Your client"}</span>
+                      <span className="forge-wide-signal" title={line} style={rowLine}>
                         <Nums text={line}/>
                       </span>
                     </span>
@@ -436,8 +464,8 @@ export default function TrainerView() {
           </div>
         )}
         {shown?.state === "ready" && (
-          <TrainerClientView key={shown.ref} client={shown.client} view={shown.view}
-            lastLooked={open.lastLooked} now={loadedAt} onRemove={() => removeClient(shown.ref)}/>
+          <TrainerClientView key={shown.ref} client={shown.client} view={shown.view} self={shown.self}
+            lastLooked={open.lastLooked} now={loadedAt} onRemove={shown.self ? undefined : () => removeClient(shown.ref)}/>
         )}
       </div>
 
@@ -566,6 +594,9 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
     if (r.status === 200) { finalFor.current = code; setStatus({ code, status: "cancelled", usedBy: null }); }
   };
 
+  // A final status (used, run out, cancelled) is what to read: it leads, and
+  // the dead code fades under it.
+  const final = state !== "pending";
   const statusText = !code ? ""
     : mine?.status === "cancelled" ? "Cancelled. This code no longer works."
     : state === "used" ? `${mine.usedBy || "Your client"} is in.`
@@ -582,25 +613,34 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
         {invite.issuing && <div role="status" style={{ fontSize: 13, color: T.ink3, minHeight: 32 }}>One moment</div>}
         {invite.error && <div role="status" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5 }}>{invite.error}</div>}
         {code && (
-          <>
-            {/* The QR only while the code works. The quiet zone sits inside the
-                svg, so pulling it left lines the modules up with the text. */}
+          // One live region throughout, so a change is announced. It sits first
+          // in the DOM; while the code is live, order moves it below the how-to.
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {/* The QR only while the code works. Its light plate lines up with
+                the text's left edge, inside the sheet's padding. */}
             {state === "pending" && (
-              <div data-qr="" style={{ margin: "-8px 0 2px -20px", width: QR_PX }}>
+              <div data-qr="" style={{ margin: "0 0 14px", width: QR_PX }}>
                 <QrCode text={shareUrl(code)} width={QR_PX} height={QR_PX}/>
               </div>
             )}
-            <div data-code="" style={{ fontFamily: T.measured, fontSize: 22, letterSpacing: "0.06em", color: T.ink, margin: "0 0 14px", opacity: state === "pending" ? 1 : 0.45 }}>
+            <div role="status" aria-live="polite" data-final={final ? "" : undefined}
+              style={final
+                ? { fontSize: 15, fontWeight: 500, color: T.ink, lineHeight: 1.4, margin: "0 0 10px", minHeight: 20 }
+                : { order: 3, fontSize: 14, color: T.ink, margin: "14px 0 18px", minHeight: 20 }}>
+              {statusText}
+            </div>
+            <div data-code="" style={{ fontFamily: T.measured, fontSize: 22, letterSpacing: "0.06em", color: final ? T.ink3 : T.ink, margin: "0 0 14px", opacity: final ? 0.3 : 1 }}>
               {formatCode(code)}
             </div>
-            <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "0 0 4px" }}>
-              In Heatwayve, they go to Profile → Add a trainer and type this code. Works once, until <span style={{ fontFamily: T.measured }}>{clockTime(invite.expiresAt)}</span>.
-            </p>
+            {!final && (
+              <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "0 0 4px" }}>
+                In Heatwayve, they go to Profile → Add a trainer and type this code. Works once, until <span style={{ fontFamily: T.measured }}>{clockTime(invite.expiresAt)}</span>.
+              </p>
+            )}
             {state === "pending" && (
               <p style={{ fontSize: 12, color: T.ink3, margin: 0 }}><Nums text={`${minsLeft} min left`}/></p>
             )}
-            <div role="status" aria-live="polite" style={{ fontSize: 14, color: T.ink, margin: "14px 0 18px", minHeight: 20 }}>{statusText}</div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ order: 4, display: "flex", gap: 10, flexWrap: "wrap", marginTop: final ? 18 : 0 }}>
               {state === "pending" && (
                 <>
                   <button type="button" onClick={onShare} style={quietBtn}>{shared === "copied" ? "Copied" : "Share link"}</button>
@@ -611,8 +651,8 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
                 <button type="button" onClick={onIssue} style={quietBtn}>New code</button>
               )}
             </div>
-            {shared === "fail" && <div style={{ fontSize: 12, color: T.ink2, marginTop: 8 }}>Couldn't reach the clipboard. Read the code out instead.</div>}
-          </>
+            {shared === "fail" && <div style={{ order: 5, fontSize: 12, color: T.ink2, marginTop: 8 }}>Couldn't reach the clipboard. Read the code out instead.</div>}
+          </div>
         )}
         <button type="button" onClick={onClose}
           style={{ width: "100%", padding: "12px", marginTop: 14, background: "none", border: "none", cursor: "pointer", fontSize: 13, color: T.ink3, fontFamily: T.text }}>

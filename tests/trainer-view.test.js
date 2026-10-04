@@ -3,7 +3,7 @@
 import { describe, it, expect } from "vitest";
 import {
   projectForTrainer, projectBreaks, scheduleRuns, runsWeekFor, nextLooks, trainerToday, rosterSignal,
-  VIEW_KEYS, DETAIL_DAYS, TREND_DAYS,
+  VIEW_KEYS, DETAIL_DAYS, TREND_DAYS, SELF_REF,
 } from "@/lib/trainer-view";
 import { mainLiftTrend, readinessBreakdown } from "@/lib/analytics";
 import { auditHistoryVolume } from "@/lib/volume-audit";
@@ -489,5 +489,12 @@ describe("rosterSignal: the last date", () => {
       expect(rosterSignal(row(bad), today).lastTrainedDaysAgo, bad).toBeNull();
     }
     expect(rosterSignal(row("2024-02-29"), "2024-03-01").lastTrainedDaysAgo).toBe(1);
+  });
+});
+
+describe("SELF_REF", () => {
+  it("is 'me', which no grant id (hwg_…) can ever equal", () => {
+    expect(SELF_REF).toBe("me");
+    expect(SELF_REF.startsWith("hwg_")).toBe(false);
   });
 });

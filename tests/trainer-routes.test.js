@@ -2,7 +2,8 @@
 // is faked with small in-memory tables, so the gate, the store, db.js's
 // profile read and the routes run for real and every statement is captured.
 // The only writes allowed: the full-look ring UPDATE, the trainer's remove
-// UPDATE and the gate's daily session INSERT. Nothing is ever deleted.
+// UPDATE and the gate's daily session INSERT. Nothing is ever deleted. The
+// trainer's own training ({ ref: "me" }) writes nothing at all.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { createHash } from "node:crypto";
@@ -341,6 +342,78 @@ describe("POST /api/trainer/client", () => {
   it("an out-of-range today falls back to the server's UTC date", async () => {
     const res = await view(session(T, "cT"), { ref: "hwg_cara", today: "2020-01-01" });
     expect((await res.json()).view.window.to).toBe(TODAY);
+  });
+});
+
+describe("POST /api/trainer/client { ref: 'me' }: the trainer's own training", () => {
+  // The trainer lifts too: the same planted data under their own storage key.
+  const plantOwn = () => {
+    db.meta.push(...db.meta.filter((m) => m.profile === "sk-cara").map((m) => ({ ...m, profile: "tia" })));
+    db.sessions.push(...db.sessions.filter((x) => x.profile === "sk-cara").map((x) => ({ ...x, profile: "tia" })));
+  };
+
+  it("reads the trainer's own storage key through the same projection; no grant, no look, nothing written", async () => {
+    plantOwn();
+    const t = session(T, "cT");
+    const theirs = await (await view(t, { ref: "hwg_cara", today: TODAY })).json();
+    calls.length = 0;
+    const looksBefore = JSON.stringify(db.grants.map((g) => [g.id, g.looks, g.look_count, g.last_used_at]));
+
+    const res = await view(t, { ref: "me", today: TODAY });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const text = await res.text();
+    const body = JSON.parse(text);
+    expect(Object.keys(body).sort()).toEqual(["client", "self", "view"]);
+    expect(body.self).toBe(true);
+    expect(body.client).toEqual({ name: "Tia" });
+    // Same allow-list: the projection of the same data is the same, byte for byte.
+    expect(body.view).toEqual(theirs.view);
+    for (const f of FORBIDDEN) expect(text, f).not.toContain(f);
+
+    const reads = dataReads();
+    expect(reads).toHaveLength(2);
+    for (const r of reads) expect(r.v).toEqual(["tia"]);
+    expect(calls.some((c) => /oauth_grants/.test(c.q)), "no grant read or look logged").toBe(false);
+    expect(writes()).toEqual([]);
+    expect(JSON.stringify(db.grants.map((g) => [g.id, g.looks, g.look_count, g.last_used_at]))).toBe(looksBefore);
+  });
+
+  it("a trainer with no training gets an empty view, not a 404", async () => {
+    const body = await (await view(session(T, "cT"), { ref: "me", today: TODAY })).json();
+    expect(body.self).toBe(true);
+    expect(body.view.sessions).toEqual([]);
+    expect(body.view.tops).toEqual([]);
+    expect(dataReads().every((r) => r.v[0] === "tia")).toBe(true);
+  });
+
+  it("only the exact ref: near misses and dead grants still answer the one 404, nothing read", async () => {
+    plantOwn();
+    const t = session(T, "cT");
+    for (const ref of ["Me", "me ", "ME", "hwg_old", "hwg_xan", "hwg_oli"]) {
+      calls.length = 0;
+      const res = await view(t, { ref, today: TODAY });
+      expect(res.status, ref).toBe(404);
+      expect(await res.text(), ref).toBe(NOT_SHARED);
+      expect(dataReads(), ref).toEqual([]);
+      expect(writes(), ref).toEqual([]);
+    }
+  });
+
+  it("only the trainer cookie admits: a lifter's own session never reads through it", async () => {
+    for (const res of [
+      await view(null, { ref: "me" }),
+      await view(session(C, "cC", { scope: null }), { ref: "me" }),
+      await view(session(C, "cC"), { ref: "me" }),
+    ]) expect(res.status).toBe(401);
+    expect(dataReads()).toEqual([]);
+  });
+
+  it("limits as the client route: 60 a minute per IP, 300 a day keyed by the trainer, never one shared 'me' bucket", async () => {
+    await view(session(T, "cT"), { ref: "me", today: TODAY });
+    expect(vi.mocked(rateLimit).mock.calls[0].slice(1)).toEqual(["trainer-client", 60]);
+    const [, route, n, opts] = vi.mocked(rateLimitShared).mock.calls[0];
+    expect([route, n, opts]).toEqual(["trainer-client", 300, { windowMs: DAY, id: T }]);
   });
 });
 
