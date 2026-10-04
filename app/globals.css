@@ -370,7 +370,7 @@ html[data-mode="dark"] .forge-page {
   .forge-wide-rhythm { grid-template-columns: repeat(12, minmax(0, 1fr)); }
 }
 @media (min-width: 640px) and (max-width: 1023.98px) {
-  .forge-wide-signal { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .forge-wide-signal { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 }
 @media (min-width: 1024px) {
   .forge-wide-rhythm { grid-template-columns: repeat(8, minmax(0, 1fr)); }
@@ -605,13 +605,15 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   :root { --press-lift: color(display-p3 0.98 0.60 0.44); }
 }
 
-/* Lab trend ramp — the drill-down's heat gradient. On a wide-gamut panel
+/* Lab trend ramp — the drill-down's heat gradient. Declared on body like
+   the heat tokens it reads (a :root declaration cannot see them and the
+   line drew black). On a wide-gamut panel
    the LIGHT theme raises its chroma past sRGB (chosen on /diag-hdr,
    2026-09-25); dark keeps the shipped heat steps, so a bedtime scroll never
    gets brighter. */
-:root { --trend-1: var(--heat-1); --trend-2: var(--heat-2); --trend-3: var(--heat-3); }
+body { --trend-1: var(--heat-1); --trend-2: var(--heat-2); --trend-3: var(--heat-3); }
 @supports (color: color(display-p3 1 1 1)) {
-  :root {
+  body {
     --trend-1: light-dark(oklch(75% 0.11 40), var(--heat-1));
     --trend-2: light-dark(oklch(64% 0.15 38), var(--heat-2));
     --trend-3: light-dark(oklch(53% 0.18 34), var(--heat-3));

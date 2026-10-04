@@ -340,7 +340,7 @@ function RhythmCell({ week, early }) {
   const ratio = due > 0 ? Math.min(1, week.done / due) : week.done > 0 ? 1 : 0;
   const step = paused || ratio === 0 ? null : ratio >= 1 ? 3 : ratio >= 0.5 ? 2 : 1;
   const [figure, note] = paused ? ["", "paused"]
-    : week.partial ? [`${week.done} of ${week.plannedSoFar}`, "so far"]
+    : week.partial ? [`${week.done}/${week.plannedSoFar}`, "so far"]
     : week.plannedResting > 0 ? [`${week.done}/${week.planned}`, "part paused"]
     : [`${week.done}/${week.planned}`, ""];
   return (
