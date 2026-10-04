@@ -2,7 +2,8 @@
 // Profile row order: Coaching is the first logged-in section (your AI, your
 // trainer, and for trainers their clients); Your trainer
 // sits under it, above Training; the breather row stays in the Training
-// group, above Account/passkey.
+// group, above Account/passkey. Someone who isn't a trainer yet finds
+// "For trainers" as the last row of More, after Privacy.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
@@ -91,13 +92,33 @@ describe("Profile: Your trainer row", () => {
     expect(screen.queryByText("Add a trainer")).toBeNull();
   });
 
-  it("the For trainers row shows under Coaching only when the trainer side is open", async () => {
+  it("a trainer gets Your clients under Coaching, and no For trainers row", async () => {
+    const { rerender } = render(<ProfileScreen {...base} trainerShare={share({ trainer: true })} />);
+    await screen.findByText("Passkey enabled");
+    expect(screen.queryByText("Your clients")).toBeNull();
+    rerender(<ProfileScreen {...base} trainerShare={share({ trainerOpen: true, trainer: true })} />);
+    expect(row("Your clients").getAttribute("href")).toBe("/trainer");
+    expect(row("Your clients").textContent.replace("Your clients", "")).toBe("See clients who share with you");
+    expect(screen.queryByText("For trainers")).toBeNull();
+    expect(screen.queryByText("Set up as a trainer")).toBeNull();
+    expectOrder([screen.getByText("Coaching"), screen.getByText("Your clients"), screen.getByText("Training"), screen.getByText("Account")]);
+  });
+
+  it("everyone else gets For trainers as the last row of More, after Privacy, only when the trainer side is open", async () => {
     const { rerender } = render(<ProfileScreen {...base} trainerShare={share()} />);
     await screen.findByText("Passkey enabled");
     expect(screen.queryByText("For trainers")).toBeNull();
-    rerender(<ProfileScreen {...base} trainerShare={share({ trainerOpen: true, trainer: true })} />);
-    expect(screen.getByText("See clients who share with you")).toBeTruthy();
-    expect(row("For trainers").getAttribute("href")).toBe("/trainer");
-    expectOrder([screen.getByText("Coaching"), screen.getByText("For trainers"), screen.getByText("Training"), screen.getByText("Account")]);
+    rerender(<ProfileScreen {...base} trainerShare={share({ trainerOpen: true })} />);
+    const forTrainers = row("For trainers");
+    expect(forTrainers.getAttribute("href")).toBe("/trainer");
+    expect(forTrainers.textContent.replace("For trainers", "")).toBe("Set up as a trainer");
+    expect(screen.queryByText("Your clients")).toBeNull();
+    const privacy = row("Privacy");
+    expectOrder([screen.getByText("Coaching"), screen.getByText("Training"), screen.getByText("Account"),
+      screen.getByText("More"), privacy, forTrainers]);
+    // Nothing between Privacy and it: it is the next row, and the last link of More.
+    expect(privacy.parentElement.nextElementSibling?.contains(forTrainers)).toBe(true);
+    const links = [...document.querySelectorAll("a[href]")].filter((a) => before(screen.getByText("More"), a));
+    expect(links.filter((a) => a.getAttribute("href").startsWith("/")).at(-1)).toBe(forTrainers);
   });
 });

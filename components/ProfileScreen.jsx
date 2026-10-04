@@ -738,13 +738,15 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
-      {current && trainerShare?.trainerOpen && (
+      {/* A trainer's clients sit with Coaching. Everyone else finds the way
+          in at the foot of More ("For trainers"), not up here. */}
+      {current && trainerShare?.trainerOpen && trainerShare.trainer && (
         <Fade d={235}>
           <Link href="/trainer"
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
-              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>For trainers</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{trainerShare.trainer ? "See clients who share with you" : "Set up as a trainer"}</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Your clients</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>See clients who share with you</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
@@ -1107,6 +1109,21 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Privacy</div>
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>What we hold, and how to make it go away.</div>
+            </div>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
+          </Link>
+        </Fade>
+      )}
+
+      {/* The way in for someone who coaches: last row of More, after Privacy.
+          Trainers already see "Your clients" under Coaching instead. */}
+      {current && trainerShare?.trainerOpen && !trainerShare.trainer && (
+        <Fade d={309}>
+          <Link href="/trainer"
+            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>For trainers</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Set up as a trainer</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
