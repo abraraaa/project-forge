@@ -5,8 +5,9 @@
 // Locks in:
 //   - 401 shows sign-in; the ceremony is quiet and its token is exchanged
 //     at POST /api/trainer/session for the named profile;
-//   - 403 notTrainer shows the upgrade panel, and the upgrade reuses that
-//     ceremony (one Face ID) with 18+ and the current Trainer Terms;
+//   - 403 notTrainer for the admin shows the upgrade panel, and the upgrade
+//     reuses that ceremony (one Face ID) with 18+ and the current Trainer
+//     Terms (everyone else applies: tests/components/TrainerApply.test.jsx);
 //   - 403 needsTerms asks to agree again; 503 says not open yet;
 //   - roster rows render every signal variant;
 //   - the invite sheet shows the code, polls, flips to "is in" and reloads
@@ -160,11 +161,11 @@ describe("TrainerView: signing in", () => {
     expect(screen.getByText("Type your Heatwayve name first.")).toBeTruthy();
   });
 
-  it("403 notTrainer shows the upgrade panel; the upgrade reuses the ceremony", async () => {
+  it("403 notTrainer for the admin shows the upgrade panel; the upgrade reuses the ceremony", async () => {
     let trainer = false;
     server.routes["POST /api/trainer/clients"] = () => (trainer
       ? { status: 200, body: { me: { name: "coachkim" }, clients: [] } } : { status: 401, body: {} });
-    server.routes["POST /api/trainer/session"] = { status: 403, body: { notTrainer: true } };
+    server.routes["POST /api/trainer/session"] = { status: 403, body: { notTrainer: true, admin: true } };
     server.routes["POST /api/trainer/upgrade"] = () => { trainer = true; return { status: 200, body: { ok: true, name: "coachkim" } }; };
     await mount();
     typeName("coachkim");
@@ -194,7 +195,7 @@ describe("TrainerView: signing in", () => {
 
   it("an upgrade that is not open yet says so", async () => {
     server.routes["POST /api/trainer/clients"] = { status: 401, body: {} };
-    server.routes["POST /api/trainer/session"] = { status: 403, body: { notTrainer: true } };
+    server.routes["POST /api/trainer/session"] = { status: 403, body: { notTrainer: true, admin: true } };
     server.routes["POST /api/trainer/upgrade"] = { status: 503, body: { error: "Not open yet." } };
     await mount();
     typeName("coachkim");
@@ -451,11 +452,15 @@ describe("TrainerView: a client", () => {
     expect(screen.getByText("Pick a client to see their training.")).toBeTruthy();
   });
 
-  it("sign out and sign out everywhere end the session", async () => {
+  it("sign out opens a sheet; Everywhere ends the session on every device", async () => {
     signedIn();
     server.routes["POST /api/trainer/session/end"] = { status: 200, body: { ok: true } };
     await mount();
-    fireEvent.click(screen.getByText("Sign out everywhere"));
+    expect(screen.queryByText("Everywhere")).toBeNull(); // one Sign out, the choice lives in the sheet
+    fireEvent.click(screen.getByText("Sign out"));
+    const sheet = screen.getByRole("dialog", { name: "Sign out" });
+    expect(within(sheet).getByText("This device")).toBeTruthy();
+    fireEvent.click(within(sheet).getByText("Everywhere"));
     await flush();
     expect(posts("/api/trainer/session/end").map((c) => c.body)).toEqual([{ everywhere: true }]);
     expect(screen.getByText("Sign in with Face ID")).toBeTruthy();
