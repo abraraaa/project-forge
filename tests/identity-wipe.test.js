@@ -2,16 +2,18 @@
 // storage key), never the requested name: photo blobs go by the account's own
 // index rows, the rest of its folder only by enumerated file patterns, and the
 // close (grants revoked, handles released, account closed with consent
-// cleared, its credentials rows deleted) runs last in one transaction.
+// cleared, its credentials rows deleted, a waiting application to coach
+// withdrawn with what it said cleared) runs last in one transaction.
 //
-// Neon is simulated over accounts / handles / credentials / oauth_grants with
+// Neon is simulated over accounts / handles / credentials / oauth_grants /
+// trainer_applications with
 // all-or-nothing transactions; profile rows, photo index rows and tokens sit
 // in memory behind the db.js helpers. Blob is an in-memory path map.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { normaliseProfile } from "../lib/profile-name.js";
 import { NextRequest } from "next/server";
 
-const db = { accounts: [], handles: [], credentials: [], grants: [], txns: [], failTxn: null, nextHandleId: 1 };
+const db = { accounts: [], handles: [], credentials: [], grants: [], applications: [], txns: [], failTxn: null, nextHandleId: 1 };
 const blobs = new Map();
 const dels = [];
 const blobFail = { del: null };
@@ -80,6 +82,15 @@ function run(state, { q, values }) {
     for (const a of state.accounts) if (a.id === values[0]) Object.assign(a, { deleted_at: "now" }, close[1] ? { consent: null } : {});
     return [];
   }
+  // Applied as written: a waiting application withdrawn; what any application said cleared.
+  if (s === "UPDATE trainer_applications SET status = CASE WHEN status = 'applied' THEN 'withdrawn' ELSE status END, decided_at = CASE WHEN status = 'applied' THEN ? ELSE decided_at END, about = NULL, link = NULL WHERE account_id = ?") {
+    for (const r of state.applications) {
+      if (r.account_id !== values[1]) continue;
+      if (r.status === "applied") Object.assign(r, { status: "withdrawn", decided_at: values[0] });
+      Object.assign(r, { about: null, link: null });
+    }
+    return [];
+  }
   if (s === "DELETE FROM credentials WHERE account_id = ?") {
     state.credentials = state.credentials.filter((c) => c.account_id !== values[0]);
     return [];
@@ -92,6 +103,7 @@ const copyState = (s) => ({
   handles: s.handles.map((r) => ({ ...r })),
   credentials: s.credentials.map((c) => ({ ...c })),
   grants: s.grants.map((g) => ({ ...g })),
+  applications: s.applications.map((r) => ({ ...r })),
   nextHandleId: s.nextHandleId,
   failClose: s.failTxn,
 });
@@ -242,7 +254,7 @@ function seedSam({ unknown = true } = {}) {
 beforeEach(() => {
   process.env.DATABASE_URL = "postgres://fake";
   claimMode.value = null;
-  Object.assign(db, { accounts: [], handles: [], credentials: [], grants: [], txns: [], failTxn: null, nextHandleId: 1 });
+  Object.assign(db, { accounts: [], handles: [], credentials: [], grants: [], applications: [], txns: [], failTxn: null, nextHandleId: 1 });
   blobs.clear(); dels.length = 0; tokens.clear(); profiles.clear(); photoRows.length = 0; oauthTokens.clear();
   blobFail.del = null;
   vi.clearAllMocks();
@@ -267,6 +279,7 @@ describe("wiping a backfilled account (storage key = its handle)", () => {
       "UPDATE accounts SET deleted_at = now(), consent = NULL WHERE id = ?",
       "DELETE FROM credentials WHERE account_id = ?",
       "UPDATE oauth_grants SET revoked_at = ?, revoked_by = 'closed' WHERE kind = 'trainer' AND trainer_account_id = ? AND revoked_at IS NULL",
+      "UPDATE trainer_applications SET status = CASE WHEN status = 'applied' THEN 'withdrawn' ELSE status END, decided_at = CASE WHEN status = 'applied' THEN ? ELSE decided_at END, about = NULL, link = NULL WHERE account_id = ?",
     ] }]);
     const [a, m] = db.accounts;
     expect(a).toMatchObject({ id: A, deleted_at: "now", consent: null });
@@ -292,6 +305,30 @@ describe("wiping a backfilled account (storage key = its handle)", () => {
     expect(byId["t-old"]).toEqual([5, "client"]);
     expect(byId["t-unrelated"]).toEqual([null, null]);
     expect(byId["t-own"]).toEqual([at, null]);
+  });
+
+  it("withdraws its waiting application to coach and clears what it said; other accounts' rows are untouched", async () => {
+    seedSam({ unknown: false });
+    const T = "hwa_" + "t".repeat(26);
+    const row = (account_id, status, extra = {}) => ({ account_id, status, about: `about-${account_id}`, link: "https://x.example",
+      terms: { version: "v", at: "t", adult: true }, applied_at: 1, decided_at: null, seen_at: null, created_at: 1, ...extra });
+    db.applications.push(row(A, "applied"), row(M, "applied"), row(T, "denied", { decided_at: 2 }));
+    ceremony("w", A, "sam");
+    expect((await wipe("sam", "w")).status).toBe(200);
+    expect(db.applications).toEqual([
+      row(A, "withdrawn", { about: null, link: null, decided_at: expect.any(Number) }),
+      row(M, "applied"),
+      row(T, "denied", { decided_at: 2 }),
+    ]);
+  });
+
+  it("a closing account whose application was already decided keeps the decision but loses what it wrote", async () => {
+    seedSam({ unknown: false });
+    const decided = { account_id: A, status: "denied", about: "a", link: "https://x.example", terms: null, applied_at: 1, decided_at: 2, seen_at: null, created_at: 1 };
+    db.applications.push({ ...decided });
+    ceremony("w", A, "sam");
+    expect((await wipe("sam", "w")).status).toBe(200);
+    expect(db.applications).toEqual([{ ...decided, about: null, link: null }]);
   });
 
   it("a previous holder's retired photo and every unknown file under the folder survive", async () => {
@@ -477,6 +514,7 @@ describe("every failure before the close leaves the wipe retryable", () => {
   it("a failed close is all or nothing and refuses the half-wipe", async () => {
     seedSam({ unknown: false });
     ceremony("w", A, "sam");
+    db.applications.push({ account_id: A, status: "applied", about: "a", link: null });
     db.failTxn = new Error("connection reset");
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect((await wipe("sam", "w")).status).toBe(500);
@@ -486,6 +524,7 @@ describe("every failure before the close leaves the wipe retryable", () => {
     expect(db.handles[0].released_at).toBeNull();
     expect(db.credentials.map((c) => c.account_id)).toEqual([A, M]);
     expect(db.grants.every((g) => g.revoked_at == null)).toBe(true);
+    expect(db.applications).toEqual([{ account_id: A, status: "applied", about: "a", link: null }]);
     // The handle and passkey still resolve, so a fresh ceremony can finish it.
     db.failTxn = null;
     ceremony("w2", A, "sam");

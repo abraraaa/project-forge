@@ -1,7 +1,8 @@
 import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
-import { trainerOpenFor } from "@/lib/auth-server";
+import { isAdminIdentity, trainerOpenFor } from "@/lib/auth-server";
 import { dbExpireToken } from "@/lib/db";
 import { dbGrantTrainerRole, dbPrimaryHandle } from "@/lib/identity-store";
+import { entitled } from "@/lib/entitlements";
 import { acceptedTrainerTermsVersion, TRAINER_TERMS_VERSION } from "@/lib/trainer-terms";
 import { publicName } from "@/lib/trainer-view";
 import { freshCeremony, mintTrainerSession, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
@@ -13,8 +14,10 @@ export const dynamic = "force-dynamic";
 
 // POST /api/trainer/upgrade  { authToken, profile, terms: { version }, adult: true }
 //   -> { ok, name } + the trainer cookie.
-// A fresh heatwayve.app Face ID, 18+ and the current Trainer Terms make the
-// caller a trainer. Free; plan is never written.
+// A fresh heatwayve.app Face ID, 18+ and the current Trainer Terms. Two
+// callers only: a trainer re-accepting changed terms, and the admin's own
+// self-grant. Everyone else applies (/api/trainer/apply): 403 { apply }.
+// Free; plan is never written.
 export async function POST(request) {
   const limited = rateLimit(request, "trainer-upgrade", 5) || await rateLimitShared(request, "trainer-upgrade", 10);
   if (limited) return noStore(limited);
@@ -23,6 +26,7 @@ export async function POST(request) {
     const { authToken, profile, terms, adult } = body && typeof body === "object" ? body : {};
     const c = await freshCeremony({ authToken, profile });
     if ("fail" in c) return c.fail;
+    if (!entitled(c.account, "trainer.dashboard") && !isAdminIdentity(c.identity)) return json({ apply: true }, 403);
     if (!trainerOpenFor(c.identity)) return json({ error: "Not open yet." }, 503);
     const version = acceptedTrainerTermsVersion(terms);
     if (version !== TRAINER_TERMS_VERSION || adult !== true) {

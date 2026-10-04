@@ -48,6 +48,7 @@ describe("identity store", () => {
     expect(await s.dbClaimHandle({ handle: "sam", display: "Sam", mode: "precutover" })).toBeNull();
     expect(await s.dbCloseAccount(A_ID, "sam")).toBeNull();
     expect(await s.dbGrantTrainerRole(A_ID, { version: "v", at: "2026-10-03T00:00:00.000Z", adult: true })).toBeNull();
+    expect(await s.dbApproveApplication(A_ID)).toBeNull();
     expect(await s.dbPrimaryHandle(A_ID)).toBeNull();
     expect(calls).toEqual([]);
     expect(txns).toEqual([]);
@@ -108,6 +109,43 @@ describe("identity store", () => {
     });
   });
 
+  describe("dbApproveApplication", () => {
+    beforeEach(() => { process.env.DATABASE_URL = "postgres://fake"; });
+    const NOW = 1_790_000_000_000;
+
+    it("one transaction: the role and terms from the application, then the application approved; both on a live account and a waiting row", async () => {
+      const { dbApproveApplication } = await import("../lib/identity-store.js");
+      reply = (q) => (/^\s*UPDATE accounts/.test(q) ? [{ id: A_ID }] : [{ account_id: A_ID }]);
+      expect(await dbApproveApplication(A_ID, NOW)).toBe(true);
+      expect(txns).toEqual([2]);
+      expect(calls.map((c) => c.q.replace(/\s+/g, " ").trim())).toEqual([
+        "UPDATE accounts SET roles = CASE WHEN 'trainer' = ANY(roles) THEN roles ELSE array_append(roles, 'trainer') END, "
+        + "trainer_terms = ta.terms FROM trainer_applications ta "
+        + "WHERE accounts.id = ? AND accounts.deleted_at IS NULL AND ta.account_id = accounts.id AND ta.status = 'applied' RETURNING accounts.id",
+        "UPDATE trainer_applications SET status = 'approved', decided_at = ? WHERE account_id = ? AND status = 'applied' "
+        + "AND EXISTS (SELECT 1 FROM accounts a WHERE a.id = ? AND a.deleted_at IS NULL) RETURNING account_id",
+      ]);
+      expect(calls.map((c) => c.values)).toEqual([[A_ID], [NOW, A_ID, A_ID]]);
+      expect(calls[0].q).not.toMatch(/\bplan\b|\|\|/);
+    });
+
+    it("no waiting application, or a closed account, approves nothing", async () => {
+      const { dbApproveApplication } = await import("../lib/identity-store.js");
+      reply = () => [];
+      expect(await dbApproveApplication(A_ID, NOW)).toBe(false);
+    });
+
+    it("a failed transaction propagates; a missing id throws before any SQL", async () => {
+      const { dbApproveApplication } = await import("../lib/identity-store.js");
+      txnError = new Error("connection reset");
+      await expect(dbApproveApplication(A_ID, NOW)).rejects.toThrow(/connection reset/);
+      calls.length = 0; txns.length = 0; txnError = null;
+      await expect(dbApproveApplication("", NOW)).rejects.toThrow(/incomplete approval/);
+      expect(calls).toEqual([]);
+      expect(txns).toEqual([]);
+    });
+  });
+
   describe("dbPrimaryHandle", () => {
     beforeEach(() => { process.env.DATABASE_URL = "postgres://fake"; });
 
@@ -156,7 +194,7 @@ describe("identity store", () => {
     expect(calls[1].values).toEqual([JSON.stringify({ version: "v1", at: "2026-10-01" }), A_ID]);
   });
 
-  it("source holds one DELETE, inside the close; updates touch only credentials, accounts, grants and scoped handle releases", () => {
+  it("source holds one DELETE, inside the close; updates touch only credentials, accounts, grants, applications and scoped handle releases", () => {
     const src = readFileSync(new URL("../lib/identity-store.js", import.meta.url), "utf8");
     const code = src.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*\*)/.test(l)).join("\n");
     expect(code).not.toMatch(/\bDROP\b|\bTRUNCATE\b/);
@@ -165,13 +203,22 @@ describe("identity store", () => {
     const close = code.slice(code.indexOf("export async function dbCloseAccount"));
     expect(close.slice(0, close.indexOf("\n}"))).toContain("q`DELETE FROM credentials WHERE account_id = ${accountId}`");
     expect(code.slice(0, code.indexOf("export async function dbCloseAccount"))).not.toMatch(/\bDELETE\b/);
-    expect([...new Set([...code.matchAll(/UPDATE (\w+)/g)].map((m) => m[1]))].sort()).toEqual(["accounts", "credentials", "handles", "oauth_grants"]);
-    // accounts: each write pinned by its whole scope: consent, the trainer upgrade on a live row, and the close.
+    expect([...new Set([...code.matchAll(/UPDATE (\w+)/g)].map((m) => m[1]))].sort()).toEqual(["accounts", "credentials", "handles", "oauth_grants", "trainer_applications"]);
+    // accounts: each write pinned by its whole scope: consent, the trainer upgrade on a live row,
+    // the approval (terms from a waiting application, on a live row), and the close.
     expect([...code.matchAll(/UPDATE accounts SET ([\s\S]*?)\s+(WHERE [^`]*)`/g)].map((m) => [m[1].replace(/\s+/g, " ").trim(), m[2].replace(/\s+/g, " ").trim()])).toEqual([
       ["consent = ${consent == null ? null : JSON.stringify(consent)}::jsonb", "WHERE id = ${accountId} RETURNING id"],
       ["roles = CASE WHEN 'trainer' = ANY(roles) THEN roles ELSE array_append(roles, 'trainer') END, trainer_terms = ${JSON.stringify(rec)}::jsonb",
         "WHERE id = ${accountId} AND deleted_at IS NULL RETURNING id"],
+      ["roles = CASE WHEN 'trainer' = ANY(roles) THEN roles ELSE array_append(roles, 'trainer') END, trainer_terms = ta.terms FROM trainer_applications ta",
+        "WHERE accounts.id = ${accountId} AND accounts.deleted_at IS NULL AND ta.account_id = accounts.id AND ta.status = 'applied' RETURNING accounts.id"],
       ["deleted_at = now(), consent = NULL", "WHERE id = ${accountId}"],
+    ]);
+    // trainer_applications: the approval of a waiting row, and the close's withdrawal of one.
+    expect([...code.matchAll(/UPDATE trainer_applications SET ([^\n]*)\s+(WHERE [^`]*)`/g)].map((m) => [m[1].trim(), m[2].replace(/\s+/g, " ").trim()])).toEqual([
+      ["status = 'approved', decided_at = ${now}",
+        "WHERE account_id = ${accountId} AND status = 'applied' AND EXISTS (SELECT 1 FROM accounts a WHERE a.id = ${accountId} AND a.deleted_at IS NULL) RETURNING account_id"],
+      ["status = CASE WHEN status = 'applied' THEN 'withdrawn' ELSE status END, decided_at = CASE WHEN status = 'applied' THEN ${nowMs} ELSE decided_at END, about = NULL, link = NULL", "WHERE account_id = ${accountId}"],
     ]);
     // handles: each release pinned by its whole scope — the claim's expired
     // alias, a reclaim's release of the lapsed account's own row, and the
@@ -192,17 +239,18 @@ describe("identity store", () => {
   describe("dbCloseAccount", () => {
     beforeEach(() => { process.env.DATABASE_URL = "postgres://fake"; });
 
-    it("one transaction: revoke grants, release handles, close and clear consent, delete credentials, revoke trainer-side grants", async () => {
+    it("one transaction: revoke grants, release handles, close and clear consent, delete credentials, revoke trainer-side grants, withdraw a waiting application", async () => {
       const { dbCloseAccount } = await import("../lib/identity-store.js");
       const before = Date.now();
       expect(await dbCloseAccount(A_ID, "sam")).toBe(true);
-      expect(txns).toEqual([5]);
+      expect(txns).toEqual([6]);
       expect(calls.map((c) => c.q.replace(/\s+/g, " ").trim())).toEqual([
         "UPDATE oauth_grants SET revoked_at = ? WHERE (account_id = ? OR (account_id IS NULL AND profile = ?)) AND revoked_at IS NULL",
         "UPDATE handles SET released_at = now() WHERE account_id = ? AND released_at IS NULL",
         "UPDATE accounts SET deleted_at = now(), consent = NULL WHERE id = ?",
         "DELETE FROM credentials WHERE account_id = ?",
         "UPDATE oauth_grants SET revoked_at = ?, revoked_by = 'closed' WHERE kind = 'trainer' AND trainer_account_id = ? AND revoked_at IS NULL",
+        "UPDATE trainer_applications SET status = CASE WHEN status = 'applied' THEN 'withdrawn' ELSE status END, decided_at = CASE WHEN status = 'applied' THEN ? ELSE decided_at END, about = NULL, link = NULL WHERE account_id = ?",
       ]);
       const [revokedAt, ...grantScope] = calls[0].values;
       expect(revokedAt).toBeGreaterThanOrEqual(before);
@@ -210,6 +258,7 @@ describe("identity store", () => {
       expect(calls.slice(1, 4).map((c) => c.values)).toEqual([[A_ID], [A_ID], [A_ID]]);
       // The trainer-side revoke shares the close's timestamp and is keyed by the account id alone.
       expect(calls[4].values).toEqual([revokedAt, A_ID]);
+      expect(calls[5].values).toEqual([revokedAt, A_ID]); // the withdrawal shares the timestamp too
     });
 
     it("a failed transaction propagates; missing ids throw before any SQL", async () => {

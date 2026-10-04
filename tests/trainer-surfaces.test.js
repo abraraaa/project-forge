@@ -69,8 +69,12 @@ describe("trainer and share components know nothing of the device", () => {
 });
 
 describe("every trainer and share route runs in London and never caches", () => {
-  const routes = [...walk("app/api/trainer"), ...walk("app/api/share"), ...walk("app/api/sync/trainer")].filter((p) => p.endsWith("route.js"));
-  it("finds the routes", () => { expect(routes.length).toBeGreaterThanOrEqual(8); });
+  const routes = [...walk("app/api/trainer"), ...walk("app/api/share"), ...walk("app/api/sync/trainer"), ...walk("app/api/diag/trainers")]
+    .filter((p) => p.endsWith("route.js"));
+  it("finds the routes", () => {
+    expect(routes.length).toBeGreaterThanOrEqual(10);
+    expect(routes).toEqual(expect.arrayContaining(["app/api/trainer/apply/route.js", "app/api/diag/trainers/route.js"]));
+  });
   it.each(routes)("%s", (p) => {
     const src = read(p);
     expect(src).toContain('preferredRegion = "lhr1"');

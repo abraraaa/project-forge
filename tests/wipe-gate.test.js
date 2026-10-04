@@ -138,14 +138,18 @@ describe("wipe gate — fails closed, always", () => {
     }
   });
 
-  it("the close only UPDATEs grants, handles and accounts, and deletes only the account's credentials rows", () => {
+  it("the close only UPDATEs grants, handles, accounts and a waiting application, and deletes only the account's credentials rows", () => {
     const store = readFileSync(resolve(root, "lib/identity-store.js"), "utf8");
     const fn = store.slice(store.indexOf("export async function dbCloseAccount"));
     const body = fn.slice(0, fn.indexOf("\n}"));
     expect([...body.matchAll(/\b(UPDATE|DELETE FROM|INSERT INTO) (\w+)/g)].map((m) => `${m[1]} ${m[2]}`)).toEqual([
       "UPDATE oauth_grants", "UPDATE handles", "UPDATE accounts", "DELETE FROM credentials", "UPDATE oauth_grants",
+      "UPDATE trainer_applications",
     ]);
     expect(body).toContain("DELETE FROM credentials WHERE account_id = ${accountId}`");
+    // The application step ends a waiting row of this account and clears what any application of theirs said.
+    expect(body.replace(/\s+/g, " ")).toContain(
+      "UPDATE trainer_applications SET status = CASE WHEN status = 'applied' THEN 'withdrawn' ELSE status END, decided_at = CASE WHEN status = 'applied' THEN ${nowMs} ELSE decided_at END, about = NULL, link = NULL WHERE account_id = ${accountId}`");
   });
 
   it("repo-wide, no code deletes account or handle rows", () => {

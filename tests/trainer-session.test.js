@@ -85,6 +85,7 @@ vi.mock("@neondatabase/serverless", () => ({
       a.trainer_terms = JSON.parse(terms);
       return [{ id: acct }];
     }
+    if (/^\s*SELECT status, about, link, terms, applied_at, decided_at, seen_at, created_at\s+FROM trainer_applications WHERE account_id = /.test(q)) return [];
     throw new Error(`unexpected SQL: ${q}`);
   },
 }));
@@ -248,21 +249,21 @@ describe("POST /api/trainer/session", () => {
     expect((await freshCeremony({ authToken: session, profile: "tia" })).fail.status).toBe(401);
   });
 
-  it("a lifter gets 403 notTrainer, nothing written, and the ceremony token stays usable for the upgrade", async () => {
+  it("a lifter gets 403 notTrainer with their name, nothing written, and the ceremony token stays usable for the upgrade", async () => {
     const authToken = mint(L, { cred: "cL" });
     const res = await signIn(authToken, "leo");
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ notTrainer: true });
+    expect(await res.json()).toEqual({ notTrainer: true, name: "Leo", admin: false, application: null });
     expect(res.headers.get("set-cookie")).toBeNull();
     expect(writes()).toEqual([]);
     expect((await freshCeremony({ authToken, profile: "leo" })).identity.accountId).toBe(L);
   });
 
-  it("stale Trainer Terms give 403 needsTerms, nothing written", async () => {
+  it("stale Trainer Terms give 403 needsTerms with the name, nothing written", async () => {
     db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" };
     const res = await signIn(mint(T, { cred: "cT" }));
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ needsTerms: true });
+    expect(await res.json()).toEqual({ needsTerms: true, name: "Tia" });
     expect(writes()).toEqual([]);
   });
 
@@ -364,13 +365,32 @@ describe("POST /api/trainer/upgrade", () => {
     });
   }
 
-  it("is not open to anyone but the admin before launch (503, after the ceremony check)", async () => {
+  it("anyone but the admin or a trainer is sent to apply (403, after the ceremony check)", async () => {
     process.env.ADMIN_ACCOUNT_ID = T;
     const res = await upgrade(mint(L, { cred: "cL" }));
-    expect(res.status).toBe(503);
-    expect(await res.json()).toEqual({ error: "Not open yet." });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ apply: true });
+    expect(res.headers.get("set-cookie")).toBeNull();
     expect((await upgrade("nope")).status).toBe(401);
     expect(writes()).toEqual([]);
+    expect(db.accounts.get(L).roles).toEqual(["lifter"]);
+  });
+
+  it("a trainer other than the admin may re-accept only once open: 503 before launch, nothing written", async () => {
+    process.env.ADMIN_ACCOUNT_ID = T;
+    db.accounts.get(N).trainer_terms = { ...CURRENT, version: "older" };
+    const res = await post(upgradePOST, "/api/trainer/upgrade", { authToken: mint(N, { cred: "cN" }), profile: "nia", terms: { version: TRAINER_TERMS_VERSION }, adult: true });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "Not open yet." });
+    expect(writes()).toEqual([]);
+  });
+
+  it("the admin, already a trainer, re-accepts changed terms: the terms overwritten, the role kept once", async () => {
+    process.env.ADMIN_ACCOUNT_ID = T;
+    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" };
+    const res = await post(upgradePOST, "/api/trainer/upgrade", { authToken: mint(T, { cred: "cT" }), profile: "tia", terms: { version: TRAINER_TERMS_VERSION }, adult: true });
+    expect(res.status).toBe(200);
+    expect(db.accounts.get(T)).toMatchObject({ roles: ["lifter", "trainer"], trainer_terms: { version: TRAINER_TERMS_VERSION, adult: true } });
   });
 
   it("a legacy passkey gets 409 needsNativePasskey, nothing written", async () => {
@@ -590,8 +610,8 @@ describe("SQL and source pins", () => {
 
   it("every trainer route runs in lhr1, is dynamic, and never returns e.message", () => {
     const routes = walk("app/api/trainer").filter((f) => f.endsWith("route.js"));
-    expect(routes.sort()).toEqual(["app/api/trainer/client/route.js", "app/api/trainer/clients/route.js", "app/api/trainer/invite/route.js",
-      "app/api/trainer/session/end/route.js", "app/api/trainer/session/route.js", "app/api/trainer/upgrade/route.js"]);
+    expect(routes.sort()).toEqual(["app/api/trainer/apply/route.js", "app/api/trainer/client/route.js", "app/api/trainer/clients/route.js",
+      "app/api/trainer/invite/route.js", "app/api/trainer/session/end/route.js", "app/api/trainer/session/route.js", "app/api/trainer/upgrade/route.js"]);
     for (const f of routes) {
       const s = read(f);
       expect(s, f).toContain('export const preferredRegion = "lhr1";');
