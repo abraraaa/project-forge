@@ -168,23 +168,29 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   return (
     <div style={{minHeight:"100vh",paddingBottom:48,position:"relative",overflow:"clip"}}>
 
-      {/* Header — date on the left, identity on the right. Quiet. */}
+      {/* Header — date on the left, identity on the right. Quiet. The name
+          is the way into Profile, so it carries a "Profile" kicker — the same
+          small-over-line stack as the date and rhythm opposite. A long name
+          ellipsises; the kicker and the date column never wrap for it. */}
       <Fade d={0}>
         <div style={{padding:"52px 24px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16}}>
-          <div>
+          <div style={{flex:"0 0 auto",maxWidth:"70%"}}>
             <div style={{fontSize:13,color:T.ink3}}>
               {new Date(nowMs).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}
             </div>
             <StreakLine rhythm={rhythm} resting={resting}/>
           </div>
-          <button onClick={onProfile} style={{...linkBtn,fontWeight:500,display:"flex",alignItems:"center",gap:6,paddingTop:1}}>
-            {profileName}
-            {syncState === "pulling" || syncState === "pushing" ? (
-              <span style={{width:6,height:6,borderRadius:"50%",background:T.ink3,animation:"pulse 1s ease-in-out infinite"}}/>
-            ) : syncState === "error" ? (
-              <span style={{width:6,height:6,borderRadius:"50%",background:T.heat[3],opacity:0.7}}/>
-            ) : null}
-            <Glyph name="arrowRight" size={12}/>
+          <button onClick={onProfile} aria-label={`Profile, ${profileName}`} style={{...linkBtn,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,minWidth:0,textAlign:"left"}}>
+            <span style={{fontSize:12,whiteSpace:"nowrap"}}>Profile</span>
+            <span style={{display:"flex",alignItems:"center",gap:6,maxWidth:"100%",fontWeight:500}}>
+              <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{profileName}</span>
+              {syncState === "pulling" || syncState === "pushing" ? (
+                <span style={{width:6,height:6,flexShrink:0,borderRadius:"50%",background:T.ink3,animation:"pulse 1s ease-in-out infinite"}}/>
+              ) : syncState === "error" ? (
+                <span style={{width:6,height:6,flexShrink:0,borderRadius:"50%",background:T.heat[3],opacity:0.7}}/>
+              ) : null}
+              <Glyph name="arrowRight" size={12} style={{flexShrink:0}}/>
+            </span>
           </button>
         </div>
       </Fade>
