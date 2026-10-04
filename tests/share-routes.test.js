@@ -402,7 +402,8 @@ describe("POST /api/share/approve", () => {
 
   it("an out-of-date page: 400 stale, no strike, nothing written", async () => {
     invite(T, CODE);
-    for (const consent of [undefined, { version: "2025-01" }, "2026-10"]) {
+    // "2026-10" is the version before the roster rows were widened.
+    for (const consent of [undefined, { version: "2025-01" }, "2026-10", { version: "2026-10" }]) {
       const authToken = mint(L, { cred: "cL" });
       const res = await approve({ code: CODE, authToken, consent });
       expect(res.status).toBe(400);

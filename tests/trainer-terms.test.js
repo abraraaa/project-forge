@@ -1,14 +1,14 @@
 // Trainer Terms and share consent: copy pinned with its version, the server
 // validators, the launch switches, and the public-name rule.
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import {
   TRAINER_LIVE, TRAINER_TERMS_VERSION, KNOWN_TRAINER_TERMS_VERSIONS, TRAINER_TERMS_COPY,
   acceptedTrainerTermsVersion, isCurrentTrainerTerms,
   SHARE_CONSENT_VERSION, SHARE_COPY, acceptedShareConsentVersion, TRAINER_SCOPE,
 } from "../lib/trainer-terms.js";
 import { trainerOpenFor, shareOpenFor } from "../lib/auth-server.js";
-import { publicName } from "../lib/trainer-view.js";
+import { publicName, SIGNAL_KEYS } from "../lib/trainer-view.js";
 
 const strings = (o) => (typeof o === "string" ? [o] : Object.values(o).flatMap(strings));
 
@@ -59,13 +59,15 @@ describe("trainer terms", () => {
 
 describe("share consent", () => {
   it("copy and version are pinned together", () => {
-    expect(SHARE_CONSENT_VERSION).toBe("2026-10");
+    expect(SHARE_CONSENT_VERSION).toBe("2026-10-04");
     expect(SHARE_COPY).toEqual({
       rows: [
         "Your sessions, sets, RPE and how you felt, from the last 24 weeks.",
         "Your main-lift trend and bests over the last 12 months.",
-        "On their client list: when you last trained, and your sessions this week.",
+        "On their client list: when you last trained, your sessions this week against your plan, and your 28-day rhythm.",
         "Breathers show as paused, never why.",
+        "Each look shows in your Profile, plus one check-in a day from their client list.",
+        "They may see a dot when any client has trained since they last opened their list. It never says who.",
       ],
       includes: "Includes sessions already logged, and new ones as you log them. Read only. Photos, bodyweight, sleep and notes stay yours.",
       line: "Only you decide. Stop any time in Profile, and they lose access straight away.",
@@ -83,6 +85,23 @@ describe("share consent", () => {
     expect(all).not.toMatch(/server/i);
     expect(all).not.toContain("How you felt each session");
     expect(all).not.toMatch(/from now on/i);
+  });
+
+  it("names everything the client list shows, the daily check-in and the dot that names no one", () => {
+    const all = strings(SHARE_COPY).join("\n");
+    // The roster line, as lib/trainer-view.js rosterSignal computes it.
+    expect(SIGNAL_KEYS).toEqual(["lastTrainedDaysAgo", "weekDone", "weekPlanned", "rhythmPct", "paused"]);
+    expect(readFileSync(new URL("../lib/trainer-view.js", import.meta.url), "utf8")).toContain("strengthRhythm(ctx, { days: 28 })");
+    for (const fact of ["when you last trained", "your sessions this week against your plan", "28-day rhythm", "paused"]) {
+      expect(all).toContain(fact);
+    }
+    expect(all).toContain("one check-in a day from their client list");
+    expect(all).toContain("It never says who.");
+  });
+
+  it("the version moved with the copy: the previous one is refused", () => {
+    expect(SHARE_CONSENT_VERSION).not.toBe("2026-10");
+    expect(acceptedShareConsentVersion({ version: "2026-10" })).toBeNull();
   });
 
   it("accepts only the current share version", () => {
