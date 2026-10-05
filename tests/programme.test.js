@@ -862,7 +862,7 @@ describe("applyFocusToSession", () => {
       ]));
     });
 
-    it("ass2 (Hip Thrust + Landmine Press — both aligned) is bumped when glutes have headroom", () => {
+    it("ass2 (Hip Extension + Landmine Press — both aligned) is bumped when glutes have headroom", () => {
       // Push Press in the clean slot drops the week's indirect glute work, so
       // the +1 fits under the ceiling. On the template anchors it does not —
       // see tests/sculpt-ceiling.test.js.

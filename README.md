@@ -26,7 +26,7 @@ So the science can be checked. The programming, the progression rules and the vo
 
 | Day | Theme | Main lifts | Supersets | Finisher |
 |---|---|---|---|---|
-| **A** Mon | Squat & Push | Barbell Back Squat, Barbell Bench Press | Barbell Reverse Lunge + Chest-Supported DB Row · Barbell Hip Thrust + Landmine Press | Hanging Leg Raise + Standing Calf Raise |
+| **A** Mon | Squat & Push | Barbell Back Squat, Barbell Bench Press | Barbell Reverse Lunge + Chest-Supported DB Row · 45-Degree Hip Extension + Landmine Press | Hanging Leg Raise + Standing Calf Raise |
 | **B** Wed | Hinge & Pull | Hex Bar Deadlift, Barbell Overhead Press | Leg Press + Pull-Up · Bulgarian Split Squat + Machine Hamstring Curl | Tricep Pushdown + Lateral Raise |
 | **C** Fri | Power & Volume | Power Clean | DB Walking Lunge + Cable Lateral Raise · Incline DB Press + Seated Cable Row · DB Curl + Skullcrusher | Face Pull + Low-to-High Cable Crossover |
 
