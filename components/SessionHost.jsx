@@ -318,7 +318,7 @@ export default function SessionHost() {
   const getW = useCallback((ex) => {
     if (!ex) return null;
     if (planWeights[ex.name] !== undefined) return planWeights[ex.name];
-    const bwSeeded = startingWeightForLift(ex.name, bodyweight);
+    const bwSeeded = startingWeightForLift(ex.name, bodyweight, ex.weight);
     if (bwSeeded !== null) return bwSeeded;
     return ex.weight;
   }, [planWeights, bodyweight]);
@@ -377,7 +377,7 @@ export default function SessionHost() {
   // Resolved WITHOUT calling getW: invoking a useCallback from the render body
   // is the other thing that makes the compiler bail here.
   const reachWeight = activeEx
-    ? (planWeights[activeEx.name] ?? startingWeightForLift(activeEx.name, bodyweight) ?? activeEx.weight)
+    ? (planWeights[activeEx.name] ?? startingWeightForLift(activeEx.name, bodyweight, activeEx.weight) ?? activeEx.weight)
     : null;
   // Never ask before two sets are in the bank. Today every main block is 3 or
   // 4 sets, so "last set" already lands on the 3rd or later — but that is a
@@ -455,13 +455,13 @@ export default function SessionHost() {
     // read for these lifts (the engine never prescribes one there).
     const resolvedWeight = loadType === "bodyweight" ? addedLoadFor(addedLoads, ex.name)
       : planWeights[ex.name]
-      ?? startingWeightForLift(ex.name, bodyweight)
+      ?? startingWeightForLift(ex.name, bodyweight, ex.weight)
       ?? ex.weight;
     // The prescription this set was measured against — W/R, never the drum —
     // so the engine judges what was done against what was asked.
     const prescribedWeight = loadType === "bodyweight" ? null
       : workingWeights[ex.name]
-      ?? startingWeightForLift(ex.name, bodyweight)
+      ?? startingWeightForLift(ex.name, bodyweight, ex.weight)
       ?? ex.weight
       ?? null;
     logSet(draftLogRef.current, {
