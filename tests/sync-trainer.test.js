@@ -69,6 +69,13 @@ vi.mock("@neondatabase/serverless", () => ({
         Object.assign(r, { status: "withdrawn", decided_at: v[0] });
         return [{ account_id: v[1] }];
       }
+      // The client's list of trainer changes (dbChangesForClient): the switch on
+      // their live trainer grant, and no changes here (tests/sync-trainer-changes.test.js has them).
+      if (flat === "SELECT edits_at, edits_off_at FROM oauth_grants WHERE account_id = ? AND kind = 'trainer' AND revoked_at IS NULL") {
+        return db.grants.filter((g) => g.account_id === v[0] && g.kind === "trainer" && g.revoked_at == null)
+          .map((g) => ({ edits_at: g.edits_at ?? null, edits_off_at: g.edits_off_at ?? null }));
+      }
+      if (/^SELECT c\.id, c\.set_id, [^]*FROM trainer_changes c [^]*WHERE c\.client_account_id = \? /.test(flat)) return [];
       if (/^SELECT \* FROM oauth_grants WHERE id = \?$/.test(text)) {
         const g = db.grants.find((x) => x.id === v[0]);
         return g ? [{ ...g }] : [];
@@ -175,7 +182,8 @@ describe("GET /api/sync/trainer: status", () => {
     const res = await get();
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
-    expect(await res.json()).toEqual({ open: false, trainerOpen: false, trainer: false, trainerRole: false, sharing: null, ended: null, application: null });
+    expect(await res.json()).toEqual({ open: false, trainerOpen: false, trainer: false, trainerRole: false, sharing: null, ended: null, application: null,
+      edits: null, changes: [] });
     expect(writes()).toEqual([]);
   });
 
@@ -297,7 +305,9 @@ describe("GET /api/sync/trainer: status", () => {
     })];
     const body = await (await get()).text();
     const res = JSON.parse(body);
-    expect(Object.keys(res).sort()).toEqual(["application", "ended", "open", "sharing", "trainer", "trainerOpen", "trainerRole"]);
+    expect(Object.keys(res).sort()).toEqual(["application", "changes", "edits", "ended", "open", "sharing", "trainer", "trainerOpen", "trainerRole"]);
+    // A share approved before changes existed: read only.
+    expect(res.edits).toEqual({ on: false, since: null });
     expect(Object.keys(res.sharing).sort()).toEqual(["consentVersion", "live", "lookCount", "looks", "name", "ref", "since"]);
     for (const l of res.sharing.looks) expect(Object.keys(l).every((k) => ["kind", "at", "day"].includes(k))).toBe(true);
     expect(res.sharing.looks).toHaveLength(2);
@@ -328,7 +338,8 @@ describe("GET /api/sync/trainer: status", () => {
 
   it("without a database: no share, still 200", async () => {
     delete process.env.DATABASE_URL;
-    expect(await status()).toEqual({ open: false, trainerOpen: false, trainer: false, trainerRole: false, sharing: null, ended: null, application: null });
+    expect(await status()).toEqual({ open: false, trainerOpen: false, trainer: false, trainerRole: false, sharing: null, ended: null, application: null,
+      edits: null, changes: [] });
   });
 });
 

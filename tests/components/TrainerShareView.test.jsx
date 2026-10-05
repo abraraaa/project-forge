@@ -74,9 +74,12 @@ describe("TrainerShareView: sharing", () => {
   it("names the trainer, what they see and since when, from the share status", async () => {
     server.status = status({ sharing: sharing() });
     await renderView();
-    expect(fetchWithTimeout).toHaveBeenCalledWith("/api/sync/trainer?profile=sam");
+    // today: the device's date, which a change's status is read against.
+    expect(fetchWithTimeout).toHaveBeenCalledWith("/api/sync/trainer?profile=sam&today=2026-10-01");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Jo");
-    expect(screen.getByText("Sees your sessions, sets and how you felt for the last 24 weeks, and your main-lift trend and bests for 12 months. Read only.")).toBeTruthy();
+    // A reply with no changes switch makes no claim about changes either way.
+    expect(screen.getByText("Sees your sessions, sets and how you felt for the last 24 weeks, and your main-lift trend and bests for 12 months.")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/read only|change your plan/i);
     expect(screen.getByText("Sharing since 3 September.")).toBeTruthy();
     expect(screen.getByText("Not looked yet.")).toBeTruthy();
   });
