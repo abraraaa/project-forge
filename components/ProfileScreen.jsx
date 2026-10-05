@@ -62,6 +62,13 @@ function trainerRowFor(share) {
   return null;
 }
 
+// Notice sublines, from GET /api/sync/notices (ProfileView): counts appear as
+// words in the row, never a badge. Anything but a positive count is nothing new.
+const newCount = (n) => (Number.isInteger(n) && n > 0 ? n : 0);
+const bugsSub = (dots) => (newCount(dots?.bugs) ? `${dots.bugs} new since you looked` : "The list — fill or kill");
+const applicationsSub = (dots) => (newCount(dots?.applications) ? `${dots.applications} waiting` : "Approve or deny coaches");
+const clientsSub = (dots) => (dots?.clients === true ? "Something new from your clients" : "See clients who share with you");
+
 // Opening the trainer side after a decision marks it seen: an UPDATE of
 // seen_at on the caller's own application row (POST /api/sync/trainer).
 // Fire and forget; a failure only leaves it unseen.
@@ -112,7 +119,7 @@ function ThemeSwitch({ value, onChange }) {
   );
 }
 
-export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,mainLifts={},onOpenBreather=null,resting=false,restingReason=null,onEndBreather=null,trainerShare=null}){
+export default function ProfileScreen({existing,current,onActivate,onCancel,bodyweight=null,bwEditOpen=false,setBwEditOpen,updateBodyweight,userFocus="Forged",onEditFocus,mainLifts={},onOpenBreather=null,resting=false,restingReason=null,onEndBreather=null,trainerShare=null,noticeDots=null}){
   const [name,setName]=useState("");
   // Per-profile preference. State carries the profile it was read for and
   // adjusts DURING render when the shown profile changes (the derived-state
@@ -759,7 +766,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Your clients</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>See clients who share with you</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{clientsSub(noticeDots)}</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
@@ -1030,7 +1037,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{marginTop:4,padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Bug reports</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>The list — fill or kill</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{bugsSub(noticeDots)}</div>
             </div>
             <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
           </a>
@@ -1042,7 +1049,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{marginTop:4,padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Trainer applications</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Approve or deny coaches</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{applicationsSub(noticeDots)}</div>
             </div>
             <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
           </a>

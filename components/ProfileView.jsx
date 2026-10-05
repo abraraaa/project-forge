@@ -39,6 +39,16 @@ async function fetchTrainerShare(profile) {
   } catch { return null; }
 }
 
+/** What is new for the Profile sublines (the home dot's read), or null. */
+async function fetchNoticeDots(profile) {
+  try {
+    const res = await fetchWithTimeout(`/api/sync/notices?profile=${encodeURIComponent(profile)}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body && typeof body.dots === "object" ? body.dots : null;
+  } catch { return null; }
+}
+
 export default function ProfileView() {
   const router = useRouter();
   // Lazy initialisers — localStorage reads are impure in render; function-form
@@ -86,6 +96,15 @@ export default function ProfileView() {
     if (!current) return undefined;
     let off = false;
     fetchTrainerShare(current).then((share) => { if (!off) setTrainerShare(share); });
+    return () => { off = true; };
+  }, [current]);
+
+  // Notices: once per visit, memory only. No answer means no words.
+  const [noticeDots, setNoticeDots] = useState(null);
+  useEffect(() => {
+    if (!current) return undefined;
+    let off = false;
+    fetchNoticeDots(current).then((dots) => { if (!off) setNoticeDots(dots); });
     return () => { off = true; };
   }, [current]);
 
@@ -144,6 +163,7 @@ export default function ProfileView() {
         restingReason={activeBreather?.reason || null}
         onEndBreather={handleEndBreather}
         trainerShare={trainerShare}
+        noticeDots={noticeDots}
       />
       {focusPickerOpen && (
         <FocusPickerSheet current={userFocus} onSave={handleSaveFocus} onCancel={() => setFocusPickerOpen(false)} />

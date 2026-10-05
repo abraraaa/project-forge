@@ -106,6 +106,13 @@ describe("Profile: Your trainer row", () => {
     expectOrder([screen.getByText("Coaching"), screen.getByText("Your clients"), screen.getByText("Training"), screen.getByText("Account")]);
   });
 
+  it("a notice changes the Your clients words, not its place", async () => {
+    render(<ProfileScreen {...base} trainerShare={share({ trainerOpen: true, trainer: true })} noticeDots={{ clients: true }} />);
+    await screen.findByText("Passkey enabled");
+    expect(row("Your clients").textContent.replace("Your clients", "")).toBe("Something new from your clients");
+    expectOrder([screen.getByText("Coaching"), screen.getByText("Your clients"), screen.getByText("Training"), screen.getByText("Account")]);
+  });
+
   it("everyone else gets For trainers as the last row of More, after Privacy, only when the trainer side is open", async () => {
     const { rerender } = render(<ProfileScreen {...base} trainerShare={share()} />);
     await screen.findByText("Passkey enabled");
