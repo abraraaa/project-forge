@@ -73,7 +73,7 @@ describe("every trainer and share route runs in London and never caches", () => 
     ...walk("app/api/sync/notices")].filter((p) => p.endsWith("route.js"));
   it("finds the routes", () => {
     expect(routes.length).toBeGreaterThanOrEqual(10);
-    expect(routes).toEqual(expect.arrayContaining(["app/api/trainer/apply/route.js", "app/api/diag/trainers/route.js",
+    expect(routes).toEqual(expect.arrayContaining(["app/api/trainer/apply/route.js", "app/api/trainer/change/route.js", "app/api/diag/trainers/route.js",
       "app/api/sync/notices/route.js"]));
   });
   it.each(routes)("%s", (p) => {
