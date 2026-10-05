@@ -21,7 +21,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   weeklyTonnage, recentForExercise, mainLiftTrend, detectPlateaus,
   weeklyVolumeByMuscle, totalTonnage, pendingTonnageMilestone,
-  formatTonnage, TONNAGE_MILESTONES_KG, __test_p4__,
+  formatTonnage, TONNAGE_MILESTONES_KG, __test_p4__, liftBests,
 } from "../lib/analytics.js";
 import { DISPLAY_BUCKET } from "../lib/exercise-anatomy.js";
 import { MUSCLE_COLOURS } from "../lib/tokens.js";
@@ -683,5 +683,61 @@ describe("formatTonnage", () => {
   it("renders >=100t as whole tonnes", () => {
     expect(formatTonnage(100000)).toBe("100 t");
     expect(formatTonnage(250000)).toBe("250 t");
+  });
+});
+
+// liftBests — the all-time best per main lift behind the Lab's "Best:" line.
+describe("liftBests", () => {
+  const rec = (date, name, sets, { loadType, readiness = "normal", type = "main" } = {}) => ({
+    date, readiness,
+    blocks: [{ type, exercises: [{ name, ...(loadType ? { loadType } : {}), sets }] }],
+  });
+
+  it("picks the max e1RM across all history, cooked and old sessions included", () => {
+    const b = liftBests([
+      rec("2025-01-10", "Back Squat", [{ weight: 110, reps: 5 }], { readiness: "cooked" }), // 128.3
+      rec("2026-09-20", "Back Squat", [{ weight: 100, reps: 5 }, { weight: 105, reps: 3 }]),
+    ])["Back Squat"];
+    expect(b).toMatchObject({ date: "2025-01-10", weight: 110, reps: 5, est1RM: 128.3 });
+  });
+
+  it("ignores accessory blocks, unlogged rows and assisted sets", () => {
+    const b = liftBests([
+      rec("2026-09-01", "Bench Press", [{ weight: 200, reps: 5 }], { type: "accessory" }),
+      rec("2026-09-02", "Bench Press", [{ weight: null, reps: null }, { weight: 80, reps: 5 }]),
+      rec("2026-09-03", "Assisted Pull-Up", [{ weight: 40, reps: 8 }], { loadType: "assisted_bodyweight" }),
+    ]);
+    expect(b["Bench Press"]).toMatchObject({ date: "2026-09-02", weight: 80 });
+    expect(b["Assisted Pull-Up"]).toBeUndefined();
+  });
+
+  it("keeps the earliest date on a tie", () => {
+    const b = liftBests([
+      rec("2026-09-10", "Deadlift", [{ weight: 140, reps: 5 }]),
+      rec("2026-08-10", "Deadlift", [{ weight: 140, reps: 5 }]),
+    ]);
+    expect(b.Deadlift.date).toBe("2026-08-10");
+  });
+
+  it("reads a loaded bodyweight best from the added kg, and a pure bodyweight best by reps", () => {
+    const b = liftBests([
+      rec("2026-09-01", "Weighted Pull-Up", [{ weight: 10, reps: 8 }, { weight: 5, reps: 3 }]),
+      rec("2026-09-01", "Push-Up", [{ weight: null, reps: 15 }, { weight: null, reps: 20 }]),
+    ]);
+    expect(b["Weighted Pull-Up"]).toMatchObject({ loadType: "loaded_bodyweight", weight: 10, reps: 8 });
+    expect(b["Push-Up"]).toMatchObject({ loadType: "bodyweight", weight: null, reps: 20, est1RM: null });
+  });
+
+  it("lets any loaded best outrank a bodyweight-tagged entry of the same name", () => {
+    const b = liftBests([
+      rec("2026-09-01", "Back Squat", [{ weight: null, reps: 30 }], { loadType: "bodyweight" }),
+      rec("2026-08-01", "Back Squat", [{ weight: 60, reps: 5 }], { loadType: "barbell" }),
+    ]);
+    expect(b["Back Squat"]).toMatchObject({ date: "2026-08-01", weight: 60 });
+  });
+
+  it("returns nothing for a lift with no history", () => {
+    expect(liftBests([])).toEqual({});
+    expect(liftBests(undefined)).toEqual({});
   });
 });

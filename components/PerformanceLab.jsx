@@ -10,14 +10,15 @@
 
 import { useMemo, useState, useEffect } from "react";
 import {
-  mainLiftTrend, weeklyVolumeByMuscle,
+  mainLiftTrend, liftBests, weeklyVolumeByMuscle,
   readinessBreakdown, sessionCount, detectPlateaus,
 } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER, VOLUME_TARGETS } from "@/lib/volume-audit";
 import Glyph from "@/components/Glyph";
 import { InkSpark, LineChart } from "@/components/LiftCharts";
 import { T, DISPLAY, HATCH } from "@/lib/tokens";
-import { addDaysIso } from "@/lib/dates";
+import { addDaysIso, daysBetween, parseLocalDate } from "@/lib/dates";
+import { isBodyweightMovement } from "@/lib/lift-translations";
 import { haptic } from "@/lib/a11y";
 import GlossarySheet, { GlossaryTrigger } from "@/components/GlossarySheet";
 import { renderShareCard, shareCanvas } from "@/lib/share-card";
@@ -65,6 +66,7 @@ const EMPTY = [];
 // ─── Main export ──────────────────────────────────────────────────────────────
 export default function PerformanceLab({ history, onBack, resting = false, breaks = EMPTY }) {
   const trends  = useMemo(() => mainLiftTrend(history),   [history]);
+  const bests   = useMemo(() => liftBests(history),       [history]);
   const todayIso = useTodayIso();
   // Each week against the schedule in force that week, breathers excluded.
   // No Days store: the Lab is history-only for strength (a session not yet
@@ -216,6 +218,7 @@ export default function PerformanceLab({ history, onBack, resting = false, break
               </div>
               {mainLifts.map(lift => (
                 <StrengthRow key={lift} lift={lift} series={trends[lift] || []}
+                  best={bests[lift]} todayIso={todayIso}
                   expanded={expandedLift === lift}
                   onToggle={() => setExpandedLift(expandedLift === lift ? null : lift)}/>
               ))}
@@ -363,7 +366,7 @@ function EmptyState() {
 // lift · e1RM sparkline · mono current · delta vs 28 days. The old
 // one-chart-with-selector died here (§13.5: nothing gets its own card);
 // the share card survives per row.
-function StrengthRow({ lift, series, expanded = false, onToggle }) {
+function StrengthRow({ lift, series, best = null, todayIso, expanded = false, onToggle }) {
   const cur = series[series.length - 1];
   if (!cur) return null;
   const cutIso = addDaysIso(new Date(), -28);
@@ -384,8 +387,12 @@ function StrengthRow({ lift, series, expanded = false, onToggle }) {
       <span style={{width:58,textAlign:"right",fontSize:11,color:delta > 0 ? T.heat[3] : T.ink3,flexShrink:0}}>
         {delta !== 0 ? <><span style={{fontFamily:T.measured}}>{deltaStr}</span> kg</> : "level"}
       </span>
+      {/* The share glyph sits inside the row's tap target: its tap and its
+          Enter/Space must not reach the row's toggle. */}
       <button
-        onClick={async ()=>{
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}
+        onClick={async (e)=>{
+          e.stopPropagation();
           const canvas = await renderShareCard({ lift, series });
           await shareCanvas(canvas, `heatwayve-${lift.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-1rm.png`);
         }}
@@ -399,11 +406,40 @@ function StrengthRow({ lift, series, expanded = false, onToggle }) {
     {expanded && (
       <div style={{padding:"4px 0 14px",animation:`fadeSlide 240ms ${T.ease}`}}>
         <LineChart series={series}/>
+        {best && <BestLine best={best} todayIso={todayIso}/>}
       </div>
     )}
     </div>
   );
 }
+
+// ─── Personal best — one quiet line under the trend ──────────────────────────
+// The chart tells the recent story; this line keeps the all-time best in
+// view (liftBests reads all history, not the trend window). Stated, not
+// celebrated: a best inside the last four weeks just says so.
+const bestDay = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+function BestLine({ best, todayIso }) {
+  const d = parseLocalDate(best.date);
+  const year = best.date.slice(0, 4);
+  const when = d ? (todayIso && todayIso.slice(0, 4) === year ? bestDay.format(d) : `${bestDay.format(d)} ${year}`) : best.date;
+  const ago = todayIso ? daysBetween(best.date, todayIso) : null;
+  const recent = ago != null && ago >= 0 && ago < 28;
+  const n = (v) => <span style={{fontFamily:T.measured}}>{v}</span>;
+  const set = best.loadType === "bodyweight"
+    ? (typeof best.reps === "number" ? <>{n(best.reps)} reps</> : n(best.reps))
+    : isBodyweightMovement(best.loadType)
+    ? <>bodyweight + {n(best.weight)} kg × {n(best.reps)}</>
+    : <>{n(best.weight)} kg × {n(best.reps)}</>;
+  return (
+    <div data-testid="lift-best" style={{marginTop:8,fontSize:12,color:T.ink3,lineHeight:1.45}}>
+      Best: {set} · {when}{recent ? " · this block" : ""}
+    </div>
+  );
+}
+
+// For tests: a pure bodyweight lift never earns a strength row (no e1RM),
+// so the line's reps-only form is reachable only directly.
+export const __test__ = { BestLine };
 
 // ─── Consistency — the last 8 weeks as day cells (§13.5) ─────────────────────
 // Planned sessions are hairline squares; completed ones fill with the
