@@ -70,3 +70,12 @@ describe("home header — the Profile entry", () => {
     expect(within(btn).getByText("Profile").style.whiteSpace).toBe("nowrap");
   });
 });
+
+describe("session stats", () => {
+  it("counts every paired block as a superset, finishers included", () => {
+    // No history yet, so the preview is session A: two supersets and a paired finisher.
+    render(home());
+    const label = screen.getByText("supersets");
+    expect(label.previousSibling.textContent).toBe("3");
+  });
+});

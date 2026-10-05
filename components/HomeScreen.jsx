@@ -337,7 +337,8 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         <>
           <Fade d={160}>
             {(()=>{
-              const supersets = viewSession.blocks.filter(b=>b.type==="superset").length;
+              // Every paired block counts: a finisher is a superset too.
+              const supersets = viewSession.blocks.filter(b=>b.exA&&b.exB).length;
               return (
                 <div style={{margin:"20px 0 0",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex"}}>
                   {[[String(viewSession.blocks.length),"blocks"],["~65","minutes"],[String(supersets),"supersets"]].map(([v,l],i)=>(
