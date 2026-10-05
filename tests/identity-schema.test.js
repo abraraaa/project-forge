@@ -87,6 +87,44 @@ describe("identity schema (ensureSchema)", () => {
     expect(slice).not.toMatch(/CREATE TABLE IF NOT EXISTS notices\b|notice_events/);
   });
 
+  it("adds the trainer changes table: one row per change, epoch-ms server times, no CHECK to widen later; three indexes; the grant's edit columns", () => {
+    const changes = statements.find((s) => s.startsWith("CREATE TABLE IF NOT EXISTS trainer_changes ("));
+    expect(changes?.split("\n").slice(1, -1).map((l) => l.trim())).toEqual([
+      "id TEXT PRIMARY KEY,",
+      "set_id TEXT NOT NULL,",
+      "grant_id TEXT NOT NULL,",
+      "profile TEXT NOT NULL,",
+      "client_account_id TEXT NOT NULL,",
+      "author_account_id TEXT NOT NULL,",
+      "source TEXT NOT NULL,",
+      "status TEXT NOT NULL,",
+      "kind TEXT NOT NULL,",
+      "target TEXT NOT NULL,",
+      "old_value JSONB,",
+      "new_value JSONB,",
+      "basis JSONB,",
+      "warnings JSONB,",
+      "effective_from TEXT,",
+      "created_at BIGINT NOT NULL,",
+      "applied_at TEXT,",
+      "outcome TEXT,",
+      "undone_at BIGINT,",
+      "undone_by TEXT,",
+      "reverted_at TEXT,",
+      "cleared_at BIGINT",
+    ]);
+    expect(changes).not.toMatch(/\bCHECK\b|\bREFERENCES\b/);
+    for (const s of [
+      "CREATE INDEX IF NOT EXISTS trainer_changes_profile ON trainer_changes (profile, created_at)",
+      "CREATE INDEX IF NOT EXISTS trainer_changes_grant ON trainer_changes (grant_id, created_at)",
+      "CREATE INDEX IF NOT EXISTS trainer_changes_client ON trainer_changes (client_account_id, created_at)",
+      "ALTER TABLE oauth_grants ADD COLUMN IF NOT EXISTS edits_at BIGINT",
+      "ALTER TABLE oauth_grants ADD COLUMN IF NOT EXISTS edits_off_at BIGINT",
+    ]) expect(statements).toContain(s);
+    expect(statements.filter((s) => /trainer_changes/.test(s))).toHaveLength(4);
+    expect(statements.filter((s) => /\bedits_/.test(s))).toHaveLength(2);
+  });
+
   it("contains no destructive or rewriting verb", () => {
     expect(slice).not.toMatch(/\bDROP\b|ALTER COLUMN|\bDELETE\b|\bUPDATE\b/);
   });
