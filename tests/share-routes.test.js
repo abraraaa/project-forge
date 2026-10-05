@@ -353,7 +353,7 @@ describe("POST /api/share/approve", () => {
     expect(g).toEqual({
       id: g.id, client_id: "hw:trainer", account_id: L, profile: "leo", credential_id: "cL", scope: "trainer:read",
       created_at: g.created_at, kind: "trainer", resource: "https://heatwayve.app/trainer", expires_at: null,
-      trainer_account_id: T, consent_version: SHARE_CONSENT_VERSION, looks: [], look_count: 0,
+      trainer_account_id: T, consent_version: SHARE_CONSENT_VERSION, looks: [], look_count: 0, edits_at: g.created_at,
       revoked_at: null, revoked_by: null, last_used_at: null,
     });
     expect(TRAINER_SCOPE).toBe(g.scope);
@@ -402,8 +402,8 @@ describe("POST /api/share/approve", () => {
 
   it("an out-of-date page: 400 stale, no strike, nothing written", async () => {
     invite(T, CODE);
-    // "2026-10" is the version before the roster rows were widened.
-    for (const consent of [undefined, { version: "2025-01" }, "2026-10", { version: "2026-10" }]) {
+    // "2026-10" is the version before the roster rows were widened; "2026-10-04" before plan changes.
+    for (const consent of [undefined, { version: "2025-01" }, "2026-10", { version: "2026-10" }, { version: "2026-10-04" }]) {
       const authToken = mint(L, { cred: "cL" });
       const res = await approve({ code: CODE, authToken, consent });
       expect(res.status).toBe(400);
@@ -581,11 +581,11 @@ describe("the approve transaction (SQL pins)", () => {
     );
     expect(s2.v).toEqual([now, L, "hwg_old", gid]);
     expect(flat(s3.q)).toBe(
-      "INSERT INTO oauth_grants (id, client_id, account_id, profile, credential_id, scope, created_at, kind, resource, expires_at, trainer_account_id, consent_version, looks, look_count) " +
-      "SELECT ?, 'hw:trainer', ?, ?, ?, 'trainer:read', ?, 'trainer', ?, NULL, i.trainer_account_id, ?, '[]'::jsonb, 0 " +
+      "INSERT INTO oauth_grants (id, client_id, account_id, profile, credential_id, scope, created_at, kind, resource, expires_at, trainer_account_id, consent_version, looks, look_count, edits_at) " +
+      "SELECT ?, 'hw:trainer', ?, ?, ?, 'trainer:read', ?, 'trainer', ?, NULL, i.trainer_account_id, ?, '[]'::jsonb, 0, ? " +
       "FROM trainer_invites i JOIN accounts t ON t.id = i.trainer_account_id AND t.deleted_at IS NULL WHERE i.grant_id = ? RETURNING id",
     );
-    expect(s3.v).toEqual([gid, L, "leo", "cL", now, TRAINER_RESOURCE, SHARE_CONSENT_VERSION, gid]);
+    expect(s3.v).toEqual([gid, L, "leo", "cL", now, TRAINER_RESOURCE, SHARE_CONSENT_VERSION, now, gid]);
   });
 
   it("with no current grant, S2 is given null and so ends nothing", async () => {

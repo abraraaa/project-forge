@@ -30,14 +30,16 @@ const SECTIONS = [
   {
     h: "What you see",
     p: [
-      "A client adds you themselves, with your code and their passkey. You then see what they agree to share: their last 24 weeks of training and how they felt, their main-lift trend and bests over 12 months, and, on your client list, when they last trained, their sessions this week against their plan, and their recent rhythm. Read only.",
+      "A client adds you themselves, with your code and their passkey. You then see what they agree to share: their last 24 weeks of training and how they felt, their main-lift trend and bests over 12 months, and, on your client list, when they last trained, their sessions this week against their plan, and their recent rhythm.",
       "You never see their photos, bodyweight, sleep, why they took a breather, what time of day they trained, or their notes. Your client sees each look, and a once-a-day check-in from your client list.",
+      "While a client has your changes on, you also see their current working weights, reps and main lifts for every lift in their programme, whether they're on a deload, their planned week up to 4 weeks ahead, and each lift's most recent top set, however long ago. You can change their working weights, reps and main lifts from their next session on, within the app's limits. Their app makes each change the next time they open it. They see every change with what it was before, can undo it, and can turn your changes off. Their logged sessions never change. If they turn your changes off or stop sharing, anything not yet in their plan is cancelled.",
     ],
   },
   {
     h: "What you agree to",
     list: [
       "Use what a client shares only to coach that client.",
+      "Change a client's plan only to coach them.",
       "Keep it private. Don't pass it on, sell it or publish it, and don't share it with another service.",
       "You decide what you do with what you see, so you're responsible for it under data protection law, as its controller. Your own private coaching notes are fine: keep them secure, and delete them when you stop coaching that client.",
     ],

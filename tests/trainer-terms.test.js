@@ -9,13 +9,15 @@ import {
 } from "../lib/trainer-terms.js";
 import { trainerOpenFor, shareOpenFor } from "../lib/auth-server.js";
 import { publicName, SIGNAL_KEYS } from "../lib/trainer-view.js";
+import { HORIZON_DAYS, LIVE_SLICES } from "../lib/trainer-change.js";
+import { PLAN_KEYS } from "../lib/trainer-plan.js";
 
 const strings = (o) => (typeof o === "string" ? [o] : Object.values(o).flatMap(strings));
 
 describe("trainer terms", () => {
   it("is off until launch, with the placeholder version", () => {
     expect(TRAINER_LIVE).toBe(false);
-    expect(TRAINER_TERMS_VERSION).toBe("draft-2026-10");
+    expect(TRAINER_TERMS_VERSION).toBe("draft-2026-10-05");
     expect(KNOWN_TRAINER_TERMS_VERSIONS).toEqual([TRAINER_TERMS_VERSION]);
     expect(TRAINER_SCOPE).toBe("trainer:read");
   });
@@ -25,6 +27,7 @@ describe("trainer terms", () => {
       summary: [
         "Clients choose to share with you, and can stop at any time.",
         "Use it only to coach them, and keep it private.",
+        "Change a client's plan only to coach them. They see every change and can undo it.",
         "You're 18 or over.",
         "Free.",
       ],
@@ -34,6 +37,25 @@ describe("trainer terms", () => {
     expect(Object.isFrozen(TRAINER_TERMS_COPY)).toBe(true);
     expect(Object.isFrozen(TRAINER_TERMS_COPY.summary)).toBe(true);
     for (const v of strings(TRAINER_TERMS_COPY)) expect(v).not.toMatch(/server/i);
+  });
+
+  it("the version moved with the plan-changes line: the previous one is refused", () => {
+    expect(TRAINER_TERMS_VERSION).not.toBe("draft-2026-10");
+    expect(acceptedTrainerTermsVersion({ version: "draft-2026-10" })).toBeNull();
+    expect(isCurrentTrainerTerms({ version: "draft-2026-10", adult: true })).toBe(false);
+  });
+
+  it("the Terms page says what a trainer may change, and no longer says read only", () => {
+    const page = readFileSync(new URL("../app/trainer/terms/page.jsx", import.meta.url), "utf8");
+    expect(page).not.toContain("Read only.");
+    expect(page).toContain("You can change their working weights, reps and main lifts from their next session on, within the app's limits.");
+    expect(page).toContain("you also see their current working weights, reps and main lifts for every lift in their programme, whether they're on a deload, their planned week up to 4 weeks ahead,");
+    expect(page).toContain("each lift's most recent top set, however long ago");
+    expect(page).toContain("If they turn your changes off or stop sharing, anything not yet in their plan is cancelled.");
+    // Week changes are off in this slice: the page never offers them.
+    expect(page).not.toMatch(/change (them|their week|their weekly plan)\b/);
+    expect(page).toContain("They see every change with what it was before, can undo it, and can turn your changes off.");
+    expect(page).toContain("Change a client's plan only to coach them.");
   });
 
   it("the Terms link opens a page that exists", () => {
@@ -59,7 +81,7 @@ describe("trainer terms", () => {
 
 describe("share consent", () => {
   it("copy and version are pinned together", () => {
-    expect(SHARE_CONSENT_VERSION).toBe("2026-10-04");
+    expect(SHARE_CONSENT_VERSION).toBe("2026-10-05");
     expect(SHARE_COPY).toEqual({
       rows: [
         "Your sessions, sets, RPE and how you felt, from the last 24 weeks.",
@@ -68,8 +90,13 @@ describe("share consent", () => {
         "Breathers show as paused, never why.",
         "Each look shows in your Profile, plus one check-in a day from their client list.",
         "They may see a dot when any client has trained since they last opened their list. It never says who.",
+        "Your current working weights, reps and main lifts for every lift in your programme, whether you're on a deload, and your planned week up to 4 weeks ahead.",
+        "Each lift's most recent top set, however long ago. It keeps their changes within safe limits.",
+        "They can change your working weights, reps and main lifts from your next session on, within the app's limits.",
+        "Every change is checked against your training. It shows in Profile with what it was before, and you can undo it in one tap until you've trained at it. Your logged sessions never change.",
+        "Turn their changes off in one tap in Profile, and keep sharing. Turning them off, or stopping sharing, cancels any change that hasn't reached your plan yet.",
       ],
-      includes: "Includes sessions already logged, and new ones as you log them. Read only. Photos, bodyweight, sleep and notes stay yours.",
+      includes: "Includes sessions already logged, and new ones as you log them. Photos, bodyweight, sleep and notes stay yours.",
       line: "Only you decide. Stop any time in Profile, and they lose access straight away.",
     });
     expect(Object.isFrozen(SHARE_COPY)).toBe(true);
@@ -99,9 +126,53 @@ describe("share consent", () => {
     expect(all).toContain("It never says who.");
   });
 
-  it("the version moved with the copy: the previous one is refused", () => {
-    expect(SHARE_CONSENT_VERSION).not.toBe("2026-10");
-    expect(acceptedShareConsentVersion({ version: "2026-10" })).toBeNull();
+  it("the version moved with the copy: the previous ones are refused", () => {
+    for (const old of ["2026-10", "2026-10-04"]) {
+      expect(SHARE_CONSENT_VERSION).not.toBe(old);
+      expect(acceptedShareConsentVersion({ version: old })).toBeNull();
+    }
+  });
+
+  it("names plan changes, the undo, the off switch and that logged sessions never change; never read only", () => {
+    const all = strings(SHARE_COPY).join("\n");
+    expect(all).not.toContain("Read only");
+    for (const fact of ["working weights, reps and main lifts", "planned week up to 4 weeks ahead", "within the app's limits",
+      "checked against your training", "what it was before", "undo it in one tap", "Your logged sessions never change.",
+      "Turn their changes off in one tap in Profile, and keep sharing.",
+      "Turning them off, or stopping sharing, cancels any change that hasn't reached your plan yet."]) {
+      expect(all).toContain(fact);
+    }
+    // The 4 weeks are the plan's horizon; the scope stays read, edits live on the grant.
+    expect(HORIZON_DAYS).toBe(28);
+    expect(TRAINER_SCOPE).toBe("trainer:read");
+  });
+
+  it("offers only what ships: weights, reps and main lifts from the next session on; no week or dated changes", () => {
+    const all = strings(SHARE_COPY).join("\n");
+    // While these slices are off, the copy never offers them. Turning one on means new copy and a new version.
+    expect(LIVE_SLICES).toEqual({ week: false, dated: false });
+    expect(all).toContain("They can change your working weights, reps and main lifts from your next session on");
+    expect(all).not.toMatch(/weekly plan|from a date/);
+  });
+
+  it("names every part of the plan the trainer is sent, not only the next session", () => {
+    const all = strings(SHARE_COPY).join("\n");
+    // One phrase per part of the projection, so a new part needs new copy.
+    const named = { lifts: "every lift in your programme", mains: "main lifts", deload: "deload", week: "planned week up to 4 weeks ahead" };
+    for (const k of PLAN_KEYS.plan.filter((k) => k !== "changes" && k !== "budget")) expect(all, k).toContain(named[k]);
+    expect(all).toContain("Your current working weights, reps and main lifts for every lift in your programme");
+    expect(all).not.toContain("Your next session's");
+  });
+
+  it("names the top set the limits come from, whatever its age", () => {
+    const all = strings(SHARE_COPY).join("\n");
+    expect(all).toContain("Each lift's most recent top set, however long ago.");
+    // The plan carries it as the anchor, found over all of their training, not the 24-week window.
+    expect(PLAN_KEYS.planLift).toContain("anchor");
+    expect(PLAN_KEYS.planAnchor).toEqual(["date", "kg", "reps"]);
+    const plan = readFileSync(new URL("../lib/trainer-plan.js", import.meta.url), "utf8");
+    expect(plan).toContain("findMostRecentLiftSession(history, name)");
+    expect(plan).not.toContain("DETAIL_DAYS");
   });
 
   it("accepts only the current share version", () => {
