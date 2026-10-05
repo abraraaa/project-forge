@@ -106,7 +106,7 @@ describe("only verified ceremonies stamp consent", () => {
 });
 
 describe("consent is claimed only where the line shows", () => {
-  const CLAIMERS = ["components/BodyweightEditModal.jsx", "components/ForgeApp.jsx", "components/ProfileScreen.jsx"];
+  const CLAIMERS = ["components/BodyweightEditModal.jsx", "components/FirstRun.jsx", "components/ForgeApp.jsx", "components/ProfileScreen.jsx"];
 
   it("only the surfaces that render ConsentLine build a claim", () => {
     expect(filesContaining(["components", "lib", "app"], "consentClaim(", ["lib/consent.js"])).toEqual(CLAIMERS);
@@ -159,14 +159,15 @@ describe("consent is claimed only where the line shows", () => {
 
   it("ConsentLine renders on every add-a-passkey surface", () => {
     const count = (f) => (read(f).match(/<ConsentLine/g) || []).length;
-    expect(count("components/ProfileScreen.jsx")).toBe(3);
+    expect(count("components/ProfileScreen.jsx")).toBe(2);
+    expect(count("components/FirstRun.jsx")).toBe(1);
     expect(count("components/HomeScreen.jsx")).toBe(1);
     expect(count("components/BodyweightEditModal.jsx")).toBe(1);
   });
 
   it("every consenting button points at its statement", () => {
     const pairs = [
-      ["components/ProfileScreen.jsx", 'aria-describedby="consent-onboarding"', "consent-onboarding"],
+      ["components/FirstRun.jsx", 'aria-describedby="consent-onboarding"', "consent-onboarding"],
       ["components/ProfileScreen.jsx", 'aria-describedby="consent-profile"', "consent-profile"],
       ["components/ProfileScreen.jsx", 'aria-describedby="consent-confirm"', "consent-confirm"],
       ["components/HomeScreen.jsx", 'aria-describedby="consent-home"', "consent-home"],

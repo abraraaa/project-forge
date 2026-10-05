@@ -126,7 +126,7 @@ describe("the odometer (boss, 2026-07-26) — 0.1 kg entry without the 1,600-det
     expect(splitKg("garbage")).toEqual({ whole: 40, digit: 0 });
   });
   it("all three bodyweight entry sites run the odometer; no half-kilo drums remain", () => {
-    for (const rel of ["components/BodyweightEditModal.jsx", "components/ProfileScreen.jsx", "app/locker-room/page.jsx"]) {
+    for (const rel of ["components/BodyweightEditModal.jsx", "components/FirstRun.jsx", "app/locker-room/page.jsx"]) {
       const s = readFileSync(resolve(root, rel), "utf8");
       expect(s, rel).toContain("<BodyweightDrum");
       expect(s, rel).not.toMatch(/ScrollDrum[^>]*step=\{0\.5\}/);

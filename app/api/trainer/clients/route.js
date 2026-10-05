@@ -3,6 +3,7 @@ import { dbPrimaryHandle } from "@/lib/identity-store";
 import { dbTrainerGrants, dbRemoveByTrainer, dbRosterSignals } from "@/lib/trainer-store";
 import { publicName, rosterSignal, rosterDay, trainerToday } from "@/lib/trainer-view";
 import { trainerGate, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
+import { dbMarkSeen } from "@/lib/notices";
 import { serverError } from "@/lib/api-errors";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
@@ -22,9 +23,9 @@ const byName = (a, b) => (a.name === null ? 1 : b.name === null ? -1 : a.name.lo
  * @param {string} me
  * @param {string[]} refs
  * @param {unknown} rawToday  the trainer device's date
+ * @param {number} [now]
  */
-async function roster(me, refs, rawToday) {
-  const now = Date.now();
+async function roster(me, refs, rawToday, now = Date.now()) {
   const today = trainerToday(rawToday, now);
   try {
     const rows = await dbRosterSignals(me, refs, { day: rosterDay(now), today, now });
@@ -41,6 +42,8 @@ async function roster(me, refs, rawToday) {
 //                       signal is the roster line (rosterSignal). It is read only after a
 //                       roster look is logged on every listed grant; if that log can't be
 //                       written, every signal is null and the list is names and dates only.
+//                       Once the signals are read, the clients notice is marked seen
+//                       (dbMarkSeen, an overwrite in place of the trainer's one 'clients' mark).
 //   { remove: ref }  -> { ok }. Ends that grant by UPDATE revoked_at, revoked_by 'trainer'.
 // POST keeps grant ids out of URLs and logs.
 export async function POST(request) {
@@ -63,7 +66,17 @@ export async function POST(request) {
     const shared = await rateLimitShared(request, LABEL, 600, { windowMs: DAY_MS, id: me });
     if (shared) return slid(g, noStore(shared));
     const grants = (await dbTrainerGrants(me)) ?? [];
-    const signals = grants.length ? await roster(me, grants.map((x) => x.ref), body?.today) : null;
+    const at = Date.now();
+    const signals = grants.length ? await roster(me, grants.map((x) => x.ref), body?.today, at) : null;
+    // Only after the roster was logged and read; marked at the read's start, so a
+    // session that arrives mid-read still lights the dot. A failed mark never fails the list.
+    if (signals) {
+      try {
+        await dbMarkSeen(me, "clients", at);
+      } catch (e) {
+        serverError(e, { label: `${LABEL}-seen` });
+      }
+    }
     const clients = grants
       .map(({ ref, name, since, lastLooked }) => ({ ref, name, since, lastLooked, signal: signals?.get(ref) ?? null }))
       .sort(byName);

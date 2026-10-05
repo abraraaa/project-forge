@@ -47,10 +47,12 @@ import Glyph from "@/components/Glyph";
 import ScrollDrum from "@/components/ScrollDrum";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
 import ProfileScreen from "@/components/ProfileScreen";
+import FirstRun from "@/components/FirstRun";
+import { dayNote } from "@/lib/first-run";
 import FocusPickerSheet from "@/components/FocusPickerSheet";
 import HomeScreen from "@/components/HomeScreen";
 import { consentClaim } from "@/lib/consent";
-import { activateProfileCore, saveFocusCore, takePendingRotationSummary } from "@/lib/profile-actions";
+import { activateProfileCore, saveFocusCore, saveMainLiftCore, takePendingRotationSummary } from "@/lib/profile-actions";
 
 
 // getLoadType / weightStepForLoadType / parseTimedReps / WEIGHT_CAPTIONS now
@@ -60,6 +62,15 @@ import { activateProfileCore, saveFocusCore, takePendingRotationSummary } from "
 // ScrollDrum now lives in components/ScrollDrum.jsx (PR3 3c).
 
 // SyncStatusCard + SyncNowRow now live in components/sync-cards.jsx (PR3 3c).
+
+// First run's step order needs the passkey capability before activation
+// reflects, so it must never hold activation: a platform call that does not
+// answer in time reads as no, and the flow starts at Focus.
+const PASSKEY_PROBE_MS = 1000;
+const passkeyCapable = () => Promise.race([
+  isPlatformAuthenticatorAvailable(),
+  new Promise((resolve) => setTimeout(() => resolve(false), PASSKEY_PROBE_MS)),
+]);
 
 // ─── Root ──────────────────────────────────────────────────────────────────────
 export default function ForgeApp(){
@@ -146,6 +157,9 @@ export default function ForgeApp(){
   const [userFocus,setUserFocus]=useState(DEFAULT_FOCUS);
   const [mainLifts,setMainLifts]=useState({});
   const [focusPickerOpen,setFocusPickerOpen]=useState(false);
+  // First run: set by a claim that is the device's first profile, in memory
+  // only (a reload lands on home). { existing, webAuthnSupported } | null.
+  const [firstRun,setFirstRun]=useState(null);
   // Session overview — lets users jump between blocks when gym constraints
   // dictate a different order than the prescribed flow. Auto-advance still
   // happens; this is the escape hatch.
@@ -603,9 +617,22 @@ export default function ForgeApp(){
   // gate path reflects activation into React state directly; the /profile
   // route calls the same core then navigates home, where this component
   // remounts and hydrates from LS.
+  //
+  // A claim on a device with no profiles opens FirstRun in the same commit
+  // that activates, so its steps never depend on the gate staying mounted.
+  // The passkey capability is settled first so the step order is fixed.
   const activateProfile = async (name, opts = {}) => {
+    const existing = P.list();
+    const fresh = !!opts.claim && existing.length === 0;
+    const webAuthn = fresh ? passkeyCapable() : null;
     const result = await activateProfileCore(name, opts);
-    if (result.ok) setActiveProfileState(result.name);
+    if (result.ok) {
+      if (fresh) {
+        setFirstRun({ existing, webAuthnSupported: await webAuthn });
+        setScreenRaw("first-run");
+      }
+      setActiveProfileState(result.name);
+    }
     return result;
   };
 
@@ -698,6 +725,33 @@ export default function ForgeApp(){
     setFocusPickerOpen(false);
   };
 
+  // First-run saves: the same cores as Profile, with the rotation summary
+  // dropped (no accessories seen yet, so "what changed" means nothing).
+  const handleFirstRunFocus = (focus) => {
+    if (!activeProfile) return;
+    const { next } = saveFocusCore(activeProfile, focus);
+    setUserFocus(focus);
+    setProgrammeBlock(next);
+  };
+  const handleFirstRunMainLift = (canonical, choice) => {
+    if (!activeProfile || !isValidMainLiftChoice(canonical, choice)) return;
+    const { mainLifts: next, summary } = saveMainLiftCore(activeProfile, canonical, choice);
+    setMainLifts(next);
+    if (summary) setProgrammeBlock(PB.get());
+  };
+  // Home, and a fresh passkey read: one added on the first-run step landed
+  // after activation's check, so the home nudge must not ask again.
+  // Forward motion: Let's go is not a step back.
+  const finishFirstRun = useCallback(() => {
+    setFirstRun(null);
+    withNavTransition(() => setScreenRaw("home"), null);
+    if (!activeProfile) return;
+    hasPasskey(activeProfile).then((has) => {
+      setPnHasPasskey(has);
+      if (has !== false) setPnStage("hidden");
+    });
+  }, [activeProfile]);
+
   // After rotation summary acknowledged, hand off to the session route.
   // Declared ABOVE the early returns, deliberately: the no-active-profile
   // return below references this in its JSX — declared in its old spot
@@ -737,6 +791,27 @@ export default function ForgeApp(){
       {rotationSummary && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
     </>
   );
+  }
+
+  if(screen==="first-run"){
+    return (
+      <ErrorBoundary>
+        <FirstRun
+          name={activeProfile}
+          existing={firstRun?.existing ?? []}
+          webAuthnSupported={!!firstRun?.webAuthnSupported}
+          bodyweight={bodyweight}
+          userFocus={userFocus}
+          mainLifts={mainLifts}
+          userWeek={userWeek}
+          onSaveFocus={handleFirstRunFocus}
+          onSaveMainLift={handleFirstRunMainLift}
+          onSaveWeek={handleSaveWeek}
+          onSaveBodyweight={updateBodyweight}
+          onDone={finishFirstRun}
+        />
+      </ErrorBoundary>
+    );
   }
 
   // The session Begin starts — off the same day context as the home preview.
@@ -1187,7 +1262,8 @@ export default function ForgeApp(){
 
 // ─── Onboarding Screen ────────────────────────────────────────────────────────
 // First-time intro. Sets forge:onboarded on continue so returning visitors
-// skip straight to ProfileScreen or home. BW is collected after name entry.
+// skip straight to ProfileScreen or home. The rest of setup follows the name
+// claim (components/FirstRun.jsx).
 function OnboardingScreen({ onContinue }) {
   return (
     <div style={{
@@ -1211,39 +1287,21 @@ function OnboardingScreen({ onContinue }) {
         <h1 style={{ ...DISPLAY, fontSize: 46, color: T.ink, marginBottom: 14 }}>
           The programme
         </h1>
-        <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.6, marginBottom: 16 }}>
-          Train with intention.
-        </p>
       </Fade>
 
+      {/* Two support lines: the A/B/C rotation and effort-led progression.
+          Everything else is asked for after the name. */}
       <Fade d={120}>
-        <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginBottom: 26 }}>
-          Heatwayve notices. Bar speed, effort, the days you show up. Your next session already knows what your body can take.
+        <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginBottom: 14 }}>
+          Three strength sessions, A, B and C, always in that order. Miss a day and the next one waits for you.
+        </p>
+        <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginBottom: 30 }}>
+          Tell us how each set felt. That sets your next weight: more when it was easy, less when it wasn&apos;t.
         </p>
       </Fade>
 
-      {/* The three promises — editorial callouts on the ground between
-          hairlines. The one place the full ramp shows before any data
-          exists: a promise sketched in the system's own grammar. */}
-      <Fade d={200}>
-        <div style={{ display: "flex", flexDirection: "column", marginBottom: 30, borderTop: `1px solid ${T.rule}` }}>
-          <PromiseLine
-            kicker="Intelligence"
-            body="Heatwayve reads how the last session felt and loads the next to match. More when you've earned it, less when you need it."
-          />
-          <PromiseLine
-            kicker="Rhythm"
-            body="Strength, Zone 2, HIIT, rest. Your week, your shape. The programme bends to fit your life, never the reverse."
-          />
-          <PromiseLine
-            kicker="Yours"
-            body="No accounts, no email, no bullshit. Your name, a passkey, and you're in."
-          />
-        </div>
-      </Fade>
-
-      {/* §14: no ramp strip — heat is never garnish; the hairline above
-          already closes the rows. Commit is the standard commit: 56px,
+      {/* §14: no ramp strip — heat is never garnish. Commit is the
+          standard commit: 56px,
           12px radius, a plain verb of work. */}
       <Fade d={320}>
         <button className="forge-press" onClick={() => onContinue()} style={{
@@ -1256,19 +1314,6 @@ function OnboardingScreen({ onContinue }) {
           Begin
         </button>
       </Fade>
-    </div>
-  );
-}
-
-function PromiseLine({ kicker, body }) {
-  return (
-    <div style={{ padding: "14px 0", borderBottom: `1px solid ${T.rule}` }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: T.ink, marginBottom: 4 }}>
-        {kicker}
-      </div>
-      <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55 }}>
-        {body}
-      </div>
     </div>
   );
 }
@@ -1290,9 +1335,8 @@ function PromiseLine({ kicker, body }) {
 // strength days back to Thu/Fri/Sat"). Persists via W.saveEdit() (effective
 // from this week's Monday); the engine reads the new week and reflows home /
 // retro / done screens. Validation is advisory
-// only — we surface a banner for "no strength days" / "missing sessions" but
-// don't block saving (some users may intentionally run a 4-strength week or
-// take a week off).
+// only — a banner for no strength days, or for what a count other than three
+// does to the A/B/C round — and never blocks saving.
 const WEEK_DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const WEEK_DAY_TYPES = [
   { type: "strength", label: "Strength" },
@@ -1322,11 +1366,11 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
     ));
   };
   const strengthCount = draft.filter(d => d.type === "strength").length;
+  // A, B and C continue across weeks, so a count other than three changes
+  // how often the round comes back, not which sessions are reached.
   const warning =
     strengthCount === 0 ? "No strength days. Your programme won't progress." :
-    strengthCount < 3   ? `Only ${strengthCount} strength day${strengthCount===1?"":"s"} — sessions B/C won't be reached.` :
-    strengthCount > 3   ? `${strengthCount} strength days — A/B/C will cycle to fill (4th = A again).` :
-    null;
+    dayNote(strengthCount);
   const { containerRef, onKeyDown } = useModalA11y(onCancel);
   const titleId = "week-editor-title";
   return (
@@ -1710,7 +1754,7 @@ export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, wor
     // these lifts is not the user's (see SessionHost pushSetToDraft).
     const baseWeight = lt === "bodyweight" ? null
       : workingWeights[ex.name]
-      ?? startingWeightForLift(ex.name, bodyweight)
+      ?? startingWeightForLift(ex.name, bodyweight, ex.weight)
       ?? ex.weight
       ?? null;
     const baseReps   = workingReps[ex.name] ?? ex.reps ?? null;

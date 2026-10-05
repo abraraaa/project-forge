@@ -2,7 +2,8 @@
 // is faked with small in-memory tables, so the gate, the store, db.js's
 // profile read and the routes run for real and every statement is captured.
 // The only writes allowed: the full-look ring UPDATE, the trainer's remove
-// UPDATE and the gate's daily session INSERT. Nothing is ever deleted. The
+// UPDATE, the gate's daily session INSERT and, after a roster read, the
+// trainer's clients notice mark (an upsert). Nothing is ever deleted. The
 // trainer's own training ({ ref: "me" }) writes nothing at all.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
@@ -95,6 +96,7 @@ vi.mock("@neondatabase/serverless", () => ({
       g.revoked_by = "trainer";
       return [{ id: g.id }];
     }
+    if (/^\s*INSERT INTO notice_marks /.test(q)) return []; // pinned in tests/notices.test.js
     if (/^\s*SELECT now\(\) AS t$/.test(q)) return [{ t: new Date() }];
     if (/^\s*SELECT field, value FROM meta WHERE profile = \?$/.test(q)) {
       return db.meta.filter((m) => m.profile === v[0]).map(({ field, value }) => ({ field, value }));
@@ -113,7 +115,7 @@ const { POST: clientPOST } = await import("@/app/api/trainer/client/route");
 const { POST: clientsPOST } = await import("@/app/api/trainer/clients/route");
 const { TRAINER_COOKIE } = await import("@/lib/trainer-session");
 const { TRAINER_TERMS_VERSION } = await import("@/lib/trainer-terms");
-const { dbLogFullLook } = await import("@/lib/trainer-store");
+const { dbLogFullLook, dbRosterSignals } = await import("@/lib/trainer-store");
 const { rateLimit, rateLimitShared } = await import("@/lib/rate-limit");
 
 const CURRENT = { version: TRAINER_TERMS_VERSION, at: "2026-10-01T00:00:00.000Z", adult: true };
@@ -470,6 +472,44 @@ describe("POST /api/trainer/clients: list", () => {
     const res = await list(null);
     expect(res.status).toBe(401);
     expect(calls.some((c) => /oauth_grants/.test(c.q))).toBe(false);
+  });
+});
+
+describe("POST /api/trainer/clients: the clients notice", () => {
+  const marks = () => writes().filter((c) => /^\s*INSERT INTO notice_marks /.test(c.q));
+  const row = { recent: [], lastDate: null, userWeek: null, breaks: null };
+
+  it("a roster that was logged and read marks clients seen, after the read, at the read's own time", async () => {
+    vi.mocked(dbRosterSignals).mockResolvedValueOnce(new Map([["hwg_abe", row], ["hwg_cara", row]]));
+    const res = await list(session(T, "cT"));
+    expect(res.status).toBe(200);
+    expect((await res.json()).clients.every((c) => c.signal !== null)).toBe(true);
+    const m = marks();
+    expect(m).toHaveLength(1);
+    expect(writes()).toEqual(m);
+    const [trainer, refs, opts] = vi.mocked(dbRosterSignals).mock.lastCall;
+    expect([trainer, refs]).toEqual([T, ["hwg_abe", "hwg_cara"]]);
+    expect(m[0].v).toEqual([T, "clients", opts.now]);
+    // After the mark, only the trainer's own name is read.
+    expect(calls.slice(calls.indexOf(m[0]) + 1).map((c) => c.q.trim().split(/\s+/).slice(0, 4).join(" "))).toEqual(["SELECT handle, display FROM"]);
+  });
+
+  it("no mark when the roster could not be logged or read, when there are no live clients, or on remove", async () => {
+    const t = session(T, "cT");
+    expect((await list(t)).status).toBe(200); // dbRosterSignals answers null here: the log failed
+    db.grants = db.grants.filter((g) => g.trainer_account_id !== T);
+    expect((await (await list(t)).json()).clients).toEqual([]);
+    await post(clientsPOST, "clients", t, { remove: "hwg_nope" });
+    expect(marks()).toEqual([]);
+  });
+
+  it("a mark that fails never fails the list", async () => {
+    vi.mocked(dbRosterSignals).mockResolvedValueOnce(new Map([["hwg_abe", row], ["hwg_cara", row]]));
+    failOn = /^\s*INSERT INTO notice_marks /;
+    const res = await list(session(T, "cT"));
+    expect(res.status).toBe(200);
+    expect((await res.json()).clients.map((c) => c.ref)).toEqual(["hwg_abe", "hwg_cara"]);
+    expect(console.error).toHaveBeenCalled();
   });
 });
 
