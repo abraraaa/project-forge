@@ -16,7 +16,7 @@ import {
   ensurePersistentStorage,
   enableAutoSync, disableAutoSync, pushNow, weeksSince, dateOfWeekdayIdxInCurrentWeek,
   newDraftLog, logSet, finaliseDraft, D, TS,
-  startingWeightForLift,
+  planStartWeight,
 } from "@/lib/storage";
 import { makeDayContext, resolveRange, sessionsFrom, owedDays, trainingRhythm, beginSessionIdx } from "@/lib/day-state";
 import { useTodayIso } from "@/lib/use-today-iso";
@@ -28,7 +28,7 @@ import InstallWalkthrough, { canWalkthroughInstall } from "@/components/InstallW
 import { getThemePreference, stampTheme } from "@/lib/theme";
 import BreatherModal from "@/components/BreatherModal";
 import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
-import { shouldOfferDeload, startDeload, dismissDeloadOffer } from "@/lib/progression";
+import { shouldOfferDeload, startDeload, dismissDeloadOffer, repTargetRepairs } from "@/lib/progression";
 import { applySessionToEngine } from "@/lib/session-engine";
 import { getLiftProfile, sanitiseWorkingWeights, getLoadType, weightStepForLoadType } from "@/lib/lift-translations";
 import { solveRotation } from "@/lib/rotation-solver";
@@ -165,6 +165,10 @@ export default function ForgeApp(){
   // happens; this is the escape hatch.
   const [workingWeights,setWWState]=useState({});
   const [workingReps,setWRState]=useState({});
+  // A relic rep target (below the lift's base, not an adoption) reads as the
+  // base on the retro sheet too, so a retro log never bakes one back in.
+  const retroRepairs = useMemo(() => repTargetRepairs({ reps: workingReps, lifts: TS.get(activeProfile)?.lifts ?? {}, sessions: SESSIONS }), [workingReps, activeProfile]);
+  const retroReps = useMemo(() => ({ ...workingReps, ...retroRepairs }), [workingReps, retroRepairs]);
   // Append-only session log built during an active session
   // Snapshot of workingWeights at SESSION START. State (not ref) because the
   // DoneScreen consumes it during render. Set in handleReadinessStart /
@@ -1110,7 +1114,7 @@ export default function ForgeApp(){
       // ─── Engine block — THE engine (lib/session-engine, #16), shared
       // with the live finalise path. UI mirrors stay here.
       {
-        const engine = applySessionToEngine(activeProfile, sessionRecord, { currentWeights: workingWeights });
+        const engine = applySessionToEngine(activeProfile, sessionRecord, { currentWeights: workingWeights, repairedReps: retroRepairs });
         if (Object.keys(engine.wwUpdates).length) {
           setWW(p => ({ ...p, ...engine.wwUpdates }));
         }
@@ -1231,7 +1235,7 @@ export default function ForgeApp(){
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased"}}>
       {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={homeWeekDays} strengthDaySessions={homeWeekSessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={homeWeekDone} dayStates={homeWeekStates} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={handleDismissAbsenceNudge}/>}
       {breatherOpen           && <BreatherModal onConfirm={handleStartBreather} onCancel={()=>setBreatherOpen(false)}/>}
-      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} workingReps={workingReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} history={history} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
+      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} muscleAnchors={TS.get(activeProfile)?.muscleAnchors} workingReps={retroReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} history={history} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}
@@ -1720,7 +1724,7 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
 // applied to all sets in an exercise.
 // effectiveWeek = the schedule in force ON `date` (resolved by the host via
 // W.getEffectiveOn) — never today's config; see handleSubmitRetro.
-export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, workingReps, effectiveWeek=WEEK, history=[], onCancel, onSubmit}){
+export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, muscleAnchors = null, workingReps, effectiveWeek=WEEK, history=[], onCancel, onSubmit}){
   const meta = useMemo(() => sessionMetaForDate(date, effectiveWeek, history), [date, effectiveWeek, history]);
   const sessionDef = meta?.type === "strength" ? SESSIONS[meta.sessionIdx] : null;
 
@@ -1748,15 +1752,11 @@ export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, wor
   // first-cell auto-fill only propagates to cells the user hasn't touched.
   const [entries, setEntries] = useState(() => exerciseRows.map(ex => {
     const setCount = ex.sets || 3;
-    // Same resolution order as the live session's getW: working → BW-seeded → SESSIONS default.
+    // The live session's order (planStartWeight). A pure bodyweight row
+    // resolves to null: its column is hidden, and W for these lifts is not
+    // the user's.
     const lt = getLoadType(ex);
-    // A pure bodyweight row logs no weight: its column is hidden, and W for
-    // these lifts is not the user's (see SessionHost pushSetToDraft).
-    const baseWeight = lt === "bodyweight" ? null
-      : workingWeights[ex.name]
-      ?? startingWeightForLift(ex.name, bodyweight, ex.weight)
-      ?? ex.weight
-      ?? null;
+    const baseWeight = planStartWeight(ex, { working: workingWeights, bodyweight, anchors: muscleAnchors });
     const baseReps   = workingReps[ex.name] ?? ex.reps ?? null;
     return {
       name: ex.name,

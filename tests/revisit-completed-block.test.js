@@ -54,12 +54,13 @@ describe("the host no longer clamps", () => {
     // Every commit (straight set, superset round, finisher round) bumps the
     // set number, so a finished block lands one past its end: the fork.
     expect(host).not.toMatch(/if \(setNum >= blockSets\)/);
-    // The block advance lives in exactly one handler, handed to the screen.
-    const advance = host.match(/setBlockIdx\(p => p \+ 1\)/g) || [];
-    expect(advance).toHaveLength(1);
+    // The block advance lives in exactly one handler, handed to the screen,
+    // and it goes to the next block still short of its sets, never p + 1.
+    expect(host).not.toMatch(/setBlockIdx\(p => p \+ 1\)/);
     const next = host.slice(host.indexOf("const handleNext = () => {"));
-    expect(next.slice(0, 220)).toContain("setBlockIdx(p => p + 1); setSetNum(1); setPhase(\"A\");");
-    expect(next.slice(0, 220)).toContain("else finishSession();");
+    expect(next.slice(0, 420)).toContain("const target = nextUnfinishedIdx(activeSession, draftLogRef.current, blockIdx);");
+    expect(next.slice(0, 420)).toContain("if (target === null) { finishSession(); return; }");
+    expect(next.slice(0, 420)).toContain("setSetNum(loggedOnBlock(draftLogRef.current, activeSession.blocks[target].id) + 1);");
     expect(host).toContain("onNext: handleNext");
     // The screen forks on the host's count, reach bonus included.
     expect(host).toContain("blockSets, nextExName, onNext: handleNext");

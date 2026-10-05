@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { unfinishedBlocks, loggedOnBlock, leadExerciseName } from "../lib/session-progress.js";
+import { unfinishedBlocks, loggedOnBlock, leadExerciseName, nextUnfinishedIdx } from "../lib/session-progress.js";
 
 const host = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), "../components/SessionHost.jsx"), "utf8");
@@ -19,6 +19,28 @@ const session = {
   ],
 };
 const draft = (blocks) => ({ blocks });
+
+describe("nextUnfinishedIdx", () => {
+  const sess = { blocks: [{ id: "b1", sets: 3 }, { id: "b2", sets: 3 }, { id: "b3", sets: 3 }, { id: "b4", sets: 3 }] };
+  const done = (n) => ({ exercises: { x: { sets: Array(n).fill({}) } } });
+  it("skips a block already done out of order and lands on the next short one", () => {
+    // b3 was done first via the overview; from b2, Next goes to b4.
+    const draft = { blocks: { b2: done(3), b3: done(3) } };
+    expect(nextUnfinishedIdx(sess, draft, 1)).toBe(3);
+  });
+  it("goes to the very next block when it is short", () => {
+    expect(nextUnfinishedIdx(sess, { blocks: { b1: done(3), b3: done(2) } }, 0)).toBe(1);
+  });
+  it("is null when every later block is done, so the fork finishes or points back", () => {
+    expect(nextUnfinishedIdx(sess, { blocks: { b3: done(3), b4: done(4) } }, 1)).toBeNull();
+    expect(nextUnfinishedIdx(sess, { blocks: {} }, 3)).toBeNull();
+  });
+  it("counts a superset by rounds and extra sets as complete", () => {
+    const ss = { blocks: [{ id: "s1", sets: 3 }, { id: "s2", sets: 3 }] };
+    expect(nextUnfinishedIdx(ss, { blocks: { s2: { exercises: { a: { sets: [{}, {}, {}] }, b: { sets: [{}, {}, {}] } } } } }, 0)).toBeNull();
+    expect(nextUnfinishedIdx(ss, { blocks: { s2: { exercises: { a: { sets: [{}, {}] }, b: { sets: [{}, {}] } } } } }, 0)).toBe(1);
+  });
+});
 
 describe("unfinishedBlocks", () => {
   it("straight sets: short and skipped blocks count, in order", () => {

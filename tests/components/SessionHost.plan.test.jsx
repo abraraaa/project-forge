@@ -177,3 +177,23 @@ describe("what the session says about how the engine read the lift", () => {
     expect(loggedSquat().sets.map((s) => s.reps)).toEqual([5, 5, 4]);
   });
 });
+
+describe("a rep target left below its lift's base", () => {
+  it("bench stored at 3 under a base of 5: the card shows 5 and the set logs against 5; R waits for finalise", () => {
+    const BENCH = "Barbell Bench Press";
+    start({
+      weights: { [SQUAT]: 100, [BENCH]: 95 },
+      reps: { [BENCH]: 3 },
+      lifts: { [BENCH]: { currentWeight: 95, sessionsCount: 9, consecutiveHolds: 0, history: [], currentRepRange: { reps: 5, sets: 3, baseReps: 5 } } },
+    });
+    logSetAt(); logSetAt(); logSetAt();
+    fireEvent.click(screen.getByText(`Next: ${BENCH}`));
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(BENCH);
+    expect(repsCell().textContent).toBe("5");
+    logSetAt();
+    const ex = D.load(WHO).draft.blocks.a2.exercises[BENCH];
+    expect(ex.prescribed.reps).toBe(5);
+    expect(ex.sets[0].reps).toBe(5);
+    expect(P.getReps(WHO)).toEqual({ [BENCH]: 3 });
+  });
+});

@@ -56,7 +56,7 @@ describe("the ceiling on the default config", () => {
 });
 
 describe("the ceiling covers the partner side of a superset", () => {
-  // mulberry32, as in tests/rotation-solver.test.js — seed 57 lands ass2 on
+  // mulberry32, as in tests/rotation-solver.test.js — seed 226 lands ass2 on
   // Single-Leg RDL (aligned via Incline Landmine Press on the other side).
   function mulberry(seed) {
     let a = seed >>> 0;
@@ -69,7 +69,7 @@ describe("the ceiling covers the partner side of a superset", () => {
   }
 
   it("a bump that would carry Hamstrings over MRV is withheld", () => {
-    const { config } = solveRotation({ focus: "Sculpt", rng: mulberry(57), history: {} });
+    const { config } = solveRotation({ focus: "Sculpt", rng: mulberry(226), history: {} });
     expect(config["ass2-A"].name).toBe("Single-Leg RDL");
     // Anchor changed after the solve, as the main-lifts page does.
     const mainLifts = { "Hex Bar Deadlift": "Romanian Deadlift" };

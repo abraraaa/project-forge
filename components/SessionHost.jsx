@@ -31,20 +31,20 @@ import { track } from "@vercel/analytics";
 import {
   P, H, W, PB, F, TS, BW, D, SessionIntent, TRAVEL,
   newDraftLog, logSet, finaliseDraft, bumpStreak, scaleForReadiness,
-  startingWeightForLift, pushNow, recordCompletion, rpeToRir,
+  planStartWeight, pushNow, recordCompletion, rpeToRir,
 } from "@/lib/storage";
 import {
   SESSIONS, EXERCISE_POOLS,
   applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
   DEFAULT_FOCUS, WEEK,
 } from "@/lib/programme";
-import { deloadDayLabel, isFinalSetMiss, lastSessionNote, ADOPT_AFTER_SESSIONS } from "@/lib/progression";
+import { deloadDayLabel, isFinalSetMiss, lastSessionNote, ADOPT_AFTER_SESSIONS, repTargetRepairs } from "@/lib/progression";
 import { SESSION_COPY } from "@/lib/session-copy";
 import { deriveTravelSession } from "@/lib/travel";
 import { applySessionToEngine } from "@/lib/session-engine";
-import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, coldStartFromAnchor, addedLoadFor } from "@/lib/lift-translations";
+import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, addedLoadFor } from "@/lib/lift-translations";
 import { restRemaining, restDeadline } from "@/lib/rest-clock";
-import { unfinishedBlocks, leadExerciseName } from "@/lib/session-progress";
+import { unfinishedBlocks, nextUnfinishedIdx, loggedOnBlock, leadExerciseName } from "@/lib/session-progress";
 import { pickFlashLine, isPullMovement } from "@/lib/set-flash";
 import { EXERCISE_ANATOMY } from "@/lib/exercise-anatomy";
 import { todayLocalIso, daysBetween } from "@/lib/dates";
@@ -76,11 +76,16 @@ export default function SessionHost() {
   const [sessionWeights, setSessionWeights] = useState({});
   const [sessionReps, setSessionReps]       = useState({});
   const planWeights = useMemo(() => ({ ...workingWeights, ...sessionWeights }), [workingWeights, sessionWeights]);
-  const planReps    = useMemo(() => ({ ...workingReps, ...sessionReps }), [workingReps, sessionReps]);
   // Lift state as the session opened, for the card's note on last session.
   const [liftStates] = useState(() => {
     if (!profile) return {};
     try { return TS.get(profile)?.lifts || {}; } catch { return {}; }
+  });
+  // Muscle anchors as the session opened: the cold-start rung of every plan
+  // weight (planStartWeight). Only finalise moves them.
+  const [muscleAnchors] = useState(() => {
+    if (!profile) return {};
+    try { return TS.get(profile)?.muscleAnchors || {}; } catch { return {}; }
   });
   const [history]                    = useState(() => (profile ? H.get(profile) : []));
   const [bodyweight, setBodyweight]  = useState(() => (profile ? BW.getKg(profile) : null));
@@ -294,6 +299,27 @@ export default function SessionHost() {
   // on top — a cooked day drops its finisher whether or not you're in a hotel.
   const travelledSession = travel ? deriveTravelSession(focusedSession) : focusedSession;
   const activeSession  = scaleForReadiness(travelledSession, readiness);
+  // The prescription the session shows: R, with any target left below its
+  // lift's base read as the base (repTargetRepairs). Templates come from the
+  // programme slot as composed before swaps and readiness; a lift placed by a
+  // session swap keeps its own target. Travel sessions never reach the engine,
+  // so they show R as stored. Persisted at finalise (repairedReps).
+  const repRepairs = useMemo(() => {
+    if (travel) return {};
+    const config = programmeBlock?.config;
+    const programmed = applyFocusToSession(
+      applyMainLiftsToSession(applyRotationToSession(SESSIONS[activeSessionIdx], config), mainLifts),
+      userFocus, config, mainLifts,
+    );
+    return repTargetRepairs({
+      reps: workingReps,
+      lifts: liftStates,
+      sessions: [programmed],
+      exclude: Object.values(sessionSwaps).map((s) => s?.name).filter(Boolean),
+    });
+  }, [travel, programmeBlock, activeSessionIdx, mainLifts, userFocus, workingReps, liftStates, sessionSwaps]);
+  const prescribedReps = useMemo(() => ({ ...workingReps, ...repRepairs }), [workingReps, repRepairs]);
+  const planReps = useMemo(() => ({ ...prescribedReps, ...sessionReps }), [prescribedReps, sessionReps]);
   const block   = activeSession.blocks[blockIdx];
   const isSS    = block.type === "superset" || block.type === "finisher";
   const swapKey = isSS ? `${block.id}-${phase}` : block.id;
@@ -302,26 +328,25 @@ export default function SessionHost() {
   const resolvedExB = isSS ? (block.exB ?? null) : null;
   const resolvedEx  = !isSS ? (block.ex ?? null) : null;
   const activeEx    = isSS ? (phase === "A" ? resolvedExA : resolvedExB) : resolvedEx;
-  // What the finished-block fork's primary names; null on the last block.
-  const nextBlock   = activeSession.blocks[blockIdx + 1] ?? null;
-  const nextExName  = nextBlock ? leadExerciseName(nextBlock) : null;
-  // On the last block, the fork first points back at any earlier block left
-  // short (jumped past via the overview, or Next'd early): a finished session
-  // can't be amended. draftView is a render-safe copy of the draft, refreshed
-  // on every advance by the loggedSets effect below.
+  // What the finished-block fork's primary names: the next block still short
+  // of its sets, so a block done out of order is never offered again. null
+  // when every later block is done. draftView is a render-safe copy of the
+  // draft, refreshed on every advance by the loggedSets effect below.
   const [draftView, setDraftView] = useState(null);
+  const nextIdx     = nextUnfinishedIdx(activeSession, draftView, blockIdx);
+  const nextBlock   = nextIdx === null ? null : activeSession.blocks[nextIdx];
+  const nextExName  = nextBlock ? leadExerciseName(nextBlock) : null;
+  // With nothing left ahead, the fork first points back at any earlier block
+  // left short (jumped past via the overview, or Next'd early): a finished
+  // session can't be amended.
   const firstShort  = !nextBlock ? (unfinishedBlocks(activeSession, draftView, blockIdx)[0] ?? null) : null;
   const backTo      = firstShort ? { idx: firstShort.idx, name: leadExerciseName(firstShort.block) } : null;
 
   // The card, the drum and the log read today's plan, which defaults to the
   // prescription until the drum moves.
-  const getW = useCallback((ex) => {
-    if (!ex) return null;
-    if (planWeights[ex.name] !== undefined) return planWeights[ex.name];
-    const bwSeeded = startingWeightForLift(ex.name, bodyweight, ex.weight);
-    if (bwSeeded !== null) return bwSeeded;
-    return ex.weight;
-  }, [planWeights, bodyweight]);
+  const getW = useCallback((ex) => (
+    ex ? planStartWeight(ex, { working: planWeights, bodyweight, anchors: muscleAnchors }) : null
+  ), [planWeights, bodyweight, muscleAnchors]);
   const getR = useCallback((ex) => ex ? (planReps[ex.name] ?? ex.reps) : null, [planReps]);
 
   const onSwap = (key, newEx) => {
@@ -333,17 +358,14 @@ export default function SessionHost() {
     // carrying it over would be worse than carrying nothing. But "nothing"
     // left the drum with no number at all, and the card then fell through to
     // its bodyweight branch and announced a dumbbell press as bodyweight
-    // (boss report, 2026-08-13). Give it the same anchor-derived start the
-    // engine computes for any first-time lift.
+    // (boss report, 2026-08-13). Give it the anchor-derived start, the same
+    // one the engine's cold start computes (lib/progression.js). Neither gives
+    // one to a bodyweight-based movement, pure, loaded or assisted: its W is
+    // added kg, not an anchor-sized load. Only the anchor rung is written
+    // (no bodyweight, no template): a one-time W write.
     const name = newEx?.name;
     if (!name || newEx.weight != null || workingWeights[name] !== undefined) return;
-    const prof = getLiftProfile(name);
-    if (!prof.progressesByLoad) return;          // genuinely BW — no weight to seed
-    if (getLoadType(newEx) === "bodyweight") return; // added load is the user's choice
-    const anchor = prof.primaryMuscle
-      ? (TS.get(profile)?.muscleAnchors?.[prof.primaryMuscle] || null)
-      : null;
-    const seed = coldStartFromAnchor(name, anchor);
+    const seed = planStartWeight(newEx, { anchors: muscleAnchors, bodyweight: null, template: null });
     if (seed) setWW((prev) => ({ ...prev, [name]: seed }));
   };
 
@@ -377,7 +399,7 @@ export default function SessionHost() {
   // Resolved WITHOUT calling getW: invoking a useCallback from the render body
   // is the other thing that makes the compiler bail here.
   const reachWeight = activeEx
-    ? (planWeights[activeEx.name] ?? startingWeightForLift(activeEx.name, bodyweight, activeEx.weight) ?? activeEx.weight)
+    ? planStartWeight(activeEx, { working: planWeights, bodyweight, anchors: muscleAnchors })
     : null;
   // Never ask before two sets are in the bank. Today every main block is 3 or
   // 4 sets, so "last set" already lands on the 3rd or later — but that is a
@@ -454,16 +476,11 @@ export default function SessionHost() {
     // when none, so a no-vest set is exactly what it always was. W is never
     // read for these lifts (the engine never prescribes one there).
     const resolvedWeight = loadType === "bodyweight" ? addedLoadFor(addedLoads, ex.name)
-      : planWeights[ex.name]
-      ?? startingWeightForLift(ex.name, bodyweight, ex.weight)
-      ?? ex.weight;
+      : planStartWeight(ex, { working: planWeights, bodyweight, anchors: muscleAnchors });
     // The prescription this set was measured against — W/R, never the drum —
     // so the engine judges what was done against what was asked.
     const prescribedWeight = loadType === "bodyweight" ? null
-      : workingWeights[ex.name]
-      ?? startingWeightForLift(ex.name, bodyweight, ex.weight)
-      ?? ex.weight
-      ?? null;
+      : planStartWeight(ex, { working: workingWeights, bodyweight, anchors: muscleAnchors });
     logSet(draftLogRef.current, {
       blockId: block.id,
       blockType: block.type,
@@ -477,7 +494,7 @@ export default function SessionHost() {
       reps: planReps[ex.name] ?? ex.reps,
       rpe: rpe || null,
       reach: reachArmed,
-      prescribed: { reps: workingReps[ex.name] ?? ex.reps, weight: prescribedWeight, sets: block.sets },
+      prescribed: { reps: prescribedReps[ex.name] ?? ex.reps, weight: prescribedWeight, sets: block.sets },
     });
     D.save(profile, draftLogRef.current);
     // Bodyweight prompt — once per session, timed to the RPE card fade.
@@ -492,7 +509,7 @@ export default function SessionHost() {
       setBwPromptedThisSession(true);
       setTimeout(() => setBwEditOpen(true), 280);
     }
-  }, [block, isSS, phase, sessionSwaps, workingWeights, workingReps, planWeights, planReps, addedLoads, resolveExFn, profile, bodyweight, bwPromptedThisSession, reachArmed]);
+  }, [block, isSS, phase, sessionSwaps, workingWeights, prescribedReps, planWeights, planReps, addedLoads, muscleAnchors, resolveExFn, profile, bodyweight, bwPromptedThisSession, reachArmed]);
 
   // Final-set flash — one quiet line after rating the LAST set of an
   // exercise (lib/set-flash.js: no repeats this session, Easy falls back to
@@ -521,17 +538,17 @@ export default function SessionHost() {
     if (isSS) return;
     // Measured against the prescription, not the template: the drum moves
     // today's plan, and a climbed target is still the target.
-    const prescribedReps = activeEx ? (workingReps[activeEx.name] ?? activeEx.reps) : null;
+    const shownReps = activeEx ? (prescribedReps[activeEx.name] ?? activeEx.reps) : null;
     const timed  = parseTimedReps(activeEx?.reps);
-    const target = typeof prescribedReps === "number" ? prescribedReps
-      : timed ? timed.seconds : parseInt(prescribedReps, 10);
+    const target = typeof shownReps === "number" ? shownReps
+      : timed ? timed.seconds : parseInt(shownReps, 10);
     const done   = getR(activeEx);
     // The last prescribed set came up short at full effort, every earlier one
     // on target: the engine reads that as a good day (final_set_miss).
     if (setNum === block.sets && !timed && activeEx?.name) {
       const prior = draftLogRef.current?.blocks?.[block.id]?.exercises?.[activeEx.name]?.sets || [];
       const rir = rpeToRir(rpe);
-      const asLogged = { prescribed: { reps: prescribedReps, sets: block.sets }, sets: [...prior, { reps: done }] };
+      const asLogged = { prescribed: { reps: shownReps, sets: block.sets }, sets: [...prior, { reps: done }] };
       if (rir !== null && rir <= 1 && isFinalSetMiss(asLogged)) { showFlash(SESSION_COPY.finalSetMiss); return; }
     }
     if (setNum !== blockSets) return; // last set of a plain block only
@@ -601,10 +618,13 @@ export default function SessionHost() {
     setAwaitRpe(true);
   };
 
-  // The fork's primary: move on to the next block, or finish on the last.
+  // The fork's primary: move on to the next block still to do, or finish.
   const handleNext = () => {
-    if (blockIdx < activeSession.blocks.length - 1) { setBlockIdx(p => p + 1); setSetNum(1); setPhase("A"); }
-    else finishSession();
+    const target = nextUnfinishedIdx(activeSession, draftLogRef.current, blockIdx);
+    if (target === null) { finishSession(); return; }
+    setBlockIdx(target);
+    setSetNum(loggedOnBlock(draftLogRef.current, activeSession.blocks[target].id) + 1);
+    setPhase("A");
   };
 
   const handleJumpToBlock = (targetIdx) => {
@@ -704,7 +724,7 @@ export default function SessionHost() {
       if (sessionRecord) {
         // Context only (a first-time lift's fallback weight): today's plan,
         // which is what these weights held when the drum wrote them.
-        const engine = applySessionToEngine(profile, sessionRecord, { currentWeights: planWeights });
+        const engine = applySessionToEngine(profile, sessionRecord, { currentWeights: planWeights, repairedReps: repRepairs });
         if (Object.keys(engine.wwUpdates).length) {
           setWW(p => ({ ...p, ...engine.wwUpdates }));
         }
@@ -773,7 +793,7 @@ export default function SessionHost() {
     // The screen edits today's plan only; the prescription is read-only here
     // (the drum's dot marks it).
     planWeights, setPlanWeights: setSessionWeights, planReps, setPlanReps: setSessionReps,
-    prescribedReps: workingReps, coachLine, travel,
+    prescribedReps, coachLine, travel,
     history, loggedSets,
     awaitRpe, ssRoundDone,
     restActive, restRemain, setRestActive, setRestRemain,
