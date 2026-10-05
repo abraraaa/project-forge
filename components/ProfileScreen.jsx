@@ -21,7 +21,6 @@ import { FOCUS_SUMMARIES, mainLiftSummary } from "@/lib/programme";
 import { reasonLabel } from "@/lib/breaks";
 import BugReportSheet from "@/components/BugReportSheet";
 import InstallWalkthrough, { canWalkthroughInstall } from "@/components/InstallWalkthrough";
-import BodyweightDrum from "@/components/BodyweightDrum";
 import { isAdminSession, cacheAuthToken } from "@/lib/auth-session";
 import { useInlineModalA11y } from "@/lib/a11y";
 import { PROFILE_SUFFIXES, LEGACY_PROFILE_KEY_PREFIXES } from "@/lib/store-health";
@@ -138,19 +137,6 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const [submitError,setSubmitError]=useState(null);
   const checkTimerRef = useRef(null);
   const latestQueryRef = useRef("");
-
-  // Post-claim BW step (only for new users with no existing profiles)
-  const [showBwStep, setShowBwStep] = useState(false);
-  const [pendingBw, setPendingBw] = useState(75);
-  const [claimedName, setClaimedName] = useState(null);
-
-  // Onboarding passkey step — sits between name claim and BW step.
-  // Only renders if WebAuthn is supported (capability gate). Skipping or
-  // failing the ceremony falls through to the BW step — onboarding never
-  // breaks. The flag is one-shot; once dismissed (accept or skip), we move on.
-  const [showPasskeyStep, setShowPasskeyStep] = useState(false);
-  const [onboardingPasskeyBusy, setOnboardingPasskeyBusy] = useState(false);
-  const [onboardingPasskeyError, setOnboardingPasskeyError] = useState(null);
 
   // Passkey state
   const [webAuthnSupported, setWebAuthnSupported] = useState(false);
@@ -387,21 +373,9 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       } else {
         setSubmitError("Network hiccup. Try again?");
       }
-    } else {
-      // Success! For first-time users (no existing profiles), enter onboarding
-      // sequence: passkey step (if supported) → BW step → home.
-      // We always set claimedName so subsequent steps know which profile to
-      // attach data to. The capability gate keeps unsupported devices on the
-      // direct claim → BW path.
-      if (existing.length === 0 && !isLocalProfile) {
-        setClaimedName(trimmed);
-        if (webAuthnSupported) {
-          setShowPasskeyStep(true);
-        } else {
-          setShowBwStep(true);
-        }
-      }
     }
+    // Success needs nothing here: activation unmounts this gate, and a first
+    // claim on the device continues in components/FirstRun.jsx (ForgeApp).
   };
 
   // Visual state for availability pip. Glyph names, not characters — every
@@ -427,174 +401,6 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const trainerRow = trainerRowFor(trainerShare);
   const askConsent = EXISTING_HOLDER_CONSENT_TAP && !!current && webAuthnSupported && profileHasPasskey[current] === true
     && !upgrade?.needed && consentKnown !== undefined && !isCurrentConsent(consentKnown);
-
-  // Post-claim passkey step (first-time onboarding only). Sits between name
-  // claim and BW step. Three exit paths all fall through to BW:
-  //   1. User accepts and ceremony succeeds — passkey registered, advance
-  //   2. User accepts but ceremony fails/cancels — log error, advance silently
-  //   3. User taps "Later" — advance, no error
-  // The home-screen chip will surface tomorrow if (1) didn't happen.
-  if (showPasskeyStep) {
-    const advanceToBw = () => {
-      setShowPasskeyStep(false);
-      setShowBwStep(true);
-    };
-
-    const handlePasskeyAccept = async () => {
-      if (!claimedName || onboardingPasskeyBusy) return;
-      setOnboardingPasskeyBusy(true);
-      setOnboardingPasskeyError(null);
-      try {
-        const result = await registerPasskey(claimedName, null, { consent: consentClaim() });
-        if (result?.ok) {
-          // Mark this profile as having a passkey in the local cache so the
-          // existing ProfileScreen card respects it on later visits.
-          setProfileHasPasskey(prev => ({ ...prev, [claimedName]: true }));
-          noteConsent(claimedName);
-          advanceToBw();
-        } else {
-          // Cancellation or non-ok result — surface a soft message and let
-          // them retry or skip. Don't auto-advance, give them control.
-          setOnboardingPasskeyError(result === null ? null : "Setup didn't complete. Try again or skip for now.");
-        }
-      } catch (e) {
-        console.error("[forge:onboarding-passkey]", e);
-        setOnboardingPasskeyError(e.message || "Couldn't set up. Try again or skip.");
-      }
-      setOnboardingPasskeyBusy(false);
-    };
-
-    const handlePasskeyLater = () => {
-      advanceToBw();
-    };
-
-    return (
-      <div style={{
-        background: "transparent", minHeight: "100vh", maxWidth: 430, margin: "0 auto",
-        fontFamily: T.text, color: T.ink, WebkitFontSmoothing: "antialiased",
-        padding: "72px 24px 48px", position: "relative", overflow: "hidden",
-        display: "flex", flexDirection: "column",
-      }}>
-        <Fade d={0}>
-          <div style={{ fontSize: 13, color: T.ink3, marginBottom: 18 }}>
-            Secure across devices
-          </div>
-          <div style={{ ...DISPLAY, fontSize: 38, color: T.ink, marginBottom: 16 }}>
-            A passkey
-          </div>
-        </Fade>
-
-        <Fade d={80}>
-          <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, marginBottom: 12 }}>
-            Add one? Without it, your data lives only on this device — clearing your browser would lose everything.
-          </p>
-          <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, marginBottom: 32 }}>
-            With one, your name is yours across phone, laptop, anywhere. Face ID, Touch ID, or your device PIN.
-          </p>
-        </Fade>
-
-        <Fade d={140}>
-          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", flexDirection:"column", gap: 12, minHeight: 80 }}>
-            {onboardingPasskeyError && (
-              <div style={{padding:"10px 14px",borderRadius:T.r,background:T.surface,boxShadow:T.elev,fontSize:13,color:T.ink,maxWidth:320,textAlign:"center",lineHeight:1.5}}>
-                {onboardingPasskeyError}
-              </div>
-            )}
-          </div>
-        </Fade>
-
-        <Fade d={200}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <button onClick={handlePasskeyAccept} disabled={onboardingPasskeyBusy} aria-describedby="consent-onboarding" style={{
-              width: "100%", height: 58, padding: "0 22px",
-              background: T.commit, border: "none", borderRadius: T.r,
-              cursor: onboardingPasskeyBusy ? "default" : "pointer",
-              fontFamily: T.text, fontSize: 17, fontWeight: 500, color: T.commitInk,
-              boxShadow: T.elevStrong,
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              opacity: onboardingPasskeyBusy ? 0.6 : 1,
-            }}>
-              <span>{onboardingPasskeyBusy ? "Setting up…" : "Add passkey"}</span>
-              {!onboardingPasskeyBusy && <Glyph name="arrowRight" size={14}/>}
-            </button>
-            <ConsentLine id="consent-onboarding" style={{ marginTop: -2, marginBottom: 4 }} />
-            <button onClick={handlePasskeyLater} disabled={onboardingPasskeyBusy} style={{
-              width: "100%", padding: "14px 24px",
-              background: "transparent", border: "none", cursor: onboardingPasskeyBusy ? "default" : "pointer",
-              fontFamily: T.text, fontSize: 14, fontWeight: 400, color: T.ink3,
-            }}>
-              Later
-            </button>
-          </div>
-        </Fade>
-      </div>
-    );
-  }
-
-  // Post-claim BW step for first-time users
-  if (showBwStep) {
-    const handleBwSave = () => {
-      if (claimedName && updateBodyweight) {
-        updateBodyweight(pendingBw);
-      }
-      setShowBwStep(false);
-    };
-    const handleBwSkip = () => {
-      setShowBwStep(false);
-    };
-
-    return (
-      <div style={{
-        background: "transparent", minHeight: "100vh", maxWidth: 430, margin: "0 auto",
-        fontFamily: T.text, color: T.ink, WebkitFontSmoothing: "antialiased",
-        padding: "72px 24px 48px", position: "relative", overflow: "hidden",
-        display: "flex", flexDirection: "column",
-      }}>
-        <Fade d={0}>
-          <div style={{ fontSize: 13, color: T.ink3, marginBottom: 18 }}>
-            One measurement
-          </div>
-          <div style={{ ...DISPLAY, fontSize: 38, color: T.ink, marginBottom: 16 }}>
-            Bodyweight
-          </div>
-        </Fade>
-
-        <Fade d={80}>
-          <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, marginBottom: 32 }}>
-            What do you weigh? Optional — but it lets us track bodyweight movements (pull-ups, dips, planks) properly.
-          </p>
-        </Fade>
-
-        <Fade d={140}>
-          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minHeight: 280 }}>
-            <BodyweightDrum value={pendingBw} onChange={setPendingBw} />
-          </div>
-        </Fade>
-
-        <Fade d={200}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <button className="forge-press" onClick={handleBwSave} style={{
-              width: "100%", height: 58, padding: "0 22px",
-              background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer",
-              fontFamily: T.text, fontSize: 17, fontWeight: 500, color: T.commitInk,
-              boxShadow: T.elevStrong,
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-            }}>
-              <span>Save & continue</span>
-              <Glyph name="arrowRight" size={14}/>
-            </button>
-            <button onClick={handleBwSkip} style={{
-              width: "100%", padding: "14px 24px",
-              background: "transparent", border: "none", cursor: "pointer",
-              fontFamily: T.text, fontSize: 14, fontWeight: 400, color: T.ink3,
-            }}>
-              Skip
-            </button>
-          </div>
-        </Fade>
-      </div>
-    );
-  }
 
   return (
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"clip"}}>

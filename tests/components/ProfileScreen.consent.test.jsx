@@ -25,7 +25,6 @@ vi.mock("next/link", () => ({ default: ({ href, children, ...p }) => <a href={hr
 
 const { default: ProfileScreen } = await import("@/components/ProfileScreen");
 const { passkeyStatus, registerPasskey, authenticatePasskey, isPlatformAuthenticatorAvailable } = await import("@/lib/webauthn");
-const { checkProfileExists } = await import("@/lib/storage");
 const { cacheAuthToken } = await import("@/lib/auth-session");
 const { CONSENT_COPY, CONSENT_VERSION } = await import("@/lib/consent");
 const { EXISTING_HOLDER_CONSENT_TAP: REAL_TAP_FLAG } = await vi.importActual("@/lib/consent");
@@ -135,46 +134,5 @@ describe("quiet consent tap for existing holders", () => {
   });
 });
 
-describe("onboarding passkey step", () => {
-  it("shows the line under Add passkey, and registers with the claim", async () => {
-    render(<ProfileScreen existing={[]} current={null} onActivate={vi.fn(async () => ({ ok: true }))} onCancel={vi.fn()} />);
-    await waitFor(() => expect(isPlatformAuthenticatorAvailable).toHaveBeenCalled());
-    const input = screen.getByLabelText("Your name");
-    fireEvent.change(input, { target: { value: "Sam" } });
-    await waitFor(() => expect(checkProfileExists).toHaveBeenCalled(), { timeout: 2000 });
-    await screen.findByText(/Available · this will be your username/);
-    fireEvent.keyDown(input, { key: "Enter" });
-    const add = await screen.findByRole("button", { name: /Add passkey/ });
-    expect(follows(add, screen.getByText(CONSENT_COPY.line))).toBe(true);
-    expect(add.getAttribute("aria-describedby")).toBe("consent-onboarding");
-    fireEvent.click(add);
-    await waitFor(() => expect(registerPasskey).toHaveBeenCalledWith("Sam", null, { consent: { version: CONSENT_VERSION } }));
-  });
-
-  // Both status-check sites: via the existing list, and the current-only fallback.
-  it.each([[["Sam"]], [[]]])("a status reply that lands after registering does not bring the tap back (existing=%j)", async (existingAfter) => {
-    // The claim makes "Sam" current, so the status check starts before the
-    // passkey step and can resolve after it with a pre-registration read.
-    let replyStatus;
-    passkeyStatus.mockImplementation(() => new Promise((r) => { replyStatus = r; }));
-    let activated;
-    const onActivate = vi.fn(() => new Promise((r) => { activated = r; }));
-    const props = { onActivate, onCancel: vi.fn() };
-    const { rerender } = render(<ProfileScreen existing={[]} current={null} {...props} />);
-    await waitFor(() => expect(isPlatformAuthenticatorAvailable).toHaveBeenCalled());
-    const input = screen.getByLabelText("Your name");
-    fireEvent.change(input, { target: { value: "Sam" } });
-    await screen.findByText(/Available · this will be your username/, {}, { timeout: 2000 });
-    fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(onActivate).toHaveBeenCalled());
-    rerender(<ProfileScreen existing={existingAfter} current="Sam" {...props} />);
-    await waitFor(() => expect(passkeyStatus).toHaveBeenCalledWith("Sam"));
-    await act(async () => { activated({ ok: true }); });
-    fireEvent.click(await screen.findByRole("button", { name: /Add passkey/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Skip" }));
-    await screen.findByText("Passkey enabled");
-    await act(async () => { replyStatus({ hasPasskey: true, consent: null }); });
-    expect(screen.getByText("Passkey enabled")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: TAP })).toBeNull();
-  });
-});
+// The onboarding passkey step moved to components/FirstRun.jsx; its consent
+// line and claim are pinned in tests/components/FirstRun.flow.test.jsx.
