@@ -5,7 +5,8 @@
 // The home screen — Bone & Ember. Pure presentation + local UI state: every
 // mutation and navigation goes through props (onBegin, onMarkDayDone,
 // onProfile, …) — the block contains no storage primitives, so ForgeApp
-// keeps sole ownership of app-state writes.
+// keeps sole ownership of app-state writes. The one network read is the
+// notices poll (GET /api/sync/notices), held in memory only.
 //
 // Surface grammar on this screen: the day is the noun that matters (Bodoni,
 // 46px), its identity carries the day key as a hairline under the name and
@@ -24,6 +25,7 @@ import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
 import { deloadCardCopy } from "@/lib/progression";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
+import { fetchWithTimeout } from "@/lib/net";
 
 // Human-readable "X ago" — tuned for < 12h windows (draft expiry cutoff).
 function formatAgo(ms) {
@@ -46,6 +48,22 @@ const BLOCK_RPE = { main: 8, superset: 8, finisher: 9 };
 // Stable identity, so React calls it on mount only (an inline arrow would
 // re-focus on every render).
 const focusOnMount = (el) => { el?.focus(); };
+
+// Notices poll floor: at most one GET per minute, however often the app
+// comes back to the foreground.
+const NOTICE_FLOOR_MS = 60_000;
+
+// Whether anything is new for this profile: true only on a 200 whose dots
+// carry at least one key. 401, any other status, offline or a bad body all
+// read as "nothing to show" (absence of evidence, not "all clear").
+async function fetchNoticeLit(profile) {
+  try {
+    const res = await fetchWithTimeout(`/api/sync/notices?profile=${encodeURIComponent(profile)}`, { cache: "no-store" });
+    if (res.status !== 200) return false;
+    const body = await res.json();
+    return !!body?.dots && typeof body.dots === "object" && Object.keys(body.dots).length > 0;
+  } catch { return false; }
+}
 
 // Shared quiet text-button style (links, dismissals).
 const linkBtn = {
@@ -106,6 +124,37 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
     return () => { document.removeEventListener("visibilitychange", reanchor); window.removeEventListener("focus", reanchor); clearInterval(id); };
   }, []);
   const todayIdx = mondayIndex(new Date(nowMs)); // 0=Mon..6=Sun, the WEEK convention
+
+  // Notices: polled on mount and whenever the app returns to the foreground,
+  // at most once per NOTICE_FLOOR_MS per profile. Memory only. The result is
+  // tagged with its profile so a switch never shows another profile's dot,
+  // and only the latest request may answer (a slow older one can't overwrite
+  // it). Not cancelled on effect cleanup: the floor would otherwise swallow
+  // the re-run's ask and the dot would never land.
+  const [notice, setNotice] = useState({ profile: null, lit: false });
+  const noticeAtRef = useRef({ profile: null, at: 0, seq: 0 });
+  useEffect(() => {
+    if (!profileName) return;
+    const poll = () => {
+      if (document.visibilityState === "hidden") return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        setNotice({ profile: profileName, lit: false });
+        return;
+      }
+      const last = noticeAtRef.current;
+      const now = Date.now();
+      if (last.profile === profileName && now - last.at < NOTICE_FLOOR_MS) return;
+      const seq = last.seq + 1;
+      noticeAtRef.current = { profile: profileName, at: now, seq };
+      fetchNoticeLit(profileName).then((lit) => {
+        if (noticeAtRef.current.seq === seq) setNotice({ profile: profileName, lit });
+      });
+    };
+    poll();
+    document.addEventListener("visibilitychange", poll);
+    return () => document.removeEventListener("visibilitychange", poll);
+  }, [profileName]);
+  const noticeLit = !!profileName && notice.profile === profileName && notice.lit;
 
   const [viewIdx, setViewIdx] = useState(todayIdx);
 
@@ -180,8 +229,14 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             </div>
             <StreakLine rhythm={rhythm} resting={resting}/>
           </div>
-          <button onClick={onProfile} aria-label={`Profile, ${profileName}`} style={{...linkBtn,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,minWidth:0,textAlign:"left"}}>
-            <span style={{fontSize:12,whiteSpace:"nowrap"}}>Profile</span>
+          <button onClick={onProfile} aria-label={`Profile, ${profileName}${noticeLit ? ", something new" : ""}`} style={{...linkBtn,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,minWidth:0,textAlign:"left"}}>
+            {/* The notice dot rides the kicker, never the name line: solid
+                ink, still, so it can't be read as sync (name line) or heat.
+                Out of flow, 5px after the word, so lighting it moves nothing. */}
+            <span style={{fontSize:12,whiteSpace:"nowrap",position:"relative"}}>
+              Profile
+              {noticeLit && <span aria-hidden="true" style={{position:"absolute",left:"calc(100% + 5px)",top:"50%",marginTop:-3,width:6,height:6,borderRadius:"50%",background:T.ink}}/>}
+            </span>
             <span style={{display:"flex",alignItems:"center",gap:6,maxWidth:"100%",fontWeight:500}}>
               <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{profileName}</span>
               {syncState === "pulling" || syncState === "pushing" ? (

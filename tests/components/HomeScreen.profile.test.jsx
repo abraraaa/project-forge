@@ -2,13 +2,18 @@
 // The home header's name is the way into Profile: it says so ("Profile"
 // kicker over the name), names itself for assistive tech, and still opens it.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within, waitFor } from "@testing-library/react";
 import HomeScreen from "../../components/HomeScreen.jsx";
 import { WEEK } from "../../lib/programme.js";
 import { makeDayContext, resolveRange, sessionsFrom } from "../../lib/day-state.js";
 
-afterEach(() => { cleanup(); vi.useRealTimers(); });
-beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 8, 25, 9, 0)); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 8, 25, 9, 0));
+  // Home asks for notices on mount; signed out here, so nothing is new
+  // (the dot itself: HomeScreen.notices.test.jsx).
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
+});
 
 const wk = (...types) => types.map((type) => ({ ...WEEK.find((d) => d.type === type), type }));
 const MWF = wk("strength", "rest", "strength", "rest", "strength", "cardio", "rest");
@@ -45,6 +50,13 @@ describe("home header — the Profile entry", () => {
     render(home({ syncState: "error" }));
     const name = within(screen.getByRole("button", { name: "Profile, sam" })).getByText("sam");
     expect(name.parentElement.querySelectorAll('span[style*="border-radius: 50%"]')).toHaveLength(1);
+  });
+
+  it("with nothing new the kicker is just the word", async () => {
+    render(home());
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    const kicker = within(screen.getByRole("button", { name: "Profile, sam" })).getByText("Profile");
+    expect(kicker.children).toHaveLength(0);
   });
 
   it("a long name ellipsises and the kicker never wraps", () => {
