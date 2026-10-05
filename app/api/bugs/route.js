@@ -3,6 +3,7 @@ import { serverError } from "@/lib/api-errors";
 import { rateLimit } from "@/lib/rate-limit";
 import { readTokenData, resolveTokenIdentity, isAdminIdentity } from "@/lib/auth-server";
 import { hasDb, dbInsertBug, dbListBugs, dbUpdateBugStatus, BUG_STATUSES } from "@/lib/db";
+import { dbMarkSeen } from "@/lib/notices";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -16,7 +17,9 @@ export const preferredRegion = "lhr1";
 //         inert text). ua/route captured server-side into context.
 //   GET   → the report list. Ceremony-token gated: reports are THIRD-PARTY
 //         text, not the submitter's own profile data, so the open-reads
-//         doctrine (#20/#21) does NOT extend here.
+//         doctrine (#20/#21) does NOT extend here. A successful list by the
+//         admin account then marks the bug notice seen (dbMarkSeen, an
+//         overwrite in place of that account's one 'bugs' mark).
 //   PATCH { id, status } — status-only triage transition. Same gate.
 //         ADMIN RECOGNITION (boss, 2026-07-26): when ADMIN_ACCOUNT_ID (or
 //         the ADMIN_PROFILE fallback) is set, the ceremony token must belong
@@ -26,18 +29,19 @@ export const preferredRegion = "lhr1";
 
 const MAX_MESSAGE_LEN = 2000;
 
+/** @returns {Promise<{ denied: Response } | { identity: import("@/lib/identity").Identity }>} */
 async function ceremonyGate(request) {
   const token = request.headers.get("x-hw-auth") || null;
   const data = await readTokenData(token);
   // Live, unscoped ceremony token; no scoped token qualifies (same posture
   // as the wipe gate: a new scope is refused by default).
   if (!data || data.scope || typeof data.expires !== "number" || Date.now() > data.expires) {
-    return NextResponse.json({ error: "Passkey authentication required", requiresAuth: true }, { status: 401 });
+    return { denied: NextResponse.json({ error: "Passkey authentication required", requiresAuth: true }, { status: 401 }) };
   }
   // The account the token was minted for. No handle is named here.
   const identity = await resolveTokenIdentity(data, null, Date.now());
   if (!identity) {
-    return NextResponse.json({ error: "Passkey authentication required", requiresAuth: true }, { status: 401 });
+    return { denied: NextResponse.json({ error: "Passkey authentication required", requiresAuth: true }, { status: 401 }) };
   }
   // Admin recognition: the token must be the boss's. Server-side ONLY —
   // the client admin flag is a UI hint.
@@ -56,12 +60,12 @@ async function ceremonyGate(request) {
   // no env file remains usable.
   if (!process.env.ADMIN_ACCOUNT_ID && !process.env.ADMIN_PROFILE) {
     if (process.env.NODE_ENV === "production") {
-      return NextResponse.json({ error: "Admin only" }, { status: 403 });
+      return { denied: NextResponse.json({ error: "Admin only" }, { status: 403 }) };
     }
   } else if (!isAdminIdentity(identity)) {
-    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+    return { denied: NextResponse.json({ error: "Admin only" }, { status: 403 }) };
   }
-  return null;
+  return { identity };
 }
 
 export async function POST(request) {
@@ -94,10 +98,20 @@ export async function POST(request) {
 export async function GET(request) {
   const limited = rateLimit(request, "bugs-review", 30);
   if (limited) return limited;
-  const denied = await ceremonyGate(request);
-  if (denied) return denied;
+  const g = await ceremonyGate(request);
+  if ("denied" in g) return g.denied;
   try {
+    // The mark's time is taken before the read, so a report that lands mid-read stays new.
+    const at = Date.now();
     const rows = await dbListBugs();
+    // Only the admin account has a bug notice (lib/notices.js); a failed mark never fails the list.
+    if (isAdminIdentity(g.identity)) {
+      try {
+        await dbMarkSeen(g.identity.accountId, "bugs", at);
+      } catch (e) {
+        serverError(e, { label: "bugs-seen" });
+      }
+    }
     return NextResponse.json({ reports: rows });
   } catch (e) {
     return serverError(e, { label: "bugs" });
@@ -107,8 +121,8 @@ export async function GET(request) {
 export async function PATCH(request) {
   const limited = rateLimit(request, "bugs-review", 30);
   if (limited) return limited;
-  const denied = await ceremonyGate(request);
-  if (denied) return denied;
+  const g = await ceremonyGate(request);
+  if ("denied" in g) return g.denied;
   try {
     const body = await request.json().catch(() => null);
     const id = Number(body?.id);

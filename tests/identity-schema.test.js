@@ -74,6 +74,19 @@ describe("identity schema (ensureSchema)", () => {
     expect(statements.filter((s) => /trainer_applications/.test(s))).toHaveLength(2);
   });
 
+  it("adds the notice marks: one row per account and kind, epoch ms, no CHECK on kind", () => {
+    const marks = statements.find((s) => s.startsWith("CREATE TABLE IF NOT EXISTS notice_marks ("));
+    expect(marks?.split("\n").slice(1, -1).map((l) => l.trim())).toEqual([
+      "account_id TEXT NOT NULL,",
+      "kind TEXT NOT NULL,",
+      "seen_at BIGINT NOT NULL,",
+      "PRIMARY KEY (account_id, kind)",
+    ]);
+    expect(statements.filter((s) => /notice_marks/.test(s))).toHaveLength(1);
+    // No events table: notices are derived from rows that already exist.
+    expect(slice).not.toMatch(/CREATE TABLE IF NOT EXISTS notices\b|notice_events/);
+  });
+
   it("contains no destructive or rewriting verb", () => {
     expect(slice).not.toMatch(/\bDROP\b|ALTER COLUMN|\bDELETE\b|\bUPDATE\b/);
   });

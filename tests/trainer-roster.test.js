@@ -2,8 +2,9 @@
 // one transaction that logs a roster look on every listed grant before one
 // aggregate read. The Neon driver is faked with small in-memory tables, so the
 // gate, the store and the route run for real and every statement is captured.
-// The only writes allowed: the roster ring UPDATE and the gate's daily session
-// INSERT. Nothing is ever deleted, and no client's profile is read whole.
+// The only writes allowed: the roster ring UPDATE, the gate's daily session
+// INSERT and, after the read, the trainer's clients notice mark (an upsert).
+// Nothing is ever deleted, and no client's profile is read whole.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { createHash } from "node:crypto";
@@ -46,6 +47,7 @@ function run(q, v) {
     const r = db.tokens.get(v[0]) ?? (v[1] != null ? db.tokens.get(v[1]) : undefined);
     return r ? [{ ...r }] : [];
   }
+  if (/^\s*INSERT INTO notice_marks /.test(q)) return []; // tests/notices.test.js
   if (/^\s*INSERT INTO auth_tokens/.test(q)) {
     const [token, profile, expires, scope, created_at, auth_at, credential_id, account_id] = v;
     if (!db.tokens.has(token)) db.tokens.set(token, { profile, expires, scope, created_at, auth_at, credential_id, account_id });
@@ -477,7 +479,7 @@ describe("POST /api/trainer/clients: the roster", () => {
     expect(calls[log].v[2]).toEqual(["hwg_abe", "hwg_cara"]);
     expect(calls[read].v[4]).toEqual(["hwg_abe", "hwg_cara"]);
     expect(profileReads()).toEqual([]);
-    expect(writes().map((c) => c.q.trim().split(/\s+/).slice(0, 2).join(" "))).toEqual(["UPDATE oauth_grants"]);
+    expect(writes().map((c) => c.q.trim().split(/\s+/).slice(0, 3).join(" "))).toEqual(["UPDATE oauth_grants SET", "INSERT INTO notice_marks"]);
   });
 
   it("logs once per London day: a second load writes nothing new; the next day adds one entry", async () => {

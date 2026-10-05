@@ -244,11 +244,13 @@ describe("trainer files: no destructive SQL, every UPDATE named", () => {
     const p = join(d, e);
     return statSync(resolve(root, p)).isDirectory() ? walk(p) : [p];
   });
-  const FILES = ["lib/trainer-store.js", "lib/trainer-session.js", "lib/trainer-code.js", "lib/trainer-apply.js",
-    ...walk("app/api/trainer"), ...walk("app/api/share"), ...walk("app/api/diag/trainers"), "app/diag-trainers/page.jsx"];
+  const FILES = ["lib/trainer-store.js", "lib/trainer-session.js", "lib/trainer-code.js", "lib/trainer-apply.js", "lib/notices.js",
+    ...walk("app/api/trainer"), ...walk("app/api/share"), ...walk("app/api/diag/trainers"), "app/diag-trainers/page.jsx",
+    ...walk("app/api/sync/notices")];
 
-  it("no DELETE, DROP or TRUNCATE in lib/trainer-*, app/api/trainer, app/api/share or the applications admin", () => {
+  it("no DELETE, DROP or TRUNCATE in lib/trainer-*, lib/notices.js, app/api/trainer, app/api/share, the notices route or the applications admin", () => {
     expect(FILES).toContain("app/api/trainer/invite/route.js");
+    expect(FILES).toContain("app/api/sync/notices/route.js");
     expect(FILES).toContain("app/api/trainer/apply/route.js");
     expect(FILES).toContain("app/api/diag/trainers/route.js");
     for (const f of FILES) expect(read(f), f).not.toMatch(/\bDELETE\b|\bDROP\b|\bTRUNCATE\b|\bdel\(|removeItem/);
@@ -267,6 +269,15 @@ describe("trainer files: no destructive SQL, every UPDATE named", () => {
       "dbApplyTrainer", "dbWithdrawApplication", "dbSeenApplication", "dbDenyApplication"]) {
       expect(header).toContain(`· ${fn}:`);
     }
+  });
+
+  it("lib/notices.js's one write is the mark upsert, named in its header; the notices GET writes nothing", () => {
+    const src = read("lib/notices.js");
+    const writes = [...src.matchAll(/q`\s*(INSERT INTO \w+|UPDATE \w+)/g)].map((m) => m[1]);
+    expect(writes).toEqual(["INSERT INTO notice_marks"]);
+    expect(src).toContain("ON CONFLICT (account_id, kind) DO UPDATE SET seen_at = EXCLUDED.seen_at`");
+    expect(src.slice(0, src.indexOf("import "))).toContain("· dbMarkSeen:");
+    expect(read("app/api/sync/notices/route.js")).not.toMatch(/\bq`|\bsql\(|dbMarkSeen/);
   });
 
   it("the invite route writes only through the store, and returns the code from issue alone", () => {
