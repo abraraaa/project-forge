@@ -121,6 +121,28 @@ describe("computeNextPrescription — cold start", () => {
     expect(result.decision).toBe("COLD_START");
   });
 
+  it("a bodyweight-based movement takes no anchor-derived weight; a barbell lift still does", () => {
+    // Matches startWeightFor's anchor rung: a weighted pull-up's W is added
+    // kg, not a share of the back's e1RM.
+    const anchor = { bestE1RM: 120, bestE1RMLift: "Barbell Row" };
+    const cold = (liftName, context = {}) => computeNextPrescription({
+      liftName, history: [], liftState: null, muscleAnchor: anchor,
+      context: { readiness: "normal", currentWeight: null, ...context },
+    });
+    for (const loadType of ["loaded_bodyweight", "loaded_bw", "assisted_bodyweight", undefined]) {
+      const r = cold("Weighted Pull-Up", loadType ? { loadType } : {});
+      expect(r.weight, String(loadType)).toBeNull();
+      expect(r.rationale, String(loadType)).not.toContain("cold_start_from_anchor");
+    }
+    const bench = computeNextPrescription({
+      liftName: "Barbell Bench Press", history: [], liftState: null,
+      muscleAnchor: { bestE1RM: 100, bestE1RMLift: "Barbell Bench Press" },
+      context: { readiness: "normal", currentWeight: null, loadType: "barbell" },
+    });
+    expect(bench.weight).toBeGreaterThan(0);
+    expect(bench.rationale).toContain("cold_start_from_anchor");
+  });
+
   it("returns currentWeight when neither history nor anchor available", () => {
     const result = computeNextPrescription({
       liftName: "Random New Lift",

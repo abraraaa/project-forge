@@ -31,7 +31,7 @@ import { track } from "@vercel/analytics";
 import {
   P, H, W, PB, F, TS, BW, D, SessionIntent, TRAVEL,
   newDraftLog, logSet, finaliseDraft, bumpStreak, scaleForReadiness,
-  startingWeightForLift, pushNow, recordCompletion, rpeToRir,
+  planStartWeight, pushNow, recordCompletion, rpeToRir,
 } from "@/lib/storage";
 import {
   SESSIONS, EXERCISE_POOLS,
@@ -42,7 +42,7 @@ import { deloadDayLabel, isFinalSetMiss, lastSessionNote, ADOPT_AFTER_SESSIONS, 
 import { SESSION_COPY } from "@/lib/session-copy";
 import { deriveTravelSession } from "@/lib/travel";
 import { applySessionToEngine } from "@/lib/session-engine";
-import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, coldStartFromAnchor, addedLoadFor } from "@/lib/lift-translations";
+import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, addedLoadFor } from "@/lib/lift-translations";
 import { restRemaining, restDeadline } from "@/lib/rest-clock";
 import { unfinishedBlocks, nextUnfinishedIdx, loggedOnBlock, leadExerciseName } from "@/lib/session-progress";
 import { pickFlashLine, isPullMovement } from "@/lib/set-flash";
@@ -80,6 +80,12 @@ export default function SessionHost() {
   const [liftStates] = useState(() => {
     if (!profile) return {};
     try { return TS.get(profile)?.lifts || {}; } catch { return {}; }
+  });
+  // Muscle anchors as the session opened: the cold-start rung of every plan
+  // weight (planStartWeight). Only finalise moves them.
+  const [muscleAnchors] = useState(() => {
+    if (!profile) return {};
+    try { return TS.get(profile)?.muscleAnchors || {}; } catch { return {}; }
   });
   const [history]                    = useState(() => (profile ? H.get(profile) : []));
   const [bodyweight, setBodyweight]  = useState(() => (profile ? BW.getKg(profile) : null));
@@ -338,13 +344,9 @@ export default function SessionHost() {
 
   // The card, the drum and the log read today's plan, which defaults to the
   // prescription until the drum moves.
-  const getW = useCallback((ex) => {
-    if (!ex) return null;
-    if (planWeights[ex.name] !== undefined) return planWeights[ex.name];
-    const bwSeeded = startingWeightForLift(ex.name, bodyweight, ex.weight);
-    if (bwSeeded !== null) return bwSeeded;
-    return ex.weight;
-  }, [planWeights, bodyweight]);
+  const getW = useCallback((ex) => (
+    ex ? planStartWeight(ex, { working: planWeights, bodyweight, anchors: muscleAnchors }) : null
+  ), [planWeights, bodyweight, muscleAnchors]);
   const getR = useCallback((ex) => ex ? (planReps[ex.name] ?? ex.reps) : null, [planReps]);
 
   const onSwap = (key, newEx) => {
@@ -356,17 +358,14 @@ export default function SessionHost() {
     // carrying it over would be worse than carrying nothing. But "nothing"
     // left the drum with no number at all, and the card then fell through to
     // its bodyweight branch and announced a dumbbell press as bodyweight
-    // (boss report, 2026-08-13). Give it the same anchor-derived start the
-    // engine computes for any first-time lift.
+    // (boss report, 2026-08-13). Give it the anchor-derived start, the same
+    // one the engine's cold start computes (lib/progression.js). Neither gives
+    // one to a bodyweight-based movement, pure, loaded or assisted: its W is
+    // added kg, not an anchor-sized load. Only the anchor rung is written
+    // (no bodyweight, no template): a one-time W write.
     const name = newEx?.name;
     if (!name || newEx.weight != null || workingWeights[name] !== undefined) return;
-    const prof = getLiftProfile(name);
-    if (!prof.progressesByLoad) return;          // genuinely BW — no weight to seed
-    if (getLoadType(newEx) === "bodyweight") return; // added load is the user's choice
-    const anchor = prof.primaryMuscle
-      ? (TS.get(profile)?.muscleAnchors?.[prof.primaryMuscle] || null)
-      : null;
-    const seed = coldStartFromAnchor(name, anchor);
+    const seed = planStartWeight(newEx, { anchors: muscleAnchors, bodyweight: null, template: null });
     if (seed) setWW((prev) => ({ ...prev, [name]: seed }));
   };
 
@@ -400,7 +399,7 @@ export default function SessionHost() {
   // Resolved WITHOUT calling getW: invoking a useCallback from the render body
   // is the other thing that makes the compiler bail here.
   const reachWeight = activeEx
-    ? (planWeights[activeEx.name] ?? startingWeightForLift(activeEx.name, bodyweight, activeEx.weight) ?? activeEx.weight)
+    ? planStartWeight(activeEx, { working: planWeights, bodyweight, anchors: muscleAnchors })
     : null;
   // Never ask before two sets are in the bank. Today every main block is 3 or
   // 4 sets, so "last set" already lands on the 3rd or later — but that is a
@@ -477,16 +476,11 @@ export default function SessionHost() {
     // when none, so a no-vest set is exactly what it always was. W is never
     // read for these lifts (the engine never prescribes one there).
     const resolvedWeight = loadType === "bodyweight" ? addedLoadFor(addedLoads, ex.name)
-      : planWeights[ex.name]
-      ?? startingWeightForLift(ex.name, bodyweight, ex.weight)
-      ?? ex.weight;
+      : planStartWeight(ex, { working: planWeights, bodyweight, anchors: muscleAnchors });
     // The prescription this set was measured against — W/R, never the drum —
     // so the engine judges what was done against what was asked.
     const prescribedWeight = loadType === "bodyweight" ? null
-      : workingWeights[ex.name]
-      ?? startingWeightForLift(ex.name, bodyweight, ex.weight)
-      ?? ex.weight
-      ?? null;
+      : planStartWeight(ex, { working: workingWeights, bodyweight, anchors: muscleAnchors });
     logSet(draftLogRef.current, {
       blockId: block.id,
       blockType: block.type,
@@ -515,7 +509,7 @@ export default function SessionHost() {
       setBwPromptedThisSession(true);
       setTimeout(() => setBwEditOpen(true), 280);
     }
-  }, [block, isSS, phase, sessionSwaps, workingWeights, prescribedReps, planWeights, planReps, addedLoads, resolveExFn, profile, bodyweight, bwPromptedThisSession, reachArmed]);
+  }, [block, isSS, phase, sessionSwaps, workingWeights, prescribedReps, planWeights, planReps, addedLoads, muscleAnchors, resolveExFn, profile, bodyweight, bwPromptedThisSession, reachArmed]);
 
   // Final-set flash — one quiet line after rating the LAST set of an
   // exercise (lib/set-flash.js: no repeats this session, Easy falls back to
