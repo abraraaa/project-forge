@@ -152,6 +152,60 @@ describe("wipe gate — fails closed, always", () => {
       "UPDATE trainer_applications SET status = CASE WHEN status = 'applied' THEN 'withdrawn' ELSE status END, decided_at = CASE WHEN status = 'applied' THEN ${nowMs} ELSE decided_at END, about = NULL, link = NULL WHERE account_id = ${accountId}`");
   });
 
+  it("the close names no trainer_changes statement", () => {
+    const store = readFileSync(resolve(root, "lib/identity-store.js"), "utf8");
+    const fn = store.slice(store.indexOf("export async function dbCloseAccount"));
+    expect(fn.slice(0, fn.indexOf("\n}"))).not.toMatch(/trainer_changes/);
+  });
+
+  it("trainer changes: the wipe only reads what it would clear (dry run), after the DB rows and before the close", () => {
+    const report = deleteSrc.indexOf("await dbWipeReportTrainerChanges(sk)");
+    expect(report).toBeGreaterThan(deleteSrc.indexOf("if (tokenData.scope)"));
+    expect(report).toBeGreaterThan(deleteSrc.indexOf("dbDeleteProfile(sk)"));
+    expect(report).toBeLessThan(deleteSrc.indexOf("dbCloseAccount(id.accountId, sk)"));
+    // The reply carries the count only; the ids stay in the server log.
+    expect(deleteSrc).toContain("trainerChanges: { dryRun: true, count: trainerChanges.count }");
+    // No clearing in the wipe yet: that is its own, later switch.
+    expect(deleteSrc).not.toMatch(/dbScrubTrainerChanges|\b(UPDATE|DELETE FROM|INSERT INTO) trainer_changes\b/);
+    // The read is one SELECT, exact-match on the storage key, with nothing that writes.
+    const store = readFileSync(resolve(root, "lib/trainer-changes-store.js"), "utf8");
+    const fn = store.slice(store.indexOf("export async function dbWipeReportTrainerChanges"));
+    const body = fn.slice(0, fn.indexOf("\n}"));
+    expect(body).not.toMatch(/\b(UPDATE|DELETE|INSERT|LIKE|TRUNCATE)\b/i);
+    expect([...body.matchAll(/q`([^`]*)`/g)].map((m) => m[1])).toEqual([
+      "SELECT id FROM trainer_changes WHERE profile = ${profile} AND cleared_at IS NULL ORDER BY created_at, id",
+    ]);
+  });
+
+  // TRUNCATE [TABLE] [ONLY] trainer_changes; DROP TABLE [IF EXISTS] trainer_changes; ALTER TABLE trainer_changes ... DROP.
+  // ensureSchema (lib/db.js, scanned too) only ever CREATEs the table: tests/identity-schema.test.js holds that.
+  const EMPTIES = [
+    /\bTRUNCATE\s+(TABLE\s+)?(ONLY\s+)?[\w\s,]*\btrainer_changes\b/i,
+    /\bDROP\s+TABLE\s+(IF\s+EXISTS\s+)?[\w\s,]*\btrainer_changes\b/i,
+    /\bALTER\s+TABLE\s+(IF\s+EXISTS\s+)?(ONLY\s+)?trainer_changes\b[^`;]*\bDROP\b/i,
+  ];
+  it("repo-wide, nothing deletes, truncates or drops trainer_changes rows or clears their numbers yet", () => {
+    const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const p = resolve(dir, e.name);
+      return e.isDirectory() ? walk(p) : /\.(js|jsx|mjs)$/.test(e.name) ? [p] : [];
+    });
+    const files = [...walk(resolve(root, "lib")), ...walk(resolve(root, "app")), ...walk(resolve(root, "scripts"))];
+    expect(files.length).toBeGreaterThan(20);
+    expect(files).toContain(resolve(root, "lib/db.js"));
+    for (const f of files) {
+      const src = readFileSync(f, "utf8");
+      expect(src, f).not.toMatch(/DELETE\s+FROM\s+trainer_changes\b/i);
+      for (const re of EMPTIES) expect(src, f).not.toMatch(re);
+      // SQL's NULL, upper case, so a JS `basis = null` is not caught.
+      expect(src, f).not.toMatch(/\bcleared_at\s*=(?!=)|\b(old_value|new_value|basis|warnings)\s*=\s*NULL\b/);
+    }
+    // The patterns catch what they are for.
+    for (const bad of ["TRUNCATE trainer_changes", "truncate table only trainer_changes", "TRUNCATE notices, trainer_changes",
+      "DROP TABLE trainer_changes", "DROP TABLE IF EXISTS trainer_changes", "ALTER TABLE trainer_changes DROP COLUMN basis"]) {
+      expect(EMPTIES.some((re) => re.test(bad)), bad).toBe(true);
+    }
+  });
+
   it("repo-wide, no code deletes account or handle rows", () => {
     const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
       const p = resolve(dir, e.name);
