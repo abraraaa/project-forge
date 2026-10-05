@@ -1,5 +1,5 @@
 // One resolver for every plan weight: startWeightFor (lib/lift-translations.js),
-// wired to the bodyweight start by planStartWeight (lib/storage.js). Order:
+// wired to the bodyweight start by planStartWeight (lib/programme-resolve.js). Order:
 // working weight → muscle-anchor cold start → bodyweight start → template → null.
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -109,7 +109,7 @@ describe("one resolver: no plan surface computes its own start", () => {
   const CALL = /\b(coldStartFromAnchor|startingWeightForLift)\s*\(/g;
   // Definitions; the resolver; the engine's own first-time prescription
   // (progression.js), which sets W rather than a plan weight.
-  const ALLOWED = new Set(["lib/lift-translations.js", "lib/storage.js", "lib/progression.js"]);
+  const ALLOWED = new Set(["lib/lift-translations.js", "lib/programme-resolve.js", "lib/progression.js"]);
 
   it("only the resolver, the definitions and the engine call the cold-start helpers", () => {
     const callers = source.filter((f) => {
@@ -118,10 +118,13 @@ describe("one resolver: no plan surface computes its own start", () => {
     });
     expect(callers.filter((f) => !ALLOWED.has(f))).toEqual([]);
   });
-  it("storage only defines startingWeightForLift; lift-translations calls coldStartFromAnchor only in the resolver", () => {
-    const storage = readFileSync(join(ROOT, "lib/storage.js"), "utf8");
-    expect(storage.match(/\bstartingWeightForLift\s*\(/g)).toEqual(["startingWeightForLift("]);
-    expect(storage.match(/\bcoldStartFromAnchor\b/g)).toBe(null);
+  it("programme-resolve only defines startingWeightForLift and calls it once, in planStartWeight; lift-translations calls coldStartFromAnchor only in the resolver", () => {
+    const resolve = readFileSync(join(ROOT, "lib/programme-resolve.js"), "utf8");
+    expect(resolve.match(/\bstartingWeightForLift\s*\(/g)).toEqual(["startingWeightForLift("]);
+    expect(resolve.match(/bodyweightStart: startingWeightForLift\b/g)).toHaveLength(1);
+    expect(resolve.match(/\bcoldStartFromAnchor\b/g)).toBe(null);
+    // storage keeps the old import path only.
+    expect(readFileSync(join(ROOT, "lib/storage.js"), "utf8").match(/\b(startingWeightForLift|planStartWeight)\s*\(/g)).toBe(null);
     const lt = readFileSync(join(ROOT, "lib/lift-translations.js"), "utf8");
     const resolver = lt.slice(lt.indexOf("export function startWeightFor("), lt.indexOf("\n}\n", lt.indexOf("export function startWeightFor(")));
     expect(lt.match(/\bcoldStartFromAnchor\s*\(/g)).toHaveLength(2); // definition + resolver
@@ -131,7 +134,9 @@ describe("one resolver: no plan surface computes its own start", () => {
     const count = (f) => (readFileSync(join(ROOT, f), "utf8").match(/\bplanStartWeight\s*\(/g) || []).length;
     expect(count("components/SessionHost.jsx")).toBe(5); // getW, swap seed, reach, logged, prescribed
     expect(count("components/ForgeApp.jsx")).toBe(1);
-    expect(count("lib/mcp-server.js")).toBe(1);       // planLoad: exLine and current_loads
+    expect(count("lib/mcp-server.js")).toBe(0);       // planLoad calls planWeight (programme-resolve)
+    expect(count("lib/programme-resolve.js")).toBe(2); // definition, planWeight
+    expect(readFileSync(join(ROOT, "lib/mcp-server.js"), "utf8").match(/\bplanWeight\s*\(/g)).toHaveLength(1); // planLoad
   });
 });
 

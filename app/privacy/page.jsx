@@ -7,7 +7,7 @@ import { T, DISPLAY } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
 
 const URL = "https://heatwayve.app/privacy";
-export const UPDATED = "4 October 2026";
+export const UPDATED = "5 October 2026";
 export const CONTACT = "ab@heatwayve.app";
 export const ICO_REG = "ZC257208";
 
@@ -24,7 +24,7 @@ const SECTIONS = [
       "We ask for a name. Never an email or phone number.",
       "Your training lives on your device. We keep your name on our servers so no one else can take it; add a passkey and your training syncs to London so it can follow you.",
       "No ads, no ad trackers. We don't sell or share your data for marketing.",
-      "Delete your profile and its training, photos and passkey go from our servers.",
+      "Delete your profile and its training, photos and passkey go from our servers. If a trainer changed your plan, the record of those changes stays.",
     ],
   },
   {
@@ -43,7 +43,7 @@ const SECTIONS = [
       "Usage and performance — page views, load times, and an anonymous count of finished sessions, through Vercel Web Analytics and Speed Insights. No name attached, no cookies, nothing that follows you across other sites.",
       "Your IP address — briefly, to stop abuse, and in our hosting provider's logs.",
       "An AI you connect, if you do — which app, which passkey approved it, and when it last read. It reads your training (never photos) only when you ask it to.",
-      "A trainer you add, if you do — who they are, when sharing started and ended, and when they looked. See \"A trainer you add\" below.",
+      "A trainer you add, if you do — who they are, when sharing started and ended, when they looked and, if they change your plan, each change with what it was before. See \"A trainer you add\" below.",
       "Coaching, if you apply or become a trainer — what you wrote and your link, the decision, when you accepted the Trainer Terms and that you're 18 or over, and your invite code, kept only as a hash.",
       "Anything you email us, if you do.",
     ],
@@ -85,6 +85,10 @@ const SECTIONS = [
       "They see your last 24 weeks of training in full — sessions, sets, weights, reps, effort and how you felt — and your main-lift trend and bests over 12 months. Their client list shows when you last trained, your sessions this week against your plan, and your recent rhythm. Breathers show as paused.",
       "They never see your photos, bodyweight, sleep, why you took a breather, what time of day you trained, or your notes.",
       "Each look, and a once-a-day check-in from their client list, shows on your profile. Stop sharing in one tap, and they lose access straight away.",
+      "While their changes are on, they also see your current working weights, reps and main lifts for every lift in your programme, whether you're on a deload, your planned week up to 4 weeks ahead, and each lift's most recent top set, however long ago. The top set is what keeps their changes within safe limits.",
+      "They can change your working weights, reps and main lifts from your next session on, within the app's limits. Each change is checked against your training, and your app makes it the next time you open it.",
+      "Turn their changes off in one tap in Profile and keep sharing. Turning them off, or stopping sharing, cancels any change that hasn't reached your plan yet.",
+      "If your trainer can change your plan, each change is kept with what it was before, so you can see and undo it.",
       "What your trainer does with what they see is their responsibility. Under the Trainer Terms, they use it only to coach you and keep it private.",
       "Nothing is deleted when sharing ends. The record of it keeps its dates: who, when it started and ended, and the last 20 looks. It never holds your training.",
     ],
@@ -106,6 +110,7 @@ const SECTIONS = [
       "Sign-in records — each works for 30 days at most. The records (your profile name and dates) stay until you delete your profile.",
       "AI connections — the record of which app you connected (never your training) stays after you delete your profile, and can't read anything once your profile and passkey are gone. Ask and we'll remove it.",
       "Trainer sharing — the record of it (who, the dates, the last 20 looks, never your training) stays after sharing ends and after you delete your profile.",
+      "Trainer changes — each change to your plan, with what it was before and after, what it was checked against, who made it and when, stays after sharing ends and after you delete your profile.",
       "Coaching records — your Terms acceptance, invite codes and the decision on your application stay after you delete your profile; what you wrote on it is cleared.",
       "Bug reports — not removed when you delete your profile. Ask and we'll delete yours.",
       "Server logs, which can include your profile name — kept briefly by our hosting provider.",

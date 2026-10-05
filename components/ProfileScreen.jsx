@@ -49,21 +49,36 @@ const NAME_MAX_LEN = 64;
 // re-focus on every render).
 const focusOnMount = (el) => { el?.focus(); };
 
+// Anything but a positive whole count is nothing new.
+const newCount = (n) => (Number.isInteger(n) && n > 0 ? n : 0);
+
 // The "Your trainer" row, from GET /api/sync/trainer (ProfileView), or null
-// when there is nothing to show.
+// when there is nothing to show. A change new since the list was last seen
+// (the notices' count of change sets) is said first; otherwise a live share
+// says whether they can change the plan.
 const shortDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
-function trainerRowFor(share) {
+function trainerRowFor(share, dots) {
   if (!share) return null;
   const { sharing, ended, open } = share;
-  if (sharing?.name) return { title: sharing.name, sub: sharing.live ? "Sees your training · read only" : "Paused" };
-  if (ended?.name && Number.isFinite(ended.at)) return { title: ended.name, sub: `Ended ${shortDate.format(new Date(ended.at))}` };
+  const fresh = newCount(dots?.trainerChange);
+  const changed = fresh ? `Changed your plan · ${fresh} new` : null;
+  if (sharing?.name) {
+    if (changed) return { title: sharing.name, sub: changed };
+    if (!sharing.live) return { title: sharing.name, sub: "Paused" };
+    const edits = share.edits && typeof share.edits === "object" ? share.edits : null;
+    // No switch in the reply: no claim about changes either way.
+    return { title: sharing.name, sub: !edits ? "Sees your training" : edits.on === true ? "Sees your training · can change your plan" : "Sees your training · can't change your plan" };
+  }
+  if (ended?.name && Number.isFinite(ended.at)) return { title: ended.name, sub: changed || `Ended ${shortDate.format(new Date(ended.at))}` };
+  // Sharing they stopped themselves leaves no ended notice, but changes sent
+  // before it still show on the trainer page: the row says so.
+  if (changed) return { title: "Your trainer", sub: changed };
   if (open) return { title: "Add a trainer", sub: "Type the code they show you" };
   return null;
 }
 
 // Notice sublines, from GET /api/sync/notices (ProfileView): counts appear as
 // words in the row, never a badge. Anything but a positive count is nothing new.
-const newCount = (n) => (Number.isInteger(n) && n > 0 ? n : 0);
 const bugsSub = (dots) => (newCount(dots?.bugs) ? `${dots.bugs} new since you looked` : "The list — fill or kill");
 const applicationsSub = (dots) => (newCount(dots?.applications) ? `${dots.applications} waiting` : "Approve or deny coaches");
 const clientsSub = (dots) => (dots?.clients === true ? "Something new from your clients" : "See clients who share with you");
@@ -398,7 +413,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   // upgrade card owns the slot while it shows. Off entirely until
   // EXISTING_HOLDER_CONSENT_TAP is switched on (see lib/consent.js).
   const consentKnown = current ? profileConsent[current] : undefined;
-  const trainerRow = trainerRowFor(trainerShare);
+  const trainerRow = trainerRowFor(trainerShare, noticeDots);
   const askConsent = EXISTING_HOLDER_CONSENT_TAP && !!current && webAuthnSupported && profileHasPasskey[current] === true
     && !upgrade?.needed && consentKnown !== undefined && !isCurrentConsent(consentKnown);
 
@@ -1053,7 +1068,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               </p>
             ) : (
             <p style={{fontSize:13,color:T.ink2,marginBottom:22,lineHeight:1.6}}>
-              Choose how far this goes. Local keeps your data in the cloud — you can reclaim the name by typing it again. Full wipe releases the name and deletes everything.
+              Choose how far this goes. Local keeps your data in the cloud — you can reclaim the name by typing it again. Full wipe releases the name and deletes your training. A record of any changes a trainer made to your plan stays.
             </p>
             )}
 
@@ -1097,7 +1112,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                   {wipeBusy ? "Wiping…" : "Full wipe · cloud & device"}
                 </div>
                 <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
-                  Deletes all weights, history, and the name claim. Can&apos;t be undone.
+                  Deletes your weights, history and the name claim. A record of any trainer changes to your plan stays. Can&apos;t be undone.
                 </div>
               </button>
               </>)}

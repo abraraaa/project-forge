@@ -21,7 +21,7 @@ const X = id26("x"); // client whose account closed
 const P = id26("p"); // client whose approving passkey is not native
 const O = id26("o"); // client of the other trainer
 
-const db = { accounts: new Map(), credentials: [], grants: [], sessions: [], bugs: [], applications: new Map(), marks: new Map() };
+const db = { accounts: new Map(), credentials: [], grants: [], sessions: [], bugs: [], applications: new Map(), marks: new Map(), changes: [] };
 const calls = [];
 let failOn = null;
 const flat = (s) => s.replace(/\s+/g, " ").trim();
@@ -42,6 +42,9 @@ const SQL = {
     + " AND EXISTS (SELECT 1 FROM sessions s WHERE s.profile = g.profile"
     + " AND s.updated_at > to_timestamp(GREATEST(COALESCE((SELECT m.seen_at FROM notice_marks m WHERE m.account_id = ? AND m.kind = 'clients'), 0), g.created_at) / 1000.0)"
     + " AND s.record->>'date' BETWEEN ? AND ?)) AS lit",
+  trainerChange: "SELECT count(DISTINCT set_id)::int AS n FROM trainer_changes"
+    + " WHERE client_account_id = ? AND source = 'trainer' AND status = 'sent' AND undone_at IS NULL"
+    + " AND created_at > COALESCE((SELECT m.seen_at FROM notice_marks m WHERE m.account_id = ? AND m.kind = 'trainerChange'), 0)",
   mark: "INSERT INTO notice_marks (account_id, kind, seen_at) VALUES (?, ?, ?) ON CONFLICT (account_id, kind) DO UPDATE SET seen_at = EXCLUDED.seen_at",
   bugList: "SELECT id, profile, message, context, status, created_at FROM bug_reports ORDER BY created_at DESC LIMIT ?",
 };
@@ -74,6 +77,12 @@ vi.mock("@neondatabase/serverless", () => ({
         && ms(s.updated_at) > Math.max(mark(m, "clients"), Number(g.created_at))
         && s.record.date >= from && s.record.date <= to));
       return [{ lit }];
+    }
+    if (f === SQL.trainerChange) {
+      const [me, m] = v;
+      const sets = new Set(db.changes.filter((c) => c.client_account_id === me && c.source === "trainer" && c.status === "sent"
+        && c.undone_at == null && Number(c.created_at) > mark(m, "trainerChange")).map((c) => c.set_id));
+      return [{ n: sets.size }];
     }
     if (f === SQL.mark) {
       db.marks.set(`${v[0]}|${v[1]}`, v[2]);
@@ -154,6 +163,7 @@ beforeEach(() => {
   db.bugs = [];
   db.applications = new Map();
   db.marks = new Map();
+  db.changes = [];
   vi.mocked(rateLimit).mockClear();
 });
 afterEach(() => {
@@ -199,7 +209,7 @@ describe("GET /api/sync/notices: the gate", () => {
 describe("GET /api/sync/notices: the kinds", () => {
   it("a lifter: only their own application is read, and the GET writes nothing", async () => {
     expect(await dots()).toEqual({ dots: {} });
-    expect(reads()).toEqual([SQL.application]);
+    expect(reads()).toEqual([SQL.application, SQL.trainerChange]);
     expect(calls[0].v).toEqual([A]);
     expect(writes()).toEqual([]);
   });
@@ -232,16 +242,16 @@ describe("GET /api/sync/notices: the kinds", () => {
     ]);
     // No admin env: nobody is admin, nothing admin is read.
     expect(await dots("tok-zed", "zed")).toEqual({ dots: {} });
-    expect(reads()).toEqual([SQL.application]);
+    expect(reads()).toEqual([SQL.application, SQL.trainerChange]);
     process.env.ADMIN_ACCOUNT_ID = Z;
     calls.length = 0;
     expect(await dots("tok-zed", "zed")).toEqual({ dots: { bugs: 2, applications: 2 }, admin: true });
-    expect(reads().sort()).toEqual([SQL.application, SQL.applications, SQL.bugs].sort());
+    expect(reads().sort()).toEqual([SQL.application, SQL.applications, SQL.bugs, SQL.trainerChange].sort());
     expect(calls.find((c) => flat(c.q) === SQL.bugs).v).toEqual([Z]);
     // Anyone else, with the env set: no admin key, no admin read.
     calls.length = 0;
     expect(await dots("tok-abe", "abe")).toEqual({ dots: {} });
-    expect(reads()).toEqual([SQL.application]);
+    expect(reads()).toEqual([SQL.application, SQL.trainerChange]);
     expect(writes()).toEqual([]);
   });
 
@@ -298,8 +308,71 @@ describe("GET /api/sync/notices: the kinds", () => {
       calls.length = 0;
       expect(await dots("tok-nia", "nia")).toEqual({ dots: {} });
       expect(await dots("tok-abe", "abe")).toEqual({ dots: {} });
-      expect(reads()).toEqual([SQL.application, SQL.application]);
+      expect(reads()).toEqual([SQL.application, SQL.trainerChange, SQL.application, SQL.trainerChange]);
     });
+  });
+});
+
+describe("trainerChange: the change sets a trainer sent, after the client's mark (E10)", () => {
+  const S = (c) => "hws_" + c.repeat(26);
+  // One stored change, as trainer_changes holds it.
+  const change = (set, i, extra = {}) => ({ id: `${set}.${i}`, set_id: set, client_account_id: A, source: "trainer", status: "sent",
+    created_at: NOW - DAY, undone_at: null, ...extra });
+  // The rule in JS, over the same rows: distinct sets for the client, sent by a
+  // trainer, the row not taken back, created after the client's mark.
+  const reference = (rows, me, seenAt) => new Set(rows.filter((c) => c.client_account_id === me && c.source === "trainer"
+    && c.status === "sent" && c.undone_at == null && Number(c.created_at) > seenAt).map((c) => c.set_id)).size;
+
+  it("counts sets, not changes; any account; the GET writes nothing", async () => {
+    db.changes = [change(S("a"), 0), change(S("a"), 1), change(S("b"), 0, { created_at: NOW - 60_000 })];
+    expect(await dots()).toEqual({ dots: { trainerChange: 2 } });
+    const c = calls.find((x) => flat(x.q) === SQL.trainerChange);
+    expect(c.v).toEqual([A, A]);
+    expect(writes()).toEqual([]);
+  });
+
+  it("not lit by: a set before the mark, a set taken back entirely, another client's, a proposal, an AI source", async () => {
+    db.marks.set(`${A}|trainerChange`, NOW - 2 * DAY);
+    db.changes = [
+      change(S("a"), 0, { created_at: NOW - 3 * DAY }),
+      change(S("b"), 0, { undone_at: NOW - 60_000 }), change(S("b"), 1, { undone_at: NOW - 60_000 }),
+      change(S("c"), 0, { client_account_id: O }),
+      change(S("d"), 0, { status: "proposed" }),
+      change(S("e"), 0, { source: "ai" }),
+    ];
+    expect((await dots()).dots).toEqual({});
+    // A set with one change still standing lights.
+    db.changes.push(change(S("f"), 0, { undone_at: NOW - 60_000 }), change(S("f"), 1));
+    expect((await dots()).dots).toEqual({ trainerChange: 1 });
+    // The mark moves past it: nothing new.
+    db.marks.set(`${A}|trainerChange`, NOW);
+    expect((await dots()).dots).toEqual({});
+  });
+
+  it("matches the JS reference across generated rows and marks", async () => {
+    let seed = 7;
+    // The high bits of a small LCG: the low ones cycle too fast to vary.
+    const rnd = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return Math.floor(seed / 65536) % n; };
+    const seenCounts = new Set();
+    for (let round = 0; round < 40; round++) {
+      const rows = Array.from({ length: rnd(12) }, (_, i) => change(S("abcdefgh"[rnd(8)]), i, {
+        client_account_id: rnd(5) ? A : O, source: rnd(6) ? "trainer" : "ai", status: rnd(6) ? "sent" : "proposed",
+        created_at: NOW - rnd(10) * DAY, undone_at: rnd(4) ? null : NOW - DAY,
+      }));
+      const seenAt = rnd(3) ? NOW - rnd(10) * DAY : 0;
+      db.changes = rows;
+      db.marks = seenAt ? new Map([[`${A}|trainerChange`, seenAt]]) : new Map();
+      const n = reference(rows, A, seenAt);
+      seenCounts.add(n);
+      expect((await dots()).dots.trainerChange ?? 0, `round ${round}`).toBe(n);
+    }
+    // The fixtures reach both nothing new and several sets.
+    expect(seenCounts.has(0) && [...seenCounts].some((n) => n > 1)).toBe(true);
+  });
+
+  it("the mark is the one upsert, by kind trainerChange", async () => {
+    expect(await dbMarkSeen(A, "trainerChange", NOW)).toBe(true);
+    expect(writes().map((c) => [flat(c.q), c.v])).toEqual([[SQL.mark, [A, "trainerChange", NOW]]]);
   });
 });
 
@@ -311,9 +384,9 @@ describe("the mark: one row per account and kind, overwritten in place", () => {
     expect([...db.marks]).toEqual([[`${T}|clients`, NOW]]);
   });
 
-  it("only bugs and clients have a mark; anything else throws before any SQL; null with no DB", async () => {
-    expect(NOTICE_KINDS).toEqual(["bugs", "applications", "application", "clients"]);
-    expect(MARKED_KINDS).toEqual(["bugs", "clients"]);
+  it("only bugs, clients and trainerChange have a mark; anything else throws before any SQL; null with no DB", async () => {
+    expect(NOTICE_KINDS).toEqual(["bugs", "applications", "application", "clients", "trainerChange"]);
+    expect(MARKED_KINDS).toEqual(["bugs", "clients", "trainerChange"]);
     for (const k of ["application", "applications", "junk", ""]) await expect(dbMarkSeen(T, k, NOW)).rejects.toThrow();
     await expect(dbMarkSeen("", "bugs", NOW)).rejects.toThrow();
     await expect(dbMarkSeen(T, "bugs", NaN)).rejects.toThrow();

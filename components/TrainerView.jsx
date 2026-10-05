@@ -7,7 +7,10 @@
 // who isn't a trainer applies here; the admin sets up directly, and a trainer
 // accepts changed Trainer Terms here. Signed in it lists the clients who
 // share with them under the trainer's own training (the "You" row), opens one
-// at a time in the pane, and shows an invite code.
+// at a time in the pane, and shows an invite code. For a client who has the
+// trainer's changes on, the pane sends plan changes through
+// /api/trainer/change; a send needs a Face ID within the day, so the pane can
+// ask for one here.
 //
 // Layout is the wide shell (.forge-wide in globals.css): the roster column
 // and the client pane, one at a time under 640. The URL stays /trainer;
@@ -183,6 +186,8 @@ export default function TrainerView() {
   // Only the latest pane request may fill the pane; an earlier reply that
   // lands late is dropped.
   const paneSeq = useRef(0);
+  // Reloads of the open pane after a change, in order among themselves.
+  const refreshSeq = useRef(0);
   // The client the history entry was made for; its index can point elsewhere
   // once the roster reloads.
   const entryRef = useRef(/** @type {string | null} */ (null));
@@ -408,6 +413,54 @@ export default function TrainerView() {
     return true;
   };
 
+  // ── Changes to a client's plan ────────────────────────────────────────────
+
+  // The pane's change route: its grant and today's date ride every call.
+  const changePlan = async (ref, body) => {
+    const r = await call("/api/trainer/change", { ...body, ref, today: todayLocalIso() });
+    if (r.status === 401) { reset(); setPhase("signedOut"); }
+    else if (r.status === 403 && r.body.needsTerms) toTerms();
+    return r;
+  };
+
+  // A fresh Face ID for a change: the quiet sign-in again, for the name
+  // signed in, which mints a new session. False when cancelled or failed.
+  const confirmFaceId = async () => {
+    const name = (who || me || "").trim();
+    if (!name) return false;
+    let auth;
+    try {
+      auth = await authenticatePasskey(name, { quiet: true });
+    } catch {
+      return false;
+    }
+    if (!auth?.authToken) return false;
+    const r = await call("/api/trainer/session", { authToken: auth.authToken, profile: name });
+    if (r.status === 200) {
+      if (typeof r.body.name === "string") setMe(r.body.name);
+      return true;
+    }
+    if (r.status === 401) { reset(); setPhase("signedOut"); }
+    else if (r.status === 403 && r.body.needsTerms) toTerms();
+    return false;
+  };
+
+  // After a send or a withdraw the open pane reloads in place: no "One
+  // moment", so its place on the page and its last line stay. A reply that
+  // lands after another client opened, or behind a later reload, is dropped
+  // (null). True when the pane reloaded, false when it didn't.
+  const refreshPane = async (ref) => {
+    const seq = paneSeq.current;
+    const mine = ++refreshSeq.current;
+    const r = await call("/api/trainer/client", { ref, today: todayLocalIso() });
+    if (seq !== paneSeq.current || mine !== refreshSeq.current) return null;
+    if (r.status === 200 && r.body.view) { setPane({ ref, state: "ready", client: r.body.client, view: r.body.view, self: r.body.self === true }); return true; }
+    if (r.status === 404) setPane({ ref, state: "missing" });
+    else if (r.status === 401) { reset(); setPhase("signedOut"); }
+    else if (r.status === 403 && r.body.needsTerms) toTerms();
+    return false;
+  };
+
   // ── The invite ────────────────────────────────────────────────────────────
 
   const issue = async () => {
@@ -496,7 +549,7 @@ export default function TrainerView() {
             className="forge-press forge-tint" style={rowStyle(selfOpen)}>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={rowTitle}>Your training</span>
-              <span style={rowLine}>Read only here</span>
+              <span style={rowLine}>As you&apos;d share it, read only</span>
             </span>
             <span className="forge-wide-n-only" style={{ flexShrink: 0, lineHeight: 0 }}>
               <Glyph name="arrowRight" size={12} color={T.ink3}/>
@@ -562,7 +615,10 @@ export default function TrainerView() {
         )}
         {shown?.state === "ready" && (
           <TrainerClientView key={shown.ref} client={shown.client} view={shown.view} self={shown.self}
-            lastLooked={open.lastLooked} now={loadedAt} onRemove={shown.self ? undefined : () => removeClient(shown.ref)}/>
+            lastLooked={open.lastLooked} now={loadedAt} onRemove={shown.self ? undefined : () => removeClient(shown.ref)}
+            onChange={shown.self ? undefined : (body) => changePlan(shown.ref, body)}
+            onFaceId={shown.self ? undefined : confirmFaceId}
+            onChanged={shown.self ? undefined : () => refreshPane(shown.ref)}/>
         )}
       </div>
 
@@ -598,7 +654,7 @@ const fieldStyle = {
 function Pitch({ who }) {
   return (
     <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: "0 0 20px" }}>
-      <p style={{ margin: "0 0 6px" }}>See your clients' training once they say yes. Read only. Free.</p>
+      <p style={{ margin: "0 0 6px" }}>See your clients' training and, when they allow it, change their plan. Free.</p>
       <p style={{ margin: "0 0 6px" }}>They approve you with Face ID, and can stop any time.</p>
       <p style={{ margin: "0 0 6px" }}>You never see photos, bodyweight, sleep, or why someone's on a breather.</p>
       {who && <p style={{ margin: 0 }}>Clients see you as {who}.</p>}

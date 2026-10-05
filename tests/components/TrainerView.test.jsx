@@ -25,7 +25,12 @@
 //   - your own training is the roster's pinned first row; it opens with
 //     ref "me" and a self history entry, in a pane titled You;
 //   - the QR plate sits inside the sheet padding; a final invite status
-//     leads in ink and the dead code fades.
+//     leads in ink and the dead code fades;
+//   - a client's plan: the pane's change calls post to /api/trainer/change
+//     with the grant and today's date; a 403 needsFaceId runs the quiet
+//     sign-in again for the signed-in name and the check runs again; a send
+//     reloads the pane in place (no "One moment"); a 401 there signs out;
+//     your own pane gets no change wiring, even when its view has a plan.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -33,15 +38,23 @@ import { render, screen, fireEvent, cleanup, act, within } from "@testing-librar
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { projectForTrainer } from "../../lib/trainer-view.js";
+import { projectForTrainer } from "../../lib/trainer-plan.js";
 import { todayLocalIso, addDaysIso } from "../../lib/dates.js";
 import { TRAINER_TERMS_VERSION } from "../../lib/trainer-terms.js";
 import { encodeQr, qrToSvgPath } from "../../lib/qr.js";
 
-const { server, auth } = vi.hoisted(() => ({
+const { server, auth, panes } = vi.hoisted(() => ({
   server: { calls: [], routes: {} },
   auth: { result: { verified: true, authToken: "tok-1" } },
+  panes: { props: [] },
 }));
+
+// The real pane, with the props TrainerView hands it kept for a look.
+vi.mock("@/components/TrainerClientView", async (importOriginal) => {
+  const real = /** @type {any} */ (await importOriginal());
+  const { createElement } = await import("react");
+  return { ...real, default: (props) => { panes.props.push(props); return createElement(real.default, props); } };
+});
 
 vi.mock("@/lib/webauthn", () => ({
   authenticatePasskey: vi.fn(async () => auth.result),
@@ -111,6 +124,7 @@ async function mount() {
 beforeEach(() => {
   server.calls = [];
   server.routes = {};
+  panes.props = [];
   auth.result = { verified: true, authToken: "tok-1" };
   window.history.replaceState(null, "", "/trainer");
 });
@@ -173,7 +187,7 @@ describe("TrainerView: signing in", () => {
     await flush();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Coach on Heatwayve");
     for (const line of [
-      "See your clients' training once they say yes. Read only. Free.",
+      "See your clients' training and, when they allow it, change their plan. Free.",
       "They approve you with Face ID, and can stop any time.",
       "You never see photos, bodyweight, sleep, or why someone's on a breather.",
       "Clients see you as coachkim.",
@@ -266,11 +280,11 @@ describe("TrainerView: the roster", () => {
     const you = roster.querySelector("[data-self-row]");
     const list = screen.getByRole("list", { name: "Clients" });
     expect(you).toBeTruthy();
-    expect(you.textContent).toBe("Your trainingRead only here");
+    expect(you.textContent).toBe("Your trainingAs you'd share it, read only");
     expect(you.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The first row button in the roster is yours; clients follow.
     const rows = [...roster.querySelectorAll("button[aria-current], [data-self-row] button, ul button")];
-    expect(rows[0].textContent).toBe("Your trainingRead only here");
+    expect(rows[0].textContent).toBe("Your trainingAs you'd share it, read only");
     expect(rows[1].textContent).toMatch(/^Alex/);
     expect(you.style.borderBottom).toMatch(/^1px solid/);
     // It is not a client: the list holds clients only.
@@ -776,5 +790,120 @@ describe("TrainerView: invite replies in order", () => {
     await act(async () => { held[0](code("ABCD0EFGH1JK")); });
     await flush();
     expect(screen.getByRole("dialog").querySelector("[data-code]").textContent).toBe("ZZZZ 0EFG H1JK");
+  });
+});
+
+describe("TrainerView: changing a client's plan", () => {
+  // Alex has changes on: the view carries a plan (squat last at 100, W 102.5).
+  function planView() {
+    const history = [0, 1, 2].map((i) => {
+      const date = addDaysIso(today, -(7 - i * 3));
+      return { id: `${date}T07:00:00.000Z`, date, readiness: "normal", session: "strength A", scheduledLetter: "A",
+        blocks: [{ type: "main", exercises: [{ name: "Barbell Back Squat", loadType: "barbell", sets: [5, 5, 5].map((r) => ({ weight: 100, reps: r, rpe: 8, loadType: "barbell" })) }] }] };
+    });
+    return projectForTrainer({ meta: { weights: { "Barbell Back Squat": 102.5 } }, history }, { todayIso: today, edits: { rows: [], used: 2, freeAt: null } });
+  }
+  const preview = { ops: [{ i: 0, kind: "weight", target: "Barbell Back Squat", from: null, before: 102.5, after: 103.75, warnings: [] }], warnings: [] };
+
+  async function openAlex() {
+    server.routes["POST /api/trainer/clients"] = { status: 200, body: { me: { name: "Coach Kim" }, clients: SIGNALS.slice(0, 1) } };
+    server.routes["POST /api/trainer/client"] = (b) => (b.ref === "me"
+      ? { status: 200, body: { client: { name: "Coach Kim" }, view: clientView(), self: true } }
+      : { status: 200, body: { client: { name: "Alex", since: Date.UTC(2026, 8, 1) }, view: planView() } });
+    await mount();
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+  }
+  async function draftAndReview() {
+    fireEvent.click(document.querySelector('[data-plan-lift="Barbell Back Squat"]'));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "More weight" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add to changes" }));
+    await act(async () => { fireEvent.click(within(document.querySelector("[data-tray]")).getByRole("button", { name: /Review/ })); });
+    await flush();
+  }
+
+  it("posts with the grant and today; a stale Face ID runs the sign-in again, then checks again; a send reloads the pane in place", async () => {
+    let fresh = false;
+    server.routes["POST /api/trainer/change"] = (b) => (!fresh ? { status: 403, body: { needsFaceId: true } }
+      : b.dryRun ? { status: 200, body: { preview, budget: { used: 2, of: 10 } } }
+      : { status: 200, body: { sent: { set: b.set.id, ids: [`${b.set.id}.0`] }, budget: { used: 3, of: 10 } } });
+    server.routes["POST /api/trainer/session"] = () => { fresh = true; return { status: 200, body: { ok: true, name: "Coach Kim" } }; };
+    await openAlex();
+    await draftAndReview();
+    const [first] = posts("/api/trainer/change");
+    expect(first.body).toMatchObject({ ref: "hwg_a", today, dryRun: true, set: { ops: [{ kind: "weight", lift: "Barbell Back Squat", kg: 103.75, from: null }] } });
+    expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toBe("Confirm it's you to check changes.");
+
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirm it's you" })); });
+    await flush();
+    const { authenticatePasskey } = await import("@/lib/webauthn");
+    expect(authenticatePasskey).toHaveBeenCalledWith("Coach Kim", { quiet: true });
+    expect(posts("/api/trainer/session").map((c) => c.body)).toEqual([{ authToken: "tok-1", profile: "Coach Kim" }]);
+    expect(posts("/api/trainer/change")).toHaveLength(2);
+    expect(posts("/api/trainer/change")[1].body.set.id).toBe(first.body.set.id);
+
+    const loads = posts("/api/trainer/client").length;
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Send to Alex" })); });
+    await flush();
+    const sent = posts("/api/trainer/change")[2].body;
+    expect("dryRun" in sent).toBe(false);
+    expect(sent).toMatchObject({ ref: "hwg_a", today, set: first.body.set });
+    // Reloaded in place: the pane stays, with its line, and never says One moment.
+    expect(posts("/api/trainer/client")).toHaveLength(loads + 1);
+    expect(posts("/api/trainer/client").at(-1).body).toEqual({ ref: "hwg_a", today });
+    expect(screen.queryByText("One moment")).toBeNull();
+    expect(document.querySelector('[data-section="plan"]').textContent).toContain("Sent. Alex sees it next time they open the app, and can undo it.");
+  });
+
+  it("a cancelled Face ID posts no session and says so; a 401 from the change route signs out", async () => {
+    server.routes["POST /api/trainer/change"] = { status: 403, body: { needsFaceId: true } };
+    auth.result = null;
+    await openAlex();
+    await draftAndReview();
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirm it's you" })); });
+    await flush();
+    expect(posts("/api/trainer/session")).toHaveLength(0);
+    expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toBe("Face ID didn't go through. Try again.");
+    cleanup();
+
+    server.calls = [];
+    server.routes["POST /api/trainer/change"] = { status: 401, body: { error: "Sign in to see your clients", requiresAuth: true } };
+    await openAlex();
+    await draftAndReview();
+    expect(screen.getByLabelText("Your Heatwayve name")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("Refresh after a stale check says when the reload didn't land, and keeps the pane", async () => {
+    server.routes["POST /api/trainer/change"] = { status: 409, body: { stale: true, error: "x" } };
+    await openAlex();
+    await draftAndReview();
+    server.routes["POST /api/trainer/client"] = { status: 500, body: {} };
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Refresh" })); });
+    await flush();
+    expect(document.querySelector('[data-section="plan"] > [role="status"]').textContent).toBe("Couldn't get their latest just now. Try again.");
+    server.routes["POST /api/trainer/client"] = { status: 200, body: { client: { name: "Alex", since: Date.UTC(2026, 8, 1) }, view: planView() } };
+    await act(async () => { fireEvent.click(within(document.querySelector("[data-tray]")).getByRole("button", { name: /Review/ })); });
+    await flush();
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Refresh" })); });
+    await flush();
+    expect(document.querySelector('[data-section="plan"] > [role="status"]').textContent).toBe("Showing their latest.");
+  });
+
+  it("your own pane gets no plan and no change wiring, even with a plan on its view", async () => {
+    await openAlex();
+    const alex = panes.props.at(-1);
+    expect([typeof alex.onChange, typeof alex.onFaceId, typeof alex.onChanged]).toEqual(["function", "function", "function"]);
+    server.routes["POST /api/trainer/client"] = (b) => (b.ref === "me"
+      ? { status: 200, body: { client: { name: "Coach Kim" }, view: planView(), self: true } }
+      : { status: 200, body: { client: { name: "Alex", since: Date.UTC(2026, 8, 1) }, view: planView() } });
+    fireEvent.click(screen.getByText("Your training"));
+    await flush();
+    const mine = panes.props.at(-1);
+    expect(mine.self).toBe(true);
+    expect(mine.view.plan).toBeTruthy();
+    expect([mine.onChange, mine.onFaceId, mine.onChanged, mine.onRemove]).toEqual([undefined, undefined, undefined, undefined]);
+    expect(document.querySelector('[data-section="plan"]')).toBeNull();
+    expect(posts("/api/trainer/change")).toHaveLength(0);
   });
 });

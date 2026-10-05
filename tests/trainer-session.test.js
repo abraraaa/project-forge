@@ -492,6 +492,24 @@ describe("trainerGate", () => {
     expect(writes()).toEqual([]);
   });
 
+  it("returns the Face ID the session is bound to, never the slide's own time", async () => {
+    const t = session(T, { ageMs: 2 * DAY, authAgeMs: 3 * DAY });
+    const g = await trainerGate(gateReq(withCookie(t)));
+    expect(g.authAt).toBe(row(t).auth_at);
+    // The slid token carries the same Face ID.
+    expect((await trainerGate(gateReq(withCookie(g.refresh)))).authAt).toBe(row(t).auth_at);
+    expect(ts.faceIdFresh(g.authAt)).toBe(false);
+    expect(ts.faceIdFresh((await trainerGate(gateReq(withCookie(session(T, { authAgeMs: 23 * 3600_000 }))))).authAt)).toBe(true);
+  });
+
+  it("a session with no Face ID instant reads as none, so it can never send a change", async () => {
+    const t = session(T);
+    row(t).auth_at = null;
+    const g = await trainerGate(gateReq(withCookie(t)));
+    expect(g).toMatchObject({ identity: { accountId: T }, authAt: null });
+    expect(ts.faceIdFresh(g.authAt)).toBe(false);
+  });
+
   it("cookie name and attributes are pinned", () => {
     expect(TRAINER_COOKIE).toBe("__Host-hw_trainer");
     expect(ts.TRAINER_COOKIE_OPTS).toEqual({ httpOnly: true, secure: true, sameSite: "strict", path: "/", maxAge: 14 * 86400 });
@@ -610,8 +628,8 @@ describe("SQL and source pins", () => {
 
   it("every trainer route runs in lhr1, is dynamic, and never returns e.message", () => {
     const routes = walk("app/api/trainer").filter((f) => f.endsWith("route.js"));
-    expect(routes.sort()).toEqual(["app/api/trainer/apply/route.js", "app/api/trainer/client/route.js", "app/api/trainer/clients/route.js",
-      "app/api/trainer/invite/route.js", "app/api/trainer/session/end/route.js", "app/api/trainer/session/route.js", "app/api/trainer/upgrade/route.js"]);
+    expect(routes.sort()).toEqual(["app/api/trainer/apply/route.js", "app/api/trainer/change/route.js", "app/api/trainer/client/route.js",
+      "app/api/trainer/clients/route.js", "app/api/trainer/invite/route.js", "app/api/trainer/session/end/route.js", "app/api/trainer/session/route.js", "app/api/trainer/upgrade/route.js"]);
     for (const f of routes) {
       const s = read(f);
       expect(s, f).toContain('export const preferredRegion = "lhr1";');

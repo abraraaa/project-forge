@@ -5,6 +5,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { EXISTING_HOLDER_CONSENT_TAP } from "../lib/consent.js";
 import { matchTokenIdentity } from "../lib/identity.js";
 import { DETAIL_DAYS, TREND_DAYS, VIEW_KEYS, LOOK_RING } from "../lib/trainer-view.js";
+import { PLAN_KEYS } from "../lib/trainer-plan.js";
+import { LIVE_SLICES } from "../lib/trainer-change.js";
 import { TRAINER_COOKIE_OPTS, TRAINER_TTL_MS, TRAINER_CAP_MS } from "../lib/trainer-session.js";
 import { SHARE_COPY, SHARE_CONSENT_VERSION, acceptedShareConsentVersion } from "../lib/trainer-terms.js";
 
@@ -131,7 +133,8 @@ describe("privacy notice stays true", () => {
     expect(page).toContain("your main-lift trend and bests over 12 months");
     // What they never see: no key for any of it anywhere in the projection.
     expect(page).toContain("They never see your photos, bodyweight, sleep, why you took a breather, what time of day you trained, or your notes.");
-    const keys = Object.values(VIEW_KEYS).flat();
+    // A plan change's reason is its status word (superseded, stopped), never a breather's.
+    const keys = Object.entries({ ...VIEW_KEYS, ...PLAN_KEYS }).flatMap(([o, ks]) => ks.filter((k) => !(o === "planChange" && k === "reason")));
     for (const k of keys) expect(k).not.toMatch(/photo|bodyweight|bw|sleep|reason|note|time|startedAt/i);
     expect(VIEW_KEYS.break).toEqual(["start", "endedAt"]);
     // The roster line: last trained, the week against the plan, the 28-day rhythm.
@@ -144,6 +147,53 @@ describe("privacy notice stays true", () => {
     expect(read("components/TrainerShareView.jsx")).toContain('l.kind === "roster"');
     expect(page).toContain("What your trainer does with what they see is their responsibility.");
     expect(page).toContain("sharing with a trainer you add");
+  });
+
+  it("plan changes: what the trainer then sees, what they can change, the kept before and after, and the off switch", () => {
+    expect(page).toContain("While their changes are on, they also see your current working weights, reps and main lifts for every lift in your programme, whether you're on a deload, your planned week up to 4 weeks ahead, and each lift's most recent top set, however long ago.");
+    expect(page).toContain("They can change your working weights, reps and main lifts from your next session on, within the app's limits.");
+    expect(page).toContain("Turn their changes off in one tap in Profile and keep sharing. Turning them off, or stopping sharing, cancels any change that hasn't reached your plan yet.");
+    expect(page).toContain("If your trainer can change your plan, each change is kept with what it was before, so you can see and undo it.");
+    // What we collect names the stored changes too.
+    expect(page).toContain("A trainer you add, if you do — who they are, when sharing started and ended, when they looked and, if they change your plan, each change with what it was before.");
+    const rows = SHARE_COPY.rows.join("\n");
+    expect(rows).toContain("planned week up to 4 weeks ahead");
+    expect(rows).toContain("Each lift's most recent top set, however long ago.");
+    expect(rows).toContain("Turn their changes off in one tap in Profile, and keep sharing.");
+    // Only next-session lift changes ship: the page offers no week or dated changes while those are off.
+    expect(LIVE_SLICES).toEqual({ week: false, dated: false });
+    expect(page).not.toMatch(/change your (weekly plan|week)\b|from a date/);
+    // The top set is the plan's anchor, found over all their training (no 24-week clip).
+    expect(PLAN_KEYS.planAnchor).toEqual(["date", "kg", "reps"]);
+    expect(read("lib/trainer-plan.js")).toContain("findMostRecentLiftSession(history, name)");
+    // Stopping sharing cancels what hasn't landed: delivery needs the grant live, changes on, and the change sent since.
+    const store = read("lib/trainer-changes-store.js");
+    const deliver = store.slice(store.indexOf("export async function dbOpenChangesFor("), store.indexOf("export async function dbOpenChangesForGrant"));
+    expect(deliver).toContain("COALESCE(g.revoked_at IS NULL AND g.trainer_account_id = c.author_account_id");
+    expect(deliver).toContain("AND g.edits_at IS NOT NULL AND (g.edits_off_at IS NULL OR g.edits_off_at < g.edits_at) AND c.created_at > g.edits_at");
+    // The current version grants changes at approval; nothing else stamps edits_at on a new grant.
+    expect(read("lib/trainer-store.js")).toMatch(/INSERT INTO oauth_grants \([^)]*consent_version, looks, look_count, edits_at\)/);
+    expect(read("lib/db.js")).toContain("ALTER TABLE oauth_grants ADD COLUMN IF NOT EXISTS edits_at BIGINT");
+  });
+
+  it("the change log stays after a profile wipe, and the page promises no clearing yet", () => {
+    // True today: the wipe only reports what it would clear. When clearing ships, this page changes with it.
+    expect(page).toContain("Trainer changes — each change to your plan, with what it was before and after, what it was checked against, who made it and when, stays after sharing ends and after you delete your profile.");
+    expect(page).toContain("If a trainer changed your plan, the record of those changes stays.");
+    expect(page).not.toMatch(/clears? the numbers|numbers (are|go) cleared/i);
+    // The wipe dialog, read at the moment of deleting, says the same.
+    const profile = read("components/ProfileScreen.jsx");
+    expect(profile).toContain("Full wipe releases the name and deletes your training. A record of any changes a trainer made to your plan stays.");
+    expect(profile).toContain("Deletes your weights, history and the name claim. A record of any trainer changes to your plan stays.");
+    expect(profile).not.toMatch(/deletes everything\.|Deletes all weights/);
+    const sync = read("app/api/sync/route.js");
+    const wipe = sync.slice(sync.indexOf("export async function DELETE"));
+    expect(wipe).toContain("trainerChanges: { dryRun: true, count: trainerChanges.count }");
+    for (const f of [...sources("lib"), ...sources("app")]) {
+      const src = read(f);
+      expect(src, f).not.toMatch(/DELETE\s+FROM\s+trainer_changes\b/i);
+      expect(src, f).not.toMatch(/UPDATE\s+trainer_changes\b[^`]*\b(old_value|new_value|cleared_at)\s*=/i);
+    }
   });
 
   it("the share approval names what the trainer section says, at the version the server stamps", () => {

@@ -16,8 +16,11 @@ vi.mock("../lib/identity-store.js", () => ({
 }));
 vi.mock("../lib/blob-utils.js", () => ({ readJsonByPrefix: vi.fn(async () => route.doc) }));
 vi.mock("../lib/db.js", async (orig) => ({ ...(await orig()), dbReadProfile: vi.fn(async () => ({ meta: {}, history: [] })) }));
-import { handleMcp, runTool, weekOn, validMainLifts, PROTOCOL_VERSIONS } from "../lib/mcp-server.js";
-import { SESSIONS, EXERCISE_POOLS, applyRotationToSession, applyMainLiftsToSession, applyFocusToSession } from "../lib/programme.js";
+import { handleMcp, runTool, weekOn, validMainLifts, resolvedProgramme, loadTypeOfName, PROTOCOL_VERSIONS } from "../lib/mcp-server.js";
+import {
+  SESSIONS, EXERCISE_POOLS, SWAP_DB, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS,
+  applyRotationToSession, applyMainLiftsToSession, applyFocusToSession,
+} from "../lib/programme.js";
 
 const rec = (date, name, weight, reps, rpe) => ({
   id: date, date, session: "strength_a", readiness: "fresh",
@@ -276,6 +279,141 @@ describe("programme loads read the way the session screen reads them", () => {
       { load: async () => ({ meta: {}, history: [{ date: "x", blocks: "abc" }] }), now },
     );
     expect(r.result.isError).toBe(true);
+  });
+});
+
+// Fixture metas across focus × main lifts × rotation config × loads, for the
+// resolvedProgramme refactor (E8).
+function e8Fixtures() {
+  const names = [...new Set([
+    ...SESSIONS.flatMap((s) => s.blocks.flatMap((b) => [b.ex, b.exA, b.exB].filter(Boolean).map((e) => e.name))),
+    ...Object.values(EXERCISE_POOLS).flatMap((s) => s.pool.map((e) => e.name)),
+    ...Object.values(SWAP_DB).flatMap((alts) => alts.map((a) => a.name)),
+  ])].sort();
+  const canon = Object.keys(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS);
+  const pick = (i) => Object.fromEntries(Object.entries(EXERCISE_POOLS).map(([k, s]) => [k, s.pool[Math.min(i, s.pool.length - 1)]]));
+  const timedPicks = Object.fromEntries(Object.entries(EXERCISE_POOLS).flatMap(([k, s]) => {
+    const t = s.pool.find((e) => typeof e.reps === "string" && /^\d+s$/.test(e.reps));
+    return t ? [[k, t]] : [];
+  }));
+  const FOCI = [undefined, "Forged", "Strong", "Sculpt"];
+  const MAINS = [
+    undefined,
+    {},
+    Object.fromEntries(canon.map((c) => [c, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS[c][0]])),
+    Object.fromEntries(canon.map((c) => [c, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS[c].at(-1)])),
+    { [canon[0]]: "Leg Press", [canon[1]]: canon[1], [canon[2]]: 7 },
+  ];
+  const CONFIGS = [
+    {},
+    pick(0),
+    pick(1),
+    pick(99),
+    { ...pick(2), ...timedPicks, "ass1-A": { name: "Not In Any Pool" }, a1: { name: "Front Squat" } },
+  ];
+  const loaded = (seed) => {
+    const weights = {}, reps = {}, lifts = {};
+    names.forEach((n, i) => {
+      const k = (i + seed) % 7;
+      if (k === 0) return;
+      weights[n] = k === 1 ? "x" : 10 + ((i * 7 + seed) % 40) * 2.5;
+      reps[n] = [null, 3, "4/leg", 30, 12, "10"][k - 1];
+      if (k === 2) lifts[n] = { adoptedReps: 3 };
+      if (k === 3) lifts[n] = { currentRepRange: { baseReps: 6 } };
+    });
+    return {
+      weights, reps,
+      bodyweight: { kg: 70 + seed },
+      addedLoads: { "Glute Bridge": { kg: 10, updatedAt: T1 }, "Push-Up": { kg: 5, updatedAt: T1 } },
+      trainingState: { lifts, muscleAnchors: { Quadriceps: { bestE1RM: 140 }, Chest: { bestE1RM: 100 }, Hamstrings: { bestE1RM: 160 } } },
+    };
+  };
+  const wk = (d) => Array.from({ length: 7 }, (_, i) => ({ type: i === d || i === d + 2 ? "strength" : "rest" }));
+  const out = [];
+  let n = 0;
+  for (const focus of FOCI) for (const mainLifts of MAINS) for (const config of CONFIGS) for (const seed of [0, 1]) {
+    n++;
+    const meta = {
+      ...(focus ? { userFocus: focus } : {}),
+      ...(mainLifts !== undefined ? { mainLifts } : {}),
+      programmeBlock: n % 3 ? { number: n % 5, startDate: "2026-09-01", config } : { config },
+      ...(seed ? loaded(n) : { weights: {}, reps: {} }),
+      ...(n % 4 === 0 ? { userWeek: [{ effectiveFrom: "2026-01-05", editedAt: "2026-01-05T00:00:00Z", week: wk(n % 5) }] } : {}),
+    };
+    const history = n % 3 === 0 ? [] : [{ id: "2026-09-10", date: "2026-09-10", session: n % 3 === 1 ? "strength_a" : "strength_b", readiness: "normal", blocks: [] }];
+    out.push({ focus: String(focus), meta, history });
+  }
+  return out;
+}
+
+describe("resolvedProgramme behind describeProgramme (E8)", () => {
+  // Digests of the programme and current_loads tool text over e8Fixtures,
+  // captured from describeProgramme before resolvedProgramme was extracted.
+  const BEFORE = { undefined: "0e422ed0f16e1cc0", Forged: "b260f8b6ef1a3b8e", Strong: "0cee9f0eb5c3d8f9", Sculpt: "a7cea783948bf52d" };
+  const fixtures = e8Fixtures();
+  const texts = fixtures.map((f) => [runTool("programme", {}, f, now).text, runTool("current_loads", {}, f, now).text]);
+
+  it("tool output is byte-identical to the pre-extraction output", () => {
+    /** @type {Record<string, string[]>} */
+    const by = {};
+    fixtures.forEach((f, i) => (by[f.focus] ??= []).push(...texts[i]));
+    const digest = Object.fromEntries(Object.entries(by).map(([k, v]) => [k, createHash("sha256").update(JSON.stringify(v)).digest("hex").slice(0, 16)]));
+    expect(digest).toEqual(BEFORE);
+  });
+  it("the fixtures reach every way a line renders", () => {
+    expect(fixtures).toHaveLength(200);
+    expect(new Set(texts.map((t) => t[0])).size).toBe(178);
+    const all = texts.flat().join("\n");
+    for (const m of ["s hold", "(suggested start)", "@ bodyweight + ", " kg each", "kg assistance", "weight not set yet (new lift)",
+      "@ bodyweight\n", "× 4/leg", "× 6-8", "(for Barbell Back Squat)", "programme defaults", "not synced from this user's app yet",
+      "Strength days:", "Next up: Strength B", "No working weights set yet."]) expect(all).toContain(m);
+  });
+});
+
+describe("resolvedProgramme", () => {
+  const SQ = "Barbell Back Squat";
+  it("lists every slot of the composed sessions, in order", () => {
+    for (const f of e8Fixtures().filter((_, i) => i % 7 === 0)) {
+      const lifts = validMainLifts(f.meta) || {};
+      const config = f.meta.programmeBlock.config;
+      const want = SESSIONS.flatMap((t, session) => applyFocusToSession(applyMainLiftsToSession(applyRotationToSession(t, config), lifts), f.meta.userFocus || "Forged", config, lifts)
+        .blocks.flatMap((b) => [["ex", b.ex], ["exA", b.exA], ["exB", b.exB]].filter(([, ex]) => ex).map(([slot, ex]) => ({ session, block: b.id, slot, name: ex.name, sets: b.sets }))));
+      expect(resolvedProgramme(f.meta).map(({ session, block, slot, name, sets }) => ({ session, block, slot, name, sets }))).toEqual(want);
+    }
+  });
+  it("names the main-lift key a chosen main answers to, per slot", () => {
+    const r = resolvedProgramme({ mainLifts: { [SQ]: "Front Squat", "Barbell Overhead Press": "Push Press", "Power Clean": "Push Press" } });
+    expect(r.filter((x) => x.canonical).map((x) => `${x.block} ${x.name} <- ${x.canonical}`)).toEqual([
+      "a1 Front Squat <- Barbell Back Squat",
+      "a2 Barbell Bench Press <- Barbell Bench Press",
+      "b1 Hex Bar Deadlift <- Hex Bar Deadlift",
+      "b2 Push Press <- Barbell Overhead Press",
+      "c1 Push Press <- Power Clean",
+    ]);
+    expect(r.filter((x) => x.type !== "main").every((x) => x.canonical === null)).toBe(true);
+  });
+  it("carries the target, load and start the session would use", () => {
+    const lsit = EXERCISE_POOLS["afin-A"].pool.find((e) => e.name === "L-Sit Hold");
+    const r = resolvedProgramme({
+      programmeBlock: { config: { "afin-A": lsit } },
+      bodyweight: { kg: 90 },
+      weights: { "Barbell Bench Press": 80 },
+      reps: { [SQ]: 3, "L-Sit Hold": 30 },
+    });
+    const at = (n) => r.find((x) => x.name === n);
+    expect(at(SQ)).toMatchObject({ reps: 5, timed: false, w: null, start: 67.5, loadType: "barbell", sets: 3 }); // 3 is repaired to the base
+    expect(at("Barbell Bench Press")).toMatchObject({ w: 80, start: 80 });
+    expect(at("L-Sit Hold")).toMatchObject({ reps: 30, timed: true });
+    const bw = r.find((x) => x.loadType === "bodyweight");
+    expect(bw?.start).toBeNull();
+  });
+  it("reads a missing or malformed meta as the default programme", () => {
+    expect(resolvedProgramme(null).map((x) => x.name)).toEqual(resolvedProgramme({}).map((x) => x.name));
+    expect(resolvedProgramme({}).length).toBeGreaterThan(0);
+  });
+  it("loadTypeOfName reads the catalogue, then the name", () => {
+    expect(loadTypeOfName("45-Degree Hip Extension")).toBe("bodyweight");
+    expect(loadTypeOfName(SQ)).toBe("barbell");
   });
 });
 

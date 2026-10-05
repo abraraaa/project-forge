@@ -6,14 +6,14 @@
 // withdrawn with what it said cleared) runs last in one transaction.
 //
 // Neon is simulated over accounts / handles / credentials / oauth_grants /
-// trainer_applications with
+// trainer_applications / trainer_changes (read only: the wipe's dry run) with
 // all-or-nothing transactions; profile rows, photo index rows and tokens sit
 // in memory behind the db.js helpers. Blob is an in-memory path map.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { normaliseProfile } from "../lib/profile-name.js";
 import { NextRequest } from "next/server";
 
-const db = { accounts: [], handles: [], credentials: [], grants: [], applications: [], txns: [], failTxn: null, nextHandleId: 1 };
+const db = { accounts: [], handles: [], credentials: [], grants: [], applications: [], changes: [], changeSql: [], failChanges: false, txns: [], failTxn: null, nextHandleId: 1 };
 const blobs = new Map();
 const dels = [];
 const blobFail = { del: null };
@@ -28,6 +28,15 @@ const norm = (q) => q.replace(/\s+/g, " ").trim();
 function run(state, { q, values }) {
   const s = norm(q);
   if (/^(CREATE|ALTER)\b/.test(s)) return [];
+  // trainer_changes: only the wipe's dry-run read is served; anything else throws.
+  if (/\btrainer_changes\b/.test(s)) {
+    state.changeSql.push(s);
+    if (state.failChanges) throw new Error("db unavailable");
+    if (s === "SELECT id FROM trainer_changes WHERE profile = ? AND cleared_at IS NULL ORDER BY created_at, id") {
+      return state.changes.filter((c) => c.profile === values[0] && c.cleared_at == null)
+        .sort((x, y) => x.created_at - y.created_at || (x.id < y.id ? -1 : 1)).map((c) => ({ id: c.id }));
+    }
+  }
   if (s.includes("FROM handles h JOIN accounts a")) {
     const [h] = values;
     const row = state.handles.find((r) => r.handle === h && r.released_at == null && r.kind === "primary");
@@ -254,7 +263,7 @@ function seedSam({ unknown = true } = {}) {
 beforeEach(() => {
   process.env.DATABASE_URL = "postgres://fake";
   claimMode.value = null;
-  Object.assign(db, { accounts: [], handles: [], credentials: [], grants: [], applications: [], txns: [], failTxn: null, nextHandleId: 1 });
+  Object.assign(db, { accounts: [], handles: [], credentials: [], grants: [], applications: [], changes: [], changeSql: [], failChanges: false, txns: [], failTxn: null, nextHandleId: 1 });
   blobs.clear(); dels.length = 0; tokens.clear(); profiles.clear(); photoRows.length = 0; oauthTokens.clear();
   blobFail.del = null;
   vi.clearAllMocks();
@@ -267,7 +276,8 @@ describe("wiping a backfilled account (storage key = its handle)", () => {
     ceremony("w", A, "sam");
     const res = await wipe("Sam", "w");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, deleted: 1 + SAM_JUNK.length, kept: 1 + SAM_UNKNOWN.length });
+    expect(await res.json()).toEqual({ ok: true, deleted: 1 + SAM_JUNK.length, kept: 1 + SAM_UNKNOWN.length,
+      trainerChanges: { dryRun: true, count: 0 } });
     // Photo by its index row first, then snapshots, then the enumerated files.
     expect(dels).toEqual([SAM_OWN_PHOTO, ...SNAPS("sam"), ...SAM_JUNK]);
     expect(vi.mocked(dbm.dbDeleteToken).mock.calls).toEqual([["w"]]);
@@ -373,6 +383,104 @@ describe("wiping a backfilled account (storage key = its handle)", () => {
   });
 });
 
+describe("trainer changes: the wipe reports what it would clear and clears nothing (dry run)", () => {
+  const T = "hwa_" + "t".repeat(26);
+  const change = (id, profile, extra = {}) => ({ id, set_id: id.split(".")[0], grant_id: "tg", profile, client_account_id: A,
+    author_account_id: T, source: "trainer", status: "sent", kind: "weight", target: "Back Squat",
+    old_value: 100, new_value: 105, basis: { anchorId: "r1", w: 100, r: 5 }, warnings: null,
+    created_at: 1, outcome: null, undone_at: null, reverted_at: null, cleared_at: null, ...extra });
+  const seedChanges = () => db.changes.push(
+    change("s2.0", "sam", { created_at: 20 }),
+    change("s1.1", "sam", { created_at: 10, outcome: "applied", undone_at: 15 }),
+    change("s1.0", "sam", { created_at: 10, source: "ai", status: "proposed" }),
+    change("s0.0", "sam", { created_at: 5, cleared_at: 6, old_value: null, new_value: null, basis: null }),
+    change("n1.0", "sammy", { created_at: 1 }),
+    change("n2.0", "sam/x", { created_at: 1 }),
+    change("n3.0", "Sam", { created_at: 1 }),
+    change("n4.0", "mallory", { created_at: 1, client_account_id: M, author_account_id: A }),
+  );
+
+  it("the dry run sends one SELECT and changes no row; the reply carries the count, the log the ids by storage key", async () => {
+    seedSam({ unknown: false });
+    seedChanges();
+    const before = structuredClone(db.changes);
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    ceremony("w", A, "sam");
+    const res = await wipe("sam", "w");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Exactly this storage key's rows not yet cleared, oldest first, whatever their source or state.
+    expect(body.trainerChanges).toEqual({ dryRun: true, count: 3 });
+    // One read, and no other statement against the table; every row, numbers included, untouched.
+    expect(db.changeSql).toEqual(["SELECT id FROM trainer_changes WHERE profile = ? AND cleared_at IS NULL ORDER BY created_at, id"]);
+    expect(db.txns.flatMap((t) => t.statements).filter((x) => x.includes("trainer_changes"))).toEqual([]);
+    expect(db.changes).toEqual(before);
+    // The ids go to the log for the owner to read, by storage key; never to the device.
+    expect(info).toHaveBeenCalledWith(expect.stringContaining("dry run"), "sam",
+      JSON.stringify({ count: 3, part: "1/1", ids: ["s1.0", "s1.1", "s2.0"] }));
+    expect(JSON.stringify(body)).not.toMatch(/s1\.0|s2\.0/);
+    info.mockRestore();
+    // The rest of the wipe ran as before: the account is closed.
+    expect(db.accounts.find((a) => a.id === A)).toMatchObject({ deleted_at: "now" });
+  });
+
+  it("a reclaimed, id-keyed account reports by its storage key, never the name", async () => {
+    seed(B, B, "sam");
+    passkey(B);
+    db.changes.push(change("k1.0", B, { client_account_id: B }), change("k2.0", "sam"));
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    ceremony("w", B, B);
+    const res = await wipe("sam", "w");
+    expect(res.status).toBe(200);
+    expect((await res.json()).trainerChanges).toEqual({ dryRun: true, count: 1 });
+    expect(info).toHaveBeenCalledWith(expect.stringContaining("dry run"), B, JSON.stringify({ count: 1, part: "1/1", ids: ["k1.0"] }));
+    info.mockRestore();
+  });
+
+  it("a long kill list is logged 200 ids a line, in order, every id once", async () => {
+    seedSam({ unknown: false });
+    const many = Array.from({ length: 450 }, (_, i) => change(`m${String(i).padStart(3, "0")}.00`, "sam", { created_at: 100 + i }));
+    db.changes.push(...many);
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    ceremony("w", A, "sam");
+    const res = await wipe("sam", "w");
+    expect(res.status).toBe(200);
+    expect((await res.json()).trainerChanges).toEqual({ dryRun: true, count: 450 });
+    const lines = info.mock.calls.filter((c) => String(c[0]).includes("dry run"));
+    expect(lines.map((c) => c[1])).toEqual(["sam", "sam", "sam"]);
+    const parts = lines.map((c) => JSON.parse(c[2]));
+    expect(parts.map((x) => [x.count, x.part, x.ids.length])).toEqual([[450, "1/3", 200], [450, "2/3", 200], [450, "3/3", 50]]);
+    expect(parts.flatMap((x) => x.ids)).toEqual(many.map((c) => c.id));
+    info.mockRestore();
+    expect(db.changeSql).toEqual(["SELECT id FROM trainer_changes WHERE profile = ? AND cleared_at IS NULL ORDER BY created_at, id"]);
+  });
+
+  it("nothing to clear still logs one line, so the owner sees the zero", async () => {
+    seedSam({ unknown: false });
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    ceremony("w", A, "sam");
+    expect((await (await wipe("sam", "w")).json()).trainerChanges).toEqual({ dryRun: true, count: 0 });
+    expect(info.mock.calls.filter((c) => String(c[0]).includes("dry run")).map((c) => c[2]))
+      .toEqual([JSON.stringify({ count: 0, part: "1/1", ids: [] })]);
+    info.mockRestore();
+  });
+
+  it("a failed dry run never stops the wipe, and the reply carries no report", async () => {
+    seedSam({ unknown: false });
+    seedChanges();
+    db.failChanges = true;
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    ceremony("w", A, "sam");
+    const res = await wipe("sam", "w");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, deleted: 1 + SAM_JUNK.length, kept: 0 });
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("trainer changes dry run failed"));
+    err.mockRestore();
+    expect(db.accounts.find((a) => a.id === A)).toMatchObject({ deleted_at: "now" });
+    expect(db.txns.at(-1)?.committed).toBe(true);
+  });
+});
+
 describe("after the wipe, the account is gone everywhere", () => {
   it("sign-in offers nothing, check shows no passkey and no consent, MCP 401s, the token resolves to nothing", async () => {
     seedSam({ unknown: false });
@@ -461,7 +569,7 @@ describe("a reclaimed, id-keyed account", () => {
     ceremony("w", B, B);
     const res = await wipe("sam", "w");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, deleted: 4, kept: 0 });
+    expect(await res.json()).toEqual({ ok: true, deleted: 4, kept: 0, trainerChanges: { dryRun: true, count: 0 } });
     const BD = dir(B);
     expect(dels).toEqual([`${BD}photos/2026-10-01.jpg`, ...SNAPS(B), `${BD}meta.json`, `${BD}history.json`, `${BD}credentials.json`]);
     expect(vi.mocked(dbm.dbDeleteProfile).mock.calls).toEqual([[B]]);

@@ -123,7 +123,9 @@ describe("ShareApprove: approval", () => {
       { code: CODE, authToken: "tok-1", profile: "alex", consent: { version: SHARE_CONSENT_VERSION } },
     ]);
     expect(screen.getByText("Jo can see your training.")).toBeTruthy();
-    expect(screen.getByText("Read only. Stop any time in Profile.")).toBeTruthy();
+    expect(screen.getByText("They can see your training and change your plan. Turn changes off, or stop sharing, any time in Profile.")).toBeTruthy();
+    // A grant on this consent starts with changes on, so the done line never says read only.
+    expect(document.body.textContent).not.toMatch(/read only/i);
   });
 
   it("a cancelled Face ID goes back to idle, says nothing and posts nothing", async () => {

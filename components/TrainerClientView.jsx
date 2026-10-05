@@ -4,14 +4,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // One client's training, as their trainer sees it: the pane of /trainer.
 // With `self`, the trainer's own training through the same projection: no
-// sharing dates, no looks, nothing to stop. Read only. Every number is computed here from the projection the trainer
+// sharing dates, no looks, nothing to stop. When the client has the trainer's
+// changes on, the view carries their plan: the trainer can change it, and
+// the client sees every change and can undo it (the plan section below).
+// Otherwise read only. Every number is computed here from the projection the trainer
 // routes send (lib/trainer-view.js projectForTrainer), with the same pure
 // functions the client's own Lab uses. Nothing about the viewer's own device
 // is read. Sessions carry synthetic ids, so nothing here parses an id as a
 // time.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { T, DISPLAY } from "@/lib/tokens";
 import { useInlineModalA11y } from "@/lib/a11y";
 import Glyph from "@/components/Glyph";
@@ -20,7 +23,12 @@ import { mainLiftTrend, readinessBreakdown } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
 import { makeDayContext, weeklyStrength } from "@/lib/day-state";
 import { isResting } from "@/lib/breaks";
+import { localDateStr } from "@/lib/dates";
 import { runsWeekFor } from "@/lib/trainer-view";
+import { MAX_OPS, MAX_KG, REP_LIMITS, TIMED_SECONDS, WEEK_JUMP_FRACTION, BIG_DROP_FRACTION } from "@/lib/trainer-change";
+import { EFFECTIVE_REP_BAND } from "@/lib/rep-band";
+import { nextRung, snapToImplement, isBodyweightMovement } from "@/lib/lift-translations";
+import { timedTargetFor } from "@/lib/programme";
 
 const PAGE = 10;
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -137,9 +145,16 @@ const quietBtn = {
  *   now?: number,
  *   onRemove?: () => Promise<boolean> | boolean | void,
  *   self?: boolean,
+ *   onChange?: (body: any) => Promise<{ status: number, body: any }>,
+ *   onFaceId?: () => Promise<boolean>,
+ *   onChanged?: () => Promise<unknown> | unknown,
  * }} props
+ * onChange posts to /api/trainer/change for this client (the parent adds
+ * the grant and the date); onFaceId runs the trainer's sign-in again for a
+ * fresh Face ID; onChanged reloads the pane after a send or a withdraw, and
+ * answers false when the reload didn't land.
  */
-export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false }) {
+export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false, onChange, onFaceId, onChanged }) {
   const name = client?.name || null;
   const title = self ? "You" : name || "Your client";
   const they = self ? "you" : "they";
@@ -187,6 +202,11 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   const looked = self ? null : agoText(lastLooked, now);
   const since = self ? null : client?.since;
   const sentenceName = name || "They";
+  // The plan comes only for a client who has the trainer's changes on.
+  const plan = !self && view?.plan && typeof view.plan === "object" ? view.plan : null;
+  // Where their changes stand (view.edits); "on" without a plan means it couldn't be read.
+  const edits = plan ? "on" : view?.edits === "on" ? "unavailable" : view?.edits;
+  const lead = self ? "Read only." : leadLine(edits, name);
 
   return (
     <div style={{ fontFamily: T.text, color: T.ink }}>
@@ -194,7 +214,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
       <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>{self ? "Your training" : "Shared with you"}</div>
       <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" }}>{title}</h1>
       <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>
-        Read only. Sessions from the last 24 weeks; main lifts over 12 months.
+        {lead} Sessions from the last 24 weeks; main lifts over 12 months.
       </p>
       <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "6px 0 0" }}>
         {since ? <>Sharing since <Nums text={msDayMonth(since)}/></> : null}
@@ -234,6 +254,9 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
               </div>
             )}
           </div>
+
+          {/* 3b. Plan: only when the client has the trainer's changes on */}
+          {plan && <PlanSection plan={plan} name={name} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>}
 
           {/* 4. Main lifts: the 12-month line and the bests */}
           <div style={section} data-section="lifts">
@@ -293,7 +316,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
       {!self && (
         <div style={{ marginTop: 40, paddingTop: 16, borderTop: `1px solid ${T.rule}` }}>
           <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 12px" }}>
-            Read only. {sentenceName} can stop sharing any time.
+            {edits === "on" || edits === "unavailable" ? "They see every change and can undo it." : "Read only."} {sentenceName} can stop sharing any time.
           </p>
           <button type="button" onClick={() => setConfirming(true)} className="forge-press forge-tint" style={quietBtn}>
             {name ? `Stop seeing ${name}'s training` : "Stop seeing their training"}
@@ -413,6 +436,851 @@ function SessionRow({ session }) {
           <span style={{ color: T.ink }}>{r.name}</span> · <Nums text={r.text}/>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── The plan: what a trainer may change, when the client has changes on ─────
+//
+// Nothing here writes on its own. Changes are drafted on this device, checked
+// by POST /api/trainer/change as a dry run (the validator the client's app
+// re-runs), and sent only from the review sheet once that check passes. The
+// client's app applies a sent change on its next open; they see it and can
+// undo it.
+
+const B32 = "abcdefghijklmnopqrstuvwxyz234567";
+/** Changes shown before "Show earlier", in sets. */
+const SETS_PAGE = 5;
+
+/** A change set's id: minted when the review opens, so a double tap sends one set. */
+export function mintSetId() {
+  const bytes = new Uint8Array(26);
+  globalThis.crypto.getRandomValues(bytes);
+  return `hws_${Array.from(bytes, (b) => B32[b & 31]).join("")}`;
+}
+
+/** "Mon 12 Oct" from epoch ms, in the viewer's own calendar. @param {number} ms */
+function msDayLabel(ms) {
+  const d = new Date(ms);
+  return Number.isFinite(d.getTime()) ? isoDayLabel(localDateStr(d)) : "";
+}
+
+/** The leading count of a rep value: 8, "8", "8/leg", "45s" → 8. */
+function repCount(v) {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  const m = typeof v === "string" ? v.match(/^\s*(\d+)/) : null;
+  return m ? parseInt(m[1], 10) : null;
+}
+
+const isTimed = (name) => timedTargetFor(name) !== null;
+const perLeg = (v) => typeof v === "string" && /\/leg$/.test(v);
+
+/** Reps as words: "5 reps", "8 reps a leg", "45 s". */
+function repsWords(v, timed) {
+  const n = repCount(v);
+  if (n === null) return "";
+  if (timed) return `${n} s`;
+  return perLeg(v) ? `${n} reps a leg` : `${n} rep${n === 1 ? "" : "s"}`;
+}
+
+/** Reps after a weight: "× 5", "× 8/leg", "× 45 s". */
+function repsAfterKg(v, timed) {
+  const n = repCount(v);
+  if (n === null) return "";
+  return timed ? ` × ${n} s` : perLeg(v) ? ` × ${n}/leg` : ` × ${n}`;
+}
+
+/**
+ * A lift's plan row: "last 100 × 5 · next 102.5 × 5 · yours 105 (waiting)".
+ * @param {any} lift  a plan lift
+ */
+export function liftLine(lift) {
+  const timed = isTimed(lift.name);
+  const parts = [];
+  const a = lift.anchor;
+  if (!a) parts.push("not lifted yet");
+  else if (a.kg != null) parts.push(`last ${a.kg}${repsAfterKg(a.reps, timed)}`);
+  else if (a.reps != null) parts.push(`last ${repsWords(a.reps, timed)}`);
+  parts.push(lift.w != null ? `next ${lift.w}${repsAfterKg(lift.reps, timed)}` : `next ${repsWords(lift.reps, timed)}`);
+  const p = lift.pending;
+  if (p && (p.w != null || p.reps != null)) {
+    const yours = p.w != null ? `${p.w}${p.reps != null ? repsAfterKg(p.reps, timed) : ""}` : repsWords(p.reps, timed);
+    parts.push(`yours ${yours} (waiting)`);
+  }
+  return parts.join(" · ");
+}
+
+/**
+ * A lift never lifted: the route and their app take up to the same public
+ * number (bounds.max: the larger of the category's cold-start cap and the
+ * template). A cap of 0 means nothing is taken. With no cap known (an older
+ * view), the route's check at review decides. The sheet and a refusal say
+ * the same.
+ * @param {number | null | undefined} cap
+ */
+export function noHistoryText(cap) {
+  if (cap != null && cap <= 0) return "Not lifted yet. Their app sets the first weight.";
+  return cap != null
+    ? `Not lifted yet. Up to ${cap} kg for a first weight.`
+    : "Not lifted yet. Review checks a first weight.";
+}
+
+/**
+ * What the trainer can do here, by the view's edits status (view.edits): on
+ * (the plan came), off (the client turned changes off), fresh (shared before
+ * changes existed: a fresh approval is needed), unavailable (changes are on,
+ * but their plan couldn't be read just now). No status (an older answer)
+ * reads as off.
+ * @param {string | null | undefined} edits
+ * @param {string | null} name  the client's name
+ */
+export function leadLine(edits, name) {
+  switch (edits) {
+    case "on": return "You can change their plan. They see every change and can undo it.";
+    case "unavailable": return "Couldn't load their plan just now. Try again in a moment.";
+    case "fresh": return `Read only. ${name ? `${name} needs` : "They need"} to approve a fresh code before you can change their plan.`;
+    default: return `Read only. ${name || "They"} can let you change their plan in Profile.`;
+  }
+}
+
+/** Why the validator refused a change, in the pane's words. Never the server's text. */
+export function refusalText(code, { lift = null, until = null, bounds = null } = {}) {
+  const who = lift || "That lift";
+  switch (code) {
+    case "not_in_programme": return `${who} isn't in their programme now.`;
+    case "bodyweight": return `${who} is bodyweight. Change its reps instead.`;
+    case "timed": return `${who} is timed. Change its seconds instead.`;
+    case "not_by_load": return `${who} doesn't move by weight. Change its reps instead.`;
+    case "reps_only": return `${who}'s last top set has no weight to show here. Change their reps instead.`;
+    case "range": return `Pick a weight up to ${MAX_KG} kg.`;
+    case "off_grid": return "Pick a weight on their kit's steps.";
+    case "ceiling": return "That's above the app's top for this lift.";
+    case "deload": return until ? `After their deload ends, about ${isoDayMonth(until)}.` : "After their deload ends.";
+    case "recovery": return `After their next ${lift || "session"} session.`;
+    case "per_change": return bounds?.max != null ? `Up to ${bounds.max} kg in one change from their last top set.` : "Too big a step from their last top set.";
+    case "per_week": return bounds?.max != null
+      ? `Up to ${bounds.max} kg this week.`
+      : `Up to ${Math.round(WEEK_JUMP_FRACTION * 100)}% a week over their top set of a week ago, or one step when that set can't be shown here.`;
+    case "floor": return bounds?.min != null ? `Not below ${bounds.min} kg, their deload weight.` : "Not below their deload weight.";
+    case "no_history": return noHistoryText(bounds?.max);
+    case "timed_range": return `${TIMED_SECONDS.min} to ${TIMED_SECONDS.max} seconds, in steps of ${TIMED_SECONDS.step}.`;
+    case "reps_range": return `${REP_LIMITS.min} to ${REP_LIMITS.max} reps.`;
+    case "not_main":
+    case "not_option": return "That isn't an option for this main lift.";
+    case "not_yet":
+    case "from_range": return "Dated changes aren't open yet.";
+    default: return "That change isn't allowed.";
+  }
+}
+
+/** A warning the validator raised: shown, never blocking. */
+export function warningText(code) {
+  switch (code) {
+    case "big_drop": return `More than ${Math.round((1 - BIG_DROP_FRACTION) * 100)}% under their last top set.`;
+    case "off_programme_reps": return "Outside the programme's usual reps for this lift.";
+    case "below_rep_band": return `Under ${EFFECTIVE_REP_BAND.min} reps: heavier work than the programme's band.`;
+    case "double_progression": return "Raises weight and reps together.";
+    case "band": return "Some muscles would sit outside their weekly range with this main lift.";
+    case "under_mev": return "Some muscles would sit under minimum.";
+    case "over_mrv": return "Some muscles would sit over their maximum.";
+    default: return null;
+  }
+}
+
+const NOT_APPLIED = {
+  superseded: "They trained before it arrived",
+  already_there: "They were already there",
+  deload: "Arrived during their deload",
+  replaced: "Replaced by a newer change",
+  limits: "Past the limits when it arrived",
+  stopped: "Stopped before it arrived",
+};
+
+/** A change's status, in the trainer's words (lib/trainer-change.js changeStatus). */
+export function trainerStatusText(c, name) {
+  switch (c.status) {
+    case "waiting": return c.from ? `From ${isoDayLabel(c.from)}` : `Waiting for ${name ? `${name}'s` : "their"} app`;
+    case "in_force": return "In their plan";
+    case "trained_yours": return `Done at your number${c.date ? `, ${isoDayMonth(c.date)}` : ""}${c.cooked ? " · cooked day" : ""}`;
+    case "changed_since": return "They changed it since";
+    case "undone": return `Undone by ${name || "them"}`;
+    case "withdrawn": return "Withdrawn";
+    default: return NOT_APPLIED[c.reason] || "Didn't arrive";
+  }
+}
+
+/** Taking a change back: before it lands, or while it is in force (never a week once landed). */
+const withdrawable = (c) => c.status === "waiting" || (c.status === "in_force" && c.kind !== "week");
+/**
+ * The rows a withdraw by set id reaches on the route (lib/trainer-changes-store.js
+ * dbWithdrawChanges): not undone, and not landed, or landed and not a week.
+ * That includes rows they trained at or changed since, so "Withdraw all"
+ * shows only when every one of these is withdrawable.
+ */
+const reachedBySet = (c) => c.status === "waiting" || (c.status === "not_applied" && c.reason === "stopped")
+  || (["in_force", "trained_yours", "changed_since"].includes(c.status) && c.kind !== "week");
+
+/** One sent change: "Barbell Back Squat · 105 kg, was 102.5". */
+export function changeLine(c) {
+  const timed = c.kind === "reps" && isTimed(c.target);
+  if (c.kind === "weight") return `${c.target} · ${c.after} kg${c.before != null ? `, was ${c.before}` : ""}`;
+  if (c.kind === "reps") return `${c.target} · ${repsWords(c.after, timed)}${c.before != null ? `, was ${repCount(c.before)}` : ""}`;
+  if (c.kind === "mainLift") return `Main lift · ${c.after}${c.before ? `, was ${c.before}` : ""}`;
+  return c.from ? `Week from ${isoDayLabel(c.from)}` : "Week";
+}
+
+/** A drafted or previewed change, before → after. */
+function previewLine(op, timed) {
+  if (op.kind === "weight") return `${op.target} · ${op.before != null ? `${op.before} → ` : ""}${op.after} kg`;
+  if (op.kind === "reps") return `${op.target} · ${op.before != null ? `${repCount(op.before)} → ` : ""}${repsWords(op.after, timed)}`;
+  if (op.kind === "mainLift") return `Main lift · ${op.before ? `${op.before} → ` : ""}${op.after}`;
+  return "Week";
+}
+
+/** The ops a set of drafts sends, main lifts first, then weights, then reps. */
+export function draftOps(drafts) {
+  return [
+    ...Object.entries(drafts.m).map(([canonical, choice]) => ({ kind: "mainLift", canonical, choice, from: null })),
+    ...Object.entries(drafts.w).map(([lift, kg]) => ({ kind: "weight", lift, kg, from: null })),
+    ...Object.entries(drafts.r).map(([lift, reps]) => ({ kind: "reps", lift, reps, from: null })),
+  ];
+}
+
+/** What the pane showed for each target: sent back so the route can tell if it moved since. */
+export function draftBasis(plan, ops) {
+  const lifts = {};
+  const mains = {};
+  for (const op of ops) {
+    if (op.kind === "mainLift") {
+      const m = plan.mains.find((x) => x.canonical === op.canonical);
+      if (m) mains[op.canonical] = m.basis;
+    } else {
+      const l = plan.lifts.find((x) => x.name === op.lift);
+      if (l) lifts[op.lift] = l.basis;
+    }
+  }
+  return { lifts, mains, week: {} };
+}
+
+const EMPTY_DRAFTS = Object.freeze({ w: {}, r: {}, m: {} });
+const draftCount = (d) => Object.keys(d.w).length + Object.keys(d.r).length + Object.keys(d.m).length;
+
+/** @type {import("react").CSSProperties} */
+const sheetStyle = {
+  padding: "26px 24px calc(24px + env(safe-area-inset-bottom))", width: "100%", boxSizing: "border-box",
+  animation: `slideUp 260ms ${T.ease}`, maxHeight: "90vh", overflowY: "auto", outline: "none",
+};
+/** @type {import("react").CSSProperties} */
+const commitStyle = {
+  width: "100%", height: 52, background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer",
+  fontFamily: T.text, fontSize: 15, fontWeight: 500, color: T.commitInk, boxShadow: T.elevStrong,
+};
+/** @type {import("react").CSSProperties} */
+const textBtn = {
+  width: "100%", padding: "12px", marginTop: 4, background: "none", border: "none", cursor: "pointer",
+  fontSize: 13, color: T.ink3, fontFamily: T.text,
+};
+/** @type {import("react").CSSProperties} */
+const smallBtn = {
+  background: "none", border: `1px solid ${T.rule}`, borderRadius: T.rSm, cursor: "pointer",
+  fontFamily: T.text, fontSize: 13, color: T.ink2, minHeight: 36, padding: "0 12px", flexShrink: 0,
+};
+/** @type {import("react").CSSProperties} */
+const subKicker = { fontSize: 12, color: T.ink3, margin: "16px 0 4px" };
+/** @type {import("react").CSSProperties} */
+const statusLine = { fontSize: 13, color: T.ink2, lineHeight: 1.5, minHeight: 0 };
+/** A chip: a pace preset, a main-lift option. @param {boolean} on @returns {import("react").CSSProperties} */
+const chip = (on) => ({
+  minHeight: 40, padding: "0 12px", borderRadius: T.rSm, cursor: "pointer", fontFamily: T.text, fontSize: 13,
+  border: `1px solid ${on ? T.ink : T.rule}`, background: on ? T.press : "none", color: on ? T.ink : T.ink2,
+});
+
+/**
+ * The plan section and its sheets. Every request goes through onChange
+ * (POST /api/trainer/change, the parent adds the grant and the date).
+ * @param {{
+ *   plan: any, name: string | null,
+ *   onChange?: (body: any) => Promise<{ status: number, body: any }>,
+ *   onFaceId?: () => Promise<boolean>,
+ *   onChanged?: () => Promise<unknown> | unknown,
+ * }} props
+ */
+function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
+  const lifts = useMemo(() => (Array.isArray(plan?.lifts) ? plan.lifts : []), [plan]);
+  const mains = useMemo(() => (Array.isArray(plan?.mains) ? plan.mains : []), [plan]);
+  const changes = useMemo(() => (Array.isArray(plan?.changes) ? plan.changes : []), [plan]);
+  const budget = plan?.budget || { used: 0, of: 10, freeAt: null };
+  const outOfSends = budget.used >= budget.of;
+  const mainFor = (liftName) => mains.find((m) => m.choice === liftName && Array.isArray(m.options) && m.options.length > 1) || null;
+
+  const [drafts, setDrafts] = useState(EMPTY_DRAFTS);
+  const [sheet, setSheet] = useState(/** @type {string | null} */ (null));
+  const [reviewing, setReviewing] = useState(false);
+  const [status, setStatus] = useState("");
+  const count = draftCount(drafts);
+  const ops = useMemo(() => draftOps(drafts), [drafts]);
+  const sheetLift = sheet ? lifts.find((l) => l.name === sheet) || null : null;
+
+  // The lift sheet's answer: a value equal to what's in the plan drops its draft.
+  const saveLift = (lift, { kg, reps, choice }) => {
+    const main = mainFor(lift.name);
+    const next = { w: { ...drafts.w }, r: { ...drafts.r }, m: { ...drafts.m } };
+    delete next.w[lift.name]; delete next.r[lift.name];
+    if (main) delete next.m[main.canonical];
+    if (main && choice && choice !== main.choice) {
+      next.m[main.canonical] = choice;
+    } else {
+      if (kg != null && kg !== lift.w) next.w[lift.name] = kg;
+      if (reps != null && reps !== repCount(lift.reps)) next.r[lift.name] = reps;
+    }
+    if (draftCount(next) > MAX_OPS) { setStatus(`Up to ${MAX_OPS} changes in one send. Send these first.`); return false; }
+    setDrafts(next);
+    const n = draftCount(next);
+    setStatus(n ? `${n} change${n === 1 ? "" : "s"} ready to review. Nothing is sent yet.` : "");
+    return true;
+  };
+
+  const dropOps = (indices) => {
+    const next = { w: { ...drafts.w }, r: { ...drafts.r }, m: { ...drafts.m } };
+    for (const i of indices) {
+      const op = /** @type {any} */ (ops[i]);
+      if (!op) continue;
+      if (op.kind === "weight") delete next.w[op.lift];
+      else if (op.kind === "reps") delete next.r[op.lift];
+      else if (op.kind === "mainLift") delete next.m[op.canonical];
+    }
+    setDrafts(next);
+    setReviewing(false);
+    setStatus(`Left out ${indices.length} change${indices.length === 1 ? "" : "s"}. Review again when ready.`);
+  };
+
+  const onSent = () => {
+    setDrafts(EMPTY_DRAFTS);
+    setReviewing(false);
+    setStatus(`Sent. ${name || "They"} sees it next time they open the app, and can undo it.`);
+    onChanged?.();
+  };
+
+  // The line follows the reload: false from onChanged means it didn't load.
+  const onRefresh = async () => {
+    setReviewing(false);
+    setStatus("Getting their latest.");
+    const ok = await onChanged?.();
+    setStatus(ok === false ? "Couldn't get their latest just now. Try again." : "Showing their latest.");
+  };
+
+  const bySession = useMemo(() => {
+    /** @type {Map<string, any[]>} */
+    const out = new Map();
+    for (const l of lifts) {
+      const k = l.session || "";
+      out.set(k, [...(out.get(k) || []), l]);
+    }
+    return [...out];
+  }, [lifts]);
+
+  return (
+    <div style={section} data-section="plan">
+      <div style={kicker}>Plan</div>
+      <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 4px" }}>
+        Pick a lift to change its weight or reps for their next session. Nothing is sent until you review it.
+      </p>
+      {plan?.deload?.active && (
+        <p data-deload="" style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "8px 0 0" }}>
+          On a deload{plan.deload.until ? <> until about <Nums text={isoDayMonth(plan.deload.until)}/></> : null}. Weights can change once it ends.
+        </p>
+      )}
+      {bySession.map(([letter, rows]) => (
+        <div key={letter || "-"} data-plan-session={letter || undefined}>
+          <div style={subKicker}>{letter ? `Session ${letter}` : "Other lifts"}</div>
+          {rows.map((l) => (
+            <PlanRow key={l.name} lift={l} main={mainFor(l.name)} drafts={drafts} onOpen={() => setSheet(l.name)}/>
+          ))}
+        </div>
+      ))}
+
+      <div data-tray="" style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <button type="button" onClick={() => { setStatus(""); setReviewing(true); }} disabled={count === 0 || outOfSends}
+          className="forge-press forge-tint" style={{ ...quietBtn, color: count && !outOfSends ? T.ink : T.ink3, cursor: count && !outOfSends ? "pointer" : "default" }}>
+          {count ? <Nums text={`${count} change${count === 1 ? "" : "s"} · Review`}/> : "No changes yet"}
+        </button>
+        {count > 0 && (
+          <button type="button" onClick={() => { setDrafts(EMPTY_DRAFTS); setStatus("Cleared. Nothing was sent."); }} style={{ ...linkText }}>
+            Clear
+          </button>
+        )}
+      </div>
+      <div role="status" aria-live="polite" style={{ ...statusLine, marginTop: 8 }}>{status}</div>
+
+      <YourChanges changes={changes} lifts={lifts} name={name} budget={budget}
+        onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
+
+      {sheetLift && (
+        <LiftSheet key={sheetLift.name} lift={sheetLift} main={mainFor(sheetLift.name)} drafts={drafts}
+          onSave={(v) => { if (saveLift(sheetLift, v)) setSheet(null); }} onClose={() => setSheet(null)}/>
+      )}
+      {reviewing && count > 0 && (
+        <ReviewSheet name={name} ops={ops} basis={draftBasis({ lifts, mains }, ops)} lifts={lifts} mains={mains} budget={budget}
+          onChange={onChange} onFaceId={onFaceId} onSent={onSent} onDrop={dropOps}
+          onRefresh={onRefresh}
+          onClose={() => setReviewing(false)}/>
+      )}
+    </div>
+  );
+}
+
+/** @type {import("react").CSSProperties} */
+const linkText = { background: "none", border: "none", padding: "8px 0", cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2 };
+
+function PlanRow({ lift, main, drafts, onOpen }) {
+  const timed = isTimed(lift.name);
+  const dw = Object.hasOwn(drafts.w, lift.name) ? drafts.w[lift.name] : null;
+  const dr = Object.hasOwn(drafts.r, lift.name) ? drafts.r[lift.name] : null;
+  const dm = main && Object.hasOwn(drafts.m, main.canonical) ? drafts.m[main.canonical] : null;
+  const draft = dm ? `new main lift ${dm}, not sent`
+    : dw != null || dr != null ? `new ${dw != null ? `${dw}${dr != null ? repsAfterKg(dr, timed) : ""}` : repsWords(dr, timed)}, not sent`
+    : null;
+  return (
+    <button type="button" onClick={onOpen} className="forge-press forge-tint" data-plan-lift={lift.name}
+      style={{ display: "block", width: "100%", padding: "10px 0", background: "none", border: "none", borderTop: `1px solid ${T.ruleFaint}`, cursor: "pointer", textAlign: "left", fontFamily: T.text, color: T.ink }}>
+      <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 15, overflowWrap: "anywhere" }}>{lift.name}</span>
+        {main && <span style={{ fontSize: 12, color: T.ink3, flexShrink: 0 }}>Main lift</span>}
+      </span>
+      <span style={{ display: "block", fontSize: 13, color: T.ink2, lineHeight: 1.5, marginTop: 2 }}>
+        <Nums text={liftLine(lift)}/>
+        {draft && <span style={{ color: T.ink }}> · <Nums text={draft}/></span>}
+      </span>
+    </button>
+  );
+}
+
+/** − value + over a fixed range. */
+function Stepper({ label, unit, children, onDown, onUp, canDown, canUp, disabled = false }) {
+  const btn = (on) => ({
+    width: 44, height: 44, borderRadius: T.r, border: `1px solid ${T.rule}`, background: "none",
+    cursor: on ? "pointer" : "default", opacity: on ? 1 : 0.4, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+  });
+  return (
+    <div role="group" aria-label={label} style={{ display: "flex", alignItems: "center", gap: 12, opacity: disabled ? 0.5 : 1 }}>
+      <button type="button" aria-label={`Less ${label.toLowerCase()}`} onClick={onDown} disabled={disabled || !canDown} style={btn(!disabled && canDown)}>
+        <Glyph name="minus" size={14} color={T.ink2}/>
+      </button>
+      <div style={{ flex: 1, minWidth: 0, textAlign: "center", fontFamily: T.measured, fontSize: 26, color: T.ink }}>
+        {children}<span style={{ fontFamily: T.text, fontSize: 13, color: T.ink3 }}> {unit}</span>
+      </div>
+      <button type="button" aria-label={`More ${label.toLowerCase()}`} onClick={onUp} disabled={disabled || !canUp} style={btn(!disabled && canUp)}>
+        <Glyph name="plus" size={14} color={T.ink2}/>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * One lift: pace presets, a weight stepper over the implement's rungs inside
+ * the bounds the validator gives, a reps (or seconds) stepper, and, on a
+ * main lift, its options.
+ */
+function LiftSheet({ lift, main, drafts, onSave, onClose }) {
+  const { containerRef, onKeyDown } = useInlineModalA11y(true, onClose);
+  const timed = isTimed(lift.name);
+  const lt = lift.loadType;
+  const b = lift.bounds;
+  const blocked = lift.blocked;
+  const anchorKg = lift.anchor?.kg ?? null;
+  const minKg = b ? b.min : 0;
+  const maxKg = b ? (b.max ?? MAX_KG) : 0;
+  const clampKg = (v) => Math.min(maxKg, Math.max(minKg, v));
+
+  // Not lifted and no next weight: the field starts empty, not at one step.
+  const startKg = Object.hasOwn(drafts.w, lift.name) ? drafts.w[lift.name] : (lift.w ?? anchorKg ?? null);
+  const [kg, setKg] = useState(/** @type {number | null} */ (startKg));
+  const [kgText, setKgText] = useState(startKg == null ? "" : String(startKg));
+  // Only a weight or reps the trainer touched (or drafted before) becomes a change.
+  const [kgTouched, setKgTouched] = useState(Object.hasOwn(drafts.w, lift.name));
+  const setBoth = (v) => { setKg(v); setKgText(String(v)); setKgTouched(true); };
+  const commitText = () => {
+    const v = parseFloat(kgText.replace(",", "."));
+    if (Number.isFinite(v) && v > 0) setBoth(clampKg(snapToImplement(v, lt)));
+    else setKgText(kg == null ? "" : String(kg));
+  };
+  const down = kg == null ? null : nextRung(kg, lt, -1);
+  const up = kg == null ? minKg : nextRung(kg, lt, +1);
+
+  const repRange = timed ? TIMED_SECONDS : { ...REP_LIMITS, step: 1 };
+  // A plan value outside the drum's range starts at its nearest end, so every step lands inside it.
+  const rawReps = Object.hasOwn(drafts.r, lift.name) ? drafts.r[lift.name] : (repCount(lift.reps) ?? repRange.min);
+  const startReps = Math.min(repRange.max, Math.max(repRange.min, rawReps));
+  const [reps, setRepsRaw] = useState(startReps);
+  const [repsTouched, setRepsTouched] = useState(Object.hasOwn(drafts.r, lift.name));
+  const setReps = (f) => { setRepsRaw(f); setRepsTouched(true); };
+  // Steps land on the grid (fives for seconds), from wherever the plan sits.
+  const repsDown = Math.max(repRange.min, Math.ceil(reps / repRange.step) * repRange.step - repRange.step);
+  const repsUp = Math.min(repRange.max, Math.floor(reps / repRange.step) * repRange.step + repRange.step);
+
+  const [choice, setChoice] = useState(main ? (drafts.m[main.canonical] ?? main.choice) : null);
+  const switching = !!main && choice !== main.choice;
+  const weighable = !!b && !blocked;
+
+  // Pace presets (§5): the last top set, the engine's next, the top of the
+  // range, and the engine's 5% drop.
+  const presets = [];
+  if (weighable && anchorKg != null) {
+    presets.push(["Hold", clampKg(anchorKg)]);
+    if (lift.w != null) presets.push(["Step", clampKg(lift.w)]);
+    if (b.max != null) presets.push(["Jump", b.max]);
+    presets.push(["Ease", clampKg(snapToImplement(anchorKg * 0.95, lt))]);
+  }
+
+  const weightLabel = lt === "assisted_bodyweight" ? "Assistance" : isBodyweightMovement(lt) ? "Added weight" : lt === "per_db" ? "Weight, each dumbbell" : "Weight";
+  const blockedText = !blocked ? null
+    : blocked.code === "deload" ? (blocked.until ? `After their deload ends, about ${isoDayMonth(blocked.until)}` : "After their deload ends")
+    : blocked.code === "recovery" ? `After their next ${lift.name} session`
+    : blocked.code === "ceiling" ? "Their last top set is past the app's top for this lift. Change their reps instead."
+    : noHistoryText(0);
+  const noWeight = timed ? "A timed hold, so seconds only." : lt === "bodyweight" ? "Bodyweight, so reps only." : "Reps only for this one.";
+  const range = !b ? null
+    : anchorKg != null ? `Up to ${b.max} kg: last top set ${anchorKg}`
+    : noHistoryText(b.max);
+
+  const save = () => onSave({
+    kg: weighable && !switching && kgTouched ? kg : null,
+    reps: !switching && repsTouched ? reps : null,
+    choice,
+  });
+
+  return (
+    <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{ overscrollBehavior: "contain", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="trainer-lift-title" tabIndex={-1}
+        onClick={(e) => e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={sheetStyle}>
+        <div id="trainer-lift-title" style={{ fontSize: 18, fontWeight: 500, color: T.ink, lineHeight: 1.3, marginBottom: 4 }}>{lift.name}</div>
+        <div style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, marginBottom: 18 }}><Nums text={liftLine(lift)}/></div>
+
+        {main && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>Main lift</div>
+            <div role="radiogroup" aria-label="Main lift" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {main.options.map((o) => (
+                <button key={o} type="button" role="radio" aria-checked={choice === o} onClick={() => setChoice(o)} style={chip(choice === o)}>{o}</button>
+              ))}
+            </div>
+            {switching && (
+              <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "10px 0 0" }}>
+                {choice} takes this slot from their next session. Their app sets its weight as it does for any new lift.
+              </p>
+            )}
+          </div>
+        )}
+
+        {!switching && (
+          <>
+            {b && (
+              <div data-weight="" style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>{weightLabel}</div>
+                {blocked ? (
+                  <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5, margin: 0 }}><Nums text={blockedText}/></p>
+                ) : (
+                  <>
+                    {presets.length > 0 && (
+                      <div role="group" aria-label="Pace" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                        {presets.map(([label, v]) => (
+                          <button key={label} type="button" aria-pressed={kg === v} onClick={() => setBoth(v)} style={chip(kg === v)}>
+                            {label} <span style={{ fontFamily: T.measured }}>{v}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <Stepper label={weightLabel} unit="kg" canDown={down != null && down >= minKg} canUp={up <= maxKg}
+                      onDown={() => { if (down != null) setBoth(clampKg(down)); }} onUp={() => setBoth(clampKg(up))}>
+                      <input aria-label={`${weightLabel} in kg`} inputMode="decimal" value={kgText}
+                        onChange={(e) => setKgText(e.target.value)} onBlur={commitText}
+                        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                        style={{ width: `${Math.max(5, kgText.length + 1)}ch`, maxWidth: "100%", textAlign: "center", fontFamily: T.measured, fontSize: 26, color: T.ink, background: "transparent", border: "none", borderBottom: `1px solid ${T.rule}`, padding: 0 }}/>
+                    </Stepper>
+                    <div style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 8 }}>
+                      <div><Nums text={range}/></div>
+                      <div><Nums text={`From ${minKg} kg`}/></div>
+                    </div>
+                    {b.warnBelow != null && kg != null && kg < b.warnBelow && (
+                      <div style={{ fontSize: 13, color: T.under, marginTop: 6 }}>{warningText("big_drop")}</div>
+                    )}
+                    {anchorKg != null && (
+                      <p style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, margin: "8px 0 0" }}>
+                        A one-off. After their next session the app carries on from what they lift.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+            {!b && <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 12px" }}>{noWeight}</p>}
+            <div data-reps="" style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>{timed ? "Seconds" : perLeg(lift.reps) ? "Reps, each leg" : "Reps"}</div>
+              <Stepper label={timed ? "Seconds" : "Reps"} unit={timed ? "s" : "reps"}
+                canDown={repsDown < reps} canUp={repsUp > reps}
+                onDown={() => setReps(repsDown)} onUp={() => setReps(repsUp)}>
+                <span>{reps}</span>
+              </Stepper>
+            </div>
+          </>
+        )}
+
+        <button type="button" onClick={save} style={commitStyle}>Add to changes</button>
+        <button type="button" onClick={onClose} style={textBtn}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The review: a dry run of the drafted set, before → after with its
+ * warnings, then the send. The set id is minted when the sheet opens; the
+ * send carries the same id and ops the dry run passed.
+ */
+function ReviewSheet({ name, ops, basis, lifts, mains, budget, onChange, onFaceId, onSent, onDrop, onRefresh, onClose }) {
+  const [setId, setSetId] = useState(mintSetId);
+  // checking · ready · refused · stale · face · editsOff · budget · gone · error · sending
+  const [phase, setPhase] = useState("checking");
+  const [preview, setPreview] = useState(/** @type {any} */ (null));
+  const [refusals, setRefusals] = useState(/** @type {any[]} */ ([]));
+  const [note, setNote] = useState("");
+  const [freeAt, setFreeAt] = useState(/** @type {number | null} */ (null));
+  const [retry, setRetry] = useState(/** @type {"check" | "send"} */ ("check"));
+  const inFlight = useRef(false);
+  const busy = phase === "checking" || phase === "sending";
+  const close = () => { if (!busy) onClose(); };
+  const { containerRef, onKeyDown } = useInlineModalA11y(true, close);
+  const timedOf = (target) => !!lifts.find((l) => l.name === target) && isTimed(target);
+
+  /** The reply to a dry run or a send, as the sheet's phase. */
+  const settle = (r, step) => {
+    const body = r.body || {};
+    if (r.status === 200 && step === "check" && body.preview) { setPreview(body.preview); setPhase("ready"); return; }
+    if (r.status === 200 && step === "send" && body.sent) { onSent(body); return; }
+    if (r.status === 403 && body.needsFaceId) { setRetry(step); setPhase("face"); return; }
+    if (r.status === 403 && body.editsOff) { setPhase("editsOff"); return; }
+    if (r.status === 409 && body.stale) { setPhase("stale"); return; }
+    if (r.status === 409 && body.taken) { setSetId(mintSetId()); setNote("That didn't send. Try again."); setPhase("ready"); return; }
+    if (r.status === 422 && Array.isArray(body.refusals)) { setRefusals(body.refusals); setPhase("refused"); return; }
+    if (r.status === 429 && body.budget) { setFreeAt(typeof body.budget.freeAt === "number" ? body.budget.freeAt : null); setPhase("budget"); return; }
+    if (r.status === 404) { setPhase("gone"); return; }
+    setNote(r.status === 0 ? "You're offline. Try again when you're back."
+      : r.status === 429 ? "Too many tries. Wait a minute, then try again."
+      : step === "send" ? "That didn't send. Try again." : "Couldn't check that just now. Try again.");
+    setPhase(step === "send" && preview ? "ready" : "error");
+  };
+
+  const run = async (step, id = setId) => {
+    if (inFlight.current || !onChange) return;
+    inFlight.current = true;
+    const body = { set: { id, ops }, basis, ...(step === "check" ? { dryRun: true } : {}) };
+    const r = await onChange(body).catch(() => ({ status: 0, body: {} }));
+    inFlight.current = false;
+    settle(r, step);
+  };
+  const check = () => { setNote(""); setPhase("checking"); run("check"); };
+  const send = () => { if (phase !== "ready") return; setNote(""); setPhase("sending"); run("send"); };
+  const confirmIt = async () => {
+    setNote("");
+    const ok = await onFaceId?.();
+    if (!ok) { setNote("Face ID didn't go through. Try again."); return; }
+    if (retry === "send") { setPhase("sending"); run("send"); } else check();
+  };
+
+  // The dry run starts when the sheet opens.
+  const onOpen = useEffectEvent(() => { run("check"); });
+  useEffect(() => { onOpen(); }, []);
+
+  const refusedAt = new Map(refusals.filter((x) => Number.isInteger(x.i)).map((x) => [x.i, x]));
+  const setLevel = refusals.some((x) => !Number.isInteger(x.i));
+  // Until the dry run answers, the lines come from the pane's own numbers.
+  const local = ops.map((op, i) => {
+    if (op.kind === "mainLift") {
+      const m = mains.find((x) => x.canonical === op.canonical);
+      return { i, kind: op.kind, target: op.canonical, before: m?.choice ?? op.canonical, after: op.choice, warnings: [] };
+    }
+    const lift = lifts.find((l) => l.name === op.lift);
+    const before = op.kind === "weight" ? lift?.w ?? null : lift?.reps ?? null;
+    return { i, kind: op.kind, target: op.lift, before, after: op.kind === "weight" ? op.kg : op.reps, warnings: [] };
+  });
+  const rows = phase === "ready" || phase === "sending" ? (preview?.ops || []) : local;
+  /** @type {Record<string, string>} */
+  const PHASE_TEXT = {
+    checking: "Checking against their limits",
+    sending: "Sending",
+    refused: setLevel ? "That set couldn't be checked. Keep editing and try again." : "Some of these are outside their limits.",
+    stale: "They've trained or changed it since you looked. Refresh to see their latest.",
+    face: `Confirm it's you to ${retry === "send" ? "send" : "check"} changes.`,
+    editsOff: `Changes are off for ${name || "them"} now. Ask them to turn changes on in Profile.`,
+    budget: `That's this week's changes for ${name || "them"}.${freeAt ? ` More from ${msDayLabel(freeAt)}.` : ""}`,
+    gone: "Not shared with you now.",
+  };
+  const phaseText = PHASE_TEXT[phase] ?? "";
+
+  return (
+    <div onKeyDown={onKeyDown} onClick={close} className="forge-scrim" style={{ overscrollBehavior: "contain", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="trainer-review-title" tabIndex={-1}
+        onClick={(e) => e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={sheetStyle}>
+        <div id="trainer-review-title" style={{ fontSize: 18, fontWeight: 500, color: T.ink, lineHeight: 1.3, marginBottom: 14 }}>
+          {name ? `Change ${name}'s plan?` : "Change their plan?"}
+        </div>
+        <ul aria-label="Changes" style={{ listStyle: "none", margin: "0 0 14px", padding: 0 }}>
+          {rows.map((op, k) => {
+            const i = op.i ?? k;
+            const refused = phase === "refused" ? refusedAt.get(i) : null;
+            const lift = lifts.find((l) => l.name === op.target);
+            return (
+              <li key={`${op.kind}:${op.target}`} data-op={i} style={{ padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>
+                <div style={{ fontSize: 14, color: T.ink }}><Nums text={previewLine(op, timedOf(op.target))}/></div>
+                {(op.warnings || []).map((w) => warningText(w)).filter(Boolean).map((t) => (
+                  <div key={t} style={{ fontSize: 13, color: T.under, marginTop: 2 }}>{t}</div>
+                ))}
+                {refused && (
+                  <div data-refused="" style={{ fontSize: 13, color: T.ink2, marginTop: 2 }}>
+                    <Nums text={refusalText(refused.code, { lift: op.target, until: refused.until ?? null, bounds: lift?.bounds ?? null })}/>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "0 0 6px" }}>They'll see each change and can undo it.</p>
+        <p style={{ fontSize: 12, color: T.ink3, margin: "0 0 18px" }}><Nums text={`${budget.used} of ${budget.of} this week`}/></p>
+
+        <div role="status" aria-live="polite" style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, marginBottom: 12, minHeight: 0 }}>
+          {note && (phase === "ready" || phase === "error" || phase === "face") ? note : phase === "budget" ? <Nums text={phaseText}/> : phaseText}
+        </div>
+
+        {phase === "face" && <button type="button" onClick={confirmIt} style={commitStyle}>Confirm it's you</button>}
+        {phase === "stale" && <button type="button" onClick={onRefresh} style={commitStyle}>Refresh</button>}
+        {phase === "refused" && !setLevel && (
+          <button type="button" onClick={() => onDrop([...refusedAt.keys()])} style={commitStyle}>Leave those out</button>
+        )}
+        {phase === "error" && <button type="button" onClick={check} style={commitStyle}>Check again</button>}
+        {(phase === "ready" || phase === "sending" || phase === "checking") && (
+          <button type="button" onClick={send} aria-disabled={phase !== "ready"} data-send=""
+            style={{ ...commitStyle, opacity: phase === "ready" ? 1 : 0.6, cursor: phase === "ready" ? "pointer" : "default" }}>
+            {phase === "sending" ? "One moment" : name ? `Send to ${name}` : "Send"}
+          </button>
+        )}
+        <button type="button" onClick={close} style={textBtn}>Keep editing</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The trainer's own changes, grouped by set, newest first, with their
+ * status and Withdraw where a change can still be taken back.
+ */
+function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChanged }) {
+  const [shown, setShown] = useState(SETS_PAGE);
+  const [busy, setBusy] = useState(/** @type {string | null} */ (null));
+  // A withdraw waiting on Face ID: what it takes back, and whether any of it is in force.
+  const [face, setFace] = useState(/** @type {{ x: string, inForce: boolean } | null} */ (null));
+  const [msg, setMsg] = useState("");
+
+  const sets = useMemo(() => {
+    /** @type {Map<string, any[]>} */
+    const by = new Map();
+    for (const c of changes) {
+      const k = c.set || c.id;
+      by.set(k, [...(by.get(k) || []), c]);
+    }
+    return [...by].map(([id, rows]) => ({ id, rows, at: Math.max(...rows.map((r) => r.at || 0)) })).sort((a, b) => b.at - a.at);
+  }, [changes]);
+
+  // The latest reps change per lift: rep adoption may have moved them since.
+  const settled = (c) => {
+    if (c.kind !== "reps" || c.status !== "trained_yours") return null;
+    const latest = changes.filter((x) => x.kind === "reps" && x.target === c.target).sort((a, b) => (b.at || 0) - (a.at || 0))[0];
+    if (latest?.id !== c.id) return null;
+    const now = lifts.find((l) => l.name === c.target)?.reps;
+    return now != null && repCount(now) !== repCount(c.after) ? repCount(now) : null;
+  };
+
+  const withdraw = async (x, wasInForce) => {
+    if (busy || !onChange) return;
+    setBusy(x); setMsg(""); setFace(null);
+    const r = await onChange({ withdraw: x }).catch(() => ({ status: 0, body: {} }));
+    setBusy(null);
+    if (r.status === 200 && Array.isArray(r.body?.withdrawn) && r.body.withdrawn.length === 0) {
+      // Nothing matched: it was undone already, or has moved past taking back.
+      setMsg("Nothing to withdraw. It's already undone, or it can't be taken back now.");
+      onChanged?.();
+    } else if (r.status === 200) {
+      setMsg(wasInForce ? `Withdrawn. ${name ? `${name}'s` : "Their"} app puts it back next time it opens.` : `Withdrawn. It won't reach ${name || "them"}.`);
+      onChanged?.();
+    } else if (r.status === 403 && r.body?.needsFaceId) {
+      setFace({ x, inForce: wasInForce });
+    } else if (r.status === 403 && r.body?.editsOff) {
+      setMsg(`Changes are off for ${name || "them"} now. Anything not landed won't land.`);
+    } else {
+      setMsg(r.status === 0 ? "You're offline. Try again when you're back." : "Couldn't withdraw that just now. Try again.");
+    }
+  };
+  const confirmIt = async () => {
+    if (!face) return;
+    const ok = await onFaceId?.();
+    if (!ok) { setMsg("Face ID didn't go through. Try again."); return; }
+    withdraw(face.x, face.inForce);
+  };
+
+  return (
+    <div data-section="changes" style={{ marginTop: 24 }}>
+      <div style={{ ...kicker, marginBottom: 4 }}>Your changes</div>
+      <div style={{ fontSize: 12, color: T.ink3, marginBottom: 8 }}>
+        <Nums text={`${budget.used} of ${budget.of} this week`}/>
+        {budget.used >= budget.of && budget.freeAt ? <> · <Nums text={`more from ${msDayLabel(budget.freeAt)}`}/></> : null}
+      </div>
+      {sets.length === 0 && <div style={{ fontSize: 13, color: T.ink2 }}>Nothing sent yet.</div>}
+      {sets.slice(0, shown).map((s) => {
+        const open = s.rows.filter(withdrawable);
+        const all = open.length > 1 && s.rows.filter(reachedBySet).every(withdrawable);
+        return (
+          <div key={s.id} data-set={s.id} style={{ borderTop: `1px solid ${T.ruleFaint}`, padding: "10px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <div style={{ flex: 1, fontSize: 13, color: T.ink3 }}>{s.at ? <Nums text={`Sent ${msDayMonth(s.at)}`}/> : "Sent"}</div>
+              {all && (
+                <button type="button" onClick={() => withdraw(s.id, open.some((c) => c.status === "in_force"))} aria-disabled={!!busy} style={smallBtn}>Withdraw all</button>
+              )}
+            </div>
+            {s.rows.map((c) => {
+              const adopted = settled(c);
+              return (
+                <div key={c.id} data-change={c.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "4px 0" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, color: T.ink, overflowWrap: "anywhere" }}><Nums text={changeLine(c)}/></div>
+                    <div style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}>
+                      <Nums text={trainerStatusText(c, name)}/>
+                      {adopted != null ? <> · <Nums text={`They've since settled on ${adopted}`}/></> : null}
+                    </div>
+                    {(c.warnings || []).map((w) => warningText(w)).filter(Boolean).map((t) => (
+                      <div key={t} style={{ fontSize: 12, color: T.under, marginTop: 2 }}>{t}</div>
+                    ))}
+                  </div>
+                  {withdrawable(c) && (
+                    <button type="button" onClick={() => withdraw(c.id, c.status === "in_force")} aria-disabled={!!busy} style={smallBtn}>
+                      {busy === c.id ? "One moment" : "Withdraw"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+      {sets.length > shown && (
+        <button type="button" onClick={() => setShown((n) => n + SETS_PAGE)} className="forge-press forge-tint" style={{ ...quietBtn, width: "100%", marginTop: 8 }}>
+          Show earlier
+        </button>
+      )}
+      <div role="status" aria-live="polite" style={{ ...statusLine, marginTop: 8 }}>
+        {face ? "Confirm it's you to withdraw a change." : msg}
+      </div>
+      {face && (
+        <button type="button" onClick={confirmIt} className="forge-press forge-tint" style={{ ...quietBtn, marginTop: 8 }}>Confirm it's you</button>
+      )}
     </div>
   );
 }

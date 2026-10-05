@@ -22,7 +22,7 @@ const X = id26("x"); // client whose account closed
 const P = id26("p"); // client whose approving passkey is gone
 const O = id26("o"); // client of the other trainer
 
-const db = { tokens: new Map(), accounts: new Map(), handles: [], credentials: [], grants: [], meta: [], sessions: [] };
+const db = { tokens: new Map(), accounts: new Map(), handles: [], credentials: [], grants: [], meta: [], sessions: [], changes: [] };
 const calls = [];
 let failOn = null;
 let logMisses = false; // the look UPDATE matches nothing (revoked between the join and the log)
@@ -63,7 +63,7 @@ vi.mock("@neondatabase/serverless", () => ({
       const h = db.handles.find((x) => x.account_id === v[0] && x.released_at == null);
       return h ? [{ handle: h.handle, display: h.display }] : [];
     }
-    if (/^\s*SELECT g\.id, g\.profile, g\.scope, g\.created_at, g\.last_used_at, h\.handle, h\.display\s+FROM oauth_grants g/.test(q)) {
+    if (/^\s*SELECT g\.id, g\.profile, g\.scope, g\.created_at, g\.last_used_at, g\.edits_at, g\.edits_off_at, h\.handle, h\.display\s+FROM oauth_grants g/.test(q)) {
       const [t, ref] = v;
       return db.grants
         .filter((g) => liveGrant(g, t) && (ref === undefined || g.id === ref))
@@ -71,7 +71,9 @@ vi.mock("@neondatabase/serverless", () => ({
         .map((g) => {
           const h = db.handles.find((x) => x.account_id === g.account_id && x.released_at == null);
           return { id: g.id, profile: g.profile, scope: g.scope, created_at: String(g.created_at),
-            last_used_at: g.last_used_at == null ? null : String(g.last_used_at), handle: h?.handle ?? null, display: h?.display ?? null };
+            last_used_at: g.last_used_at == null ? null : String(g.last_used_at),
+            edits_at: g.edits_at == null ? null : String(g.edits_at), edits_off_at: g.edits_off_at == null ? null : String(g.edits_off_at),
+            handle: h?.handle ?? null, display: h?.display ?? null };
         });
     }
     if (/^\s*UPDATE oauth_grants SET\s+looks = CASE/.test(q)) {
@@ -98,6 +100,24 @@ vi.mock("@neondatabase/serverless", () => ({
     }
     if (/^\s*INSERT INTO notice_marks /.test(q)) return []; // pinned in tests/notices.test.js
     if (/^\s*SELECT now\(\) AS t$/.test(q)) return [{ t: new Date() }];
+    // The trainer's own changes on one grant (dbChangesForTrainer). Whole stored rows come back,
+    // basis and bookkeeping included, so the projection is what keeps them home.
+    if (/^\s*SELECT c\.id, c\.set_id, .* AS edits_live\s+FROM trainer_changes c LEFT JOIN oauth_grants g/s.test(q)) {
+      const [ref, t, since] = v;
+      return db.changes
+        .filter((c) => c.grant_id === ref && c.author_account_id === t && c.source === "trainer" && c.status === "sent"
+          && (c.created_at > since || (c.outcome == null && c.undone_at == null)))
+        .map((c) => {
+          const g = db.grants.find((x) => x.id === c.grant_id);
+          const live = !!g && g.revoked_at == null && g.edits_at != null && (g.edits_off_at == null || g.edits_off_at < g.edits_at) && c.created_at > g.edits_at;
+          return { ...c, created_at: String(c.created_at), edits_live: live };
+        });
+    }
+    if (/^\s*SELECT count\(DISTINCT set_id\)::int AS used, min\(created_at\) AS oldest FROM trainer_changes/.test(q)) {
+      const [ref, since] = v;
+      const rows = db.changes.filter((c) => c.grant_id === ref && c.source === "trainer" && c.created_at > since);
+      return [{ used: new Set(rows.map((c) => c.set_id)).size, oldest: rows.length ? String(Math.min(...rows.map((c) => c.created_at))) : null }];
+    }
     if (/^\s*SELECT field, value FROM meta WHERE profile = \?$/.test(q)) {
       return db.meta.filter((m) => m.profile === v[0]).map(({ field, value }) => ({ field, value }));
     }
@@ -117,6 +137,7 @@ const { TRAINER_COOKIE } = await import("@/lib/trainer-session");
 const { TRAINER_TERMS_VERSION } = await import("@/lib/trainer-terms");
 const { dbLogFullLook, dbRosterSignals } = await import("@/lib/trainer-store");
 const { rateLimit, rateLimitShared } = await import("@/lib/rate-limit");
+const { PLAN_KEYS } = await import("@/lib/trainer-plan");
 
 const CURRENT = { version: TRAINER_TERMS_VERSION, at: "2026-10-01T00:00:00.000Z", adult: true };
 const account = (id, sk, roles, trainer_terms = null) => ({
@@ -139,6 +160,7 @@ const grant = (id, client, trainer, cred, extra = {}) => ({
   revoked_at: null, revoked_by: null, looks: [], look_count: 0, last_used_at: null, ...extra,
 });
 const writes = () => calls.filter((c) => /^\s*(INSERT|UPDATE|DELETE)\b/.test(c.q));
+const changeReads = () => calls.filter((c) => /FROM trainer_changes\b/.test(c.q));
 const dataReads = () => calls.filter((c) => /FROM (meta|sessions)\b/.test(c.q));
 const H = "https://heatwayve.app/api/trainer";
 const cookie = (t) => (t ? { cookie: `${TRAINER_COOKIE}=${t}` } : {});
@@ -223,6 +245,7 @@ beforeEach(() => {
     grant("hwg_oli", O, N, "cO"),
   ];
   db.meta = Object.entries(PLANTED_META).map(([field, value]) => ({ profile: "sk-cara", field, value }));
+  db.changes = [];
   db.sessions = [daysAgo(1), daysAgo(200)].map((d, i) => {
     const record = plantedRecord(d, i ? "18:02:03" : "07:13:42");
     return { profile: "sk-cara", id: record.id, record };
@@ -244,7 +267,9 @@ describe("POST /api/trainer/client", () => {
     const body = await res.json();
     expect(Object.keys(body).sort()).toEqual(["client", "view"]);
     expect(body.client).toEqual({ name: "Cara", since: 1_790_000_000_000 });
-    expect(Object.keys(body.view).sort()).toEqual(["breaks", "schedule", "sessions", "tops", "window"]);
+    expect(Object.keys(body.view).sort()).toEqual(["breaks", "edits", "schedule", "sessions", "tops", "window"]);
+    // A grant approved before plan changes (no edits_at): read only until a fresh approval.
+    expect(body.view.edits).toBe("fresh");
     for (const k of ["meta", "history", "scopes", "scope", "profile", "ref", "cursor"]) {
       expect(body, k).not.toHaveProperty(k);
       expect(body.view, k).not.toHaveProperty(k);
@@ -370,7 +395,9 @@ describe("POST /api/trainer/client { ref: 'me' }: the trainer's own training", (
     expect(body.self).toBe(true);
     expect(body.client).toEqual({ name: "Tia" });
     // Same allow-list: the projection of the same data is the same, byte for byte.
-    expect(body.view).toEqual(theirs.view);
+    const { edits: _grantOnly, ...theirView } = theirs.view;
+    expect(body.view).toEqual(theirView);
+    expect(body.view).not.toHaveProperty("edits");
     for (const f of FORBIDDEN) expect(text, f).not.toContain(f);
 
     const reads = dataReads();
@@ -416,6 +443,194 @@ describe("POST /api/trainer/client { ref: 'me' }: the trainer's own training", (
     expect(vi.mocked(rateLimit).mock.calls[0].slice(1)).toEqual(["trainer-client", 60]);
     const [, route, n, opts] = vi.mocked(rateLimitShared).mock.calls[0];
     expect([route, n, opts]).toEqual(["trainer-client", 300, { windowMs: DAY, id: T }]);
+  });
+});
+
+describe("POST /api/trainer/client: the plan, with the client's changes on", () => {
+  const SQUAT = "Barbell Back Squat";
+  const SET = "hws_" + "t".repeat(26);
+  const EDITS_AT = Date.now() - 3 * DAY;
+  const RECORD_ID = `${daysAgo(1)}T07:13:42.000Z`;
+  const editsOn = (ref = "hwg_cara", extra = {}) => Object.assign(db.grants.find((g) => g.id === ref), { edits_at: EDITS_AT, ...extra });
+  // With changes on the trainer sees the stored W: a plain number here, not a sentinel.
+  const plainWeights = () => { db.meta.find((m) => m.profile === "sk-cara" && m.field === "weights").value = { [SQUAT]: 100 }; };
+  const stored = (i, over = {}) => ({
+    id: `${SET}.${i}`, set_id: SET, grant_id: "hwg_cara", profile: "sk-cara", client_account_id: C, author_account_id: T,
+    source: "trainer", status: "sent", kind: "weight", target: SQUAT, old_value: 100, new_value: 105,
+    basis: { anchorId: RECORD_ID, trainedId: RECORD_ID, w: 100, r: null }, warnings: ["big_drop"], effective_from: null,
+    created_at: Date.now() - DAY + i, applied_at: null, outcome: null, undone_at: null, undone_by: null, reverted_at: null, cleared_at: null,
+    ...over,
+  });
+
+  it("the view carries the plan, read after the look; the only write is still the look", async () => {
+    editsOn();
+    plainWeights();
+    db.changes = [
+      stored(0),
+      stored(1, { author_account_id: N, set_id: "hws_" + "n".repeat(26), id: "hws_" + "n".repeat(26) + ".0" }), // another trainer's
+      stored(2, { grant_id: "hwg_abe", id: `${SET}.2` }), // another client's
+    ];
+    const res = await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const text = await res.text();
+    const body = JSON.parse(text);
+    expect(Object.keys(body)).toEqual(["client", "view"]);
+    expect(Object.keys(body.view).sort()).toEqual(["breaks", "edits", "plan", "schedule", "sessions", "tops", "window"]);
+    expect(body.view.edits).toBe("on");
+    const { plan } = body.view;
+    expect(Object.keys(plan)).toEqual(PLAN_KEYS.plan);
+    // Only this trainer's changes on this grant; the budget counts every set on the grant.
+    expect(plan.changes.map((c) => c.id)).toEqual([`${SET}.0`]);
+    expect(plan.changes[0]).toEqual({ id: `${SET}.0`, set: SET, kind: "weight", target: SQUAT, before: 100, after: 105, from: null,
+      status: "waiting", reason: null, date: null, at: db.changes[0].created_at, warnings: ["big_drop"] });
+    expect(plan.budget).toEqual({ used: 2, of: 10, freeAt: db.changes[0].created_at + 7 * DAY });
+    const squat = plan.lifts.find((l) => l.name === SQUAT);
+    expect(squat.pending).toEqual({ w: 105, reps: null });
+
+    // Order: the ring UPDATE, then the profile and the changes; the changes read is this grant and this trainer.
+    const iLog = calls.findIndex((c) => /^\s*UPDATE oauth_grants SET\s+looks = CASE/.test(c.q));
+    expect(iLog).toBeGreaterThan(-1);
+    const reads = changeReads();
+    expect(reads).toHaveLength(2);
+    for (const r of reads) {
+      expect(calls.indexOf(r)).toBeGreaterThan(iLog);
+      expect(r.v[0]).toBe("hwg_cara");
+    }
+    expect(reads.find((r) => /edits_live/.test(r.q)).v[1]).toBe(T);
+    expect(writes().map((w) => w.q.trim().slice(0, 20))).toEqual(["UPDATE oauth_grants "]);
+  });
+
+  it("never sends a planted field, a change's basis or bookkeeping, or a load read from bodyweight", async () => {
+    editsOn();
+    plainWeights();
+    db.sessions[0].record.readiness = "normal"; // a top set the engine reads
+    // A pure bodyweight lift whose logged weight is the body itself (a legacy set): never its load.
+    db.sessions[0].record.blocks[0].exercises.push({ name: "45-Degree Hip Extension", muscle: "Glutes", loadType: "bodyweight",
+      sets: [{ weight: 81.37, reps: 12, rpe: 8, rir: 2, loadType: "bodyweight", bodyweightUsed: 81.37, effectiveLoad: 81.37 }] });
+    db.changes = [stored(0, { applied_at: "2026-09-01T06:51:44.000Z", outcome: "applied", reverted_at: "2026-09-02T05:52:45.000Z",
+      undone_at: 1777777777777, undone_by: "client" })];
+    const text = await (await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).text();
+    for (const f of [...FORBIDDEN, "06:51:44", "05:52:45", "anchorId", "trainedId", "sk-cara", C, "editsLive", "edits_live", "cleared"]) {
+      expect(text, f).not.toContain(f);
+    }
+    // The planted squat set's load is a body-based effectiveLoad (778.11), not its logged 100: reps only.
+    const squat = JSON.parse(text).view.plan.lifts.find((l) => l.name === SQUAT);
+    expect(squat).toMatchObject({ w: null, bounds: null, anchor: { date: daysAgo(1), kg: null } });
+    const hip = JSON.parse(text).view.plan.lifts.find((l) => l.name === "45-Degree Hip Extension");
+    expect(hip).toMatchObject({ w: null, bounds: null, anchor: { date: daysAgo(1), kg: null, reps: 12 } });
+  });
+
+  it("an anchor kg the session view withholds never leaves through the plan (the body as a Pull-Up's weight, a stale working weight, no effectiveLoad, no load type)", async () => {
+    editsOn();
+    plainWeights();
+    const rec0 = db.sessions[0].record;
+    rec0.readiness = "normal";
+    const base = rec0.blocks[0].exercises.map((e) => ({ ...e }));
+    const variants = [
+      ["pull-up, weight = body", [{ name: "Pull-Up", muscle: "Lats", loadType: "loaded_bodyweight",
+        sets: [{ weight: 81.37, reps: 6, rpe: 9, rir: 1, loadType: "bodyweight", bodyweightUsed: 81.37, effectiveLoad: 81.37 }] }]],
+      ["pull-up, stale working weight", [{ name: "Pull-Up", muscle: "Lats", loadType: "loaded_bodyweight",
+        sets: [{ weight: 61.25, reps: 6, rpe: 9, rir: 1, loadType: "bodyweight", bodyweightUsed: 81.37, effectiveLoad: 81.37 }] }]],
+      ["bench, no effectiveLoad, weight = body", [{ name: "Barbell Bench Press", muscle: "Chest", loadType: "barbell",
+        sets: [{ weight: 81.37, reps: 5, rpe: 8, rir: 2, loadType: "bodyweight" }] }]],
+      // No load type on set or exercise: the programme's ('bodyweight') decides, though the name alone does not say so.
+      ["hip extension, no load type anywhere, weight = body", [{ name: "45-Degree Hip Extension", muscle: "Glutes",
+        sets: [{ weight: 81.37, reps: 12, rpe: 8, rir: 2 }] }]],
+    ];
+    for (const [label, extra] of variants) {
+      rec0.blocks[0].exercises = [...base, ...extra];
+      const text = await (await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).text();
+      const { plan, sessions } = JSON.parse(text).view;
+      const name = extra[0].name;
+      // The session view shows that set as 0; the plan's anchor carries no kg, and no bounds or W.
+      expect(sessions[0].blocks[0].exercises.find((e) => e.name === name).sets[0].weight, label).toBe(0);
+      expect(plan.lifts.find((l) => l.name === name), label).toMatchObject({ w: null, bounds: null, anchor: { date: daysAgo(1), kg: null } });
+      for (const f of [...FORBIDDEN, "61.25"]) expect(JSON.stringify(plan), `${label}: ${f}`).not.toContain(f);
+      for (const f of FORBIDDEN) expect(text, `${label}: ${f}`).not.toContain(f);
+    }
+  });
+
+  it("mixed load types, and an untyped bodyweight set in the trend tier: the body never leaves", async () => {
+    editsOn();
+    plainWeights();
+    const recent = db.sessions[0].record;
+    recent.readiness = "normal";
+    // A bench session with a plain set and a body-loaded set (effectiveLoad 20 + 81.37).
+    recent.blocks[0].exercises = [{ name: "Barbell Bench Press", muscle: "Chest", loadType: "barbell", sets: [
+      { weight: 100, reps: 5, rpe: 8, rir: 2, loadType: "barbell" },
+      { weight: 20, reps: 8, rpe: 8, rir: 2, loadType: "loaded_bodyweight", bodyweightUsed: 81.37, effectiveLoad: 101.37 },
+    ] }];
+    // 200 days back (trend tier): a pure bodyweight main-block set with no load type anywhere, its weight the body.
+    const old = db.sessions[1].record;
+    old.readiness = "normal";
+    old.blocks[0].exercises = [
+      { name: "45-Degree Hip Extension", muscle: "Glutes", sets: [{ weight: 81.37, reps: 12, rpe: 8 }] },
+      { name: "Barbell Back Squat", muscle: "Quads", loadType: "barbell", sets: [{ weight: 100, reps: 5, rpe: 8, loadType: "barbell" }] },
+    ];
+    const text = await (await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).text();
+    const { plan, tops } = JSON.parse(text).view;
+    expect(plan.lifts.find((l) => l.name === "Barbell Bench Press")).toMatchObject({ w: null, bounds: null, anchor: { date: daysAgo(1), kg: null } });
+    for (const f of ["81.37", "101.37"]) {
+      expect(JSON.stringify(plan), f).not.toContain(f);
+      expect(text, f).not.toContain(f);
+    }
+    expect(tops.flatMap((t) => t.blocks[0].exercises.map((e) => e.name))).toEqual(["Barbell Back Squat"]);
+    for (const f of FORBIDDEN) expect(text, f).not.toContain(f);
+  });
+
+  it("changes never on, or turned off: no plan, and the trainer's changes are never read", async () => {
+    const t = session(T, "cT");
+    for (const [extra, status] of [[null, "fresh"], [{ edits_off_at: EDITS_AT + 1 }, "off"]]) {
+      if (extra) editsOn("hwg_cara", extra);
+      calls.length = 0;
+      db.changes = [stored(0)];
+      const body = await (await view(t, { ref: "hwg_cara", today: TODAY })).json();
+      expect(body.view, JSON.stringify(extra)).not.toHaveProperty("plan");
+      expect(body.view.edits, JSON.stringify(extra)).toBe(status);
+      expect(changeReads(), JSON.stringify(extra)).toEqual([]);
+    }
+    // Turned back on: the plan is back.
+    editsOn("hwg_cara", { edits_at: EDITS_AT + 2, edits_off_at: EDITS_AT + 1 });
+    const back = (await (await view(t, { ref: "hwg_cara", today: TODAY })).json()).view;
+    expect(back).toHaveProperty("plan");
+    expect(back.edits).toBe("on");
+  });
+
+  it("the trainer's own training never carries a plan", async () => {
+    const body = await (await view(session(T, "cT"), { ref: "me", today: TODAY })).json();
+    expect(body.view).not.toHaveProperty("plan");
+    expect(body.view).not.toHaveProperty("edits");
+    expect(changeReads()).toEqual([]);
+  });
+
+  it("look-before-read holds for the plan: no look, no changes read; not shared, nothing read", async () => {
+    editsOn();
+    editsOn("hwg_oli");
+    failOn = /^\s*UPDATE oauth_grants SET\s+looks = CASE/;
+    expect((await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).status).toBe(503);
+    expect(changeReads()).toEqual([]);
+    failOn = null;
+    logMisses = true;
+    expect((await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).status).toBe(404);
+    logMisses = false;
+    calls.length = 0;
+    expect((await view(session(T, "cT"), { ref: "hwg_oli", today: TODAY })).status).toBe(404);
+    expect(changeReads()).toEqual([]);
+    expect(dataReads()).toEqual([]);
+  });
+
+  it("a changes read that fails: the view still answers, without a plan, and the failure is logged", async () => {
+    editsOn();
+    failOn = /FROM trainer_changes/;
+    const res = await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.view).not.toHaveProperty("plan");
+    // Changes are on but could not be read: the pane can tell this from changes off.
+    expect(body.view.edits).toBe("unavailable");
+    expect(body.view.sessions).toHaveLength(1);
+    expect(vi.mocked(console.error).mock.calls.some((c) => String(c[0]).includes("trainer-client-plan"))).toBe(true);
   });
 });
 
@@ -548,7 +763,7 @@ describe("SQL pins", () => {
   const run = async (fn) => { calls.length = 0; await fn(); return calls; };
 
   it("liveness: one join on the open client account and its native approving passkey; with a ref, that grant only", async () => {
-    const BASE = "SELECT g.id, g.profile, g.scope, g.created_at, g.last_used_at, h.handle, h.display FROM oauth_grants g"
+    const BASE = "SELECT g.id, g.profile, g.scope, g.created_at, g.last_used_at, g.edits_at, g.edits_off_at, h.handle, h.display FROM oauth_grants g"
       + " JOIN accounts a ON a.id = g.account_id AND a.deleted_at IS NULL"
       + " JOIN credentials c ON c.id = g.credential_id AND c.account_id = g.account_id AND c.rp_id = 'heatwayve.app'"
       + " LEFT JOIN handles h ON h.account_id = g.account_id AND h.kind = 'primary' AND h.released_at IS NULL"

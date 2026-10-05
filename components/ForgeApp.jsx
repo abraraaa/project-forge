@@ -489,8 +489,9 @@ export default function ForgeApp(){
 
     // BLOCKING sync — await blob round-trip before unblocking the UI. On
     // error, still unblock (we'll show whatever's in localStorage — a
-    // recoverable error state, not a frozen UI).
-    backgroundSync(activeProfile, { onUpdate: onSyncUpdate })
+    // recoverable error state, not a frozen UI). Home applies any trainer
+    // changes the pull carries (lib/storage.js applyTrainerRows).
+    backgroundSync(activeProfile, { onUpdate: onSyncUpdate, applyTrainer: true })
       .then(() => { if (!cancelled) setHydrating(false); })
       .catch((e) => {
         console.error("[forge:hydrate]", e);

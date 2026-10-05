@@ -10,6 +10,7 @@ import { metaPath, historyPath, profileDir, photosPrefix, snapshotPaths } from "
 import { dbResolveHandle, dbAccountByStorageKey, dbClaimHandle, dbCloseAccount, CLAIM_MODE } from "@/lib/identity-store";
 import { countIndexedCredentials, readCredentialSet } from "@/lib/credential-store";
 import { IDENTITY_BLOB_FALLBACK, RESERVED_HANDLE_RE } from "@/lib/identity";
+import { dbOpenChangesFor, dbWipeReportTrainerChanges } from "@/lib/trainer-changes-store";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -292,8 +293,23 @@ async function readLatestLegacy(blobs, kindRe) {
   return readJson(latest.pathname);
 }
 
+// Trainer changes waiting for this profile's app, for the DB reads below:
+// { rows } when there are any, else null and the key is left out. Read only;
+// the app applies them through its own stamped edits (lib/storage.js
+// applyTrainerRows). Never fails the pull: on error the rows wait for the next.
+async function trainerRowsFor(profile) {
+  try {
+    const rows = await dbOpenChangesFor(profile);
+    return Array.isArray(rows) && rows.length ? { rows } : null;
+  } catch (e) {
+    console.error("[forge:sync GET] trainer changes read failed:", e?.message || e);
+    return null;
+  }
+}
+
 // GET /api/sync?profile=Name
-// Returns { meta: {...}, history: [...] }
+// Returns { meta: {...}, history: [...] }, plus `trainer: { rows }` from the
+// DB reads when a trainer has changes waiting (old clients ignore the key).
 //
 // GET /api/sync?profile=Name&check=1
 // Returns { exists: boolean } — lightweight availability check for signup.
@@ -359,8 +375,10 @@ export async function GET(request) {
       if (!hasDb()) {
         return NextResponse.json({ error: "Delta sync unavailable" }, { status: 503 });
       }
+      // One after the other: two cold reads at once would each run the schema DDL.
       const delta = await dbReadProfileSince(gate.profile, since);
-      return withSyncCookie(NextResponse.json({ delta: true, ...delta }), gate);
+      const trainer = await trainerRowsFor(gate.profile);
+      return withSyncCookie(NextResponse.json({ delta: true, ...delta, ...(trainer ? { trainer } : {}) }), gate);
     }
 
     // DB-first: if the profile has rows, serve them. Blob remains the read
@@ -368,7 +386,10 @@ export async function GET(request) {
     if (hasDb()) {
       try {
         const fromDb = await dbReadProfile(gate.profile);
-        if (fromDb) return withSyncCookie(NextResponse.json(fromDb), gate);
+        if (fromDb) {
+          const trainer = await trainerRowsFor(gate.profile);
+          return withSyncCookie(NextResponse.json(trainer ? { ...fromDb, trainer } : fromDb), gate);
+        }
       } catch (e) {
         console.error("[forge:sync GET] db read failed, falling back to blob:", e?.message || e);
       }
@@ -759,7 +780,9 @@ export async function POST(request) {
 // docs). Anything else in the folder is kept and counted. Then closes the
 // account: grants revoked, handles released (the name is free), consent
 // cleared, passkey rows deleted. Requires a fresh, unscoped passkey ceremony
-// token; a profile with no passkey must register one first.
+// token; a profile with no passkey must register one first. With the DB, the
+// reply also carries trainerChanges { dryRun, count }: how many trainer changes
+// a wipe would clear (their ids go to the server log only). None are cleared yet.
 export async function DELETE(request) {
   const limited = rateLimit(request, "sync-delete", 10);
   if (limited) return limited;
@@ -849,6 +872,8 @@ export async function DELETE(request) {
     try { await dbDeleteToken(authToken); } catch {}
 
     let deleted = 0;
+    /** @type {{ count: number, ids: string[] } | null} */
+    let trainerChanges = null;
     if (hasDb()) {
       // Photo blobs by the account's OWN index rows, read before the rows go;
       // each path must sit under its own photos prefix. A previous holder's
@@ -870,6 +895,20 @@ export async function DELETE(request) {
         // Refuse a half-wipe: if DB rows survive while blobs die, the next
         // GET would serve the "deleted" profile straight back from the DB.
         return serverError(e, { label: "sync-delete-db" });
+      }
+      // Dry run only (wipe protocol): the trainer changes whose numbers a
+      // wipe of this profile would clear, logged and reported. Writes
+      // nothing; clearing them is a later, separate switch. Never fails the wipe.
+      try { trainerChanges = await dbWipeReportTrainerChanges(sk); }
+      catch (e) { console.error(`[forge:sync-delete] trainer changes dry run failed: ${e?.message || e}`); }
+      if (trainerChanges) {
+        // The owner's kill list, 200 ids a line so no log line is cut short; part k/n.
+        const { count, ids } = trainerChanges;
+        const parts = Math.max(1, Math.ceil(ids.length / 200));
+        for (let k = 0; k < parts; k++) {
+          console.info("[forge:sync-delete] dry run, trainer changes a wipe would clear:", sk,
+            JSON.stringify({ count, part: `${k + 1}/${parts}`, ids: ids.slice(k * 200, (k + 1) * 200) }));
+        }
       }
     }
     // Snapshot generations live OUTSIDE the profile prefix and must die
@@ -917,7 +956,8 @@ export async function DELETE(request) {
       catch (e) { return serverError(e, { label: "sync-delete-close" }); }
     }
 
-    return NextResponse.json({ ok: true, deleted, kept: listed.length - junk.length });
+    return NextResponse.json({ ok: true, deleted, kept: listed.length - junk.length,
+      ...(trainerChanges ? { trainerChanges: { dryRun: true, count: trainerChanges.count } } : {}) });
   } catch (e) {
     return serverError(e);
   }

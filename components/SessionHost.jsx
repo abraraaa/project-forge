@@ -31,8 +31,9 @@ import { track } from "@vercel/analytics";
 import {
   P, H, W, PB, F, TS, BW, D, SessionIntent, TRAVEL,
   newDraftLog, logSet, finaliseDraft, bumpStreak, scaleForReadiness,
-  planStartWeight, pushNow, recordCompletion, rpeToRir,
+  planStartWeight, pushNow, recordCompletion, rpeToRir, TL,
 } from "@/lib/storage";
+import { changeStatus } from "@/lib/trainer-change";
 import {
   SESSIONS, EXERCISE_POOLS,
   applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
@@ -60,6 +61,34 @@ import {
 
 const SESSION_KEYS = ["strength-a", "strength-b", "strength-c"];
 
+/**
+ * Who set this lift's number, when a trainer's change set it and it still
+ * stands: the value is unchanged and no session of the lift came after it
+ * landed (the same "in force" the client's change list shows). Read-only.
+ * @param {Record<string, { id: string, after: any, by: string | null, at: string }> | undefined} mark  trainerLocal marks for the lift
+ * @param {string} lift
+ * @param {{ weights: Record<string, any>, reps: Record<string, any>, history: any[] }} state
+ * @returns {string | null}
+ */
+export function setByLine(mark, lift, { weights, reps, history }) {
+  if (!mark || typeof mark !== "object") return null;
+  const meta = { weights, reps };
+  const todayIso = todayLocalIso();
+  /** @param {"weight" | "reps"} kind */
+  const holder = (kind) => {
+    const m = mark[kind];
+    if (!m || typeof m.id !== "string" || typeof m.at !== "string") return undefined;
+    const row = { id: m.id, kind, target: lift, after: m.after, appliedAt: m.at, outcome: "applied" };
+    if (changeStatus(row, { meta, history, todayIso }).status !== "in_force") return undefined;
+    return typeof m.by === "string" && m.by ? m.by : "your trainer";
+  };
+  const w = holder("weight");
+  const r = holder("reps");
+  if (w && r && w === r) return `Set by ${w}`;
+  const parts = [w && `Weight set by ${w}`, r && `${w ? "reps" : "Reps"} set by ${r}`].filter(Boolean);
+  return parts.length ? parts.join(", ") : null;
+}
+
 export default function SessionHost() {
   const router = useRouter();
 
@@ -80,6 +109,12 @@ export default function SessionHost() {
   const [liftStates] = useState(() => {
     if (!profile) return {};
     try { return TS.get(profile)?.lifts || {}; } catch { return {}; }
+  });
+  // Who set each lift's number, as the session opened (device-local marks a
+  // trainer's change leaves when it lands). Display only.
+  const [trainerMarks] = useState(() => {
+    if (!profile) return {};
+    try { return TL.get(profile).marks; } catch { return {}; }
   });
   // Muscle anchors as the session opened: the cold-start rung of every plan
   // weight (planStartWeight). Only finalise moves them.
@@ -445,6 +480,16 @@ export default function SessionHost() {
   const coachLine = lastNote?.kind === "adopted" ? SESSION_COPY.adoptedTarget(lastNote.reps, ADOPT_AFTER_SESSIONS)
     : lastNote?.kind === "final_set_miss" ? SESSION_COPY.ownAllSets(block.sets)
     : null;
+  // A quieter line under it when a trainer set today's number.
+  const setBy = activeEx?.name
+    ? setByLine(trainerMarks[activeEx.name], activeEx.name, { weights: workingWeights, reps: workingReps, history })
+    : null;
+  const cardLine = !setBy ? coachLine : (
+    <>
+      {coachLine && <span style={{ display: "block" }}>{coachLine}</span>}
+      <span style={{ display: "block", marginTop: coachLine ? 4 : 0, fontSize: 12, color: T.ink3 }}>{setBy}</span>
+    </>
+  );
 
   const resolveExFn = useCallback((blockId, ph, defaultEx) => {
     const b = activeSession.blocks.find(x => x.id === blockId);
@@ -793,7 +838,7 @@ export default function SessionHost() {
     // The screen edits today's plan only; the prescription is read-only here
     // (the drum's dot marks it).
     planWeights, setPlanWeights: setSessionWeights, planReps, setPlanReps: setSessionReps,
-    prescribedReps, coachLine, travel,
+    prescribedReps, coachLine: cardLine, travel,
     history, loggedSets,
     awaitRpe, ssRoundDone,
     restActive, restRemain, setRestActive, setRestRemain,

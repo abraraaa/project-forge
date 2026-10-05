@@ -37,7 +37,7 @@ export const APPROVE_COPY = Object.freeze({
   changed: "Something changed. Try again.",
   notNow: "Not now",
   done: "Done",
-  doneLine: "Read only. Stop any time in Profile.",
+  doneLine: "They can see your training and change your plan. Turn changes off, or stop sharing, any time in Profile.",
 });
 
 const JSON_POST = { method: "POST", headers: { "Content-Type": "application/json" } };
