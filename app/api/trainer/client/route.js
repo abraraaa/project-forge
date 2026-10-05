@@ -2,7 +2,9 @@ import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { dbReadProfile } from "@/lib/db";
 import { dbPrimaryHandle } from "@/lib/identity-store";
 import { dbTrainerGrants, dbLogFullLook } from "@/lib/trainer-store";
-import { projectForTrainer, trainerToday, publicName, SELF_REF } from "@/lib/trainer-view";
+import { dbChangesForTrainer } from "@/lib/trainer-changes-store";
+import { trainerToday, publicName, SELF_REF } from "@/lib/trainer-view";
+import { projectForTrainer, editsStatus } from "@/lib/trainer-plan";
 import { trainerGate, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
 
@@ -21,6 +23,12 @@ const notShared = () => json({ error: "Not shared with you now." }, 404);
 // POST /api/trainer/client { ref, today } -> { client: { name, since }, view }
 // POST keeps the grant id out of URLs and logs. The look is logged on the
 // grant before the client's data is read; if it can't be logged, nothing is read.
+// view.edits says where the trainer's changes stand: on, off, fresh (the
+// grant predates the current consent) or unavailable (changes on, but the
+// trainer's own changes could not be read: the failure is logged and the view
+// answers without a plan). When on, view.plan carries what the trainer may
+// change, with their own changes and budget (read after the look, like the
+// profile).
 // { ref: "me" } -> { client: { name }, view, self: true }: the trainer's own
 // training, from their own storage key, through the same projection. No
 // grant and no look: it is their own data.
@@ -40,12 +48,12 @@ export async function POST(request) {
     if (shared) return slid(g, noStore(shared));
 
     const now = Date.now();
-    let profile, client;
+    let profile, client, grant = null;
     if (self) {
       profile = g.identity.storageKey;
       client = { name: publicName(await dbPrimaryHandle(me)) };
     } else {
-      const [grant] = (await dbTrainerGrants(me, ref)) ?? [];
+      grant = ((await dbTrainerGrants(me, ref)) ?? [])[0] ?? null;
       if (!grant) return slid(g, notShared());
       let logged;
       try {
@@ -61,7 +69,17 @@ export async function POST(request) {
     }
 
     const data = await dbReadProfile(profile);
-    const view = projectForTrainer(data, { todayIso: trainerToday(body.today, now) });
+    let changes = null;
+    if (grant?.edits === true) {
+      try {
+        changes = await dbChangesForTrainer(ref, me, now);
+      } catch (e) {
+        serverError(e, { label: `${LABEL}-plan` }); // logged; the view still answers
+      }
+    }
+    // The trainer's own training has no grant: no edits status, no plan.
+    const status = grant ? editsStatus(grant, changes) : null;
+    const view = projectForTrainer(data, { todayIso: trainerToday(body.today, now), edits: changes, status });
     return slid(g, json(self ? { client, view, self: true } : { client, view }));
   } catch (e) {
     return noStore(serverError(e, { label: LABEL }));
