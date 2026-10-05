@@ -53,6 +53,7 @@ const INVENTORY = {
   D:  { disposition: "device-local", keys: ["draft"], reason: "transient in-session draft, recovered locally only" },
   AN: { disposition: "device-local", keys: ["absenceNudge"], reason: "which absence this device's nudge was dismissed for; a UI courtesy, derived absence itself is never stored" },
   TRAVEL: { disposition: "device-local", keys: ["travel"], reason: "describes where the DEVICE is, not who the user is — syncing it would put the phone left at home into travel mode" },
+  TL: { disposition: "device-local", keys: ["trainerLocal"], reason: "trainer changes as this device saw them (waiting rows, who set a number, unreported outcomes); the server keeps the log and redelivers anything unreported" },
   // LS and SyncStatus are utilities, not stores. They don't own data.
 };
 
