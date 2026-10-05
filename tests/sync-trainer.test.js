@@ -2,8 +2,9 @@
 // The Neon driver is faked with small in-memory tables, so dbClientShare, the
 // Neon OAuth store and revokeGrantFor run for real and every statement is
 // captured. Sign-in is faked at readTokenData / resolveTokenIdentity.
-// The only writes allowed: the client's stop, an UPDATE of revoked_at, and
-// "Got it" on the ended notice, an UPDATE of notice_seen_at.
+// The only writes allowed: the client's stop, an UPDATE of revoked_at,
+// "Got it" on the ended notice, an UPDATE of notice_seen_at, and on the
+// caller's own application to coach, the seen and withdraw UPDATEs.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { readFileSync } from "node:fs";
@@ -17,7 +18,7 @@ const B = id26("b"); // another client, "bea"
 const T = id26("t"); // trainer "tia"
 const N = id26("n"); // trainer "nia"
 
-const db = { accounts: new Map(), handles: [], credentials: [], grants: [] };
+const db = { accounts: new Map(), handles: [], credentials: [], grants: [], applications: new Map() };
 const calls = [];
 
 // Mirrors dbClientShare's SELECT: the newest trainer grant (live first), the
@@ -49,6 +50,24 @@ vi.mock("@neondatabase/serverless", () => ({
       calls.push({ q: text, v });
       if (/^SELECT g\.id, g\.created_at, g\.revoked_at, g\.revoked_by, g\.consent_version, g\.looks, g\.look_count, g\.notice_seen_at,/.test(text)) {
         return clientShareRow(v[0]);
+      }
+      const flat = text.replace(/\s+/g, " ").trim();
+      if (flat === "SELECT status, about, link, terms, applied_at, decided_at, seen_at, created_at FROM trainer_applications WHERE account_id = ?") {
+        const r = db.applications.get(v[0]);
+        // BIGINT columns come back as strings, as from Neon.
+        return r ? [Object.fromEntries(Object.entries(r).map(([k, x]) => [k, typeof x === "number" ? String(x) : x]))] : [];
+      }
+      if (flat === "UPDATE trainer_applications SET seen_at = ? WHERE account_id = ? AND status IN ('approved', 'denied') AND seen_at IS NULL RETURNING account_id") {
+        const r = db.applications.get(v[1]);
+        if (!r || !["approved", "denied"].includes(r.status) || r.seen_at != null) return [];
+        r.seen_at = v[0];
+        return [{ account_id: v[1] }];
+      }
+      if (flat === "UPDATE trainer_applications SET status = 'withdrawn', decided_at = ? WHERE account_id = ? AND status = 'applied' RETURNING account_id") {
+        const r = db.applications.get(v[1]);
+        if (!r || r.status !== "applied") return [];
+        Object.assign(r, { status: "withdrawn", decided_at: v[0] });
+        return [{ account_id: v[1] }];
       }
       if (/^SELECT \* FROM oauth_grants WHERE id = \?$/.test(text)) {
         const g = db.grants.find((x) => x.id === v[0]);
@@ -141,6 +160,7 @@ beforeEach(() => {
     { id: `cred-${B}`, account_id: B, rp_id: "heatwayve.app" },
   ];
   db.grants = [];
+  db.applications = new Map();
 });
 afterEach(() => {
   for (const k of envKeys) {
@@ -155,7 +175,7 @@ describe("GET /api/sync/trainer: status", () => {
     const res = await get();
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
-    expect(await res.json()).toEqual({ open: false, trainerOpen: false, trainer: false, sharing: null, ended: null });
+    expect(await res.json()).toEqual({ open: false, trainerOpen: false, trainer: false, trainerRole: false, sharing: null, ended: null, application: null });
     expect(writes()).toEqual([]);
   });
 
@@ -277,7 +297,7 @@ describe("GET /api/sync/trainer: status", () => {
     })];
     const body = await (await get()).text();
     const res = JSON.parse(body);
-    expect(Object.keys(res).sort()).toEqual(["ended", "open", "sharing", "trainer", "trainerOpen"]);
+    expect(Object.keys(res).sort()).toEqual(["application", "ended", "open", "sharing", "trainer", "trainerOpen", "trainerRole"]);
     expect(Object.keys(res.sharing).sort()).toEqual(["consentVersion", "live", "lookCount", "looks", "name", "ref", "since"]);
     for (const l of res.sharing.looks) expect(Object.keys(l).every((k) => ["kind", "at", "day"].includes(k))).toBe(true);
     expect(res.sharing.looks).toHaveLength(2);
@@ -292,7 +312,7 @@ describe("GET /api/sync/trainer: status", () => {
     expect(await status()).toMatchObject({ open: true, trainerOpen: false, trainer: false });
     delete process.env.TRAINER_PREVIEW_ACCOUNTS;
     process.env.ADMIN_ACCOUNT_ID = T;
-    expect(await status("tok-tia", "tia")).toMatchObject({ open: true, trainerOpen: true, trainer: true });
+    expect(await status("tok-tia", "tia")).toMatchObject({ open: true, trainerOpen: true, trainer: true, trainerRole: true });
   });
 
   it("refuses: no sign-in, no profile, another account's profile, a photos or trainer token", async () => {
@@ -308,7 +328,7 @@ describe("GET /api/sync/trainer: status", () => {
 
   it("without a database: no share, still 200", async () => {
     delete process.env.DATABASE_URL;
-    expect(await status()).toEqual({ open: false, trainerOpen: false, trainer: false, sharing: null, ended: null });
+    expect(await status()).toEqual({ open: false, trainerOpen: false, trainer: false, trainerRole: false, sharing: null, ended: null, application: null });
   });
 });
 
@@ -428,6 +448,96 @@ describe("POST /api/sync/trainer: the ended notice, seen", () => {
   it("without a database: 503, nothing written", async () => {
     delete process.env.DATABASE_URL;
     expect((await post({ profile: "abe", seen: "hwg_t1" })).status).toBe(503);
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("the caller's application to coach", () => {
+  const app = (status, extra = {}) => ({ account_id: A, status, about: "SENTINEL-ABOUT", link: "https://sentinel.example",
+    terms: { version: TRAINER_TERMS_VERSION, at: "x", adult: true }, applied_at: NOW - 3 * DAY, decided_at: null, seen_at: null,
+    created_at: NOW - 40 * DAY, ...extra });
+
+  it("GET carries where it stands, never what was written; numbers come back as numbers", async () => {
+    db.applications.set(A, app("applied"));
+    const body = await (await get()).text();
+    expect(JSON.parse(body).application).toEqual({ status: "applied", at: NOW - 3 * DAY, decidedAt: null, nextAt: null, seen: false });
+    for (const bad of ["SENTINEL-ABOUT", "sentinel.example", TRAINER_TERMS_VERSION]) expect(body).not.toContain(bad);
+    expect(writes()).toEqual([]);
+  });
+
+  it("a denial: nextAt is 30 days on while that is ahead, then null; seen once marked", async () => {
+    db.applications.set(A, app("denied", { decided_at: NOW - 2 * DAY }));
+    expect((await status()).application).toEqual({ status: "denied", at: NOW - 3 * DAY, decidedAt: NOW - 2 * DAY, nextAt: NOW + 28 * DAY, seen: false });
+    db.applications.set(A, app("denied", { decided_at: NOW - 31 * DAY, seen_at: NOW - 30 * DAY }));
+    expect((await status()).application).toMatchObject({ status: "denied", nextAt: null, seen: true });
+    // Another account's row is never this caller's.
+    db.applications = new Map([[B, { ...app("approved"), account_id: B }]]);
+    expect((await status()).application).toBeNull();
+  });
+
+  it("seenApplication is one UPDATE of seen_at on the caller's own decided row, once", async () => {
+    db.applications.set(A, app("approved", { decided_at: NOW - DAY }));
+    db.applications.set(B, { ...app("approved", { decided_at: NOW - DAY }), account_id: B });
+    const res = await post({ profile: "abe", seenApplication: true });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    const w = writes();
+    expect(w.map((c) => c.q.replace(/\s+/g, " ").trim())).toEqual([
+      "UPDATE trainer_applications SET seen_at = ? WHERE account_id = ? AND status IN ('approved', 'denied') AND seen_at IS NULL RETURNING account_id",
+    ]);
+    expect(w[0].v[1]).toBe(A);
+    expect(db.applications.get(A).seen_at).toBeGreaterThan(0);
+    expect(db.applications.get(B).seen_at).toBeNull();
+    expect((await post({ profile: "abe", seenApplication: true })).status).toBe(404);
+  });
+
+  it("seenApplication on a waiting or withdrawn row, or none, is not found and marks nothing", async () => {
+    expect((await post({ profile: "abe", seenApplication: true })).status).toBe(404);
+    for (const st of ["applied", "withdrawn"]) {
+      db.applications.set(A, app(st));
+      expect((await post({ profile: "abe", seenApplication: true })).status).toBe(404);
+      expect(db.applications.get(A).seen_at).toBeNull();
+    }
+  });
+
+  it("withdrawApplication is one UPDATE to 'withdrawn' on the caller's own waiting row; what they wrote is not touched", async () => {
+    db.applications.set(A, app("applied"));
+    const res = await post({ profile: "abe", withdrawApplication: true });
+    expect(res.status).toBe(200);
+    const w = writes();
+    expect(w.map((c) => c.q.replace(/\s+/g, " ").trim())).toEqual([
+      "UPDATE trainer_applications SET status = 'withdrawn', decided_at = ? WHERE account_id = ? AND status = 'applied' RETURNING account_id",
+    ]);
+    expect(w[0].v[1]).toBe(A);
+    expect(db.applications.get(A)).toMatchObject({ status: "withdrawn", about: "SENTINEL-ABOUT", link: "https://sentinel.example" });
+    expect((await status()).application).toMatchObject({ status: "withdrawn", nextAt: null });
+    // Only a waiting row: again, or a decided one, is not found.
+    expect((await post({ profile: "abe", withdrawApplication: true })).status).toBe(404);
+    db.applications.set(A, app("denied", { decided_at: NOW - DAY }));
+    expect((await post({ profile: "abe", withdrawApplication: true })).status).toBe(404);
+    expect(db.applications.get(A).status).toBe("denied");
+  });
+
+  it("only a literal true counts; both at once, or either beside stop or seen, is not an application write", async () => {
+    db.applications.set(A, app("applied"));
+    for (const body of [{ withdrawApplication: "true" }, { withdrawApplication: 1 }, { seenApplication: true, withdrawApplication: true },
+      { withdrawApplication: true, stop: "hwg_x" }, { withdrawApplication: true, seen: "hwg_x" }]) {
+      expect((await post({ profile: "abe", ...body })).status, JSON.stringify(body)).toBe(404);
+    }
+    // Beside seen, the ended-notice path ran (and matched nothing); no application write was sent.
+    expect(writes().filter((c) => /trainer_applications/.test(c.q))).toEqual([]);
+    expect(db.applications.get(A).status).toBe("applied");
+  });
+
+  it("refuses without the sync sign-in, and never on a photos or trainer token; 503 without a database", async () => {
+    db.applications.set(A, app("applied"));
+    for (const [token, profile] of [[null, "abe"], ["tok-abe-photos", "abe"], ["tok-abe-trainer", "abe"], ["tok-abe", "tia"]]) {
+      expect((await post({ profile, withdrawApplication: true }, token)).status).toBe(401);
+      expect((await post({ profile, seenApplication: true }, token)).status).toBe(401);
+    }
+    expect(calls).toEqual([]);
+    delete process.env.DATABASE_URL;
+    expect((await post({ profile: "abe", withdrawApplication: true })).status).toBe(503);
     expect(calls).toEqual([]);
   });
 });

@@ -5,8 +5,9 @@
 // Locks in:
 //   - 401 shows sign-in; the ceremony is quiet and its token is exchanged
 //     at POST /api/trainer/session for the named profile;
-//   - 403 notTrainer shows the upgrade panel, and the upgrade reuses that
-//     ceremony (one Face ID) with 18+ and the current Trainer Terms;
+//   - 403 notTrainer for the admin shows the upgrade panel, and the upgrade
+//     reuses that ceremony (one Face ID) with 18+ and the current Trainer
+//     Terms (everyone else applies: tests/components/TrainerApply.test.jsx);
 //   - 403 needsTerms asks to agree again; 503 says not open yet;
 //   - roster rows render every signal variant;
 //   - the invite sheet shows the code, polls, flips to "is in" and reloads
@@ -20,7 +21,11 @@
 //   - a final invite status (used, cancelled) stops polling for good;
 //   - an invite reply after the sheet closed, or behind a newer issue, is
 //     dropped; a terms change while a client opens leaves no pane behind;
-//   - the upgrade panel names the trainer by the server's name once known.
+//   - the upgrade panel names the trainer by the server's name once known;
+//   - your own training is the roster's pinned first row; it opens with
+//     ref "me" and a self history entry, in a pane titled You;
+//   - the QR plate sits inside the sheet padding; a final invite status
+//     leads in ink and the dead code fades.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -91,6 +96,8 @@ function signedIn(clients = SIGNALS) {
     : { status: 200, body: { me: { name: "Coach Kim" }, clients } });
   server.routes["POST /api/trainer/client"] = (b) => (b.ref === "hwg_gone"
     ? { status: 404, body: { error: "Not shared with you now." } }
+    : b.ref === "me"
+    ? { status: 200, body: { client: { name: "Coach Kim" }, view: clientView(), self: true } }
     : { status: 200, body: { client: { name: "Alex", since: Date.UTC(2026, 8, 1) }, view: clientView() } });
 }
 
@@ -154,11 +161,11 @@ describe("TrainerView: signing in", () => {
     expect(screen.getByText("Type your Heatwayve name first.")).toBeTruthy();
   });
 
-  it("403 notTrainer shows the upgrade panel; the upgrade reuses the ceremony", async () => {
+  it("403 notTrainer for the admin shows the upgrade panel; the upgrade reuses the ceremony", async () => {
     let trainer = false;
     server.routes["POST /api/trainer/clients"] = () => (trainer
       ? { status: 200, body: { me: { name: "coachkim" }, clients: [] } } : { status: 401, body: {} });
-    server.routes["POST /api/trainer/session"] = { status: 403, body: { notTrainer: true } };
+    server.routes["POST /api/trainer/session"] = { status: 403, body: { notTrainer: true, admin: true } };
     server.routes["POST /api/trainer/upgrade"] = () => { trainer = true; return { status: 200, body: { ok: true, name: "coachkim" } }; };
     await mount();
     typeName("coachkim");
@@ -188,7 +195,7 @@ describe("TrainerView: signing in", () => {
 
   it("an upgrade that is not open yet says so", async () => {
     server.routes["POST /api/trainer/clients"] = { status: 401, body: {} };
-    server.routes["POST /api/trainer/session"] = { status: 403, body: { notTrainer: true } };
+    server.routes["POST /api/trainer/session"] = { status: 403, body: { notTrainer: true, admin: true } };
     server.routes["POST /api/trainer/upgrade"] = { status: 503, body: { error: "Not open yet." } };
     await mount();
     typeName("coachkim");
@@ -252,6 +259,30 @@ describe("TrainerView: the roster", () => {
     expect(screen.getByText("Signed in as Coach Kim")).toBeTruthy();
   });
 
+  it("pins your own training first, a hairline apart from the clients", async () => {
+    signedIn();
+    const { container } = await mount();
+    const roster = container.querySelector(".forge-wide-roster");
+    const you = roster.querySelector("[data-self-row]");
+    const list = screen.getByRole("list", { name: "Clients" });
+    expect(you).toBeTruthy();
+    expect(you.textContent).toBe("Your trainingRead only here");
+    expect(you.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The first row button in the roster is yours; clients follow.
+    const rows = [...roster.querySelectorAll("button[aria-current], [data-self-row] button, ul button")];
+    expect(rows[0].textContent).toBe("Your trainingRead only here");
+    expect(rows[1].textContent).toMatch(/^Alex/);
+    expect(you.style.borderBottom).toMatch(/^1px solid/);
+    // It is not a client: the list holds clients only.
+    expect(within(list).queryByText("Your training")).toBeNull();
+  });
+
+  it("an empty roster still shows your own training", async () => {
+    signedIn([]);
+    await mount();
+    expect(screen.getByText("Your training")).toBeTruthy();
+  });
+
   it("an empty roster says how clients add you", async () => {
     signedIn([]);
     await mount();
@@ -297,6 +328,37 @@ describe("TrainerView: a client", () => {
     await act(async () => { window.dispatchEvent(new PopStateEvent("popstate", { state: null })); });
     expect(container.firstChild.getAttribute("data-view")).toBe("roster");
     expect(screen.getByText("Pick a client to see their training.")).toBeTruthy();
+    push.mockRestore(); replace.mockRestore();
+  });
+
+  it("your own row opens your training: ref me, a self history entry, a pane titled You with nothing to stop", async () => {
+    signedIn();
+    const { container } = await mount();
+    const push = vi.spyOn(window.history, "pushState");
+    fireEvent.click(screen.getByText("Your training"));
+    await flush();
+    expect(posts("/api/trainer/client").map((c) => c.body)).toEqual([{ ref: "me", today }]);
+    expect(push).toHaveBeenCalledWith({ view: "client", self: true }, "");
+    expect(window.location.pathname).toBe("/trainer");
+    expect(container.firstChild.getAttribute("data-view")).toBe("client");
+    expect(screen.getByText("You", { selector: "h1" })).toBeTruthy();
+    expect(screen.getByText("Your training", { selector: "span" }).closest("button").getAttribute("aria-current")).toBe("true");
+    const main = container.querySelector(".forge-wide-main");
+    expect(main.textContent).not.toMatch(/Sharing since|You last looked|Stop seeing/);
+    // Switching to a client replaces the entry; Back clears; Forward reopens yours.
+    const replace = vi.spyOn(window.history, "replaceState");
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    expect(replace).toHaveBeenCalledWith({ view: "client", i: 0 }, "");
+    fireEvent.click(screen.getByText("Your training"));
+    await flush();
+    expect(replace).toHaveBeenLastCalledWith({ view: "client", self: true }, "");
+    await act(async () => { window.dispatchEvent(new PopStateEvent("popstate", { state: null })); });
+    expect(container.firstChild.getAttribute("data-view")).toBe("roster");
+    await act(async () => { window.dispatchEvent(new PopStateEvent("popstate", { state: { view: "client", self: true } })); });
+    await flush();
+    expect(screen.getByText("You", { selector: "h1" })).toBeTruthy();
+    expect(posts("/api/trainer/client").map((c) => c.body.ref)).toEqual(["me", "hwg_a", "me", "me"]);
     push.mockRestore(); replace.mockRestore();
   });
 
@@ -390,11 +452,15 @@ describe("TrainerView: a client", () => {
     expect(screen.getByText("Pick a client to see their training.")).toBeTruthy();
   });
 
-  it("sign out and sign out everywhere end the session", async () => {
+  it("sign out opens a sheet; Everywhere ends the session on every device", async () => {
     signedIn();
     server.routes["POST /api/trainer/session/end"] = { status: 200, body: { ok: true } };
     await mount();
-    fireEvent.click(screen.getByText("Sign out everywhere"));
+    expect(screen.queryByText("Everywhere")).toBeNull(); // one Sign out, the choice lives in the sheet
+    fireEvent.click(screen.getByText("Sign out"));
+    const sheet = screen.getByRole("dialog", { name: "Sign out" });
+    expect(within(sheet).getByText("This device")).toBeTruthy();
+    fireEvent.click(within(sheet).getByText("Everywhere"));
     await flush();
     expect(posts("/api/trainer/session/end").map((c) => c.body)).toEqual([{ everywhere: true }]);
     expect(screen.getByText("Sign in with Face ID")).toBeTruthy();
@@ -542,6 +608,70 @@ describe("TrainerView: the invite sheet", () => {
     expect(within(dialog).queryByRole("img", { name: "QR code for the share link" })).toBeNull();
     expect(dialog.querySelector("[data-qr]")).toBeNull();
     expect(dialog.querySelector("[data-code]").textContent).toBe("ABCD 0EFG H1JK");
+  });
+
+  it("the QR plate sits inside the sheet's padding, its left edge on the text's", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(issuedAt);
+    signedIn();
+    inviteRoutes();
+    await mount();
+    await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
+    await flush();
+    const plate = screen.getByRole("dialog").querySelector("[data-qr]");
+    for (const side of ["marginLeft", "marginRight", "marginTop"]) {
+      expect(plate.style[side] === "" || parseFloat(plate.style[side]) >= 0, side).toBe(true);
+    }
+    expect(plate.style.width).toBe("185px");
+  });
+
+  it("once the code is cancelled, used or run out, the status leads in ink and the dead code fades", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(issuedAt);
+    signedIn();
+    const reply = { status: "pending", expiresAt: issuedAt + 3_600_000 };
+    inviteRoutes(reply);
+    await mount();
+    await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
+    await flush();
+    const dialog = screen.getByRole("dialog");
+    const status = within(dialog).getByRole("status");
+    const code = dialog.querySelector("[data-code]");
+    // Live: the code in ink; the status (first in the DOM, one live region) sits after the how-to by order.
+    expect(code.style.opacity).toBe("1");
+    expect(status.style.order).toBe("3");
+    expect(status.compareDocumentPosition(code) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(status.style.fontSize).toBe("14px");
+    expect(status.hasAttribute("data-final")).toBe(false);
+
+    await act(async () => { fireEvent.click(within(dialog).getByText("Cancel code")); });
+    await flush();
+    const after = within(dialog).getByRole("status");
+    expect(after).toBe(status); // one live region throughout, so it is announced
+    expect(after.textContent).toBe("Cancelled. This code no longer works.");
+    expect(after.hasAttribute("data-final")).toBe(true);
+    expect(after.style.order).toBe(""); // first in the DOM and on screen
+    expect(within(dialog).queryByText(/Works once, until/)).toBeNull(); // the how-to goes with the dead code
+    expect(after.parentElement.style.display).toBe("flex");
+    expect(after.parentElement.style.flexDirection).toBe("column");
+    expect(after.style.fontSize).toBe("15px");
+    expect(after.style.fontWeight).toBe("500");
+    expect(after.style.color).toBe("var(--ink)");
+    expect(code.style.opacity).toBe("0.3");
+    expect(code.style.color).toBe("var(--ink-3)");
+
+    // Used reads the same way, on a fresh code.
+    server.routes["POST /api/trainer/invite"] = () => ({ status: 200, body: { code: "MNPQ2RSTV3WX", expiresAt: issuedAt + 3_600_000 } });
+    await act(async () => { fireEvent.click(within(dialog).getByText("New code")); });
+    await flush();
+    expect(within(dialog).getByRole("status").hasAttribute("data-final")).toBe(false);
+    Object.assign(reply, { status: "used", usedBy: "Sam" });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    await flush();
+    const used = within(dialog).getByRole("status");
+    expect(used.textContent).toBe("Sam is in.");
+    expect(used.style.order).toBe("");
+    expect(dialog.querySelector("[data-code]").style.opacity).toBe("0.3");
   });
 
   it("an issue that is not open yet says so", async () => {

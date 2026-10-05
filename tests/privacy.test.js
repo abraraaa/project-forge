@@ -1,13 +1,17 @@
 // The privacy notice makes claims that live in code. If one of these fails,
 // the code changed under the notice: update app/privacy/page.jsx with it.
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { EXISTING_HOLDER_CONSENT_TAP } from "../lib/consent.js";
 import { matchTokenIdentity } from "../lib/identity.js";
 import { DETAIL_DAYS, TREND_DAYS, VIEW_KEYS, LOOK_RING } from "../lib/trainer-view.js";
 import { TRAINER_COOKIE_OPTS, TRAINER_TTL_MS, TRAINER_CAP_MS } from "../lib/trainer-session.js";
+import { SHARE_COPY, SHARE_CONSENT_VERSION, acceptedShareConsentVersion } from "../lib/trainer-terms.js";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+// Every .js/.jsx file under a top-level folder, as repo-relative paths.
+const sources = (dir) => readdirSync(new URL(`../${dir}`, import.meta.url), { recursive: true })
+  .filter((f) => /\.jsx?$/.test(f)).map((f) => `${dir}/${f}`);
 
 describe("privacy notice stays true", () => {
   const page = read("app/privacy/page.jsx");
@@ -140,6 +144,49 @@ describe("privacy notice stays true", () => {
     expect(read("components/TrainerShareView.jsx")).toContain('l.kind === "roster"');
     expect(page).toContain("What your trainer does with what they see is their responsibility.");
     expect(page).toContain("sharing with a trainer you add");
+  });
+
+  it("the share approval names what the trainer section says, at the version the server stamps", () => {
+    const rows = SHARE_COPY.rows.join("\n");
+    // The roster line, the breather rule and the daily check-in, on both.
+    for (const fact of ["when you last trained", "your sessions this week against your plan", "paused"]) {
+      expect(page).toContain(fact);
+      expect(rows).toContain(fact);
+    }
+    expect(page).toContain("your recent rhythm");
+    expect(rows).toContain("28-day rhythm");
+    expect(page).toContain("a once-a-day check-in from their client list");
+    expect(rows).toContain("one check-in a day from their client list");
+    // Approval records the version the client saw, and only the current one.
+    expect(acceptedShareConsentVersion({ version: SHARE_CONSENT_VERSION })).toBe(SHARE_CONSENT_VERSION);
+    expect(read("app/api/share/approve/route.js")).toContain("if (consentVersion !== SHARE_CONSENT_VERSION) {");
+  });
+
+  it("what we keep about a trainer: Terms acceptance, the application, invite codes as a hash", () => {
+    expect(page).toContain("Coaching, if you apply or become a trainer — what you wrote and your link, the decision, when you accepted the Trainer Terms and that you're 18 or over, and your invite code, kept only as a hash.");
+    expect(page).toContain("Coaching records — your Terms acceptance, invite codes and the decision on your application stay after you delete your profile; what you wrote on it is cleared.");
+    // No line promises the words go whatever the status.
+    const db = read("lib/db.js");
+    // Terms acceptance: a version, when, and the 18+ attestation, stamped by the grant (self-grant or approval).
+    expect(read("lib/identity-store.js")).toContain("const rec = { version: terms.version, at: terms.at, adult: true };");
+    expect(read("app/api/trainer/upgrade/route.js")).toContain("dbGrantTrainerRole(c.identity.accountId, { version, at: new Date().toISOString(), adult: true })");
+    expect(db).toContain("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS trainer_terms JSONB");
+    // The invite slot holds the code's hash and never the code.
+    const invites = db.slice(db.indexOf("CREATE TABLE IF NOT EXISTS trainer_invites"), db.indexOf(")`;", db.indexOf("CREATE TABLE IF NOT EXISTS trainer_invites")));
+    expect(invites).toContain("code_hash TEXT NOT NULL");
+    expect(invites).not.toMatch(/\bcode TEXT/);
+    expect(read("lib/trainer-store.js")).toContain("dbIssueInvite(trainerId, hashSecret(code), now)");
+    // The application: what they wrote, the link, the Terms, and the decision.
+    const apps = db.slice(db.indexOf("CREATE TABLE IF NOT EXISTS trainer_applications"), db.indexOf(")`;", db.indexOf("CREATE TABLE IF NOT EXISTS trainer_applications")));
+    for (const col of ["about TEXT", "link TEXT", "terms JSONB", "status TEXT", "decided_at"]) expect(apps).toContain(col);
+    // Closing withdraws a waiting application and clears its words; any other application keeps them.
+    const store = read("lib/identity-store.js");
+    const close = store.slice(store.indexOf("export async function dbCloseAccount"));
+    expect(close).toMatch(/UPDATE trainer_applications SET status = CASE WHEN status = 'applied' THEN 'withdrawn' ELSE status END, [^`]*about = NULL, link = NULL\s+WHERE account_id = \$\{accountId\}`/);
+    expect(close.slice(0, close.indexOf("return true;"))).not.toMatch(/trainer_terms|trainer_invites/);
+    for (const f of [...sources("lib"), ...sources("app")]) {
+      expect(read(f), f).not.toMatch(/DELETE\s+FROM\s+(trainer_applications|trainer_invites)\b/i);
+    }
   });
 
   it("ending a trainer share deletes nothing, and the record keeps its dates", () => {

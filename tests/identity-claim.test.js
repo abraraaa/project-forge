@@ -53,6 +53,8 @@ function run(state, { q, values }) {
     state.credentials = state.credentials.filter((c) => c.account_id !== values[0]);
     return [];
   }
+  // The close's withdrawal of a waiting application to coach (none in these fixtures).
+  if (/^\s*UPDATE trainer_applications SET status = CASE WHEN status = 'applied' THEN 'withdrawn' ELSE status END, [^\n]*about = NULL, link = NULL\s+WHERE account_id = \?$/.test(q)) return [];
   if (/^\s*UPDATE handles SET released_at = now\(\)/.test(q)) {
     const [h] = values;
     for (const r of state.handles) {

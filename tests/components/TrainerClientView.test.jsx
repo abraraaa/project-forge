@@ -13,6 +13,8 @@
 //   - a breather shows as paused, never its reason; a cell's note never
 //     breaks inside a word; a travel session says so, and "Away" never shows;
 //   - "Stop seeing" asks first, then hands back to the dashboard;
+//   - the trainer's own training (self): titled You, no sharing date, no
+//     last look, nothing to stop;
 //   - the source never imports sessionCount or the device store.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -30,6 +32,8 @@ afterEach(cleanup);
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const today = todayLocalIso();
+// A fixed mid-week Wednesday for the cell-note test: on a Sunday no "so far" cell exists.
+const MIDWEEK = "2026-09-30";
 const ago = (n) => addDaysIso(today, -n);
 
 const squat = (weight, reps = [5, 5, 5], rpe = [8, 8, 8.5]) => ({
@@ -163,8 +167,8 @@ describe("TrainerClientView", () => {
   });
 
   it("a rhythm cell's note breaks between words only, never inside one", () => {
-    const meta = { breaks: [{ id: "b1", start: ago(30), endedAt: ago(16), reason: "injured" }] };
-    render(<TrainerClientView client={client} view={view(history(), meta)}/>);
+    const meta = { breaks: [{ id: "b1", start: "2026-08-31", endedAt: "2026-09-14", reason: "injured" }] };
+    render(<TrainerClientView client={client} view={projectForTrainer({ meta, history: history() }, { todayIso: MIDWEEK })}/>);
     const notes = [...document.querySelectorAll("ol.forge-wide-rhythm li > span[aria-hidden] > span")]
       .filter((n) => /^(so far|paused|part paused)$/.test(n.textContent));
     expect(notes.map((n) => n.textContent)).toEqual(expect.arrayContaining(["so far", "paused"]));
@@ -262,6 +266,24 @@ describe("TrainerClientView", () => {
     fireEvent.click(within(dialog).getByText("Keep"));
     fireEvent.click(screen.getByText("Stop seeing Sam's training"));
     expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toBe("");
+  });
+
+  it("for the trainer's own training: titled You, no sharing date, no last look, nothing to stop", () => {
+    const now = Date.UTC(2026, 9, 5, 12);
+    render(<TrainerClientView self client={{ name: "Coach Kim", since: Date.UTC(2026, 8, 1) }} view={view()}
+      lastLooked={now - 86_400_000} now={now} onRemove={vi.fn()}/>);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("You");
+    expect(screen.getByText("Your training")).toBeTruthy();
+    const text = document.body.textContent;
+    expect(text).not.toContain("Sharing since");
+    expect(text).not.toContain("You last looked");
+    expect(text).not.toContain("Shared with you");
+    expect(text).not.toMatch(/Stop seeing|can stop sharing/);
+    expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull();
+    expect(screen.getByText("How you felt")).toBeTruthy();
+    expect(screen.queryByText("How they felt")).toBeNull();
+    // The training itself shows as for any client.
+    expect(document.querySelectorAll("[data-session]").length).toBe(10);
   });
 
   it("never imports sessionCount or the device store", () => {

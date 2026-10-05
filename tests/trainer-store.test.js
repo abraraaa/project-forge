@@ -145,6 +145,98 @@ describe("trainer store: the ended notice, seen", () => {
   });
 });
 
+describe("trainer store: applications to coach", () => {
+  beforeEach(() => { calls.length = 0; reply = () => []; process.env.DATABASE_URL = "postgres://fake"; });
+  afterEach(() => { delete process.env.DATABASE_URL; });
+  const terms = { version: "draft-2026-10", at: "2026-10-04T09:00:00.000Z", adult: true };
+  const DAY = 86_400_000;
+
+  it("returns null for every application function with no DB", async () => {
+    delete process.env.DATABASE_URL;
+    expect(await s.dbTrainerApplication(T)).toBeNull();
+    expect(await s.dbOpenApplicationCount()).toBeNull();
+    expect(await s.dbApplyTrainer(T, { about: "a", link: null, terms }, NOW)).toBeNull();
+    expect(await s.dbWithdrawApplication(T, NOW)).toBeNull();
+    expect(await s.dbSeenApplication(T, NOW)).toBeNull();
+    expect(await s.dbDenyApplication(T, NOW)).toBeNull();
+    expect(await s.dbListApplications(NOW)).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it("dbApplyTrainer: one INSERT, the named overwrite only over a withdrawn row or a denial 30 days old", async () => {
+    reply = () => [{ account_id: T }];
+    expect(await s.dbApplyTrainer(T, { about: "Gym in Leeds", link: "https://kim.example", terms: { ...terms, extra: 1 } }, NOW)).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(flat(calls[0].q)).toBe(
+      "INSERT INTO trainer_applications (account_id, status, about, link, terms, applied_at, decided_at, seen_at, created_at) "
+      + "VALUES (?, 'applied', ?, ?, ?::jsonb, ?, NULL, NULL, ?) "
+      + "ON CONFLICT (account_id) DO UPDATE SET status = 'applied', about = EXCLUDED.about, link = EXCLUDED.link, terms = EXCLUDED.terms, "
+      + "applied_at = EXCLUDED.applied_at, decided_at = NULL, seen_at = NULL "
+      + "WHERE trainer_applications.status = 'withdrawn' "
+      + "OR (trainer_applications.status = 'denied' AND trainer_applications.decided_at <= ?) RETURNING account_id",
+    );
+    // created_at is set on the first insert only: the overwrite never names it.
+    expect(calls[0].values).toEqual([T, "Gym in Leeds", "https://kim.example", JSON.stringify(terms), NOW, NOW, NOW - 30 * DAY]);
+    reply = () => [];
+    expect(await s.dbApplyTrainer(T, { about: "x", link: null, terms }, NOW)).toBe(false);
+    expect(calls[1].values[2]).toBeNull();
+  });
+
+  it("dbApplyTrainer refuses an empty about, a missing id or terms without 18+ before any SQL", async () => {
+    for (const [id, app] of [["", { about: "a", terms }], [T, { about: "", terms }], [T, { about: "a", terms: { ...terms, adult: false } }], [T, { about: "a", terms: null }]]) {
+      await expect(s.dbApplyTrainer(id, /** @type {any} */ ({ link: null, ...app }), NOW)).rejects.toThrow(/incomplete application/);
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("withdraw, seen and deny are single UPDATEs scoped to the one account and the one status", async () => {
+    reply = () => [{ account_id: T }];
+    expect(await s.dbWithdrawApplication(T, NOW)).toBe(true);
+    expect(await s.dbSeenApplication(T, NOW)).toBe(true);
+    expect(await s.dbDenyApplication(T, NOW)).toBe(true);
+    expect(calls.map((c) => flat(c.q))).toEqual([
+      "UPDATE trainer_applications SET status = 'withdrawn', decided_at = ? WHERE account_id = ? AND status = 'applied' RETURNING account_id",
+      "UPDATE trainer_applications SET seen_at = ? WHERE account_id = ? AND status IN ('approved', 'denied') AND seen_at IS NULL RETURNING account_id",
+      "UPDATE trainer_applications SET status = 'denied', decided_at = ? WHERE account_id = ? AND status = 'applied' RETURNING account_id",
+    ]);
+    for (const c of calls) expect(c.values).toEqual([NOW, T]);
+    reply = () => [];
+    expect(await s.dbWithdrawApplication(T, NOW)).toBe(false);
+    expect(await s.dbSeenApplication(T, NOW)).toBe(false);
+    expect(await s.dbDenyApplication(T, NOW)).toBe(false);
+  });
+
+  it("reads: the account's row with numbers as numbers, and the waiting count", async () => {
+    reply = () => [{ status: "denied", about: "a", link: null, terms, applied_at: String(NOW - 9), decided_at: String(NOW - 5), seen_at: null, created_at: "1" }];
+    expect(await s.dbTrainerApplication(T)).toEqual({ status: "denied", about: "a", link: null, terms, appliedAt: NOW - 9, decidedAt: NOW - 5, seenAt: null, createdAt: 1 });
+    expect(flat(calls[0].q)).toBe("SELECT status, about, link, terms, applied_at, decided_at, seen_at, created_at FROM trainer_applications WHERE account_id = ?");
+    reply = () => [];
+    expect(await s.dbTrainerApplication(T)).toBeNull();
+    reply = () => [{ n: 7 }];
+    expect(await s.dbOpenApplicationCount()).toBe(7);
+    expect(flat(calls[2].q)).toBe("SELECT count(*)::int AS n FROM trainer_applications WHERE status = 'applied'");
+  });
+
+  it("dbListApplications: waiting oldest first, the last 50 decided newest first; the live handle as the name, age in days", async () => {
+    reply = (q) => (/ta\.status = 'applied'/.test(q)
+      ? [{ account_id: T, status: "applied", about: "Gym", link: null, applied_at: String(NOW - DAY), decided_at: null,
+        account_created_at: new Date(NOW - 12.5 * DAY), handle: "kim", display: "Kim" }]
+      : [{ account_id: "hwa_x", status: "withdrawn", about: null, link: null, applied_at: "5", decided_at: "6",
+        account_created_at: new Date(NOW - DAY / 2), handle: null, display: null }]);
+    expect(await s.dbListApplications(NOW)).toEqual({
+      open: [{ accountId: T, name: "Kim", accountAge: 12, status: "applied", about: "Gym", link: null, appliedAt: NOW - DAY, decidedAt: null }],
+      decided: [{ accountId: "hwa_x", name: null, accountAge: 0, status: "withdrawn", about: null, link: null, appliedAt: 5, decidedAt: 6 }],
+    });
+    const [open, decided] = calls.map((c) => flat(c.q));
+    const from = "FROM trainer_applications ta JOIN accounts a ON a.id = ta.account_id "
+      + "LEFT JOIN handles h ON h.account_id = ta.account_id AND h.kind = 'primary' AND h.released_at IS NULL";
+    const cols = "SELECT ta.account_id, ta.status, ta.about, ta.link, ta.applied_at, ta.decided_at, a.created_at AS account_created_at, h.handle, h.display";
+    expect(open).toBe(`${cols} ${from} WHERE ta.status = 'applied' ORDER BY ta.applied_at`);
+    expect(decided).toBe(`${cols} ${from} WHERE ta.status <> 'applied' ORDER BY ta.decided_at DESC NULLS LAST LIMIT ?`);
+    expect(calls[1].values).toEqual([50]);
+  });
+});
+
 describe("trainer files: no destructive SQL, every UPDATE named", () => {
   const root = resolve(__dirname, "..");
   const read = (f) => readFileSync(resolve(root, f), "utf8");
@@ -152,22 +244,27 @@ describe("trainer files: no destructive SQL, every UPDATE named", () => {
     const p = join(d, e);
     return statSync(resolve(root, p)).isDirectory() ? walk(p) : [p];
   });
-  const FILES = ["lib/trainer-store.js", "lib/trainer-session.js", "lib/trainer-code.js", ...walk("app/api/trainer"), ...walk("app/api/share")];
+  const FILES = ["lib/trainer-store.js", "lib/trainer-session.js", "lib/trainer-code.js", "lib/trainer-apply.js",
+    ...walk("app/api/trainer"), ...walk("app/api/share"), ...walk("app/api/diag/trainers"), "app/diag-trainers/page.jsx"];
 
-  it("no DELETE, DROP or TRUNCATE in lib/trainer-*, app/api/trainer or app/api/share", () => {
+  it("no DELETE, DROP or TRUNCATE in lib/trainer-*, app/api/trainer, app/api/share or the applications admin", () => {
     expect(FILES).toContain("app/api/trainer/invite/route.js");
+    expect(FILES).toContain("app/api/trainer/apply/route.js");
+    expect(FILES).toContain("app/api/diag/trainers/route.js");
     for (const f of FILES) expect(read(f), f).not.toMatch(/\bDELETE\b|\bDROP\b|\bTRUNCATE\b|\bdel\(|removeItem/);
   });
 
-  it("trainer-store's writes are exactly the invite upsert, the cancel UPDATE, the approve transaction, the look ring, the trainer's remove, the roster ring and the notice seen", () => {
+  it("trainer-store's writes are exactly the invite upsert, the cancel UPDATE, the approve transaction, the look ring, the trainer's remove, the roster ring, the notice seen, and the application's apply, withdraw, seen and deny", () => {
     const src = read("lib/trainer-store.js");
     const writes = [...src.matchAll(/q`\s*(INSERT INTO \w+|UPDATE \w+)/g)].map((m) => m[1]);
     expect(writes).toEqual(["INSERT INTO trainer_invites", "UPDATE trainer_invites",
       "UPDATE trainer_invites", "UPDATE oauth_grants", "INSERT INTO oauth_grants",
-      "UPDATE oauth_grants", "UPDATE oauth_grants", "UPDATE oauth_grants", "UPDATE oauth_grants"]);
+      "UPDATE oauth_grants", "UPDATE oauth_grants", "UPDATE oauth_grants", "UPDATE oauth_grants",
+      "INSERT INTO trainer_applications", "UPDATE trainer_applications", "UPDATE trainer_applications", "UPDATE trainer_applications"]);
     // Each one is named in the header's write list.
     const header = src.slice(0, src.indexOf("import "));
-    for (const fn of ["dbIssueInvite", "dbCancelInvite", "dbApproveTrainer", "dbLogFullLook", "dbRosterSignals", "dbRemoveByTrainer", "dbSeenEndedNotice"]) {
+    for (const fn of ["dbIssueInvite", "dbCancelInvite", "dbApproveTrainer", "dbLogFullLook", "dbRosterSignals", "dbRemoveByTrainer", "dbSeenEndedNotice",
+      "dbApplyTrainer", "dbWithdrawApplication", "dbSeenApplication", "dbDenyApplication"]) {
       expect(header).toContain(`· ${fn}:`);
     }
   });

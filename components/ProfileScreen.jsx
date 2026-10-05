@@ -36,6 +36,8 @@ import BodyweightEditModal from "@/components/BodyweightEditModal";
 import TakenNameModal from "@/components/TakenNameModal";
 import ConsentLine from "@/components/ConsentLine";
 import { consentClaim, isCurrentConsent, CONSENT_COPY, CONSENT_VERSION, EXISTING_HOLDER_CONSENT_TAP } from "@/lib/consent";
+import { applyRowSub, decisionUnseen } from "@/lib/trainer-apply-copy";
+import { fetchWithTimeout } from "@/lib/net";
 
 // Mirrors the server rule (validateProfile in app/api/sync/route.js): path
 // separators and control characters are rejected there with a 400, and the
@@ -58,6 +60,17 @@ function trainerRowFor(share) {
   if (ended?.name && Number.isFinite(ended.at)) return { title: ended.name, sub: `Ended ${shortDate.format(new Date(ended.at))}` };
   if (open) return { title: "Add a trainer", sub: "Type the code they show you" };
   return null;
+}
+
+// Opening the trainer side after a decision marks it seen: an UPDATE of
+// seen_at on the caller's own application row (POST /api/sync/trainer).
+// Fire and forget; a failure only leaves it unseen.
+function markApplicationSeen(profile, share) {
+  if (!profile || !decisionUnseen(share?.application)) return;
+  fetchWithTimeout("/api/sync/trainer", {
+    method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true,
+    body: JSON.stringify({ profile, seenApplication: true }),
+  }).catch(() => {});
 }
 
 // Sun · Auto · Moon — the appearance switch. Selection is the card
@@ -738,13 +751,15 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
-      {current && trainerShare?.trainerOpen && (
+      {/* A trainer's clients sit with Coaching. Everyone else finds the way
+          in at the foot of More ("For trainers"), not up here. */}
+      {current && trainerShare?.trainerOpen && trainerShare.trainer && (
         <Fade d={235}>
-          <Link href="/trainer"
+          <Link href="/trainer" onClick={() => markApplicationSeen(current, trainerShare)}
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
-              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>For trainers</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{trainerShare.trainer ? "See clients who share with you" : "Set up as a trainer"}</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Your clients</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>See clients who share with you</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
@@ -1022,6 +1037,18 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
       {current && isAdminSession(current) && (
+        <Fade d={301}>
+          <a href="/diag-trainers"
+            style={{marginTop:4,padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Trainer applications</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Approve or deny coaches</div>
+            </div>
+            <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
+          </a>
+        </Fade>
+      )}
+      {current && isAdminSession(current) && (
         <Fade d={302}>
           <a href="/diag-sync"
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
@@ -1107,6 +1134,22 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Privacy</div>
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>What we hold, and how to make it go away.</div>
+            </div>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
+          </Link>
+        </Fade>
+      )}
+
+      {/* The way in for someone who coaches: last row of More, after Privacy.
+          Trainers already see "Your clients" under Coaching instead. The
+          subline says where an application stands. */}
+      {current && trainerShare?.trainerOpen && !trainerShare.trainer && (
+        <Fade d={309}>
+          <Link href="/trainer" onClick={() => markApplicationSeen(current, trainerShare)}
+            style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:500,color:T.ink}}>For trainers</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{applyRowSub(trainerShare.application)}</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>

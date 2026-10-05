@@ -30,3 +30,12 @@ describe("LiftCharts", () => {
     expect(lab).not.toMatch(/(?:const|let|var)\s+(?:InkSpark|LineChart)\b/);
   });
 });
+
+describe("the trend ramp can see the heat tokens", () => {
+  it("--trend-* is declared on body, where --heat-* lives, never on :root", () => {
+    const css = read("app/globals.css");
+    expect(css).toMatch(/\nbody \{ --trend-1: var\(--heat-1\);/);
+    expect(css).not.toMatch(/:root \{[^}]*--trend-/);
+    expect(css).not.toMatch(/:root \{\n\s*--trend-1/);
+  });
+});

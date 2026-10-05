@@ -7,7 +7,7 @@ import { T, DISPLAY } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
 
 const URL = "https://heatwayve.app/privacy";
-export const UPDATED = "3 October 2026";
+export const UPDATED = "4 October 2026";
 export const CONTACT = "ab@heatwayve.app";
 export const ICO_REG = "ZC257208";
 
@@ -44,6 +44,7 @@ const SECTIONS = [
       "Your IP address — briefly, to stop abuse, and in our hosting provider's logs.",
       "An AI you connect, if you do — which app, which passkey approved it, and when it last read. It reads your training (never photos) only when you ask it to.",
       "A trainer you add, if you do — who they are, when sharing started and ended, and when they looked. See \"A trainer you add\" below.",
+      "Coaching, if you apply or become a trainer — what you wrote and your link, the decision, when you accepted the Trainer Terms and that you're 18 or over, and your invite code, kept only as a hash.",
       "Anything you email us, if you do.",
     ],
   },
@@ -105,6 +106,7 @@ const SECTIONS = [
       "Sign-in records — each works for 30 days at most. The records (your profile name and dates) stay until you delete your profile.",
       "AI connections — the record of which app you connected (never your training) stays after you delete your profile, and can't read anything once your profile and passkey are gone. Ask and we'll remove it.",
       "Trainer sharing — the record of it (who, the dates, the last 20 looks, never your training) stays after sharing ends and after you delete your profile.",
+      "Coaching records — your Terms acceptance, invite codes and the decision on your application stay after you delete your profile; what you wrote on it is cleared.",
       "Bug reports — not removed when you delete your profile. Ask and we'll delete yours.",
       "Server logs, which can include your profile name — kept briefly by our hosting provider.",
       "No passkey? Your name (and anything synced before 27 July 2026) stays until you add one and delete your profile, or email us.",

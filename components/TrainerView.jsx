@@ -3,9 +3,11 @@
 // components/TrainerView.jsx
 // ─────────────────────────────────────────────────────────────────────────────
 // /trainer: the trainer's dashboard. Signed out it asks for a Heatwayve name
-// and a quiet Face ID (no lifter cookies are left on this device); a new
-// trainer accepts the Trainer Terms here. Signed in it lists the clients who
-// share with them, opens one at a time in the pane, and shows an invite code.
+// and a quiet Face ID (no lifter cookies are left on this device). Someone
+// who isn't a trainer applies here; the admin sets up directly, and a trainer
+// accepts changed Trainer Terms here. Signed in it lists the clients who
+// share with them under the trainer's own training (the "You" row), opens one
+// at a time in the pane, and shows an invite code.
 //
 // Layout is the wide shell (.forge-wide in globals.css): the roster column
 // and the client pane, one at a time under 640. The URL stays /trainer;
@@ -24,6 +26,10 @@ import { fetchWithTimeout } from "@/lib/net";
 import { todayLocalIso } from "@/lib/dates";
 import { formatCode, shareUrl } from "@/lib/trainer-code";
 import { TRAINER_TERMS_COPY, TRAINER_TERMS_VERSION } from "@/lib/trainer-terms";
+import {
+  APPLY_COPY, REPLY_COPY, ABOUT_MAX, ABOUT_COUNT_FROM, LINK_MAX, aboutProblem, deniedLine, linkProblem, linkToSend, toMs,
+} from "@/lib/trainer-apply-copy";
+import { SELF_REF } from "@/lib/trainer-view";
 import TrainerClientView, { Nums, msDayMonth } from "@/components/TrainerClientView";
 import QrCode from "@/components/QrCode";
 
@@ -32,9 +38,13 @@ const POLL_FOR_MS = 20 * 60_000;
 // A ceremony token is good for 5 minutes at the routes; reuse it inside 4.
 const CEREMONY_REUSE_MS = 4 * 60_000;
 const FACE_ID_FAILED = "Face ID didn't go through. Try again.";
-const WENT_WRONG = "Something went wrong. Try again.";
 // A share link is a 37-module symbol with its quiet zone: 5 px a module.
 const QR_PX = 185;
+// The trainer's own training: the roster's pinned first row. Its history
+// entry says self rather than holding an index.
+const SELF_ROW = Object.freeze({ ref: SELF_REF, name: null, lastLooked: null });
+/** @param {HTMLElement | null} el */
+const focusOnMount = (el) => { el?.focus(); };
 
 /** JSON in, { status, body } out; status 0 when the network failed. */
 async function call(path, body) {
@@ -47,6 +57,43 @@ async function call(path, body) {
   } catch {
     return { status: 0, body: {} };
   }
+}
+
+/**
+ * The words for a reply with none of its own. The server's text is never shown.
+ * @param {{ status: number }} r
+ */
+function replyError(r) {
+  if (r.status === 0) return REPLY_COPY.offline;
+  if (r.status === 429) return REPLY_COPY.tooMany;
+  if (r.status === 401) return FACE_ID_FAILED;
+  return REPLY_COPY.wentWrong;
+}
+
+/**
+ * Which 503 the apply route sent: the queue cap, before launch, or neither
+ * (an outage, which reads as something went wrong).
+ * @param {{ body: any }} r
+ * @returns {"paused" | "notOpen" | null}
+ */
+const applyClosed = (r) => {
+  const said = String(r.body.error ?? "");
+  if (r.body.paused === true || /paused/i.test(said)) return "paused";
+  if (r.body.notOpen === true || /not open/i.test(said)) return "notOpen";
+  return null;
+};
+
+/**
+ * What /trainer shows for an application the server already holds, or null
+ * for the form (none, withdrawn, or a denial whose wait is over).
+ * @param {any} app
+ * @returns {{ kind: "applied" | "denied", nextAt?: number | null } | null}
+ */
+function resultFor(app) {
+  if (app?.status === "applied") return { kind: "applied" };
+  const next = toMs(app?.nextAt);
+  if (app?.status === "denied" && next != null && next > Date.now()) return { kind: "denied", nextAt: next };
+  return null;
 }
 
 /**
@@ -96,9 +143,19 @@ const linkBtn = {
 const kickerStyle = { fontSize: 13, color: T.ink2, marginBottom: 8 };
 /** @type {import("react").CSSProperties} */
 const h1Style = { ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" };
+/** A roster row's button. @param {boolean} current @returns {import("react").CSSProperties} */
+const rowStyle = (current) => ({
+  display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 8px", background: current ? T.press : "none",
+  border: "none", borderRadius: T.rSm, cursor: "pointer", textAlign: "left", fontFamily: T.text, color: T.ink,
+});
+/** @type {import("react").CSSProperties} */
+const rowTitle = { display: "block", fontSize: 15, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+/** @type {import("react").CSSProperties} */
+const rowLine = { display: "block", fontSize: 12, color: T.ink3, marginTop: 3, lineHeight: 1.45 };
 
 export default function TrainerView() {
-  // loading · signedOut · upgrade (not a trainer yet) · terms (terms changed) · error · roster
+  // loading · signedOut · apply (not a trainer yet) · upgrade (the admin, not a
+  // trainer yet) · terms (terms changed) · error · roster
   const [phase, setPhase] = useState("loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -107,15 +164,21 @@ export default function TrainerView() {
   // The name typed at sign-in; never written to the device.
   const [who, setWho] = useState("");
   const nameRef = useRef(/** @type {HTMLInputElement | null} */ (null));
-  // The last quiet ceremony: reused once for the upgrade so it costs one Face ID.
+  // The last quiet ceremony: reused once for the upgrade or the application,
+  // so it costs one Face ID.
   const ceremony = useRef(/** @type {{ name: string, token: string, at: number } | null} */ (null));
+  // The application being written (memory only; kept across a sign-in bounce)
+  // and what came back: { kind: 'sent' | 'applied' | 'denied', nextAt }.
+  const [about, setAbout] = useState("");
+  const [link, setLink] = useState("");
+  const [applyResult, setApplyResult] = useState(/** @type {{ kind: string, nextAt?: number | null } | null} */ (null));
 
   const [me, setMe] = useState(null);
   const [clients, setClients] = useState([]);
   const [loadedAt, setLoadedAt] = useState(0);
-  // The open client: { i, ref, name, lastLooked } and its pane state.
+  // The open client (or SELF_ROW, i -1): { i, ref, name, lastLooked } and its pane state.
   const [open, setOpen] = useState(null);
-  const [pane, setPane] = useState(null); // { ref, state: 'loading' | 'missing' | 'error' } | { ref, state: 'ready', client, view }
+  const [pane, setPane] = useState(null); // { ref, state: 'loading' | 'missing' | 'error' } | { ref, state: 'ready', client, view, self }
   const mainRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   // Only the latest pane request may fill the pane; an earlier reply that
   // lands late is dropped.
@@ -129,7 +192,7 @@ export default function TrainerView() {
   const inviteSeq = useRef(0);
 
   const reset = () => {
-    setMe(null); setClients([]); setOpen(null); setPane(null); setInvite(null);
+    setMe(null); setClients([]); setOpen(null); setPane(null); setInvite(null); setApplyResult(null);
     ceremony.current = null; paneSeq.current += 1; inviteSeq.current += 1; entryRef.current = null;
   };
 
@@ -165,7 +228,7 @@ export default function TrainerView() {
     return () => { off = true; };
   }, []);
 
-  // ── Sign-in and the upgrade ───────────────────────────────────────────────
+  // ── Sign-in, the application and the upgrade ──────────────────────────────
 
   const typedName = () => (nameRef.current?.value ?? who).trim();
 
@@ -197,12 +260,55 @@ export default function TrainerView() {
       await loadRoster();
       return;
     }
-    if (r.status === 403 && r.body.notTrainer) { setPhase("upgrade"); return; }
+    // The panels name the trainer as clients see them: the server's name.
+    if (r.status === 403 && typeof r.body.name === "string") setMe(r.body.name);
+    // Not a trainer: the admin sets up directly; everyone else applies, or
+    // sees where their application stands.
+    if (r.status === 403 && r.body.notTrainer) {
+      if (r.body.admin === true) { setPhase("upgrade"); return; }
+      setApplyResult(resultFor(r.body.application));
+      setPhase("apply");
+      return;
+    }
     if (r.status === 403 && r.body.needsTerms) { setPhase("terms"); return; }
     if (r.status === 409 && r.body.needsNativePasskey) { setLegacy(true); return; }
     if (r.status === 503) { setNotOpen(true); return; }
     ceremony.current = null;
-    setError(r.status === 401 ? FACE_ID_FAILED : (r.body.error || WENT_WRONG));
+    setError(replyError(r));
+  };
+
+  // "Send application": the fields are checked first, then one quiet Face ID
+  // (sign-in's, while fresh). Tapping is the acceptance: 18+ and the current
+  // Trainer Terms ride in the body, as for the upgrade.
+  const sendApplication = async () => {
+    if (busy) return;
+    const bad = aboutProblem(about) || linkProblem(link);
+    if (bad) { setError(bad); return; }
+    const text = about.trim();
+    const url = linkToSend(link);
+    const fresh = ceremony.current && Date.now() - ceremony.current.at < CEREMONY_REUSE_MS ? ceremony.current : null;
+    const name = fresh?.name || typedName();
+    if (!name) { setError("Type your Heatwayve name first."); nameRef.current?.focus(); return; }
+    setWho(name); setBusy(true); setError(null); setNotOpen(false); setLegacy(false);
+    const c = fresh || await runCeremony(name);
+    if (!c) { setBusy(false); return; }
+    const r = await call("/api/trainer/apply", {
+      authToken: c.token, profile: c.name, about: text, ...(url ? { link: url } : {}),
+      terms: { version: TRAINER_TERMS_VERSION }, adult: true,
+    });
+    ceremony.current = null;
+    setBusy(false);
+    if (r.status === 200) { setAbout(""); setLink(""); setApplyResult({ kind: "sent" }); return; }
+    if (r.status === 409 && r.body.needsNativePasskey) { setLegacy(true); return; }
+    if (r.status === 409 && r.body.status === "applied") { setApplyResult({ kind: "applied" }); return; }
+    if (r.status === 409 && r.body.status === "denied") { setApplyResult({ kind: "denied", nextAt: toMs(r.body.nextAt) }); return; }
+    // Already a trainer (approved or set up since sign-in): sign in for the roster.
+    if ((r.status === 403 && r.body.trainer) || (r.status === 409 && r.body.status === "approved")) { reset(); setPhase("signedOut"); setError(APPLY_COPY.alreadyTrainer); return; }
+    if (r.status === 401) { reset(); setPhase("signedOut"); setError(APPLY_COPY.signInAgain); return; }
+    const closed = r.status === 503 ? applyClosed(r) : null;
+    if (closed === "paused") { setError(APPLY_COPY.paused); return; }
+    if (closed === "notOpen") { setNotOpen(true); return; }
+    setError(r.status === 400 ? APPLY_COPY.checkFields : replyError(r));
   };
 
   // "Set me up as a trainer" / "Agree with Face ID". Tapping is the
@@ -221,11 +327,14 @@ export default function TrainerView() {
     ceremony.current = null;
     setBusy(false);
     if (r.status === 200) { await loadRoster(); return; }
+    // Setting up directly is the admin's (and a trainer re-agreeing); anyone else applies.
+    if (r.status === 403 && r.body.apply) { setPhase("apply"); return; }
     if (r.status === 409 && r.body.needsNativePasskey) { setLegacy(true); return; }
     if (r.status === 503) { setNotOpen(true); return; }
-    setError(r.status === 401 ? FACE_ID_FAILED : (r.body.error || WENT_WRONG));
+    setError(replyError(r));
   };
 
+  const [signOutOpen, setSignOutOpen] = useState(false);
   const signOut = async (everywhere) => {
     if (busy) return;
     setBusy(true);
@@ -247,24 +356,25 @@ export default function TrainerView() {
     window.requestAnimationFrame?.(() => mainRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" }));
     const r = await call("/api/trainer/client", { ref: c.ref, today: todayLocalIso() });
     if (seq !== paneSeq.current) return;
-    if (r.status === 200 && r.body.view) setPane({ ref: c.ref, state: "ready", client: r.body.client, view: r.body.view });
+    if (r.status === 200 && r.body.view) setPane({ ref: c.ref, state: "ready", client: r.body.client, view: r.body.view, self: r.body.self === true });
     else if (r.status === 404) setPane({ ref: c.ref, state: "missing" });
     else if (r.status === 401) { reset(); setPhase("signedOut"); }
     else if (r.status === 403 && r.body.needsTerms) toTerms();
     else setPane({ ref: c.ref, state: "error" });
   };
 
-  const openClient = (i) => {
-    const c = clients[i];
+  const openRow = (i, c) => {
     if (!c || open?.ref === c.ref) return;
     // One entry for "a client is open": switching clients replaces it, so
     // Back always returns to no selection.
-    const state = { view: "client", i };
+    const state = c === SELF_ROW ? { view: "client", self: true } : { view: "client", i };
     if (window.history.state?.view === "client") window.history.replaceState(state, "");
     else window.history.pushState(state, "");
     entryRef.current = c.ref;
     showClient(i, c);
   };
+  const openClient = (i) => openRow(i, clients[i]);
+  const openSelf = () => openRow(-1, SELF_ROW);
 
   const closeClient = () => {
     if (window.history.state?.view === "client") window.history.back();
@@ -273,7 +383,7 @@ export default function TrainerView() {
 
   const onPop = useEffectEvent((e) => {
     const st = e.state;
-    const c = st?.view === "client" ? clients[st.i] : null;
+    const c = st?.view !== "client" ? null : st.self === true ? SELF_ROW : clients[st.i];
     if (c && c.ref === entryRef.current) {
       if (open?.ref !== c.ref) showClient(st.i, c);
     } else {
@@ -310,7 +420,7 @@ export default function TrainerView() {
     } else if (r.status === 401) {
       reset(); setPhase("signedOut");
     } else {
-      setInvite({ error: r.status === 503 ? "Not open yet." : (r.body.error || WENT_WRONG) });
+      setInvite({ error: r.status === 503 ? APPLY_COPY.notOpen : replyError(r) });
     }
   };
   const closeInvite = () => { inviteSeq.current += 1; setInvite(null); };
@@ -347,6 +457,10 @@ export default function TrainerView() {
               </button>
             </>
           )}
+          {phase === "apply" && (
+            <ApplyPanel who={me || who} askName={!who} nameRef={nameRef} busy={busy} result={applyResult}
+              about={about} link={link} onAbout={setAbout} onLink={setLink} onSend={sendApplication}/>
+          )}
           {(phase === "upgrade" || phase === "terms") && (
             <UpgradePanel terms={phase === "terms"} who={me || who} askName={phase === "terms" && !who}
               nameRef={nameRef} busy={busy} onAgree={agree}/>
@@ -357,7 +471,7 @@ export default function TrainerView() {
             </p>
           )}
           <div role="status" aria-live="polite" style={{ fontSize: 12, color: T.ink2, marginTop: 10, minHeight: 16, textAlign: "center" }}>
-            {notOpen ? "Not open yet." : error || ""}
+            {notOpen ? APPLY_COPY.notOpen : error || ""}
           </div>
         </div>
       </div>
@@ -365,6 +479,7 @@ export default function TrainerView() {
   }
 
   const selected = open ? clients.findIndex((c) => c.ref === open.ref) : -1;
+  const selfOpen = open?.ref === SELF_REF;
   const shown = open && pane?.ref === open.ref ? pane : null;
   return (
     <div {...root} data-view={open ? "client" : "roster"}>
@@ -375,21 +490,33 @@ export default function TrainerView() {
           style={{ ...commitBtn, marginTop: 14, marginBottom: 20 }}>
           Add a client
         </button>
+        {/* Your own training, pinned first; a hairline sets it apart from clients. */}
+        <div data-self-row="" style={{ borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}` }}>
+          <button type="button" onClick={openSelf} aria-current={selfOpen ? "true" : undefined}
+            className="forge-press forge-tint" style={rowStyle(selfOpen)}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={rowTitle}>Your training</span>
+              <span style={rowLine}>Read only here</span>
+            </span>
+            <span className="forge-wide-n-only" style={{ flexShrink: 0, lineHeight: 0 }}>
+              <Glyph name="arrowRight" size={12} color={T.ink3}/>
+            </span>
+          </button>
+        </div>
         {clients.length === 0 ? (
-          <p className="forge-wide-n-only" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6 }}>{EMPTY_ROSTER}</p>
+          <p className="forge-wide-n-only" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: "14px 0 0" }}>{EMPTY_ROSTER}</p>
         ) : (
-          <ul aria-label="Clients" style={{ listStyle: "none", margin: 0, padding: 0, borderTop: `1px solid ${T.rule}` }}>
+          <ul aria-label="Clients" style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {clients.map((c, i) => {
               const line = signalText(c.signal, c.since);
               const current = i === selected;
               return (
                 <li key={c.ref} style={{ borderBottom: `1px solid ${T.ruleFaint}` }}>
                   <button type="button" onClick={() => openClient(i)} aria-current={current ? "true" : undefined}
-                    className="forge-press forge-tint"
-                    style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 8px", background: current ? T.press : "none", border: "none", borderRadius: T.rSm, cursor: "pointer", textAlign: "left", fontFamily: T.text, color: T.ink }}>
+                    className="forge-press forge-tint" style={rowStyle(current)}>
                     <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "block", fontSize: 15, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || "Your client"}</span>
-                      <span className="forge-wide-signal" title={line} style={{ display: "block", fontSize: 12, color: T.ink3, marginTop: 3, lineHeight: 1.45 }}>
+                      <span style={rowTitle}>{c.name || "Your client"}</span>
+                      <span className="forge-wide-signal" title={line} style={rowLine}>
                         <Nums text={line}/>
                       </span>
                     </span>
@@ -404,11 +531,9 @@ export default function TrainerView() {
         )}
         <div style={{ marginTop: 28, fontSize: 12, color: T.ink3 }}>
           {me && <div style={{ marginBottom: 4 }}>Signed in as {me}</div>}
-          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-            <button type="button" onClick={() => signOut(false)} style={linkBtn}>Sign out</button>
-            <button type="button" onClick={() => signOut(true)} style={linkBtn}>Sign out everywhere</button>
-          </div>
+          <button type="button" onClick={() => setSignOutOpen(true)} style={linkBtn}>Sign out</button>
         </div>
+        {signOutOpen && <SignOutSheet onPick={(everywhere) => { setSignOutOpen(false); signOut(everywhere); }} onClose={() => setSignOutOpen(false)}/>}
       </div>
 
       <div className="forge-wide-main" ref={mainRef} style={{ minWidth: 0 }}>
@@ -436,8 +561,8 @@ export default function TrainerView() {
           </div>
         )}
         {shown?.state === "ready" && (
-          <TrainerClientView key={shown.ref} client={shown.client} view={shown.view}
-            lastLooked={open.lastLooked} now={loadedAt} onRemove={() => removeClient(shown.ref)}/>
+          <TrainerClientView key={shown.ref} client={shown.client} view={shown.view} self={shown.self}
+            lastLooked={open.lastLooked} now={loadedAt} onRemove={shown.self ? undefined : () => removeClient(shown.ref)}/>
         )}
       </div>
 
@@ -461,28 +586,39 @@ function NameField({ inputRef, disabled }) {
   );
 }
 
-// Not a trainer yet, or the Trainer Terms changed. The commit is the
-// acceptance; the terms line under it says what is accepted.
-function UpgradePanel({ terms, who, askName, nameRef, busy, onAgree }) {
+/** @type {import("react").CSSProperties} */
+const fieldLabel = { display: "block", fontSize: 13, color: T.ink3, marginBottom: 6 };
+/** @type {import("react").CSSProperties} */
+const fieldStyle = {
+  width: "100%", boxSizing: "border-box", padding: "12px 14px", fontFamily: T.text, fontSize: 16, color: T.ink,
+  background: "transparent", border: `1px solid ${T.rule}`, borderRadius: T.r,
+};
+
+// What being a trainer means, and the name clients see.
+function Pitch({ who }) {
+  return (
+    <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: "0 0 20px" }}>
+      <p style={{ margin: "0 0 6px" }}>See your clients' training once they say yes. Read only. Free.</p>
+      <p style={{ margin: "0 0 6px" }}>They approve you with Face ID, and can stop any time.</p>
+      <p style={{ margin: "0 0 6px" }}>You never see photos, bodyweight, sleep, or why someone's on a breather.</p>
+      {who && <p style={{ margin: 0 }}>Clients see you as {who}.</p>}
+    </div>
+  );
+}
+
+// The Trainer Terms summary, the commit, and the 18+ and Terms line under
+// it: the commit is the acceptance.
+function TermsCommit({ label, busy, onCommit }) {
   const line = TRAINER_TERMS_COPY.line;
   const cut = line.indexOf("Trainer Terms");
   return (
     <>
-      <div style={kickerStyle}>For trainers</div>
-      <h1 style={h1Style}>{terms ? "The Trainer Terms changed" : "Coach on Heatwayve"}</h1>
-      <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: "0 0 20px" }}>
-        <p style={{ margin: "0 0 6px" }}>See your clients' training once they say yes. Read only. Free.</p>
-        <p style={{ margin: "0 0 6px" }}>They approve you with Face ID, and can stop any time.</p>
-        <p style={{ margin: "0 0 6px" }}>You never see photos, bodyweight, sleep, or why someone's on a breather.</p>
-        {who && <p style={{ margin: 0 }}>Clients see you as {who}.</p>}
-      </div>
       <ul style={{ margin: "0 0 24px", paddingLeft: 18, fontSize: 13, color: T.ink2, lineHeight: 1.6 }}>
         {TRAINER_TERMS_COPY.summary.map((s) => <li key={s}>{s}</li>)}
       </ul>
-      {askName && <NameField inputRef={nameRef} disabled={busy}/>}
-      <button type="button" onClick={onAgree} aria-disabled={busy} aria-describedby="hw-trainer-terms"
+      <button type="button" onClick={onCommit} aria-disabled={busy} aria-describedby="hw-trainer-terms"
         className="forge-press forge-lift" {...pressLiftHandlers} style={{ ...commitBtn, opacity: busy ? 0.6 : 1 }}>
-        {busy ? "One moment" : terms ? "Agree with Face ID" : "Set me up as a trainer"}
+        {busy ? "One moment" : label}
       </button>
       <p id="hw-trainer-terms" style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "10px 0 0" }}>
         {cut >= 0 ? (
@@ -498,9 +634,81 @@ function UpgradePanel({ terms, who, askName, nameRef, busy, onAgree }) {
   );
 }
 
+// Not a trainer yet: the application, or where it stands once sent.
+function ApplyPanel({ who, askName, nameRef, busy, result, about, link, onAbout, onLink, onSend }) {
+  const counting = about.length >= ABOUT_COUNT_FROM;
+  return (
+    <>
+      <div style={kickerStyle}>For trainers</div>
+      <h1 style={h1Style}>Coach on Heatwayve</h1>
+      {result ? (
+        // Replaces the form and its Send button: announced, and focus lands here.
+        <div data-apply-result={result.kind} role="status" tabIndex={-1} ref={focusOnMount} style={{ outline: "none" }}>
+          <p style={{ fontSize: 15, color: T.ink, lineHeight: 1.5, margin: "0 0 8px" }}>
+            {result.kind === "sent" ? APPLY_COPY.sent : result.kind === "applied" ? APPLY_COPY.applied : deniedLine(result.nextAt)}
+          </p>
+          <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>{APPLY_COPY.carryOn}</p>
+        </div>
+      ) : (
+        <>
+          <Pitch who={who}/>
+          <p style={{ fontSize: 14, color: T.ink, lineHeight: 1.6, margin: "0 0 20px" }}>{APPLY_COPY.lead}</p>
+          {askName && <NameField inputRef={nameRef} disabled={busy}/>}
+          <label htmlFor="hw-apply-about" style={fieldLabel}>{APPLY_COPY.aboutLabel}</label>
+          <textarea id="hw-apply-about" value={about} onChange={(e) => onAbout(e.target.value)} maxLength={ABOUT_MAX}
+            rows={4} placeholder={APPLY_COPY.aboutHint} disabled={busy} aria-describedby={counting ? "hw-apply-count" : undefined}
+            style={{ ...fieldStyle, display: "block", resize: "vertical", lineHeight: 1.45 }}/>
+          {/* The count shows near the limit only; the line keeps its height so nothing jumps. */}
+          <div id="hw-apply-count" style={{ fontSize: 12, color: T.ink3, textAlign: "right", minHeight: 16, margin: "4px 0 12px" }}>
+            {counting ? <Nums text={`${ABOUT_MAX - about.length} left`}/> : null}
+          </div>
+          <label htmlFor="hw-apply-link" style={fieldLabel}>{APPLY_COPY.linkLabel}</label>
+          <input id="hw-apply-link" type="url" inputMode="url" value={link} onChange={(e) => onLink(e.target.value)}
+            maxLength={LINK_MAX} placeholder={APPLY_COPY.linkHint} autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            disabled={busy} style={{ ...fieldStyle, height: 48, padding: "0 14px", marginBottom: 24 }}/>
+          <TermsCommit label={APPLY_COPY.send} busy={busy} onCommit={onSend}/>
+        </>
+      )}
+    </>
+  );
+}
+
+// The admin setting up directly, or a trainer whose Trainer Terms changed.
+function UpgradePanel({ terms, who, askName, nameRef, busy, onAgree }) {
+  return (
+    <>
+      <div style={kickerStyle}>For trainers</div>
+      <h1 style={h1Style}>{terms ? "The Trainer Terms changed" : "Coach on Heatwayve"}</h1>
+      <Pitch who={who}/>
+      {askName && <NameField inputRef={nameRef} disabled={busy}/>}
+      <TermsCommit label={terms ? "Agree with Face ID" : "Set me up as a trainer"} busy={busy} onCommit={onAgree}/>
+    </>
+  );
+}
+
 // "Add a client": the code, how the client uses it, and whether they have.
 // It polls while open and visible, and stops after 20 minutes. Sheets carry
 // no press visuals.
+/** Sign out of this device, or of every device the trainer session is on. */
+function SignOutSheet({ onPick, onClose }) {
+  const { containerRef, onKeyDown } = useInlineModalA11y(true, onClose);
+  return (
+    <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{ overscrollBehavior: "contain", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="trainer-signout-title" tabIndex={-1}
+        onClick={(e) => e.stopPropagation()} className="forge-sheet-ground forge-vellum"
+        style={{ padding: "26px 24px calc(24px + env(safe-area-inset-bottom))", width: "100%", animation: `slideUp 260ms ${T.ease}`, boxSizing: "border-box", outline: "none", fontFamily: T.text, color: T.ink }}>
+        <div id="trainer-signout-title" style={{ fontSize: 18, fontWeight: 500, lineHeight: 1.3, marginBottom: 6 }}>Sign out</div>
+        <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "0 0 18px" }}>Everywhere ends this trainer sign-in on every device. Your training app stays signed in.</p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button type="button" onClick={() => onPick(false)} style={quietBtn}>This device</button>
+          <button type="button" onClick={() => onPick(true)} style={quietBtn}>Everywhere</button>
+        </div>
+        <button type="button" onClick={onClose} style={{ ...linkBtn, marginTop: 18, display: "block", margin: "18px auto 0" }}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 function InviteSheet({ invite, onIssue, onClose, onUsed }) {
   const { containerRef, onKeyDown } = useInlineModalA11y(true, onClose);
   const [status, setStatus] = useState(null); // { code, status, usedBy } for the code shown
@@ -566,6 +774,9 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
     if (r.status === 200) { finalFor.current = code; setStatus({ code, status: "cancelled", usedBy: null }); }
   };
 
+  // A final status (used, run out, cancelled) is what to read: it leads, and
+  // the dead code fades under it.
+  const final = state !== "pending";
   const statusText = !code ? ""
     : mine?.status === "cancelled" ? "Cancelled. This code no longer works."
     : state === "used" ? `${mine.usedBy || "Your client"} is in.`
@@ -582,25 +793,34 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
         {invite.issuing && <div role="status" style={{ fontSize: 13, color: T.ink3, minHeight: 32 }}>One moment</div>}
         {invite.error && <div role="status" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5 }}>{invite.error}</div>}
         {code && (
-          <>
-            {/* The QR only while the code works. The quiet zone sits inside the
-                svg, so pulling it left lines the modules up with the text. */}
+          // One live region throughout, so a change is announced. It sits first
+          // in the DOM; while the code is live, order moves it below the how-to.
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {/* The QR only while the code works. Its light plate lines up with
+                the text's left edge, inside the sheet's padding. */}
             {state === "pending" && (
-              <div data-qr="" style={{ margin: "-8px 0 2px -20px", width: QR_PX }}>
+              <div data-qr="" style={{ margin: "0 0 14px", width: QR_PX }}>
                 <QrCode text={shareUrl(code)} width={QR_PX} height={QR_PX}/>
               </div>
             )}
-            <div data-code="" style={{ fontFamily: T.measured, fontSize: 22, letterSpacing: "0.06em", color: T.ink, margin: "0 0 14px", opacity: state === "pending" ? 1 : 0.45 }}>
+            <div role="status" aria-live="polite" data-final={final ? "" : undefined}
+              style={final
+                ? { fontSize: 15, fontWeight: 500, color: T.ink, lineHeight: 1.4, margin: "0 0 10px", minHeight: 20 }
+                : { order: 3, fontSize: 14, color: T.ink, margin: "14px 0 18px", minHeight: 20 }}>
+              {statusText}
+            </div>
+            <div data-code="" style={{ fontFamily: T.measured, fontSize: 22, letterSpacing: "0.06em", color: final ? T.ink3 : T.ink, margin: "0 0 14px", opacity: final ? 0.3 : 1 }}>
               {formatCode(code)}
             </div>
-            <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "0 0 4px" }}>
-              In Heatwayve, they go to Profile → Add a trainer and type this code. Works once, until <span style={{ fontFamily: T.measured }}>{clockTime(invite.expiresAt)}</span>.
-            </p>
+            {!final && (
+              <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "0 0 4px" }}>
+                In Heatwayve, they go to Profile → Add a trainer and type this code. Works once, until <span style={{ fontFamily: T.measured }}>{clockTime(invite.expiresAt)}</span>.
+              </p>
+            )}
             {state === "pending" && (
               <p style={{ fontSize: 12, color: T.ink3, margin: 0 }}><Nums text={`${minsLeft} min left`}/></p>
             )}
-            <div role="status" aria-live="polite" style={{ fontSize: 14, color: T.ink, margin: "14px 0 18px", minHeight: 20 }}>{statusText}</div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ order: 4, display: "flex", gap: 10, flexWrap: "wrap", marginTop: final ? 18 : 0 }}>
               {state === "pending" && (
                 <>
                   <button type="button" onClick={onShare} style={quietBtn}>{shared === "copied" ? "Copied" : "Share link"}</button>
@@ -611,8 +831,8 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
                 <button type="button" onClick={onIssue} style={quietBtn}>New code</button>
               )}
             </div>
-            {shared === "fail" && <div style={{ fontSize: 12, color: T.ink2, marginTop: 8 }}>Couldn't reach the clipboard. Read the code out instead.</div>}
-          </>
+            {shared === "fail" && <div style={{ order: 5, fontSize: 12, color: T.ink2, marginTop: 8 }}>Couldn't reach the clipboard. Read the code out instead.</div>}
+          </div>
         )}
         <button type="button" onClick={onClose}
           style={{ width: "100%", padding: "12px", marginTop: 14, background: "none", border: "none", cursor: "pointer", fontSize: 13, color: T.ink3, fontFamily: T.text }}>

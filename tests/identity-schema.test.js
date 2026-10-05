@@ -57,6 +57,23 @@ describe("identity schema (ensureSchema)", () => {
     expect(slice).not.toMatch(/trainer_access_log|read_count/);
   });
 
+  it("adds the applications table: one row per account, epoch-ms times, no CHECK to widen later; and the waiting index", () => {
+    const apps = statements.find((s) => s.startsWith("CREATE TABLE IF NOT EXISTS trainer_applications ("));
+    expect(apps?.split("\n").slice(1, -1).map((l) => l.trim())).toEqual([
+      "account_id TEXT PRIMARY KEY,",
+      "status TEXT,",
+      "about TEXT,",
+      "link TEXT,",
+      "terms JSONB,",
+      "applied_at BIGINT,",
+      "decided_at BIGINT,",
+      "seen_at BIGINT,",
+      "created_at BIGINT",
+    ]);
+    expect(statements).toContain("CREATE INDEX IF NOT EXISTS trainer_applications_open ON trainer_applications (applied_at) WHERE status = 'applied'");
+    expect(statements.filter((s) => /trainer_applications/.test(s))).toHaveLength(2);
+  });
+
   it("contains no destructive or rewriting verb", () => {
     expect(slice).not.toMatch(/\bDROP\b|ALTER COLUMN|\bDELETE\b|\bUPDATE\b/);
   });
