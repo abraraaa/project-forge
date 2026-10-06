@@ -1083,19 +1083,19 @@ describe("sanitiseWorkingWeights", () => {
     expect(sanitiseWorkingWeights(weights)).toBe(weights);
   });
 
-  it("clamps an obviously-corrupt isolation weight back to the cap", () => {
-    const weights = { "Leaning Lateral Raise": 110 };  // ~5× cap of 25
+  it("rewrites a corrupt weight (over 400 kg) back to the cap", () => {
+    const weights = { "Leaning Lateral Raise": 1100 };
     const out = sanitiseWorkingWeights(weights);
     expect(out).not.toBe(weights);
     expect(out["Leaning Lateral Raise"]).toBe(CATEGORY_COLD_START_MAX_KG.accessory_isolation);
   });
 
-  it("leaves slightly-above-cap values alone (likely legitimate progression)", () => {
-    // Isolation cap = 25; 1.5× buffer = 37.5. 30kg is above cap but below
-    // buffer, should be preserved (a strong lifter might legitimately do
-    // lateral raises at this weight).
-    const weights = { "Lateral Raise": 30 };
-    expect(sanitiseWorkingWeights(weights)).toBe(weights);
+  it("leaves above-cap values alone (real progression)", () => {
+    // Isolation cap = 25: 30 and 110 kg are over it and are kept.
+    for (const kg of [30, 110]) {
+      const weights = { "Lateral Raise": kg };
+      expect(sanitiseWorkingWeights(weights)).toBe(weights);
+    }
   });
 
   it("ignores BW-progression lifts (no weight cap applies)", () => {
@@ -1103,9 +1103,10 @@ describe("sanitiseWorkingWeights", () => {
     expect(sanitiseWorkingWeights(weights)).toBe(weights);
   });
 
-  it("ignores non-numeric or invalid entries", () => {
-    const weights = { "Bench Press": null, "Lateral Raise": "twenty", "Other": Infinity };
+  it("ignores non-numeric entries; a non-finite number goes to the cap", () => {
+    const weights = { "Bench Press": null, "Lateral Raise": "twenty" };
     expect(sanitiseWorkingWeights(weights)).toBe(weights);
+    expect(sanitiseWorkingWeights({ "Lateral Raise": Infinity })).toEqual({ "Lateral Raise": CATEGORY_COLD_START_MAX_KG.accessory_isolation });
   });
 
   it("handles null/empty input safely", () => {

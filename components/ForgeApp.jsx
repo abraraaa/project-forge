@@ -407,9 +407,9 @@ export default function ForgeApp(){
     // Hydrating React state from the localStorage cache on profile change —
     // synchronising with an external store, which is exactly what effects are
     // for. The seed runs once per profile, no cascade. Intentional.
-    // Sanity-clamp wildly-out-of-range workingWeights at load (defensive
-    // against corruption from earlier bugs — e.g. 110kg recommendation for
-    // an isolation movement). Only clamps values > 1.5× category cap.
+    // Sanity bound on workingWeights at load: only a corrupt value (not a
+    // finite number, or over WORKING_WEIGHT_MAX_KG) is rewritten; real
+    // progression past the cold-start cap is kept. See sanitiseWorkingWeights.
     const rawWeights = local.meta.weights || {};
     const sanitisedWeights = sanitiseWorkingWeights(rawWeights);
     if (sanitisedWeights !== rawWeights) {
@@ -454,8 +454,8 @@ export default function ForgeApp(){
     // BACKGROUND: Sync from blob, update state if remote has newer data
     const onSyncUpdate = ({ meta, history: remoteHistory }) => {
       if (cancelled) return;
-      // Blob had newer data — update React state silently (clamping any
-      // wildly-out-of-range weights along the way; see sanitiseWorkingWeights).
+      // Blob had newer data — update React state silently (rewriting only a
+      // corrupt weight along the way; see sanitiseWorkingWeights).
       // EVERY synced field refreshes, not just the original four: the old
       // callback ignored days/breaks/focus/schedule/bodyweight, so a pull
       // landed those in localStorage while the screen kept stale state
