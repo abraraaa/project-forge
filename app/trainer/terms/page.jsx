@@ -42,6 +42,7 @@ const SECTIONS = [
       "Change a client's plan only to coach them.",
       "Keep it private. Don't pass it on, sell it or publish it, and don't share it with another service.",
       "You decide what you do with what you see, so you're responsible for it under data protection law, as its controller. Your own private coaching notes are fine: keep them secure, and delete them when you stop coaching that client.",
+      "A copy you download of what a client shares is still their data. Delete it when they stop sharing with you, or if they ask.",
     ],
   },
   {

@@ -85,6 +85,7 @@ const SECTIONS = [
       "They see your last 24 weeks of training in full — sessions, sets, weights, reps, effort and how you felt — and your main-lift trend and bests over 12 months. Their client list shows when you last trained, your sessions this week against your plan, and your recent rhythm. Breathers show as paused.",
       "They never see your photos, bodyweight, sleep, why you took a breather, what time of day you trained, or your notes.",
       "Each look, and a once-a-day check-in from their client list, shows on your profile. Stop sharing in one tap, and they lose access straight away.",
+      "They can download a copy of what they see, and a download counts as a look. Under the Trainer Terms, they delete that copy when you stop sharing or if you ask.",
       "While their changes are on, they also see your current working weights, reps and main lifts for every lift in your programme, whether you're on a deload, your planned week up to 4 weeks ahead, and each lift's most recent top set, however long ago. The top set is what keeps their changes within safe limits.",
       "They can change your working weights, reps and main lifts from your next session on, within the app's limits. Each change is checked against your training, and your app makes it the next time you open it.",
       "Turn their changes off in one tap in Profile and keep sharing. Turning them off, or stopping sharing, cancels any change that hasn't reached your plan yet.",
