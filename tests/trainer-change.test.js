@@ -11,7 +11,7 @@ import {
   DAY_LABELS, LIVE_SLICES, OUTCOMES, KINDS, MAX_OPS, HORIZON_DAYS, SET_ID_RE, REP_LIMITS, TIMED_SECONDS, MAX_KG, RESET,
 } from "@/lib/trainer-change";
 import { climbRungs, MAX_JUMP_FRACTION } from "@/lib/progression";
-import { STEP_SIZES, nextRung, weightStepForLoadType, categoryCeilingKg, CATEGORY_COLD_START_MAX_KG, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights } from "@/lib/lift-translations";
+import { STEP_SIZES, nextRung, weightStepForLoadType, CATEGORY_COLD_START_MAX_KG, WORKING_WEIGHT_MAX_KG, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights } from "@/lib/lift-translations";
 import { MAIN_LIFT_FUNCTIONAL_EQUIVALENTS, EXERCISE_POOLS, WEEK } from "@/lib/programme";
 import { bandViolations } from "@/lib/rotation-solver";
 import { resolvedProgramme } from "@/lib/mcp-server";
@@ -228,49 +228,57 @@ describe("W2: the drum's range, on the implement's grid", () => {
   });
 });
 
-describe("W3: the sanitiser's ceiling", () => {
-  it("allows exactly the ceiling, refuses one rung past it", () => {
-    // Lateral Raise: per_db, isolation cap 25 → ceiling 37.5, off the 1 kg grid.
-    const hist = [rec(ago(2), { "Lateral Raise": { kg: 36, reps: 15, loadType: "per_db" } })];
-    expect(categoryCeilingKg("Lateral Raise")).toBe(37.5);
-    expect(code(check({ kind: "weight", lift: "Lateral Raise", kg: 37 }, {}, hist))).toBe(null);
-    expect(code(check({ kind: "weight", lift: "Lateral Raise", kg: 38 }, {}, hist))).toBe("ceiling");
-    expect(boundsFor("Lateral Raise", ctx({}, hist)).max).toBe(37);
+describe("W3: no ceiling past the cold-start cap; MAX_KG is the app's sanity bound", () => {
+  const CALF = "Standing Calf Raise";
+  const calfLt = () => resolvedProgramme({}).find((l) => l.name === CALF).loadType;
+  const calfAt = (kg) => ctx({}, [rec(ago(2), { [CALF]: { kg, reps: 12, loadType: calfLt() } })]);
+  const v = (c, lift, x) => validateOp({ kind: "weight", lift, kg: x }, { ...c, basis: basisFor(c, { lifts: [lift] }) });
+
+  it("MAX_KG is the sanitiser's bound, and the device keeps every weight up to it", () => {
+    expect(MAX_KG).toBe(WORKING_WEIGHT_MAX_KG);
+    expect(sanitiseWorkingWeights({ [CALF]: 110 })).toEqual({ [CALF]: 110 });
+    expect(sanitiseWorkingWeights({ [CALF]: MAX_KG })).toEqual({ [CALF]: MAX_KG });
   });
 
-  it("holds for a top set at or over it, since their app clamps anything over it; max is never under min", () => {
-    const CALF = "Standing Calf Raise";
-    const lt = resolvedProgramme({}).find((l) => l.name === CALF).loadType;
-    const ceiling = categoryCeilingKg(CALF);
-    expect(ceiling).toBe(37.5);
-    // The client's app clamps a W over the ceiling, whatever the top set: nothing accepted may sit over it.
-    expect(sanitiseWorkingWeights({ [CALF]: ceiling })[CALF]).toBe(ceiling);
-    expect(sanitiseWorkingWeights({ [CALF]: 40 })[CALF]).not.toBe(40);
-    const at = (kg) => ctx({}, [rec(ago(2), { [CALF]: { kg, reps: 12, loadType: lt } })]);
-    const v = (c, x) => validateOp({ kind: "weight", lift: CALF, kg: x }, { ...c, basis: basisFor(c, { lifts: [CALF] }) });
-    // At the ceiling or a little over: the range runs from the floor up to the ceiling.
-    for (const kg of [ceiling, 50]) {
-      const c = at(kg);
+  it("a Standing Calf Raise anchored at 100 kg gives 70 to 110, and both ends are accepted", () => {
+    const c = calfAt(100);
+    const b = boundsFor(CALF, c);
+    expect(b).toMatchObject({ min: 70, max: 110, blocked: null });
+    expect(v(c, CALF, 110)).toMatchObject({ ok: true });
+    expect(v(c, CALF, 70)).toMatchObject({ ok: true });
+    expect(code(v(c, CALF, 110 + b.step))).toBe("per_change");
+    expect(code(v(c, CALF, 70 - b.step))).toBe("floor");
+  });
+
+  it("a Lateral Raise past the old 37.5 kg clamp moves by the per-change rule", () => {
+    const hist = [rec(ago(2), { "Lateral Raise": { kg: 36, reps: 15, loadType: "per_db" } })];
+    expect(code(check({ kind: "weight", lift: "Lateral Raise", kg: 38 }, {}, hist))).toBe(null);
+    expect(code(check({ kind: "weight", lift: "Lateral Raise", kg: 39 }, {}, hist))).toBe(null);
+    expect(code(check({ kind: "weight", lift: "Lateral Raise", kg: 40 }, {}, hist))).toBe("per_change");
+    expect(boundsFor("Lateral Raise", ctx({}, hist)).max).toBe(39);
+  });
+
+  it("400 is accepted at the right anchor; 402.5 is refused 'range'", () => {
+    const c = ctx({}, [squatAt(380)]);
+    expect(boundsFor(SQUAT, c)).toMatchObject({ max: 400, blocked: null });
+    expect(v(c, SQUAT, 400)).toMatchObject({ ok: true });
+    expect(code(v(c, SQUAT, 402.5))).toBe("range");
+  });
+
+  it("a top set whose deload floor sits over MAX_KG is blocked 'range'; max is never under min and nothing is accepted", () => {
+    for (const kg of [600, 1000]) {
+      const c = calfAt(kg);
       const b = boundsFor(CALF, c);
-      expect(b, `${kg}`).toMatchObject({ max: ceiling, blocked: null });
+      expect(b, `${kg}`).toMatchObject({ max: MAX_KG, blocked: { code: "range", until: null } });
       expect(b.max, `${kg}`).toBeGreaterThanOrEqual(b.min);
-      expect(v(c, b.max), `${kg}`).toMatchObject({ ok: true });
-      expect(v(c, b.min), `${kg}`).toMatchObject({ ok: true });
-      expect(code(v(c, b.max + b.step)), `${kg}`).toBe("ceiling");
+      expect(code(v(c, CALF, b.max)), `${kg}`).toBe("floor");
+      expect(code(v(c, CALF, b.max + b.step)), `${kg}`).toBe("range");
     }
-    // Far over it the deload floor sits over the ceiling: nothing is accepted, and the pane reads it as blocked.
-    for (const kg of [60, 100]) {
-      const c = at(kg);
-      const b = boundsFor(CALF, c);
-      expect(b, `${kg}`).toMatchObject({ min: ceiling, max: ceiling, blocked: { code: "ceiling", until: null } });
-      expect(code(v(c, b.max)), `${kg}`).toBe("floor");
-      expect(code(v(c, kg)), `${kg}`).toBe("ceiling");
-    }
-    // Under the ceiling it holds; never lifted, the cap or the template does.
-    const under = at(30);
-    expect(boundsFor(CALF, under).max).toBeLessThanOrEqual(ceiling);
-    expect(code(v(under, 40))).toBe("ceiling");
+  });
+
+  it("never lifted, the cap or the template still bounds it", () => {
     expect(boundsFor(CALF, ctx({}))).toMatchObject({ max: 35, blocked: null });
+    expect(code(check({ kind: "weight", lift: CALF, kg: 37.5 }))).toBe("no_history");
   });
 });
 
@@ -423,7 +431,7 @@ describe("W8: never performed — the larger of the category's cold-start cap an
           expect(boundsFor(lift.name, { ...ctx(meta), phase }), `${lift.name} ${phase}`).toEqual(ref);
           expect(code(inPhase({ kind: "weight", lift: lift.name, kg: max }, meta, phase)), `${lift.name} ${max} ${phase}`).toBe(null);
           expect(code(inPhase({ kind: "weight", lift: lift.name, kg: up(max, lift.loadType) }, meta, phase)), `${lift.name} max + step ${phase}`)
-            .toBe(up(max, lift.loadType) > categoryCeilingKg(lift.name) ? "ceiling" : "no_history");
+            .toBe("no_history");
         }
       }
       checked++;
@@ -438,7 +446,7 @@ describe("W8: never performed — the larger of the category's cold-start cap an
       for (const phase of ["write", "apply"]) {
         expect(code(inPhase({ kind: "weight", lift: name, kg: 35 }, {}, phase)), `${name} ${phase}`).toBe(null);
         expect(code(inPhase({ kind: "weight", lift: name, kg: 37.5 }, {}, phase)), `${name} ${phase}`).toBe("no_history");
-        expect(code(inPhase({ kind: "weight", lift: name, kg: 40 }, {}, phase)), `${name} ${phase}`).toBe("ceiling");
+        expect(code(inPhase({ kind: "weight", lift: name, kg: 40 }, {}, phase)), `${name} ${phase}`).toBe("no_history");
       }
     }
   });
@@ -863,8 +871,8 @@ describe("boundsFor: the pane's range is the validator's", () => {
       const v = (kg) => validateOp({ kind: "weight", lift: lift.name, kg }, { ...c, basis: basisFor(c, { lifts: [lift.name] }) });
       if (b === null) { expect(v(10).code).toMatch(/^(bodyweight|timed|not_by_load)$/); continue; }
       expect(b.max, `${lift.name} ${history.at(-1)?.blocks[0].exercises[0].sets[0].weight}`).toBeGreaterThanOrEqual(b.min);
-      // A floor over the ceiling: blocked, and nothing at either end is taken.
-      if (b.blocked?.code === "ceiling") { expect(v(b.max).ok).toBe(false); expect(v(b.max + b.step).ok).toBe(false); continue; }
+      // A deload floor over MAX_KG: blocked, and nothing at either end is taken.
+      if (b.blocked?.code === "range") { expect(v(b.max).ok).toBe(false); expect(v(b.max + b.step).ok).toBe(false); continue; }
       expect(v(b.max)).toMatchObject({ ok: true });
       expect(v(Math.round((b.max + b.step) * 100) / 100).ok).toBe(false);
       expect(v(b.min)).toMatchObject({ ok: true });
@@ -1213,7 +1221,7 @@ describe("E1: one validator, built from the engine's modules", () => {
     expect(source.filter((f) => f !== "lib/trainer-change.js" && DEF.test(readFileSync(join(ROOT, f), "utf8")))).toEqual([]);
   });
   it("the engine's limits are used only by the engine and the validator", () => {
-    const USE = /\b(MAX_JUMP_FRACTION|deloadIntensityFor|categoryCeilingKg)\b/;
+    const USE = /\b(MAX_JUMP_FRACTION|deloadIntensityFor)\b/;
     const allowed = new Set(["lib/progression.js", "lib/lift-translations.js", "lib/trainer-change.js"]);
     expect(source.filter((f) => !allowed.has(f) && USE.test(readFileSync(join(ROOT, f), "utf8")))).toEqual([]);
   });

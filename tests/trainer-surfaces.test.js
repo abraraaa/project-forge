@@ -74,7 +74,12 @@ describe("every trainer and share route runs in London and never caches", () => 
   it("finds the routes", () => {
     expect(routes.length).toBeGreaterThanOrEqual(10);
     expect(routes).toEqual(expect.arrayContaining(["app/api/trainer/apply/route.js", "app/api/trainer/change/route.js", "app/api/diag/trainers/route.js",
-      "app/api/sync/notices/route.js"]));
+      "app/api/sync/notices/route.js", "app/api/trainer/export/route.js"]));
+  });
+  it.each(["app/api/trainer/client/route.js", "app/api/trainer/export/route.js"])("%s takes the grant ref in a POST body, never the URL", (p) => {
+    const src = read(p);
+    expect(src).toMatch(/^export async function POST\(request\)/m);
+    expect(src).not.toMatch(/export (async )?function (GET|HEAD)\b|searchParams|nextUrl/);
   });
   it.each(routes)("%s", (p) => {
     const src = read(p);

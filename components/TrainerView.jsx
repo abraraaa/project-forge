@@ -62,6 +62,11 @@ async function call(path, body) {
   }
 }
 
+/** The CSV request: the pane reads the Response itself (body, filename). Network failure is null. */
+const exportCsv = (body) => fetchWithTimeout("/api/trainer/export", {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+}).catch(() => null);
+
 /**
  * The words for a reply with none of its own. The server's text is never shown.
  * @param {{ status: number }} r
@@ -618,7 +623,8 @@ export default function TrainerView() {
             lastLooked={open.lastLooked} now={loadedAt} onRemove={shown.self ? undefined : () => removeClient(shown.ref)}
             onChange={shown.self ? undefined : (body) => changePlan(shown.ref, body)}
             onFaceId={shown.self ? undefined : confirmFaceId}
-            onChanged={shown.self ? undefined : () => refreshPane(shown.ref)}/>
+            onChanged={shown.self ? undefined : () => refreshPane(shown.ref)}
+            clientRef={shown.self ? null : shown.ref} onExport={exportCsv}/>
         )}
       </div>
 

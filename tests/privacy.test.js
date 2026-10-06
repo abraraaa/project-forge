@@ -154,6 +154,11 @@ describe("privacy notice stays true", () => {
     expect(page).toContain("They can change your working weights, reps and main lifts from your next session on, within the app's limits.");
     expect(page).toContain("Turn their changes off in one tap in Profile and keep sharing. Turning them off, or stopping sharing, cancels any change that hasn't reached your plan yet.");
     expect(page).toContain("If your trainer can change your plan, each change is kept with what it was before, so you can see and undo it.");
+    // The download: what they see, counted as a look, and the Terms' line on deleting it.
+    expect(page).toContain("They can download a copy of what they see, and a download counts as a look. Under the Trainer Terms, they delete that copy when you stop sharing or if you ask.");
+    expect(SHARE_COPY.rows).toContain("They can download a copy of what they see.");
+    expect(read("app/trainer/terms/page.jsx")).toContain("Delete it when they stop sharing with you, or if they ask.");
+    expect(read("app/api/trainer/export/route.js")).toContain("logged = await dbLogFullLook(ref, me, now);");
     // What we collect names the stored changes too.
     expect(page).toContain("A trainer you add, if you do — who they are, when sharing started and ended, when they looked and, if they change your plan, each change with what it was before.");
     const rows = SHARE_COPY.rows.join("\n");

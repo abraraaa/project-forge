@@ -640,7 +640,7 @@ const ctxFrom = (data, plan) => ({
   },
 });
 const sendWeight = (ctx, lift, kg) => validateChangeSet({ id: SET_B, ops: [{ kind: "weight", lift, kg, from: null }] }, ctx);
-const LIMIT_CODES = ["per_change", "per_week", "ceiling", "no_history", "range", "floor"];
+const LIMIT_CODES = ["per_change", "per_week", "no_history", "range", "floor"];
 
 describe("the plan: only on a grant with changes on", () => {
   it("the route's projection adds plan only when edits are passed; the rest of the view is the read-only one", () => {

@@ -17,7 +17,7 @@ const strings = (o) => (typeof o === "string" ? [o] : Object.values(o).flatMap(s
 describe("trainer terms", () => {
   it("is off until launch, with the placeholder version", () => {
     expect(TRAINER_LIVE).toBe(false);
-    expect(TRAINER_TERMS_VERSION).toBe("draft-2026-10-05");
+    expect(TRAINER_TERMS_VERSION).toBe("draft-2026-10-05b");
     expect(KNOWN_TRAINER_TERMS_VERSIONS).toEqual([TRAINER_TERMS_VERSION]);
     expect(TRAINER_SCOPE).toBe("trainer:read");
   });
@@ -39,10 +39,17 @@ describe("trainer terms", () => {
     for (const v of strings(TRAINER_TERMS_COPY)) expect(v).not.toMatch(/server/i);
   });
 
-  it("the version moved with the plan-changes line: the previous one is refused", () => {
-    expect(TRAINER_TERMS_VERSION).not.toBe("draft-2026-10");
-    expect(acceptedTrainerTermsVersion({ version: "draft-2026-10" })).toBeNull();
-    expect(isCurrentTrainerTerms({ version: "draft-2026-10", adult: true })).toBe(false);
+  it("the version moved with the plan-changes and download lines: the previous ones are refused", () => {
+    for (const old of ["draft-2026-10", "draft-2026-10-05"]) {
+      expect(TRAINER_TERMS_VERSION).not.toBe(old);
+      expect(acceptedTrainerTermsVersion({ version: old })).toBeNull();
+      expect(isCurrentTrainerTerms({ version: old, adult: true })).toBe(false);
+    }
+  });
+
+  it("the Terms page says a downloaded copy is still the client's, and when it goes", () => {
+    const page = readFileSync(new URL("../app/trainer/terms/page.jsx", import.meta.url), "utf8");
+    expect(page).toContain("A copy you download of what a client shares is still their data. Delete it when they stop sharing with you, or if they ask.");
   });
 
   it("the Terms page says what a trainer may change, and no longer says read only", () => {
@@ -81,7 +88,7 @@ describe("trainer terms", () => {
 
 describe("share consent", () => {
   it("copy and version are pinned together", () => {
-    expect(SHARE_CONSENT_VERSION).toBe("2026-10-05");
+    expect(SHARE_CONSENT_VERSION).toBe("2026-10-05b");
     expect(SHARE_COPY).toEqual({
       rows: [
         "Your sessions, sets, RPE and how you felt, from the last 24 weeks.",
@@ -89,6 +96,7 @@ describe("share consent", () => {
         "On their client list: when you last trained, your sessions this week against your plan, and your 28-day rhythm.",
         "Breathers show as paused, never why.",
         "Each look shows in your Profile, plus one check-in a day from their client list.",
+        "They can download a copy of what they see.",
         "They may see a dot when any client has trained since they last opened their list. It never says who.",
         "Your current working weights, reps and main lifts for every lift in your programme, whether you're on a deload, and your planned week up to 4 weeks ahead.",
         "Each lift's most recent top set, however long ago. It keeps their changes within safe limits.",
@@ -127,7 +135,7 @@ describe("share consent", () => {
   });
 
   it("the version moved with the copy: the previous ones are refused", () => {
-    for (const old of ["2026-10", "2026-10-04"]) {
+    for (const old of ["2026-10", "2026-10-04", "2026-10-05"]) {
       expect(SHARE_CONSENT_VERSION).not.toBe(old);
       expect(acceptedShareConsentVersion({ version: old })).toBeNull();
     }

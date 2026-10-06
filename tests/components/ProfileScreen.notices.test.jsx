@@ -29,7 +29,11 @@ const sub = (title) => screen.getByText(title).closest("a").textContent.replace(
 
 // The admin wing shows on this device's admin hint (lib/auth-session.js).
 beforeEach(() => { localStorage.clear(); localStorage.setItem("forge:sam:adminHint", "1"); });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); localStorage.clear(); });
+
+// The Your clients subline is plain notice words outside a trainer-news week
+// (lib/trainer-news.js): pin the clock there, faking Date only.
+const outsideNews = () => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 10, 2, 12)); };
 
 describe("Profile rows read the notices as words", () => {
   it.each([
@@ -59,6 +63,7 @@ describe("Profile rows read the notices as words", () => {
     ["nothing new", {}, "See clients who share with you"],
     ["no answer", null, "See clients who share with you"],
   ])("Your clients, %s", async (_, noticeDots, line) => {
+    outsideNews();
     render(<ProfileScreen {...base} trainerShare={share({ trainer: true })} noticeDots={noticeDots} />);
     await screen.findByText("Passkey enabled");
     expect(sub("Your clients")).toBe(line);
@@ -121,6 +126,7 @@ describe("ProfileView fetches the notices once per visit", () => {
     ["offline", () => { throw new TypeError("Failed to fetch"); }],
     ["a body that isn't JSON", () => new Response("nope", { status: 200 })],
   ])("renders no notice words on %s", async (_, answer) => {
+    outsideNews();
     const spy = mount(answer);
     await screen.findByText("Your clients");
     await waitFor(() => expect(spy.mock.calls.filter(([url]) => notices(url))).toHaveLength(1));

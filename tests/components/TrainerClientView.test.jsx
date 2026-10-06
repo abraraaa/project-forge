@@ -111,11 +111,13 @@ describe("TrainerClientView", () => {
     expect(dates()).toHaveLength(10);
     expect(dates()[0]).toBe(ago(1));
     expect([...dates()].sort().reverse()).toEqual(dates());
-    fireEvent.click(screen.getByText("Show earlier"));
+    // Scoped: each lift's ledger pages with its own "Show earlier".
+    const sessions = () => within(document.querySelector('[data-section="sessions"]'));
+    fireEvent.click(sessions().getByText("Show earlier"));
     expect(dates()).toHaveLength(20);
-    fireEvent.click(screen.getByText("Show earlier"));
+    fireEvent.click(sessions().getByText("Show earlier"));
     expect(dates()).toHaveLength(25);
-    expect(screen.queryByText("Show earlier")).toBeNull();
+    expect(sessions().queryByText("Show earlier")).toBeNull();
   });
 
   it("lists a day-200 record in no session row, though the trend tier holds it", () => {
@@ -123,7 +125,8 @@ describe("TrainerClientView", () => {
     expect(v.tops.map((t) => t.date)).toContain(ago(200));
     render(<TrainerClientView client={client} view={v}/>);
     let more;
-    while ((more = screen.queryByText("Show earlier"))) fireEvent.click(more);
+    const sessions = within(document.querySelector('[data-section="sessions"]'));
+    while ((more = sessions.queryByText("Show earlier"))) fireEvent.click(more);
     const rows = [...document.querySelectorAll("[data-session]")];
     expect(rows).toHaveLength(25);
     expect(rows.map((r) => r.getAttribute("data-session"))).not.toContain(ago(200));
@@ -482,18 +485,33 @@ describe("TrainerClientView: the plan", () => {
     expect(within(dialog()).getByRole("button", { name: "More reps" }).disabled).toBe(false);
   });
 
-  it("a top set past the app's top for the lift blocks weight changes and says why; reps still change", () => {
-    // Standing Calf Raise at 100 kg: its deload floor (70) sits over the ceiling (37.5) their app clamps to.
+  /** The plan data with a Standing Calf Raise top set at kg, yesterday. */
+  const calfAt = (kg) => {
     const data = planData();
     const calf = { name: "Standing Calf Raise", muscle: "Calves", loadType: "machine",
-      sets: [12, 12, 12].map((r) => ({ weight: 100, reps: r, rir: 2, loadType: "machine", effectiveLoad: 100 })) };
+      sets: [12, 12, 12].map((r) => ({ weight: kg, reps: r, rir: 2, loadType: "machine", effectiveLoad: kg })) };
     data.history.push({ v: 2, id: `${ago(1)}T09:00:00.000Z`, date: ago(1), readiness: "normal", session: "strength A", scheduledLetter: "A",
       blocks: [{ id: "main", type: "main", exercises: [calf] }] });
-    const view = planView(data);
-    expect(view.plan.lifts.find((l) => l.name === "Standing Calf Raise").blocked).toEqual({ code: "ceiling", until: null });
+    return data;
+  };
+
+  it("a 100 kg calf raise top set takes changes up to 110 kg, past the cold-start cap", () => {
+    const view = planView(calfAt(100));
+    const calf = view.plan.lifts.find((l) => l.name === "Standing Calf Raise");
+    expect(calf.blocked).toBe(null);
+    expect(calf.bounds).toMatchObject({ min: 70, max: 110 });
     render(<TrainerClientView client={client} view={view}/>);
     openLift("Standing Calf Raise");
-    expect(dialog().querySelector("[data-weight]").textContent).toContain("Their last top set is past the app's top for this lift. Change their reps instead.");
+    expect(dialog().textContent).toContain("Up to 110 kg: last top set 100");
+    expect(within(dialog()).getByLabelText("Weight in kg")).toBeTruthy();
+  });
+
+  it("a top set whose deload weight is over the app's top blocks weight changes and says why; reps still change", () => {
+    const view = planView(calfAt(600));
+    expect(view.plan.lifts.find((l) => l.name === "Standing Calf Raise").blocked).toEqual({ code: "range", until: null });
+    render(<TrainerClientView client={client} view={view}/>);
+    openLift("Standing Calf Raise");
+    expect(dialog().querySelector("[data-weight]").textContent).toContain(`Their last top set is over ${MAX_KG} kg, the most their app takes. Change their reps instead.`);
     expect(within(dialog()).queryByLabelText("Weight in kg")).toBeNull();
     expect(within(dialog()).getByRole("button", { name: "More reps" }).disabled).toBe(false);
   });
@@ -893,3 +911,292 @@ function isoDayMonthOf(iso) {
   const [, m, d] = iso.split("-").map(Number);
   return `${d} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]}`;
 }
+
+// ── The ledger ──────────────────────────────────────────────────────────────
+
+const SQUAT = "Barbell Back Squat";
+const ledgerEl = (lift = SQUAT) => /** @type {HTMLElement} */ (document.querySelector(`[data-ledger="${lift}"]`));
+const narrowRows = () => [...ledgerEl().querySelectorAll("[data-ledger-narrow] [data-ledger-row]")];
+const wideRows = () => [...ledgerEl().querySelectorAll("[data-ledger-wide] tbody[data-ledger-row]")];
+
+describe("TrainerClientView: the ledger", () => {
+  it("sits under the bests, for a read-only grant too: a compact row per session under 640, a table from 640", () => {
+    render(<TrainerClientView client={client} view={view()}/>);
+    const l = ledgerEl();
+    const detail = l.closest(".forge-wide-lift-detail");
+    expect(detail).toBeTruthy();
+    const best = within(/** @type {HTMLElement} */ (detail)).getByText(/^Best in 12 months/);
+    expect(best.compareDocumentPosition(l) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The tiers pick one: the compact rows hide from 640, the table under it.
+    expect(l.querySelector("[data-ledger-narrow]")?.className).toBe("forge-wide-n-only");
+    expect(l.querySelector("[data-ledger-wide]")?.className).toBe("forge-wide-mw-only");
+    const css = readFileSync(resolve(root, "app/globals.css"), "utf8");
+    // Every rule of a top-level media block, up to its closing brace at column 0.
+    const block = (head) => css.split(`${head} {\n`).slice(1).map((b) => b.split("\n}\n")[0]).join("\n");
+    expect(block("@media (max-width: 639.98px)")).toContain(".forge-wide-mw-only { display: none; }");
+    expect(block("@media (min-width: 640px)")).toContain(".forge-wide-n-only { display: none; }");
+    // Compact: date · best set · session volume, newest first, ten to a page.
+    expect(narrowRows()).toHaveLength(10);
+    expect(narrowRows()[0].querySelector("button")?.textContent).toBe(`${isoDayMonthOf(ago(1))} · 100 × 5 · 1500 kg`);
+    // Table: date, reps, kg and volume; one row per session under Top sets.
+    const heads = [...l.querySelectorAll("[data-ledger-wide] thead th")].map((th) => th.textContent);
+    expect(heads).toEqual(["Date", "Reps", "kg", "Volume"]);
+    expect(wideRows()).toHaveLength(10);
+    expect(wideRows()[0].querySelectorAll("tr")).toHaveLength(1);
+    expect(wideRows()[0].textContent).toBe(`${isoDayMonthOf(ago(1))}51001500 kg`);
+  });
+
+  it("toggles Top sets and All sets: every set, numbered and marked, and every compact row open", () => {
+    render(<TrainerClientView client={client} view={view()}/>);
+    const group = within(ledgerEl()).getByRole("group", { name: `${SQUAT} ledger sets` });
+    const topBtn = within(group).getByRole("button", { name: `Top sets for ${SQUAT}` });
+    const allBtn = within(group).getByRole("button", { name: `All sets for ${SQUAT}` });
+    expect(topBtn.getAttribute("aria-pressed")).toBe("true");
+    expect(narrowRows().every((r) => r.querySelector("button")?.getAttribute("aria-expanded") === "false")).toBe(true);
+    fireEvent.click(allBtn);
+    expect(allBtn.getAttribute("aria-pressed")).toBe("true");
+    expect(topBtn.getAttribute("aria-pressed")).toBe("false");
+    const heads = [...ledgerEl().querySelectorAll("[data-ledger-wide] thead th")].map((th) => th.textContent);
+    expect(heads).toEqual(["Date", "Set", "Reps", "kg", "Top set", "Volume"]);
+    const trs = [...wideRows()[0].querySelectorAll("tr")];
+    expect(trs).toHaveLength(3);
+    expect(trs.map((tr) => [...tr.querySelectorAll("td")].slice(0, 4).map((td) => td.textContent))).toEqual([
+      ["1", "5", "100", "Top"], ["2", "5", "100", ""], ["3", "5", "100", ""],
+    ]);
+    expect(narrowRows().every((r) => r.querySelector("button")?.getAttribute("aria-expanded") === "true")).toBe(true);
+    expect([...narrowRows()[0].querySelectorAll("[data-ledger-set]")].map((s) => s.textContent))
+      .toEqual(["Set 1 · 100 × 5 · Top", "Set 2 · 100 × 5", "Set 3 · 100 × 5"]);
+    fireEvent.click(topBtn);
+    expect(wideRows()[0].querySelectorAll("tr")).toHaveLength(1);
+  });
+
+  it("a compact row opens to its sets on tap, and closes again", () => {
+    render(<TrainerClientView client={client} view={view()}/>);
+    const row = narrowRows()[1];
+    const btn = /** @type {HTMLElement} */ (row.querySelector("button"));
+    expect(row.querySelector("[data-ledger-sets]")).toBeNull();
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
+    expect(row.querySelectorAll("[data-ledger-set]")).toHaveLength(3);
+    expect(narrowRows()[0].querySelector("[data-ledger-sets]")).toBeNull();
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    expect(row.querySelector("[data-ledger-sets]")).toBeNull();
+  });
+
+  it("pages by ten, and past 24 weeks lists the top-set tier, marked", () => {
+    const v = view();
+    render(<TrainerClientView client={client} view={v}/>);
+    let more;
+    while ((more = within(ledgerEl()).queryByText("Show earlier"))) fireEvent.click(more);
+    expect(narrowRows()).toHaveLength(26);
+    const last = narrowRows()[25];
+    expect(last.getAttribute("data-tier")).toBe("top");
+    expect(last.textContent).toContain(`${isoDayMonthOf(ago(200))} · 137.5 × 5 · top set only`);
+    expect(ledgerEl().querySelector("[data-ledger-narrow] [data-ledger-older]")?.textContent).toBe(`Before ${isoDayMonthOf(v.window.from)}: top sets only.`);
+    expect(ledgerEl().querySelector("[data-ledger-wide] [data-ledger-older]")?.textContent).toBe(`Before ${isoDayMonthOf(v.window.from)}: top sets only.`);
+    expect(wideRows()[25].textContent).toContain("top set only");
+    expect(ledgerEl().querySelector("[data-ledger-empty]")).toBeNull();
+  });
+
+  it("says when nothing was logged for the lift in 24 weeks, plainly, and still lists older top sets", () => {
+    render(<TrainerClientView client={client} view={view([rec(200, { weight: 120 }), rec(230, { weight: 117.5 })])}/>);
+    const empty = ledgerEl().querySelector("[data-ledger-empty]");
+    expect(empty?.textContent).toBe("Nothing logged for this lift in the last 24 weeks.");
+    expect(empty?.textContent).not.toContain("!");
+    expect(narrowRows().map((r) => r.getAttribute("data-tier"))).toEqual(["top", "top"]);
+  });
+
+  it("shows a reps-only set as its reps: no kg derived from bodyweight or a planted load", () => {
+    const hist = history();
+    hist[0].blocks[0].exercises[0].sets = [8, 8].map((r) => ({ weight: null, reps: r, rpe: 8, loadType: "barbell", effectiveLoad: 83.7, est1rm: 105.6, volume: 669.6 }));
+    render(<TrainerClientView client={client} view={view(hist, { bodyweight: { kg: 83.7 } })}/>);
+    const btn = /** @type {HTMLElement} */ (narrowRows()[0].querySelector("button"));
+    expect(btn.textContent).toBe(`${isoDayMonthOf(ago(1))} · 8 reps · 16 reps in all`);
+    fireEvent.click(btn);
+    expect([...narrowRows()[0].querySelectorAll("[data-ledger-set]")].map((s) => s.textContent)).toEqual(["Set 1 · 8 reps · Top", "Set 2 · 8 reps"]);
+    expect([...wideRows()[0].querySelectorAll("td")].map((td) => td.textContent)).toEqual(["8", "–", "16 reps in all"]);
+    expect(document.body.textContent).not.toContain("83.7");
+  });
+
+  it("names the trainer's change on the session they trained it at, where the plan carries it", () => {
+    const v = planView();
+    const at = Date.UTC(2026, 9, 3, 12);
+    v.plan.changes = [
+      { id: "hws_x.0", set: "hws_x", kind: "weight", target: SQUAT, before: 97.5, after: 100, from: null, status: "trained_yours", reason: null, date: ago(1), at, warnings: [] },
+      { id: "hws_x.1", set: "hws_x", kind: "reps", target: SQUAT, before: 6, after: 5, from: null, status: "trained_yours", reason: null, date: ago(1), at, warnings: [] },
+    ];
+    render(<TrainerClientView client={client} view={v}/>);
+    const heads = [...ledgerEl().querySelectorAll("[data-ledger-wide] thead th")].map((th) => th.textContent);
+    expect(heads).toEqual(["Date", "Prescribed", "Reps", "kg", "Volume", "Change"]);
+    // Sent together: one line in the table; the reps change is the prescription.
+    expect([...wideRows()[0].querySelectorAll("[data-ledger-change]")].map((c) => c.textContent)).toEqual([`You, ${isoDayMonthOf("2026-10-03")}`]);
+    expect([...wideRows()[0].querySelectorAll("td")][0].textContent).toBe("5");
+    expect(wideRows()[1].querySelector("[data-ledger-change]")).toBeNull();
+    const btn = /** @type {HTMLElement} */ (narrowRows()[0].querySelector("button"));
+    expect(btn.textContent).toContain("Yours");
+    fireEvent.click(btn);
+    expect([...narrowRows()[0].querySelectorAll("[data-ledger-change]")].map((c) => c.textContent)).toEqual([
+      `Your change, 100 kg, sent ${isoDayMonthOf("2026-10-03")}`, `Your change, 5 reps, sent ${isoDayMonthOf("2026-10-03")}`,
+    ]);
+    expect(narrowRows()[0].textContent).toContain("Prescribed 5 reps");
+  });
+
+  it("prints a string prescription and a string reps change as they are, a number with 'reps'", () => {
+    const v = planView();
+    const at = Date.UTC(2026, 9, 3, 12);
+    v.plan.changes = [
+      { id: "hws_y.0", set: "hws_y", kind: "reps", target: SQUAT, before: 6, after: "8/leg", from: null, status: "trained_yours", reason: null, date: ago(1), at, warnings: [] },
+    ];
+    render(<TrainerClientView client={client} view={v}/>);
+    fireEvent.click(/** @type {HTMLElement} */ (narrowRows()[0].querySelector("button")));
+    const text = narrowRows()[0].textContent;
+    expect(text).toContain("Prescribed 8/leg");
+    expect(text).not.toContain("8/leg reps");
+    expect([...narrowRows()[0].querySelectorAll("[data-ledger-change]")].map((c) => c.textContent))
+      .toEqual([`Your change, 8/leg, sent ${isoDayMonthOf("2026-10-03")}`]);
+    expect([...wideRows()[0].querySelectorAll("td")][0].textContent).toBe("8/leg");
+  });
+
+  it("names every Show earlier, Top sets and All sets by its lift, so no two buttons share a name", () => {
+    const BENCH = "Barbell Bench Press";
+    const hist = history();
+    for (const r of hist) {
+      r.blocks[0].exercises.push({ ...squat(80), name: BENCH, muscle: "Chest" });
+    }
+    render(<TrainerClientView client={client} view={view(hist)}/>);
+    for (const lift of [SQUAT, BENCH]) {
+      const l = within(ledgerEl(lift));
+      expect(l.getByRole("button", { name: `Top sets for ${lift}` }).textContent).toBe("Top sets");
+      expect(l.getByRole("button", { name: `All sets for ${lift}` }).textContent).toBe("All sets");
+      expect(l.getByRole("button", { name: `Show earlier ${lift} sessions` }).textContent).toBe("Show earlier");
+    }
+    const sessions = within(/** @type {HTMLElement} */ (document.querySelector('[data-section="sessions"]')));
+    expect(sessions.getByRole("button", { name: "Show earlier sessions" }).textContent).toBe("Show earlier");
+    const named = screen.getAllByRole("button").filter((b) => /^(Show earlier|Top sets|All sets)$/.test(b.textContent ?? ""))
+      .map((b) => b.getAttribute("aria-label"));
+    expect(named).toHaveLength(7);
+    expect(named.every(Boolean)).toBe(true);
+    expect(new Set(named).size).toBe(named.length);
+  });
+});
+
+// ── The CSV download ────────────────────────────────────────────────────────
+
+describe("TrainerClientView: Download CSV", () => {
+  const CSV = "\uFEFF# Heatwayve export for Sam\r\ndate,session\r\n";
+  const csvResponse = (headers = { "Content-Disposition": `attachment; filename="heatwayve-sam-${today}.csv"` }) =>
+    new Response(CSV, { status: 200, headers: { "Content-Type": "text/csv; charset=utf-8", ...headers } });
+  // The parent's side (components/TrainerView.jsx): the pane's body, POSTed as JSON through its fetch.
+  const parentExport = (f) => (body) => f("/api/trainer/export", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  /** @type {{ href: string, download: string, inDoc: boolean }[]} */
+  let clicks;
+  let created, revoked;
+  // URL's statics as they were, so the stubs never leak past this block.
+  const URL_STATICS = /** @type {const} */ (["createObjectURL", "revokeObjectURL"]);
+  const urlBefore = URL_STATICS.map((k) => Object.getOwnPropertyDescriptor(URL, k));
+  const setup = () => {
+    clicks = [];
+    created = vi.fn(() => "blob:https://heatwayve.app/0f1e2d");
+    revoked = vi.fn();
+    for (const [k, f] of [["createObjectURL", created], ["revokeObjectURL", revoked]]) {
+      Object.defineProperty(URL, k, { value: f, writable: true, configurable: true });
+    }
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function () {
+      clicks.push({ href: this.href, download: this.download, inDoc: document.body.contains(this) });
+    });
+    // Local noon of the file's today: the pane dates the body and the fallback name at click time.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(new Date(`${today}T12:00:00`));
+  };
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    URL_STATICS.forEach((k, i) => {
+      const d = urlBefore[i];
+      if (d) Object.defineProperty(URL, k, d);
+      else Reflect.deleteProperty(URL, k);
+    });
+  });
+  const download = async () => {
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Download CSV" })); });
+  };
+  const status = () => /** @type {HTMLElement} */ (document.querySelector("[data-export] [role=status]")).textContent;
+
+  it("POSTs the ref and today in a JSON body, saves the file by the route's name, then revokes the URL; no ref in any URL", async () => {
+    setup();
+    const fetchMock = vi.fn(async () => csvResponse());
+    render(<TrainerClientView client={client} view={view()} clientRef="hwg_ab/c" onExport={parentExport(fetchMock)}/>);
+    await download();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/trainer/export");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ ref: "hwg_ab/c", today: todayLocalIso() });
+    expect(created).toHaveBeenCalledTimes(1);
+    const blob = created.mock.calls[0][0];
+    expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 3)).toEqual(new Uint8Array([0xef, 0xbb, 0xbf]));
+    expect(clicks).toEqual([{ href: "blob:https://heatwayve.app/0f1e2d", download: `heatwayve-sam-${today}.csv`, inDoc: true }]);
+    // The temporary anchor is gone; the URL is revoked once the save has started.
+    expect(document.querySelector("a[download]")).toBeNull();
+    expect(revoked).not.toHaveBeenCalled();
+    vi.runAllTimers();
+    expect(revoked).toHaveBeenCalledWith("blob:https://heatwayve.app/0f1e2d");
+    for (const u of [url, ...clicks.map((c) => c.href), ...revoked.mock.calls.map((c) => c[0])]) expect(u).not.toContain("hwg_");
+    expect(document.querySelector('a[href*="hwg_"]')).toBeNull();
+    expect(status()).toBe("");
+  });
+
+  it("without a usable name from the route, names it heatwayve-<name>-<date>.csv, never by the ref", async () => {
+    setup();
+    for (const [c, headers, want] of [
+      [client, {}, `heatwayve-sam-${today}.csv`],
+      [client, { "Content-Disposition": 'attachment; filename="../../etc.csv"' }, `heatwayve-sam-${today}.csv`],
+      [{ name: null }, {}, `heatwayve-client-${today}.csv`],
+      [{ name: "名前" }, {}, `heatwayve-client-${today}.csv`],
+    ]) {
+      clicks.length = 0;
+      render(<TrainerClientView client={c} view={view()} clientRef="hwg_abc" onExport={parentExport(vi.fn(async () => csvResponse(headers)))}/>);
+      await download();
+      expect(clicks.map((k) => k.download)).toEqual([want]);
+      cleanup();
+    }
+  });
+
+  it("a refusal or a network failure says so in the pane's words, never the server's, and saves nothing", async () => {
+    setup();
+    for (const onExport of [
+      parentExport(vi.fn(async () => Response.json({ error: SERVER_WORDS }, { status: 429 }))),
+      parentExport(vi.fn(async () => Response.json({ error: SERVER_WORDS }, { status: 404 }))),
+      parentExport(vi.fn(async () => { throw new TypeError("Failed to fetch"); })),
+      vi.fn(async () => null),
+    ]) {
+      render(<TrainerClientView client={client} view={view()} clientRef="hwg_abc" onExport={onExport}/>);
+      await download();
+      expect(status()).toBe("Couldn't download just now.");
+      expect(document.body.textContent).not.toContain(SERVER_WORDS);
+      expect(document.body.textContent).not.toContain("Failed to fetch");
+      cleanup();
+    }
+    expect(clicks).toEqual([]);
+    expect(created).not.toHaveBeenCalled();
+  });
+
+  it("your own training downloads too, as 'me'; nothing to download without a ref or without the parent's export", async () => {
+    setup();
+    const fetchMock = vi.fn(async () => csvResponse({ "Content-Disposition": `attachment; filename="heatwayve-kim-${today}.csv"` }));
+    render(<TrainerClientView client={{ name: "Kim" }} view={view()} self onExport={parentExport(fetchMock)}/>);
+    await download();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ ref: "me", today: todayLocalIso() });
+    expect(clicks.map((k) => k.download)).toEqual([`heatwayve-kim-${today}.csv`]);
+    cleanup();
+    render(<TrainerClientView client={client} view={view()} onExport={parentExport(fetchMock)}/>);
+    expect(screen.queryByRole("button", { name: "Download CSV" })).toBeNull();
+    cleanup();
+    render(<TrainerClientView client={client} view={view()} clientRef="hwg_abc"/>);
+    expect(screen.queryByRole("button", { name: "Download CSV" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Download CSV" })).toBeNull();
+  });
+});

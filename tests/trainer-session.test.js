@@ -518,6 +518,9 @@ describe("trainerGate", () => {
 });
 
 describe("POST /api/trainer/session/end", () => {
+  // A token lives while now <= expires; the end writes expires = now − 1, so the same millisecond's gate check already fails. The clock is pinned so the test says so exactly.
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-10-06T12:00:00.000Z")); });
+  afterEach(() => { vi.useRealTimers(); });
   const end = (token, body = {}) => post(endPOST, "/api/trainer/session/end", body, token ? withCookie(token) : {});
   const cleared = (res) => {
     const set = res.headers.get("set-cookie");
@@ -538,6 +541,7 @@ describe("POST /api/trainer/session/end", () => {
     expect(writes()).toHaveLength(1);
     expect(writes()[0].q).toMatch(/^UPDATE auth_tokens SET expires = \?\s+WHERE \(token = \? OR token = \?\) AND expires > \? RETURNING expires$/);
     expect(db.tokens.has(hash(t))).toBe(true);
+    // The next request, in the same millisecond.
     expect((await trainerGate(gateReq(withCookie(t)))).fail.status).toBe(401);
     // Another device's session lives on.
     expect(await trainerGate(gateReq(withCookie(other)))).toMatchObject({ identity: { accountId: T } });
@@ -615,8 +619,8 @@ describe("SQL and source pins", () => {
 
   it("the two expiry statements are UPDATEs with their full WHERE", () => {
     const src = read("lib/db.js").replace(/\s+/g, " ");
-    expect(src).toContain("UPDATE auth_tokens SET expires = ${now} WHERE (token = ${tokenKey(token)} OR token = ${legacyKey(token)}) AND expires > ${now} RETURNING expires");
-    expect(src).toContain("UPDATE auth_tokens SET expires = ${now} WHERE account_id = ${accountId} AND scope = 'trainer' AND expires > ${now} RETURNING expires");
+    expect(src).toContain("UPDATE auth_tokens SET expires = ${now - 1} WHERE (token = ${tokenKey(token)} OR token = ${legacyKey(token)}) AND expires > ${now} RETURNING expires");
+    expect(src).toContain("UPDATE auth_tokens SET expires = ${now - 1} WHERE account_id = ${accountId} AND scope = 'trainer' AND expires > ${now} RETURNING expires");
   });
 
   it("no DELETE, DROP, TRUNCATE or token delete in any trainer file", () => {
@@ -629,7 +633,7 @@ describe("SQL and source pins", () => {
   it("every trainer route runs in lhr1, is dynamic, and never returns e.message", () => {
     const routes = walk("app/api/trainer").filter((f) => f.endsWith("route.js"));
     expect(routes.sort()).toEqual(["app/api/trainer/apply/route.js", "app/api/trainer/change/route.js", "app/api/trainer/client/route.js",
-      "app/api/trainer/clients/route.js", "app/api/trainer/invite/route.js", "app/api/trainer/session/end/route.js", "app/api/trainer/session/route.js", "app/api/trainer/upgrade/route.js"]);
+      "app/api/trainer/clients/route.js", "app/api/trainer/export/route.js", "app/api/trainer/invite/route.js", "app/api/trainer/session/end/route.js", "app/api/trainer/session/route.js", "app/api/trainer/upgrade/route.js"]);
     for (const f of routes) {
       const s = read(f);
       expect(s, f).toContain('export const preferredRegion = "lhr1";');

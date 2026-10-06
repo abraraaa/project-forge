@@ -1,6 +1,6 @@
 // The engine's constants and finders, exported for the trainer-change
 // validator (lib/trainer-change.js), which must use them and never copy them.
-// E3: the validator's weight ceiling is exactly the sanitiser's.
+// E3: the validator's weight top is exactly the sanitiser's bound.
 import { describe, it, expect } from "vitest";
 import * as progression from "@/lib/progression";
 import {
@@ -8,7 +8,7 @@ import {
   RECOVERY_SESSIONS_PER_LIFT, ADOPT_MIN_REPS, computeDeloadPrescription, __test__,
 } from "@/lib/progression";
 import {
-  categoryCeilingKg, sanitiseWorkingWeights, CATEGORY_COLD_START_MAX_KG, getLiftProfile,
+  WORKING_WEIGHT_MAX_KG, sanitiseWorkingWeights, CATEGORY_COLD_START_MAX_KG, getLiftProfile,
   getLoadType, swapLoadType, nextRung,
 } from "@/lib/lift-translations";
 import { TYPE_LABEL, normaliseWeek } from "@/lib/sync-merge";
@@ -65,36 +65,37 @@ describe("engine exports pinned (no behaviour change)", () => {
   });
 });
 
-describe("E3: categoryCeilingKg is the sanitiser's ceiling", () => {
+describe("E3: WORKING_WEIGHT_MAX_KG is the sanitiser's bound and the validator's top", () => {
   const lifts = catalogue();
   it("covers the catalogue", () => {
     expect(lifts.length).toBeGreaterThan(50);
   });
-  it("for every catalogue lift: the ceiling passes untouched, one rung more is clamped to the cap", () => {
+  it("for every catalogue lift: the bound passes untouched, one rung more is rewritten to the cap", () => {
     let checked = 0;
     for (const [name, lt] of lifts) {
-      const ceiling = categoryCeilingKg(name);
       const profile = getLiftProfile(name);
-      if (ceiling === null) {
+      const cap = profile.progressesByLoad ? CATEGORY_COLD_START_MAX_KG[profile.category] : undefined;
+      if (!cap) {
         // No cap: the sanitiser never touches the lift, however heavy.
         const w = { [name]: 9999 };
         expect(sanitiseWorkingWeights(w)).toBe(w);
         continue;
       }
-      expect(ceiling).toBe(CATEGORY_COLD_START_MAX_KG[profile.category] * 1.5);
-      const at = { [name]: ceiling };
-      expect(sanitiseWorkingWeights(at)).toBe(at);
-      const above = nextRung(ceiling, lt, +1);
-      expect(above).toBeGreaterThan(ceiling);
-      expect(sanitiseWorkingWeights({ [name]: above })).toEqual({ [name]: CATEGORY_COLD_START_MAX_KG[profile.category] });
+      // Past the cold-start cap, and the old 1.5x clamp, is real progression.
+      for (const kg of [cap * 1.5, nextRung(cap * 1.5, lt, +1), WORKING_WEIGHT_MAX_KG]) {
+        const w = { [name]: kg };
+        expect(sanitiseWorkingWeights(w), `${name} ${kg}`).toBe(w);
+      }
+      const above = nextRung(WORKING_WEIGHT_MAX_KG, lt, +1);
+      expect(above).toBeGreaterThan(WORKING_WEIGHT_MAX_KG);
+      expect(sanitiseWorkingWeights({ [name]: above })).toEqual({ [name]: cap });
       checked++;
     }
     expect(checked).toBeGreaterThan(40);
   });
-  it("is null for lifts that do not progress by load", () => {
-    expect(categoryCeilingKg("Push-Up")).toBe(null);
-    expect(categoryCeilingKg("Wall Sit")).toBe(null);
-    expect(categoryCeilingKg("Barbell Back Squat")).toBe(375);
-    expect(categoryCeilingKg("Leaning Lateral Raise")).toBe(37.5);
+  it("the validator's MAX_KG is the same number", async () => {
+    const { MAX_KG } = await import("@/lib/trainer-change");
+    expect(WORKING_WEIGHT_MAX_KG).toBe(400);
+    expect(MAX_KG).toBe(WORKING_WEIGHT_MAX_KG);
   });
 });

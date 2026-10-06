@@ -14,7 +14,7 @@
 // time.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { T, DISPLAY } from "@/lib/tokens";
 import { useInlineModalA11y } from "@/lib/a11y";
 import Glyph from "@/components/Glyph";
@@ -23,8 +23,10 @@ import { mainLiftTrend, readinessBreakdown } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
 import { makeDayContext, weeklyStrength } from "@/lib/day-state";
 import { isResting } from "@/lib/breaks";
-import { localDateStr } from "@/lib/dates";
-import { runsWeekFor } from "@/lib/trainer-view";
+import { localDateStr, todayLocalIso } from "@/lib/dates";
+import { runsWeekFor, SELF_REF } from "@/lib/trainer-view";
+import { ledgerFor, ledgerKg, ledgerReps, ledgerRepsText, ledgerSetText, ledgerVolumeText, ledgerSetsShown } from "@/lib/trainer-ledger";
+import { exportFilename } from "@/lib/trainer-export";
 import { MAX_OPS, MAX_KG, REP_LIMITS, TIMED_SECONDS, WEEK_JUMP_FRACTION, BIG_DROP_FRACTION } from "@/lib/trainer-change";
 import { EFFECTIVE_REP_BAND } from "@/lib/rep-band";
 import { nextRung, snapToImplement, isBodyweightMovement } from "@/lib/lift-translations";
@@ -148,13 +150,19 @@ const quietBtn = {
  *   onChange?: (body: any) => Promise<{ status: number, body: any }>,
  *   onFaceId?: () => Promise<boolean>,
  *   onChanged?: () => Promise<unknown> | unknown,
+ *   clientRef?: string | null,
+ *   onExport?: (body: { ref: string, today: string }) => Promise<Response | null | undefined>,
  * }} props
+ * clientRef is the ref the parent opened this pane by (a client's; your own
+ * training is "me"). onExport posts the body to /api/trainer/export through
+ * the parent's fetch, as onChange does, and hands back the raw response; the
+ * pane saves it as a file. The ref rides in the body, never a URL.
  * onChange posts to /api/trainer/change for this client (the parent adds
  * the grant and the date); onFaceId runs the trainer's sign-in again for a
  * fresh Face ID; onChanged reloads the pane after a send or a withdraw, and
  * answers false when the reload didn't land.
  */
-export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false, onChange, onFaceId, onChanged }) {
+export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false, onChange, onFaceId, onChanged, clientRef = null, onExport }) {
   const name = client?.name || null;
   const title = self ? "You" : name || "Your client";
   const they = self ? "you" : "they";
@@ -172,6 +180,8 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   const line = useMemo(() => mainLiftTrend([...tops, ...sessions]), [tops, sessions]);
   const all = useMemo(() => mainLiftTrend([...tops, ...sessions], { includeCooked: true }), [tops, sessions]);
   const lifts = Object.keys(all);
+  // Each main lift's ledger: every set over 24 weeks, then top sets to 12 months.
+  const ledgers = useMemo(() => Object.fromEntries(Object.keys(all).map((l) => [l, ledgerFor(view, l)])), [view, all]);
   const felt = useMemo(() => readinessBreakdown(sessions), [sessions]);
   const audit = useMemo(() => auditHistoryVolume(sessions, { weeks: 2 }), [sessions]);
   const under = audit && !audit.away
@@ -207,6 +217,18 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   // Where their changes stand (view.edits); "on" without a plan means it couldn't be read.
   const edits = plan ? "on" : view?.edits === "on" ? "unavailable" : view?.edits;
   const lead = self ? "Read only." : leadLine(edits, name);
+  // The export: a client's (the pane only renders while the grant is live) or
+  // your own, which the route serves as "me".
+  const exportRef = self ? SELF_REF : typeof clientRef === "string" && clientRef ? clientRef : null;
+  const [exporting, setExporting] = useState(false);
+  const [exportFailed, setExportFailed] = useState(false);
+  const onDownload = async () => {
+    if (exporting || !exportRef || !onExport) return;
+    setExporting(true); setExportFailed(false);
+    const ok = await downloadCsv(onExport, exportRef, self ? SELF_REF : "", name);
+    setExporting(false);
+    if (!ok) setExportFailed(true);
+  };
 
   return (
     <div style={{ fontFamily: T.text, color: T.ink }}>
@@ -221,6 +243,15 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
         {since && looked ? " · " : null}
         {looked ? <>You last looked <Nums text={looked}/></> : null}
       </p>
+      {exportRef && onExport && (
+        <div data-export="" style={{ marginTop: 4 }}>
+          <button type="button" onClick={onDownload} aria-disabled={exporting}
+            style={{ display: "inline-block", padding: "12px 0", lineHeight: "20px", background: "none", border: "none", cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2, textDecoration: "underline", textUnderlineOffset: 3 }}>
+            Download CSV
+          </button>
+          <div role="status" aria-live="polite" style={statusLine}>{exportFailed ? EXPORT_FAILED : ""}</div>
+        </div>
+      )}
 
       <div className="forge-wide-pane">
         <div>
@@ -266,7 +297,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
             )}
             {lifts.map((lift) => (
               <LiftBlock key={lift} lift={lift} line={line[lift] || []} points={all[lift] || []} from={from}
-                open={shownLift === lift} onOpen={() => setOpenLift(lift)}/>
+                ledger={ledgers[lift] || []} open={shownLift === lift} onOpen={() => setOpenLift(lift)}/>
             ))}
           </div>
         </div>
@@ -303,7 +334,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
             )}
             {newestFirst.slice(0, shown).map((s) => <SessionRow key={s.id} session={s}/>)}
             {newestFirst.length > shown && (
-              <button type="button" onClick={() => setShown((n) => n + PAGE)} className="forge-press forge-tint"
+              <button type="button" onClick={() => setShown((n) => n + PAGE)} className="forge-press forge-tint" aria-label="Show earlier sessions"
                 style={{ ...quietBtn, width: "100%", marginTop: 12 }}>
                 Show earlier
               </button>
@@ -386,8 +417,9 @@ function RhythmCell({ week, early }) {
 }
 
 // One main lift. Under 640 a row with a sparkline that opens its chart (one
-// open at a time, as in the Lab); from 640 every chart shows.
-function LiftBlock({ lift, line, points, from, open, onOpen }) {
+// open at a time, as in the Lab); from 640 every chart shows. Its ledger
+// sits under the bests.
+function LiftBlock({ lift, line, points, from, ledger, open, onOpen }) {
   const best = bestOf(points);
   const last = points[points.length - 1];
   const recent = from ? points.filter((p) => p.date >= from).length : points.length;
@@ -412,7 +444,219 @@ function LiftBlock({ lift, line, points, from, open, onOpen }) {
           {last && <div>Last top set: <Nums text={`${last.topSet.weight} × ${last.topSet.reps}`}/></div>}
           <div><Nums text={`${recent} session${recent === 1 ? "" : "s"} in the last 24 weeks`}/></div>
         </div>
+        <LiftLedger lift={lift} rows={ledger} from={from}/>
       </div>
+    </div>
+  );
+}
+
+// ── The export ──────────────────────────────────────────────────────────────
+
+const EXPORT_FAILED = "Couldn't download just now.";
+/** How long the saved file's object URL lives: long enough for a slow browser to start the save. */
+const REVOKE_AFTER_MS = 10_000;
+
+/**
+ * The file name the route sent (Content-Disposition), when it is a plain
+ * .csv name; otherwise null.
+ * @param {string | null} header
+ */
+export function exportNameFrom(header) {
+  const m = typeof header === "string" ? header.match(/filename="([^"]*)"/i) : null;
+  return m && /^[A-Za-z0-9._-]{1,120}\.csv$/.test(m[1]) ? m[1] : null;
+}
+
+/**
+ * POST the export through the parent and save what comes back as a file.
+ * True when the file was handed to the browser; any failure is false, and
+ * the server's words are never read.
+ * @param {(body: { ref: string, today: string }) => Promise<Response | null | undefined>} onExport
+ * @param {string} ref
+ * @param {string} fallbackRef  what the fallback name may use in place of a handle: "me" or nothing, never a grant ref
+ * @param {string | null} name
+ */
+async function downloadCsv(onExport, ref, fallbackRef, name) {
+  const today = todayLocalIso();
+  try {
+    const res = await onExport({ ref, today });
+    if (!res || !res.ok) return false;
+    const blob = await res.blob();
+    const file = exportNameFrom(res.headers.get("Content-Disposition")) ?? exportFilename(name, fallbackRef, today);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = file;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Ledger sessions shown before "Show earlier". */
+const LEDGER_PAGE = 10;
+
+/** The trainer's change on a session: "You, 3 Oct" (the day it was sent). */
+export function changeByText(c) {
+  const day = c?.at != null ? msDayMonth(c.at) : "";
+  return day ? `You, ${day}` : "You";
+}
+
+/** The same, with what it set: "Your change, 105 kg, sent 3 Oct". */
+function changeDetailText(c) {
+  const what = c.after == null ? "" : c.kind === "weight" ? `, ${c.after} kg` : `, ${ledgerRepsText(c.after)}`;
+  const day = c.at != null ? msDayMonth(c.at) : "";
+  return `Your change${what}${day ? `, sent ${day}` : ""}`;
+}
+
+/** @type {import("react").CSSProperties} */
+const cell = { padding: "6px 6px 6px 0", textAlign: "left", verticalAlign: "top", fontWeight: 400 };
+/** @type {import("react").CSSProperties} */
+const headCell = { ...cell, fontSize: 12, color: T.ink3, borderBottom: `1px solid ${T.rule}`, whiteSpace: "nowrap" };
+
+/**
+ * One main lift's ledger, newest first (lib/trainer-ledger.js): top sets or
+ * every set. Under 640 a compact row per session (date · best set · volume)
+ * that opens to its sets, every row open under All sets; from 640 a table.
+ * Both are rendered and the tier classes pick one, as the lift rows do.
+ * A set the view carries no kg for shows its reps alone.
+ */
+function LiftLedger({ lift, rows, from }) {
+  const [mode, setMode] = useState(/** @type {"top" | "all"} */ ("top"));
+  // Rows tapped away from the mode's default: closed under Top sets, open under All sets.
+  const [flipped, setFlipped] = useState(() => /** @type {Set<string>} */ (new Set()));
+  const [shown, setShown] = useState(LEDGER_PAGE);
+  const page = rows.slice(0, shown);
+  const firstTop = page.findIndex((r) => r.tier === "top");
+  const recent = rows.some((r) => r.tier === "session");
+  const prescribed = rows.some((r) => r.prescribed != null);
+  const anyChange = rows.some((r) => r.changes.length > 0);
+  const pick = (m) => { setMode(m); setFlipped(new Set()); };
+  const flip = (key) => setFlipped((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const olderText = from ? `Before ${isoDayMonth(from)}: top sets only.` : "Older: top sets only.";
+  const cols = 3 + (mode === "all" ? 2 : 0) + (prescribed ? 1 : 0) + (anyChange ? 1 : 0) + 1;
+
+  return (
+    <div data-ledger={lift} style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+        <div style={{ flex: 1, fontSize: 13, color: T.ink3 }}>Ledger</div>
+        <div role="group" aria-label={`${lift} ledger sets`} style={{ display: "flex", gap: 6 }}>
+          <button type="button" aria-pressed={mode === "top"} aria-label={`Top sets for ${lift}`} onClick={() => pick("top")} style={chip(mode === "top")}>Top sets</button>
+          <button type="button" aria-pressed={mode === "all"} aria-label={`All sets for ${lift}`} onClick={() => pick("all")} style={chip(mode === "all")}>All sets</button>
+        </div>
+      </div>
+      {!recent && (
+        <div data-ledger-empty="" style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, marginBottom: 8 }}>Nothing logged for this lift in the last 24 weeks.</div>
+      )}
+
+      {/* Under 640: a compact row per session. */}
+      <div className="forge-wide-n-only" data-ledger-narrow="">
+        {page.map((r, i) => {
+          const open = (mode === "all") !== flipped.has(r.key);
+          const summary = [isoDayMonth(r.date), ledgerSetText(r.best), r.tier === "top" ? "top set only" : ledgerVolumeText(r.volume)]
+            .filter(Boolean).join(" · ");
+          return (
+            <Fragment key={r.key}>
+              {i === firstTop && <div data-ledger-older="" style={{ fontSize: 12, color: T.ink3, padding: "10px 0 4px" }}><Nums text={olderText}/></div>}
+              <div data-ledger-row={r.key} data-tier={r.tier} style={{ borderTop: `1px solid ${T.ruleFaint}` }}>
+                <button type="button" aria-expanded={open} onClick={() => flip(r.key)} className="forge-press forge-tint"
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 44, padding: "8px 0", background: "none", border: "none", cursor: "pointer", fontFamily: T.text, fontSize: 14, color: T.ink, textAlign: "left" }}>
+                  <span style={{ flex: 1, minWidth: 0 }}><Nums text={summary}/></span>
+                  {r.changes.length > 0 && <span style={{ fontSize: 12, color: T.ink3, flexShrink: 0 }}>Yours</span>}
+                  <Glyph name={open ? "chevronUp" : "chevronDown"} size={11} color={T.ink3}/>
+                </button>
+                {open && (
+                  <div data-ledger-sets="" style={{ padding: "0 0 10px" }}>
+                    {r.prescribed != null && (
+                      <div style={{ fontSize: 12, color: T.ink3, marginBottom: 2 }}><Nums text={`Prescribed ${ledgerRepsText(r.prescribed)}`}/></div>
+                    )}
+                    {r.sets.map((s) => (
+                      <div key={s.n} data-ledger-set={s.n} style={{ fontSize: 13, color: T.ink2, lineHeight: 1.6 }}>
+                        <Nums text={`Set ${s.n} · ${ledgerSetText(s)}`}/>
+                        {s.top && <span style={{ color: T.ink }}> · Top</span>}
+                      </div>
+                    ))}
+                    {r.changes.map((c, k) => (
+                      <div key={k} data-ledger-change="" style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}><Nums text={changeDetailText(c)}/></div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Fragment>
+          );
+        })}
+      </div>
+
+      {/* From 640: the table. */}
+      <div className="forge-wide-mw-only" data-ledger-wide="" style={{ overflowX: "auto" }}>
+        {page.length > 0 && (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, color: T.ink2 }}>
+            <caption style={SR_ONLY}>{lift}, {mode === "top" ? "top sets" : "every set"}, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col" style={headCell}>Date</th>
+                {mode === "all" && <th scope="col" style={headCell}>Set</th>}
+                {prescribed && <th scope="col" style={headCell}>Prescribed</th>}
+                <th scope="col" style={headCell}>Reps</th>
+                <th scope="col" style={headCell}>kg</th>
+                {mode === "all" && <th scope="col" style={headCell}><span style={SR_ONLY}>Top set</span></th>}
+                <th scope="col" style={headCell}>Volume</th>
+                {anyChange && <th scope="col" style={headCell}>Change</th>}
+              </tr>
+            </thead>
+            {page.map((r, i) => {
+              const sets = ledgerSetsShown(r, mode);
+              return (
+                <Fragment key={r.key}>
+                  {i === firstTop && (
+                    <tbody data-ledger-older="">
+                      <tr><td colSpan={cols} style={{ ...cell, fontSize: 12, color: T.ink3, paddingTop: 12 }}><Nums text={olderText}/></td></tr>
+                    </tbody>
+                  )}
+                  <tbody data-ledger-row={r.key} data-tier={r.tier}>
+                    {sets.map((s, j) => (
+                      <tr key={s.n} data-ledger-set={s.n} style={{ borderTop: j === 0 ? `1px solid ${T.ruleFaint}` : "none" }}>
+                        {j === 0 && <th scope="rowgroup" rowSpan={sets.length} style={{ ...cell, color: T.ink, whiteSpace: "nowrap" }}><Nums text={isoDayMonth(r.date)}/></th>}
+                        {mode === "all" && <td style={{ ...cell, fontFamily: T.measured }}>{s.n}</td>}
+                        {prescribed && <td style={{ ...cell, fontFamily: T.measured }}>{j === 0 && r.prescribed != null ? ledgerReps(r.prescribed) : ""}</td>}
+                        <td style={{ ...cell, fontFamily: T.measured, color: T.ink }}>{ledgerReps(s.reps) || "–"}</td>
+                        <td style={{ ...cell, fontFamily: T.measured, color: T.ink }}>{ledgerKg(s) || "–"}</td>
+                        {mode === "all" && <td style={{ ...cell, fontSize: 12, color: T.ink }}>{s.top ? "Top" : ""}</td>}
+                        {j === 0 && (
+                          <td rowSpan={sets.length} style={{ ...cell, whiteSpace: r.volume?.kg != null ? "nowrap" : "normal" }}>
+                            {r.tier === "top" ? <span style={{ fontSize: 12, color: T.ink3 }}>top set only</span> : <Nums text={ledgerVolumeText(r.volume)}/>}
+                          </td>
+                        )}
+                        {anyChange && j === 0 && (
+                          <td rowSpan={sets.length} style={{ ...cell, fontSize: 12 }}>
+                            {/* One line per day sent: a weight and reps sent together read once. */}
+                            {[...new Set(r.changes.map(changeByText))].map((t) => <div key={t} data-ledger-change=""><Nums text={t}/></div>)}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </Fragment>
+              );
+            })}
+          </table>
+        )}
+      </div>
+
+      {rows.length > shown && (
+        <button type="button" onClick={() => setShown((n) => n + LEDGER_PAGE)} className="forge-press forge-tint" aria-label={`Show earlier ${lift} sessions`}
+          style={{ ...quietBtn, width: "100%", marginTop: 10 }}>
+          Show earlier
+        </button>
+      )}
     </div>
   );
 }
@@ -554,7 +798,6 @@ export function refusalText(code, { lift = null, until = null, bounds = null } =
     case "reps_only": return `${who}'s last top set has no weight to show here. Change their reps instead.`;
     case "range": return `Pick a weight up to ${MAX_KG} kg.`;
     case "off_grid": return "Pick a weight on their kit's steps.";
-    case "ceiling": return "That's above the app's top for this lift.";
     case "deload": return until ? `After their deload ends, about ${isoDayMonth(until)}.` : "After their deload ends.";
     case "recovery": return `After their next ${lift || "session"} session.`;
     case "per_change": return bounds?.max != null ? `Up to ${bounds.max} kg in one change from their last top set.` : "Too big a step from their last top set.";
@@ -936,7 +1179,7 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
   const blockedText = !blocked ? null
     : blocked.code === "deload" ? (blocked.until ? `After their deload ends, about ${isoDayMonth(blocked.until)}` : "After their deload ends")
     : blocked.code === "recovery" ? `After their next ${lift.name} session`
-    : blocked.code === "ceiling" ? "Their last top set is past the app's top for this lift. Change their reps instead."
+    : blocked.code === "range" ? `Their last top set is over ${MAX_KG} kg, the most their app takes. Change their reps instead.`
     : noHistoryText(0);
   const noWeight = timed ? "A timed hold, so seconds only." : lt === "bodyweight" ? "Bodyweight, so reps only." : "Reps only for this one.";
   const range = !b ? null
@@ -1271,7 +1514,7 @@ function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChang
         );
       })}
       {sets.length > shown && (
-        <button type="button" onClick={() => setShown((n) => n + SETS_PAGE)} className="forge-press forge-tint" style={{ ...quietBtn, width: "100%", marginTop: 8 }}>
+        <button type="button" onClick={() => setShown((n) => n + SETS_PAGE)} className="forge-press forge-tint" aria-label="Show earlier changes" style={{ ...quietBtn, width: "100%", marginTop: 8 }}>
           Show earlier
         </button>
       )}

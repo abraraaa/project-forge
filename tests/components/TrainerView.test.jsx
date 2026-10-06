@@ -321,6 +321,20 @@ describe("TrainerView: the roster", () => {
 });
 
 describe("TrainerView: a client", () => {
+  it("hands the pane an export handler that POSTs { ref, today } to /api/trainer/export; no ref in a URL", async () => {
+    signedIn();
+    server.routes["POST /api/trainer/export"] = { status: 200, body: {} };
+    await mount();
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    const pane = panes.props.at(-1);
+    expect(typeof pane.onExport).toBe("function");
+    const res = await pane.onExport({ ref: "hwg_a", today });
+    expect(res.status).toBe(200);
+    expect(posts("/api/trainer/export").map((c) => c.body)).toEqual([{ ref: "hwg_a", today }]);
+    expect(server.calls.some((c) => c.url.includes("hwg_"))).toBe(false);
+  });
+
   it("opens in the pane; history holds an index, the URL stays /trainer; Back clears it", async () => {
     signedIn();
     const { container } = await mount();
