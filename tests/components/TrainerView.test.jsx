@@ -187,11 +187,9 @@ describe("TrainerView: signing in", () => {
     await flush();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Coach on Heatwayve");
     for (const line of [
-      "See your clients' training and, when they allow it, change their plan. Free.",
-      "They approve you with Face ID, and can stop any time.",
-      "You never see photos, bodyweight, sleep, or why someone's on a breather.",
-      "Clients see you as coachkim.",
+      "See your clients' training, never their photos, bodyweight, sleep or why they're on a breather, and change their plan when they allow it. They approve you with Face ID, can stop any time, and see you as coachkim.",
       "You're 18 or over.",
+      "Free.",
     ]) expect(screen.getByText(line)).toBeTruthy();
     const commit = screen.getByText("Set me up as a trainer");
     const terms = document.getElementById(commit.getAttribute("aria-describedby"));
@@ -300,7 +298,7 @@ describe("TrainerView: the roster", () => {
   it("an empty roster says how clients add you", async () => {
     signedIn([]);
     await mount();
-    const empty = "No clients yet. Show them a code. They add you in the app under Profile, then you see their training, read only.";
+    const empty = "No clients yet. Show them a code; they add you under Profile.";
     expect(screen.getAllByText(empty).length).toBeGreaterThan(0);
   });
 
@@ -750,8 +748,8 @@ describe("TrainerView: the terms change under an open session", () => {
     await flush();
     fireEvent.click(screen.getByText("Alex"));
     await flush();
-    expect(screen.getByText("Clients see you as Coach Kim.")).toBeTruthy();
-    expect(screen.queryByText(/Clients see you as COACHKIM/)).toBeNull();
+    expect(screen.getByText(/see you as Coach Kim\.$/)).toBeTruthy();
+    expect(screen.queryByText(/see you as COACHKIM/)).toBeNull();
   });
 });
 
@@ -866,7 +864,7 @@ describe("TrainerView: changing a client's plan", () => {
     expect(posts("/api/trainer/client")).toHaveLength(loads + 1);
     expect(posts("/api/trainer/client").at(-1).body).toEqual({ ref: "hwg_a", today });
     expect(screen.queryByText("One moment")).toBeNull();
-    expect(document.querySelector('[data-section="plan"]').textContent).toContain("Sent. Alex sees it next time they open the app, and can undo it.");
+    expect(document.querySelector('[data-section="plan"]').textContent).toContain("Sent to Alex.");
   });
 
   it("a cancelled Face ID posts no session and says so; a 401 from the change route signs out", async () => {

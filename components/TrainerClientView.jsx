@@ -233,7 +233,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   return (
     <div style={{ fontFamily: T.text, color: T.ink }}>
       {/* 1. Header */}
-      <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>{self ? "Your training" : "Shared with you"}</div>
+      <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>{self ? "Your training" : "Shared with you"}</div>
       <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" }}>{title}</h1>
       <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>
         {lead} Sessions from the last 24 weeks; main lifts over 12 months.
@@ -313,7 +313,6 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
             ) : (
               <div style={{ fontSize: 13, color: T.ink2 }}>Nothing logged in the last 24 weeks.</div>
             )}
-            <div style={{ fontSize: 12, color: T.ink3, marginTop: 6 }}>Each session shows how {they} felt; sets show RPE or RIR.</div>
           </div>
 
           {/* 6. Under minimum: only when flagged */}
@@ -347,7 +346,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
       {!self && (
         <div style={{ marginTop: 40, paddingTop: 16, borderTop: `1px solid ${T.rule}` }}>
           <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 12px" }}>
-            {edits === "on" || edits === "unavailable" ? "They see every change and can undo it." : "Read only."} {sentenceName} can stop sharing any time.
+            {edits === "on" || edits === "unavailable" ? "" : "Read only. "}{sentenceName} can stop sharing any time.
           </p>
           <button type="button" onClick={() => setConfirming(true)} className="forge-press forge-tint" style={quietBtn}>
             {name ? `Stop seeing ${name}'s training` : "Stop seeing their training"}
@@ -393,17 +392,20 @@ function RhythmCell({ week, early }) {
   const due = week.partial ? week.plannedSoFar : week.planned;
   const ratio = due > 0 ? Math.min(1, week.done / due) : week.done > 0 ? 1 : 0;
   const step = paused || ratio === 0 ? null : ratio >= 1 ? 3 : ratio >= 0.5 ? 2 : 1;
+  // "so far" and "part paused" don't fit a narrow cell at 12px: they live
+  // in the screen-reader line, and the cell shows the figure alone. A paused
+  // week's only mark is its word, set at 10px with no side padding so it
+  // stays inside the cell's border (12px "paused" is ~39px; a 390 cell ~35).
   const [figure, note] = paused ? ["", "paused"]
-    : week.partial ? [`${week.done}/${week.plannedSoFar}`, "so far"]
-    : week.plannedResting > 0 ? [`${week.done}/${week.planned}`, "part paused"]
+    : week.partial ? [`${week.done}/${week.plannedSoFar}`, ""]
     : [`${week.done}/${week.planned}`, ""];
   return (
     <li className={early ? "forge-wide-rhythm-early" : undefined} data-week={week.mondayIso}
       style={{
-        position: "relative", boxSizing: "border-box", minWidth: 0, padding: "8px 2px", borderRadius: T.rMark,
+        position: "relative", boxSizing: "border-box", minWidth: 0, padding: paused ? "8px 0" : "8px 2px", borderRadius: T.rMark,
         textAlign: "center", lineHeight: 1.2,
         background: paused ? "transparent" : step ? T.heat[step] : "transparent",
-        boxShadow: step ? "none" : `inset 0 0 0 1px ${T.rule}`,
+        border: `1px solid ${step ? "transparent" : T.rule}`,
         color: step ? `var(--on-heat-${step})` : paused ? T.ink3 : T.ink2,
       }}>
       <span style={SR_ONLY}>Week of {isoDayMonth(week.mondayIso)}: {text}</span>
@@ -570,7 +572,7 @@ function LiftLedger({ lift, rows, from }) {
                 <button type="button" aria-expanded={open} onClick={() => flip(r.key)} className="forge-press forge-tint"
                   style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 44, padding: "8px 0", background: "none", border: "none", cursor: "pointer", fontFamily: T.text, fontSize: 14, color: T.ink, textAlign: "left" }}>
                   <span style={{ flex: 1, minWidth: 0 }}><Nums text={summary}/></span>
-                  {r.changes.length > 0 && <span style={{ fontSize: 12, color: T.ink3, flexShrink: 0 }}>Yours</span>}
+                  {r.changes.length > 0 && <span style={{ fontSize: 12, color: T.ink3, flexShrink: 0 }}>Your change</span>}
                   <Glyph name={open ? "chevronUp" : "chevronDown"} size={11} color={T.ink3}/>
                 </button>
                 {open && (
@@ -918,6 +920,11 @@ const commitStyle = {
   width: "100%", height: 52, background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer",
   fontFamily: T.text, fontSize: 15, fontWeight: 500, color: T.commitInk, boxShadow: T.elevStrong,
 };
+/** Full-width, outlined: every sheet action but Send. @type {import("react").CSSProperties} */
+const outlineStyle = {
+  width: "100%", height: 52, background: "none", border: `1px solid ${T.rule}`, borderRadius: T.r, cursor: "pointer",
+  fontFamily: T.text, fontSize: 15, fontWeight: 500, color: T.ink,
+};
 /** @type {import("react").CSSProperties} */
 const textBtn = {
   width: "100%", padding: "12px", marginTop: 4, background: "none", border: "none", cursor: "pointer",
@@ -934,7 +941,7 @@ const subKicker = { fontSize: 12, color: T.ink3, margin: "16px 0 4px" };
 const statusLine = { fontSize: 13, color: T.ink2, lineHeight: 1.5, minHeight: 0 };
 /** A chip: a pace preset, a main-lift option. @param {boolean} on @returns {import("react").CSSProperties} */
 const chip = (on) => ({
-  minHeight: 40, padding: "0 12px", borderRadius: T.rSm, cursor: "pointer", fontFamily: T.text, fontSize: 13,
+  minHeight: 36, padding: "0 12px", borderRadius: T.rSm, cursor: "pointer", fontFamily: T.text, fontSize: 13,
   border: `1px solid ${on ? T.ink : T.rule}`, background: on ? T.press : "none", color: on ? T.ink : T.ink2,
 });
 
@@ -979,7 +986,7 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
     if (draftCount(next) > MAX_OPS) { setStatus(`Up to ${MAX_OPS} changes in one send. Send these first.`); return false; }
     setDrafts(next);
     const n = draftCount(next);
-    setStatus(n ? `${n} change${n === 1 ? "" : "s"} ready to review. Nothing is sent yet.` : "");
+    setStatus(n ? `${n} change${n === 1 ? "" : "s"} to review` : "");
     return true;
   };
 
@@ -1000,7 +1007,7 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
   const onSent = () => {
     setDrafts(EMPTY_DRAFTS);
     setReviewing(false);
-    setStatus(`Sent. ${name || "They"} sees it next time they open the app, and can undo it.`);
+    setStatus(`Sent to ${name || "them"}.`);
     onChanged?.();
   };
 
@@ -1025,9 +1032,6 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
   return (
     <div style={section} data-section="plan">
       <div style={kicker}>Plan</div>
-      <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 4px" }}>
-        Pick a lift to change its weight or reps for their next session. Nothing is sent until you review it.
-      </p>
       {plan?.deload?.active && (
         <p data-deload="" style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "8px 0 0" }}>
           On a deload{plan.deload.until ? <> until about <Nums text={isoDayMonth(plan.deload.until)}/></> : null}. Weights can change once it ends.
@@ -1048,7 +1052,7 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
           {count ? <Nums text={`${count} change${count === 1 ? "" : "s"} · Review`}/> : "No changes yet"}
         </button>
         {count > 0 && (
-          <button type="button" onClick={() => { setDrafts(EMPTY_DRAFTS); setStatus("Cleared. Nothing was sent."); }} style={{ ...linkText }}>
+          <button type="button" onClick={() => { setDrafts(EMPTY_DRAFTS); setStatus("Cleared"); }} style={{ ...linkText }}>
             Clear
           </button>
         )}
@@ -1174,6 +1178,11 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
     if (b.max != null) presets.push(["Jump", b.max]);
     presets.push(["Ease", clampKg(snapToImplement(anchorKg * 0.95, lt))]);
   }
+  // One caption for the two presets whose names don't say what they are.
+  const presetNote = [
+    presets.some(([l]) => l === "Step") && "Step is their app's next weight.",
+    presets.some(([l]) => l === "Jump") && "Jump is the most this change allows.",
+  ].filter(Boolean).join(" ");
 
   const weightLabel = lt === "assisted_bodyweight" ? "Assistance" : isBodyweightMovement(lt) ? "Added weight" : lt === "per_db" ? "Weight, each dumbbell" : "Weight";
   const blockedText = !blocked ? null
@@ -1183,7 +1192,7 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
     : noHistoryText(0);
   const noWeight = timed ? "A timed hold, so seconds only." : lt === "bodyweight" ? "Bodyweight, so reps only." : "Reps only for this one.";
   const range = !b ? null
-    : anchorKg != null ? `Up to ${b.max} kg: last top set ${anchorKg}`
+    : anchorKg != null ? `Up to ${b.max} kg: last top set ${anchorKg} kg`
     : noHistoryText(b.max);
 
   const save = () => onSave({
@@ -1228,7 +1237,7 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
                       <div role="group" aria-label="Pace" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
                         {presets.map(([label, v]) => (
                           <button key={label} type="button" aria-pressed={kg === v} onClick={() => setBoth(v)} style={chip(kg === v)}>
-                            {label} <span style={{ fontFamily: T.measured }}>{v}</span>
+                            {label} <span style={{ fontFamily: T.measured }}>{v}</span><span> kg</span>
                           </button>
                         ))}
                       </div>
@@ -1242,15 +1251,11 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
                     </Stepper>
                     <div style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 8 }}>
                       <div><Nums text={range}/></div>
-                      <div><Nums text={`From ${minKg} kg`}/></div>
+                      <div><Nums text={`Not below ${minKg} kg`}/></div>
+                      {presetNote && <div>{presetNote}</div>}
                     </div>
                     {b.warnBelow != null && kg != null && kg < b.warnBelow && (
                       <div style={{ fontSize: 13, color: T.under, marginTop: 6 }}>{warningText("big_drop")}</div>
-                    )}
-                    {anchorKg != null && (
-                      <p style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, margin: "8px 0 0" }}>
-                        A one-off. After their next session the app carries on from what they lift.
-                      </p>
                     )}
                   </>
                 )}
@@ -1268,7 +1273,7 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
           </>
         )}
 
-        <button type="button" onClick={save} style={commitStyle}>Add to changes</button>
+        <button type="button" onClick={save} className="forge-press forge-tint" style={outlineStyle}>Add to changes</button>
         <button type="button" onClick={onClose} style={textBtn}>Cancel</button>
       </div>
     </div>
@@ -1388,18 +1393,18 @@ function ReviewSheet({ name, ops, basis, lifts, mains, budget, onChange, onFaceI
           })}
         </ul>
         <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "0 0 6px" }}>They'll see each change and can undo it.</p>
-        <p style={{ fontSize: 12, color: T.ink3, margin: "0 0 18px" }}><Nums text={`${budget.used} of ${budget.of} this week`}/></p>
+        <p style={{ fontSize: 12, color: T.ink3, margin: "0 0 18px" }}><Nums text={`${budget.used} of ${budget.of} changes this week`}/></p>
 
         <div role="status" aria-live="polite" style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, marginBottom: 12, minHeight: 0 }}>
           {note && (phase === "ready" || phase === "error" || phase === "face") ? note : phase === "budget" ? <Nums text={phaseText}/> : phaseText}
         </div>
 
         {phase === "face" && <button type="button" onClick={confirmIt} style={commitStyle}>Confirm it's you</button>}
-        {phase === "stale" && <button type="button" onClick={onRefresh} style={commitStyle}>Refresh</button>}
+        {phase === "stale" && <button type="button" onClick={onRefresh} className="forge-press forge-tint" style={outlineStyle}>Refresh</button>}
         {phase === "refused" && !setLevel && (
-          <button type="button" onClick={() => onDrop([...refusedAt.keys()])} style={commitStyle}>Leave those out</button>
+          <button type="button" onClick={() => onDrop([...refusedAt.keys()])} className="forge-press forge-tint" style={outlineStyle}>Leave those out</button>
         )}
-        {phase === "error" && <button type="button" onClick={check} style={commitStyle}>Check again</button>}
+        {phase === "error" && <button type="button" onClick={check} className="forge-press forge-tint" style={outlineStyle}>Check again</button>}
         {(phase === "ready" || phase === "sending" || phase === "checking") && (
           <button type="button" onClick={send} aria-disabled={phase !== "ready"} data-send=""
             style={{ ...commitStyle, opacity: phase === "ready" ? 1 : 0.6, cursor: phase === "ready" ? "pointer" : "default" }}>
@@ -1473,7 +1478,7 @@ function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChang
     <div data-section="changes" style={{ marginTop: 24 }}>
       <div style={{ ...kicker, marginBottom: 4 }}>Your changes</div>
       <div style={{ fontSize: 12, color: T.ink3, marginBottom: 8 }}>
-        <Nums text={`${budget.used} of ${budget.of} this week`}/>
+        <Nums text={`${budget.used} of ${budget.of} changes this week`}/>
         {budget.used >= budget.of && budget.freeAt ? <> · <Nums text={`more from ${msDayLabel(budget.freeAt)}`}/></> : null}
       </div>
       {sets.length === 0 && <div style={{ fontSize: 13, color: T.ink2 }}>Nothing sent yet.</div>}

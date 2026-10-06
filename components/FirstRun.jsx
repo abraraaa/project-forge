@@ -4,13 +4,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // The first-run steps after a name is claimed on a device with no profiles:
 // Passkey (when the device can) → Focus → Main lifts → Strength days →
-// Bodyweight + Let's go. ForgeApp mounts this once the profile is active, so
+// Bodyweight + Start training. ForgeApp mounts this once the profile is active, so
 // the steps outlive the gate's unmount (they used to live in ProfileScreen,
 // which activation unmounted before they could show).
 //
 // Writes go only through the save props, and only for a real change: Keep
 // writes nothing. Focus and main lifts save as they change; the week saves
-// on its Keep (each toggle re-derives the whole week); bodyweight on Let's go
+// on its Keep (each toggle re-derives the whole week); bodyweight on Start training
 // (Skip writes nothing).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ const PAGE = {
 };
 /** @type {import("react").CSSProperties} */
 const PRIMARY = {
-  width: "100%", height: 58, padding: "0 22px",
+  width: "100%", height: 56, padding: "0 22px",
   background: T.commit, border: "none", borderRadius: T.r,
   fontFamily: T.text, fontSize: 17, fontWeight: 500, color: T.commitInk,
   boxShadow: T.elevStrong,
@@ -123,7 +123,7 @@ export default function FirstRun({
         }
       } catch (e) {
         console.error("[forge:onboarding-passkey]", e);
-        setPasskeyError(e?.message || "Couldn't set up. Try again or skip.");
+        setPasskeyError(e?.message === "WebAuthn not supported" ? "This browser can't use passkeys." : "Couldn't set up. Try again or skip.");
       }
       setPasskeyBusy(false);
     };
@@ -141,7 +141,7 @@ export default function FirstRun({
 
         <Fade d={80}>
           <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, marginBottom: 12 }}>
-            Add one? Without it, your data lives only on this device — clearing your browser would lose everything.
+            Without one, your training lives only on this device. Clearing the browser clears it.
           </p>
           <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, marginBottom: 32 }}>
             With one, your name is yours across phone, laptop, anywhere. Face ID, Touch ID, or your device PIN.
@@ -151,7 +151,7 @@ export default function FirstRun({
         <Fade d={140}>
           <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column", gap: 12, minHeight: 80 }}>
             {passkeyError && (
-              <div style={{ padding: "10px 14px", borderRadius: T.r, background: T.surface, boxShadow: T.elev, fontSize: 13, color: T.ink, maxWidth: 320, textAlign: "center", lineHeight: 1.5 }}>
+              <div style={{ alignSelf: "stretch", fontSize: 12, color: T.heat[4], lineHeight: 1.5 }}>
                 {passkeyError}
               </div>
             )}
@@ -220,8 +220,8 @@ export default function FirstRun({
     );
   }
 
-  // Bodyweight + Let's go. The drum shows what is stored, else 75. With
-  // nothing stored, Let's go saves what the drum shows, 75 included: it is
+  // Bodyweight + Start training. The drum shows what is stored, else 75. With
+  // nothing stored, Start training saves what the drum shows, 75 included: it is
   // the answer, and the starting weights and the stale-weight card read it.
   // A stored value is saved again only if the drum moved.
   const bwShown = bwPick ?? bodyweight ?? 75;
@@ -265,7 +265,7 @@ export default function FirstRun({
           <button type="button" className="forge-press" onClick={handleGo}
             aria-describedby={firstDay ? "first-session-line" : undefined}
             style={{ ...PRIMARY, cursor: "pointer" }}>
-            <span>Let&apos;s go</span>
+            <span>Start training</span>
             <Glyph name="arrowRight" size={14}/>
           </button>
           <button type="button" onClick={onDone} style={{ ...QUIET, cursor: "pointer" }}>

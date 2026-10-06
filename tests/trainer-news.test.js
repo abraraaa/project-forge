@@ -9,15 +9,13 @@ const ledger = TRAINER_NEWS.find((n) => n.key === "ledger-export");
 
 describe("TRAINER_NEWS", () => {
   it("carries the ledger export, shipped 2026-10-06", () => {
-    expect(ledger).toEqual({ key: "ledger-export", shipped: "2026-10-06", line: "Per-lift ledger and CSV export" });
+    expect(ledger).toEqual({ key: "ledger-export", shipped: "2026-10-06" });
   });
 
-  it("every entry has a unique key, a local date and a line", () => {
+  it("every entry has a unique key and a local date", () => {
     expect(new Set(TRAINER_NEWS.map((n) => n.key)).size).toBe(TRAINER_NEWS.length);
     for (const n of TRAINER_NEWS) {
       expect(n.shipped).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(n.line.trim()).toBe(n.line);
-      expect(n.line).not.toMatch(/!/);
     }
   });
 
@@ -43,20 +41,20 @@ describe("newFor", () => {
 
   it("matches nothing on a malformed date", () => {
     for (const bad of ["", "2026-10", "06/10/2026", "not a date"]) expect(newFor(bad)).toEqual([]);
-    expect(newFor("2026-10-06", [{ key: "x", shipped: "soon", line: "x" }])).toEqual([]);
+    expect(newFor("2026-10-06", [{ key: "x", shipped: "soon" }])).toEqual([]);
   });
 
   it("newest first when two overlap", () => {
     const news = [
-      { key: "a", shipped: "2026-10-01", line: "A" },
-      { key: "b", shipped: "2026-10-04", line: "B" },
-      { key: "c", shipped: "2026-09-20", line: "C" },
+      { key: "a", shipped: "2026-10-01" },
+      { key: "b", shipped: "2026-10-04" },
+      { key: "c", shipped: "2026-09-20" },
     ];
     expect(newFor("2026-10-05", news).map((n) => n.key)).toEqual(["b", "a"]);
   });
 
   it("crosses a month and a DST change by calendar day", () => {
-    const news = [{ key: "m", shipped: "2026-10-28", line: "M" }];
+    const news = [{ key: "m", shipped: "2026-10-28" }];
     expect(newFor("2026-11-03", news).map((n) => n.key)).toEqual(["m"]);
     expect(newFor("2026-11-04", news)).toEqual([]);
   });

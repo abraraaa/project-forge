@@ -5,7 +5,7 @@ import Link from "next/link";
 import { T, DISPLAY } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
 
-const KICKER = "DRAFT";
+const KICKER = "Draft";
 const CONTACT = "ab@heatwayve.app";
 
 export const metadata = {

@@ -2,7 +2,7 @@
 // First run, end to end through ForgeApp: a claim that is the device's first
 // profile opens FirstRun (Passkey → Focus → Main lifts → Days → Bodyweight)
 // before home, Keep writes nothing, a change writes once through the existing
-// cores, Let's go records a bodyweight when none is stored, and a second
+// cores, Start training records a bodyweight when none is stored, and a second
 // profile on the device goes straight home. The three
 // step components are stubbed to their contract (components/first-run/*).
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -103,7 +103,7 @@ const press = (name) => act(async () => { fireEvent.click(screen.getByRole("butt
 const follows = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
 describe("first run on a fresh device", () => {
-  it("a fresh claim opens the passkey step; all-Keep then Let's go writes only the bodyweight shown", async () => {
+  it("a fresh claim opens the passkey step; all-Keep then Start training writes only the bodyweight shown", async () => {
     await claim();
     expect(await screen.findByRole("button", { name: /Add passkey/ })).toBeTruthy();
     expect(screen.queryByTestId("gate")).toBeNull();
@@ -122,7 +122,7 @@ describe("first run on a fresh device", () => {
     await press("Keep days");
     expect(screen.getByText("Bodyweight")).toBeTruthy();
     const passkeyChecks = hasPasskey.mock.calls.length;
-    await press("Let's go");
+    await press("Start training");
 
     expect(await screen.findByText("Home of Sam")).toBeTruthy();
     // Nothing stored, so the drum's 75 is the answer: the one write, and
@@ -161,7 +161,7 @@ describe("first run on a fresh device", () => {
     await press("Keep days");
     const drum = screen.getAllByText("76")[0];
     await act(async () => { fireEvent.click(drum); });
-    await press("Let's go");
+    await press("Start training");
 
     await screen.findByText("Home of Sam");
     // The focus core's rotation summary is dropped, not carried home.
@@ -228,7 +228,7 @@ describe("the week is saved only when the days differ", () => {
     await press("Tue Thu Sat");
     await press("Mon Wed Fri");
     await press("Keep days");
-    await press("Let's go");
+    await press("Start training");
     await screen.findByText("Home of Sam");
     expect(written("Sam")).toEqual(["bodyweight"]);
   });
@@ -246,22 +246,22 @@ describe("FirstRun on its own: save props and the closing line", () => {
     await press("Keep days");
   };
 
-  it("all Keep with nothing stored: only the shown bodyweight saves, and Let's go names the first strength day", async () => {
+  it("all Keep with nothing stored: only the shown bodyweight saves, and Start training names the first strength day", async () => {
     const p = props();
     render(<FirstRun {...p} todayIdx={1} />);
     await toBodyweight();
     expect(screen.getByText("First session: Strength A, Wednesday.")).toBeTruthy();
-    await press("Let's go");
+    await press("Start training");
     expect(saves(p)).toEqual([0, 0, 0, 1]);
     expect(p.onSaveBodyweight).toHaveBeenCalledWith(75);
     expect(p.onDone).toHaveBeenCalledTimes(1);
   });
 
-  it("all Keep with a stored bodyweight: Let's go saves nothing", async () => {
+  it("all Keep with a stored bodyweight: Start training saves nothing", async () => {
     const p = { ...props(), bodyweight: 82 };
     render(<FirstRun {...p} todayIdx={1} />);
     await toBodyweight();
-    await press("Let's go");
+    await press("Start training");
     expect(saves(p)).toEqual([0, 0, 0, 0]);
     expect(p.onDone).toHaveBeenCalledTimes(1);
   });
@@ -278,7 +278,7 @@ describe("FirstRun on its own: save props and the closing line", () => {
     await press("Keep days");
     expect(screen.getByText("First session: Strength A, Tuesday.")).toBeTruthy();
     await act(async () => { fireEvent.click(screen.getAllByText("80")[0]); });
-    await press("Let's go");
+    await press("Start training");
     expect(saves(p)).toEqual([1, 1, 1, 1]);
     expect(p.onSaveFocus).toHaveBeenCalledWith("Strong");
     expect(p.onSaveMainLift).toHaveBeenCalledWith("Barbell Back Squat", "Front Squat");
@@ -307,6 +307,13 @@ describe("FirstRun on its own: save props and the closing line", () => {
     registerPasskey.mockResolvedValueOnce({ ok: false });
     await press(/Add passkey/);
     expect(screen.getByText("Setup didn't complete. Try again or skip for now.")).toBeTruthy();
+    registerPasskey.mockRejectedValueOnce(new Error("SENTINEL internal"));
+    await press(/Add passkey/);
+    expect(screen.getByText("Couldn't set up. Try again or skip.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("SENTINEL");
+    registerPasskey.mockRejectedValueOnce(new Error("WebAuthn not supported"));
+    await press(/Add passkey/);
+    expect(screen.getByText("This browser can't use passkeys.")).toBeTruthy();
     await press("Later");
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeTruthy();
     expect(saves(p)).toEqual([0, 0, 0, 0]);

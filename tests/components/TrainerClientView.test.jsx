@@ -187,13 +187,17 @@ describe("TrainerClientView", () => {
     expect(rhythmCellText({ ...w, planned: 1, plannedResting: 2, done: 1 })).toBe("1/1 · part paused");
   });
 
-  it("a rhythm cell's note breaks between words only, never inside one", () => {
+  it("a rhythm cell shows only the paused note; so far and part paused are screen-reader words", () => {
     const meta = { breaks: [{ id: "b1", start: "2026-08-31", endedAt: "2026-09-14", reason: "injured" }] };
     render(<TrainerClientView client={client} view={projectForTrainer({ meta, history: history() }, { todayIso: MIDWEEK })}/>);
     const notes = [...document.querySelectorAll("ol.forge-wide-rhythm li > span[aria-hidden] > span")]
       .filter((n) => /^(so far|paused|part paused)$/.test(n.textContent));
-    expect(notes.map((n) => n.textContent)).toEqual(expect.arrayContaining(["so far", "paused"]));
+    expect(notes.length).toBeGreaterThan(0);
+    expect(new Set(notes.map((n) => n.textContent))).toEqual(new Set(["paused"]));
+    expect(document.querySelector("ol.forge-wide-rhythm").textContent).toMatch(/\d+ of \d+ so far/);
     for (const n of notes) {
+      expect(n.style.fontSize).toBe("10px");
+      expect(n.parentElement.parentElement.style.padding).toBe("8px 0px");
       expect(n.style.overflowWrap).toBe("");
       expect(n.getAttribute("style")).not.toMatch(/overflow-wrap|word-break/);
     }
@@ -369,7 +373,7 @@ describe("TrainerClientView: the plan", () => {
   it("says what the trainer can do: change the plan, or ask for changes in Profile", () => {
     render(<TrainerClientView client={client} view={planView()}/>);
     expect(screen.getByText("You can change their plan. They see every change and can undo it. Sessions from the last 24 weeks; main lifts over 12 months.")).toBeTruthy();
-    expect(screen.getByText("They see every change and can undo it. Sam can stop sharing any time.")).toBeTruthy();
+    expect(screen.getByText("Sam can stop sharing any time.")).toBeTruthy();
     expect(document.querySelector('[data-section="plan"]')).toBeTruthy();
     cleanup();
     // No plan on the view: read only, and the way to change that.
@@ -403,8 +407,8 @@ describe("TrainerClientView: the plan", () => {
     // On, with the plan: the plan line; on without one (it couldn't be read) is the unavailable line.
     render(<TrainerClientView client={client} view={{ ...view(), edits: "on" }}/>);
     expect(document.querySelector("p").textContent).toBe(`Couldn't load their plan just now. Try again in a moment.${tail}`);
-    // Changes on but unread: the footer still says they see every change.
-    expect(screen.getByText("They see every change and can undo it. Sam can stop sharing any time.")).toBeTruthy();
+    // Changes on but unread: the footer doesn't call it read only.
+    expect(screen.getByText("Sam can stop sharing any time.")).toBeTruthy();
     cleanup();
     render(<TrainerClientView client={client} view={planView()}/>);
     expect(document.querySelector("p").textContent).toBe(`You can change their plan. They see every change and can undo it.${tail}`);
@@ -430,11 +434,12 @@ describe("TrainerClientView: the plan", () => {
     render(<TrainerClientView client={client} view={planView()}/>);
     openLift("Barbell Back Squat");
     const d = dialog();
-    expect(d.textContent).toContain("Up to 110 kg: last top set 100");
-    expect(d.textContent).toContain("From 65 kg");
-    expect(d.textContent).toContain("A one-off. After their next session the app carries on from what they lift.");
+    expect(d.textContent).toContain("Up to 110 kg: last top set 100 kg");
+    expect(d.textContent).toContain("Not below 65 kg");
+    expect(d.textContent).toContain("Step is their app's next weight. Jump is the most this change allows.");
+    expect(d.textContent).not.toContain("A one-off");
     const pace = within(d).getByRole("group", { name: "Pace" });
-    expect([...pace.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Hold 100", "Step 102.5", "Jump 110", "Ease 95"]);
+    expect([...pace.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Hold 100 kg", "Step 102.5 kg", "Jump 110 kg", "Ease 95 kg"]);
     const kg = () => within(d).getByLabelText("Weight in kg").value;
     expect(kg()).toBe("102.5");
     tap("More weight");
@@ -502,7 +507,7 @@ describe("TrainerClientView: the plan", () => {
     expect(calf.bounds).toMatchObject({ min: 70, max: 110 });
     render(<TrainerClientView client={client} view={view}/>);
     openLift("Standing Calf Raise");
-    expect(dialog().textContent).toContain("Up to 110 kg: last top set 100");
+    expect(dialog().textContent).toContain("Up to 110 kg: last top set 100 kg");
     expect(within(dialog()).getByLabelText("Weight in kg")).toBeTruthy();
   });
 
@@ -538,7 +543,7 @@ describe("TrainerClientView: the plan", () => {
     expect(within(d).getByText("Change Sam's plan?")).toBeTruthy();
     expect(d.querySelector('[data-op="0"]').textContent).toBe("Barbell Back Squat · 102.5 → 105 kg");
     expect(d.textContent).toContain("They'll see each change and can undo it.");
-    expect(d.textContent).toContain("3 of 10 this week");
+    expect(d.textContent).toContain("3 of 10 changes this week");
 
     // A double tap sends one set: the same id and ops the dry run passed.
     await act(async () => { tap("Send to Sam"); tap("Send to Sam"); });
@@ -550,7 +555,7 @@ describe("TrainerClientView: the plan", () => {
     expect(sent.basis).toEqual(check.basis);
     expect(onChanged).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(document.querySelector('[data-section="plan"]').textContent).toContain("Sent. Sam sees it next time they open the app, and can undo it.");
+    expect(document.querySelector('[data-section="plan"]').textContent).toContain("Sent to Sam.");
     expect(within(document.querySelector("[data-tray]")).getByRole("button").textContent).toBe("No changes yet");
   });
 
@@ -736,7 +741,7 @@ describe("TrainerClientView: the plan", () => {
     render(<TrainerClientView client={client} view={planView(planData(), { used: 10, freeAt })} onChange={fakeRoute()}/>);
     openLift("Barbell Back Squat"); tap("More weight"); tap("Add to changes");
     expect(within(document.querySelector("[data-tray]")).getByRole("button", { name: /Review/ }).disabled).toBe(true);
-    expect(document.querySelector('[data-section="changes"]').textContent).toContain("10 of 10 this week · more from Mon 12 Oct");
+    expect(document.querySelector('[data-section="changes"]').textContent).toContain("10 of 10 changes this week · more from Mon 12 Oct");
   });
 
   it("your changes: by set, newest first, in the trainer's words, with Withdraw only where it can be taken back", async () => {
@@ -1034,7 +1039,7 @@ describe("TrainerClientView: the ledger", () => {
     expect([...wideRows()[0].querySelectorAll("td")][0].textContent).toBe("5");
     expect(wideRows()[1].querySelector("[data-ledger-change]")).toBeNull();
     const btn = /** @type {HTMLElement} */ (narrowRows()[0].querySelector("button"));
-    expect(btn.textContent).toContain("Yours");
+    expect(btn.textContent).toContain("Your change");
     fireEvent.click(btn);
     expect([...narrowRows()[0].querySelectorAll("[data-ledger-change]")].map((c) => c.textContent)).toEqual([
       `Your change, 100 kg, sent ${isoDayMonthOf("2026-10-03")}`, `Your change, 5 reps, sent ${isoDayMonthOf("2026-10-03")}`,

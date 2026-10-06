@@ -16,10 +16,10 @@ import TrainerTermsPage, { metadata } from "../app/trainer/terms/page.jsx";
 afterEach(cleanup);
 
 describe("Trainer Terms page", () => {
-  it("renders the Terms under a DRAFT kicker", () => {
+  it("renders the Terms under a Draft kicker", () => {
     render(<TrainerTermsPage />);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Trainer Terms");
-    expect(screen.getByText("DRAFT")).toBeTruthy();
+    expect(screen.getByText("Draft")).toBeTruthy();
     for (const h of ["Who can be a trainer", "What you agree to", "When access ends", "Law"]) {
       expect(screen.getByRole("heading", { level: 2, name: h })).toBeTruthy();
     }

@@ -98,11 +98,24 @@ describe("the list", () => {
   it("with changes on, the live line says what they see and can change; off, that they can't", async () => {
     server.status = status();
     await renderView();
-    expect(screen.getByText("Sees your sessions, sets and how you felt for the last 24 weeks, your main-lift trend and bests for 12 months, your plan up to 4 weeks ahead, and each lift's most recent top set. Can change your weights, reps and main lifts from your next session on. Every change shows below, with Undo.")).toBeTruthy();
+    const sees = () => [...screen.getByRole("list", { name: "What Jo sees" }).querySelectorAll("li")].map((li) => li.textContent);
+    expect(sees()).toEqual([
+      "Your sessions, sets, RPE and how you felt, from the last 24 weeks.",
+      "Your main-lift trend and bests over the last 12 months.",
+      "On their client list: when you last trained, your sessions this week against your plan, and your 28-day rhythm.",
+      "Your current working weights, reps and main lifts for every lift in your programme, whether you're on a deload, and your planned week up to 4 weeks ahead.",
+      "Each lift's most recent top set, however long ago. It keeps their changes within safe limits.",
+      "They can change your working weights, reps and main lifts from your next session on, within the app's limits.",
+    ]);
     cleanup();
     server.status = status({ edits: { on: false, since: null } });
     await renderView();
-    expect(screen.getByText("Sees your sessions, sets and how you felt for the last 24 weeks, and your main-lift trend and bests for 12 months. Can't change your plan.")).toBeTruthy();
+    expect(sees()).toEqual([
+      "Your sessions, sets, RPE and how you felt, from the last 24 weeks.",
+      "Your main-lift trend and bests over the last 12 months.",
+      "On their client list: when you last trained, your sessions this week against your plan, and your 28-day rhythm.",
+      "Can't change your plan.",
+    ]);
     expect(document.body.textContent).not.toMatch(/read only/i);
   });
 

@@ -148,7 +148,7 @@ const linkBtn = {
   fontFamily: T.text, fontSize: 13, color: T.ink2,
 };
 /** @type {import("react").CSSProperties} */
-const kickerStyle = { fontSize: 13, color: T.ink2, marginBottom: 8 };
+const kickerStyle = { fontSize: 13, color: T.ink3, marginBottom: 8 };
 /** @type {import("react").CSSProperties} */
 const h1Style = { ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" };
 /** A roster row's button. @param {boolean} current @returns {import("react").CSSProperties} */
@@ -528,7 +528,7 @@ export default function TrainerView() {
               This needs a passkey for heatwayve.app. Update it in the Heatwayve app on your phone, then sign in here.
             </p>
           )}
-          <div role="status" aria-live="polite" style={{ fontSize: 12, color: T.ink2, marginTop: 10, minHeight: 16, textAlign: "center" }}>
+          <div role="status" aria-live="polite" style={{ fontSize: 12, color: T.ink2, marginTop: 10, minHeight: 16 }}>
             {notOpen ? APPLY_COPY.notOpen : error || ""}
           </div>
         </div>
@@ -544,8 +544,8 @@ export default function TrainerView() {
       <div className="forge-wide-roster">
         <div style={kickerStyle}>For trainers</div>
         <h1 style={h1Style}>Your clients</h1>
-        <button type="button" onClick={issue} className="forge-press forge-lift" {...pressLiftHandlers}
-          style={{ ...commitBtn, marginTop: 14, marginBottom: 20 }}>
+        <button type="button" onClick={issue} className="forge-press forge-tint"
+          style={{ ...quietBtn, width: "100%", marginTop: 14, marginBottom: 20 }}>
           Add a client
         </button>
         {/* Your own training, pinned first; a hairline sets it apart from clients. */}
@@ -635,7 +635,7 @@ export default function TrainerView() {
   );
 }
 
-const EMPTY_ROSTER = "No clients yet. Show them a code. They add you in the app under Profile, then you see their training, read only.";
+const EMPTY_ROSTER = "No clients yet. Show them a code; they add you under Profile.";
 
 function NameField({ inputRef, disabled }) {
   return (
@@ -659,12 +659,10 @@ const fieldStyle = {
 // What being a trainer means, and the name clients see.
 function Pitch({ who }) {
   return (
-    <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: "0 0 20px" }}>
-      <p style={{ margin: "0 0 6px" }}>See your clients' training and, when they allow it, change their plan. Free.</p>
-      <p style={{ margin: "0 0 6px" }}>They approve you with Face ID, and can stop any time.</p>
-      <p style={{ margin: "0 0 6px" }}>You never see photos, bodyweight, sleep, or why someone's on a breather.</p>
-      {who && <p style={{ margin: 0 }}>Clients see you as {who}.</p>}
-    </div>
+    <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: "0 0 20px" }}>
+      {"See your clients' training, never their photos, bodyweight, sleep or why they're on a breather, and change their plan when they allow it. "
+        + (who ? `They approve you with Face ID, can stop any time, and see you as ${who}.` : "They approve you with Face ID and can stop any time.")}
+    </p>
   );
 }
 
@@ -675,8 +673,10 @@ function TermsCommit({ label, busy, onCommit }) {
   const cut = line.indexOf("Trainer Terms");
   return (
     <>
-      <ul style={{ margin: "0 0 24px", paddingLeft: 18, fontSize: 13, color: T.ink2, lineHeight: 1.6 }}>
-        {TRAINER_TERMS_COPY.summary.map((s) => <li key={s}>{s}</li>)}
+      <ul style={{ listStyle: "none", margin: "0 0 24px", padding: 0, borderTop: `1px solid ${T.rule}` }}>
+        {TRAINER_TERMS_COPY.summary.map((s) => (
+          <li key={s} style={{ padding: "12px 2px", borderBottom: `1px solid ${T.rule}`, fontSize: 14, color: T.ink, lineHeight: 1.5 }}>{s}</li>
+        ))}
       </ul>
       <button type="button" onClick={onCommit} aria-disabled={busy} aria-describedby="hw-trainer-terms"
         className="forge-press forge-lift" {...pressLiftHandlers} style={{ ...commitBtn, opacity: busy ? 0.6 : 1 }}>
