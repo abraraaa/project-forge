@@ -149,11 +149,17 @@ vi.mock("@/lib/db", async (importOriginal) => ({
   dbReadToken: vi.fn(async (token) => tokens.get(token) || null),
   dbDeleteToken: vi.fn(async (token) => { tokens.delete(token); }),
   dbReadProfile: vi.fn(async (sk) => profiles.get(sk) || null),
-  dbUpsertProfile: vi.fn(async (sk, { meta, history }) => {
+  dbInsertHistory: vi.fn(async (sk, history) => {
     const cur = profiles.get(sk) || { meta: {}, history: [] };
     const byId = new Map(cur.history.map((r) => [r.id, r]));
     for (const r of history || []) if (!byId.has(r.id)) byId.set(r.id, r);
-    profiles.set(sk, { meta: { ...cur.meta, ...(meta || {}) }, history: [...byId.values()], cursor: "c" });
+    profiles.set(sk, { ...cur, history: [...byId.values()], cursor: "c" });
+  }),
+  dbReadMetaBase: vi.fn(async (sk) => ({ meta: { ...(profiles.get(sk)?.meta || {}) }, revs: {} })),
+  dbWriteMetaGuarded: vi.fn(async (sk, meta) => {
+    const cur = profiles.get(sk) || { meta: {}, history: [] };
+    profiles.set(sk, { ...cur, meta: { ...cur.meta, ...(meta || {}) }, cursor: "c" });
+    return true;
   }),
   dbDeleteProfile: vi.fn(async (sk) => { profiles.delete(sk); }),
   dbUpsertPhoto: vi.fn(async () => {}),
@@ -662,7 +668,7 @@ describe("a new account's reads and writes resolve to its id, never the name", (
   };
   const underName = (name) => (p) => String(p).startsWith(`forge/profiles/${name}/`);
   beforeEach(() => {
-    for (const m of [dbm.dbReadProfile, dbm.dbUpsertProfile, dbm.dbUpsertPhoto, dbm.dbInsertToken]) vi.mocked(m).mockClear();
+    for (const m of [dbm.dbReadProfile, dbm.dbWriteMetaGuarded, dbm.dbUpsertPhoto, dbm.dbInsertToken]) vi.mocked(m).mockClear();
   });
 
   it("sync GET and PUT: the claim marker, the seed and the rows are all the id's", async () => {
@@ -682,7 +688,7 @@ describe("a new account's reads and writes resolve to its id, never the name", (
       body: JSON.stringify({ profile: "sam", data: { meta: { weights: { Squat: 100 } }, history: [{ id: "2026-10-01T10:00:00.000Z", date: "2026-10-01" }] } }),
     }));
     expect(res.status).toBe(200);
-    expect(calls(dbm.dbUpsertProfile).map((c) => c[0])).toEqual([acct.id]);
+    expect(calls(dbm.dbWriteMetaGuarded).map((c) => c[0])).toEqual([acct.id]);
     expect(profiles.get(acct.id).meta).toMatchObject({ displayName: "Sam", weights: { Squat: 100 } });
     expect(profiles.has("sam")).toBe(false);
 

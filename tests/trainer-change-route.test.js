@@ -795,6 +795,6 @@ describe("source pins", () => {
     expect(helper).toContain("return logged ? null : notShared();");
   });
   it("never writes client data, never queries directly, never deletes", () => {
-    expect(src).not.toMatch(/dbUpsertMetaFields|dbUpsertProfile|dbInsertRecords|@\/lib\/storage|\bq`|\bsql\(|\bDELETE\b|\bdel\(/);
+    expect(src).not.toMatch(/dbWriteMetaGuarded|dbInsertHistory|dbUpsertMetaFields|dbUpsertProfile|dbInsertRecords|@\/lib\/storage|\bq`|\bsql\(|\bDELETE\b|\bdel\(/);
   });
 });

@@ -70,7 +70,7 @@ describe("the gate is ON for every verb that touches a profile's data", () => {
     const put = section("PUT");
     const gateAt = put.indexOf("await syncGate(request, profile)");
     expect(gateAt).toBeGreaterThan(-1);
-    for (const write of ["dbUpsertProfile", "mergeMeta", "mergeHistories"]) {
+    for (const write of ["dbInsertHistory", "writeMetaGuarded", "mergeMeta", "mergeHistories"]) {
       expect(put.indexOf(write), write).toBeGreaterThan(gateAt);
     }
   });

@@ -36,8 +36,9 @@ vi.mock("@/lib/db", async (importOriginal) => ({
   dbReadToken: vi.fn(async (t) => tokens.get(t) || null),
   dbReadProfile: track("dbReadProfile", () => ({ meta: { weights: { Squat: 100 } }, history: [], cursor: "2026-10-05T10:00:00.000Z" })),
   dbReadProfileSince: track("dbReadProfileSince", () => ({ meta: {}, history: [], cursor: "2026-10-05T11:00:00.000Z" })),
-  dbUpsertMetaFields: track("dbUpsertMetaFields", () => true),
-  dbUpsertProfile: track("dbUpsertProfile", () => true),
+  dbReadMetaBase: track("dbReadMetaBase", () => ({ meta: {}, revs: {} })),
+  dbInsertHistory: track("dbInsertHistory", () => true),
+  dbWriteMetaGuarded: track("dbWriteMetaGuarded", () => true),
 }));
 vi.mock("@/lib/trainer-changes-store", () => ({
   dbOpenChangesFor: track("dbOpenChangesFor", () => {

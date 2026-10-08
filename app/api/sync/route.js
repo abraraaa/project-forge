@@ -2,7 +2,7 @@ import { put, list, del, get } from "@vercel/blob";
 import { rateLimit } from "@/lib/rate-limit";
 import { mergeMeta, mergeHistories, mergeMetaFields, fieldClosure } from "@/lib/sync-merge";
 import { hasRealPasskey, readTokenData, resolveTokenIdentity, mintAuthToken } from "@/lib/auth-server";
-import { hasDb, dbReadProfile, dbUpsertProfile, dbDeleteProfile, dbDeleteToken, dbReadProfileSince, dbReadMetaFields, dbCursorNow, dbListPhotos } from "@/lib/db";
+import { hasDb, dbReadProfile, dbInsertHistory, dbReadMetaBase, dbWriteMetaGuarded, mintRevStamp, dbDeleteProfile, dbDeleteToken, dbReadProfileSince, dbCursorNow, dbListPhotos } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { serverError as apiError } from "@/lib/api-errors";
 import { normaliseProfile } from "@/lib/profile-name";
@@ -20,6 +20,24 @@ export const preferredRegion = "lhr1";
 // audit 2026-07-26, P3 info-disclosure. Detail stays in the server log.
 
 const serverError = (e, opts = {}) => apiError(e, { label: "sync", ...opts });
+
+// Meta writes: read the base with its revs, merge the ORIGINAL incoming onto
+// it, write only if no row moved since the read (lib/db.js dbWriteMetaGuarded).
+// A miss re-reads and re-merges. Returns the merged fields, or null after
+// META_WRITE_TRIES misses with nothing written.
+const META_WRITE_TRIES = 3;
+async function writeMetaGuarded(profile, readBase, merge) {
+  const stamp = mintRevStamp();
+  for (let i = 0; i < META_WRITE_TRIES; i++) {
+    const { meta, revs } = await readBase();
+    const merged = merge(meta);
+    if (await dbWriteMetaGuarded(profile, merged, revs, stamp)) return merged;
+  }
+  return null;
+}
+// 409 after the retries: the client treats it like any failed push (lib/storage.js
+// blobPush / blobPushDelta): it keeps its queue, does not commit push-state, and re-ships.
+const staleWrite = () => NextResponse.json({ error: "stale" }, { status: 409 });
 
 // Blob layout, under the account's storage key (the normalised name for
 // name-keyed accounts, the account id for id-keyed ones; display name lives in meta):
@@ -501,9 +519,9 @@ export async function PUT(request) {
       const norm = gate.profile;
       const cursor = await dbCursorNow();
       const closure = fieldClosure(Object.keys(incoming));
-      const existing = await dbReadMetaFields(norm, closure);
-      const mergedFields = mergeMetaFields(existing, incoming);
-      await dbUpsertProfile(norm, { meta: mergedFields, history: records });
+      await dbInsertHistory(norm, records);
+      const mergedFields = await writeMetaGuarded(norm, () => dbReadMetaBase(norm, closure), (existing) => mergeMetaFields(existing, incoming));
+      if (!mergedFields) return withSyncCookie(staleWrite(), gate);
       return withSyncCookie(NextResponse.json({ ok: true, delta: true, cursor, meta: { fields: Object.keys(mergedFields).length }, history: { inserted: records.length } }), gate);
     } catch (e) {
       // Refuse silently-dropped deltas: the client keeps its dirty set and
@@ -524,7 +542,9 @@ export async function PUT(request) {
     try {
       const norm = gate.profile;
       const fromDb = await dbReadProfile(norm);
-      let baseMeta = fromDb?.meta || null;
+      // Meta values come from the guarded read below (with their revs); a
+      // profile with no rows seeds them from its blob.
+      let seedMeta = {};
       let baseHistory = fromDb?.history || null;
       if (!fromDb) {
         const { blobs } = await list({ prefix: profileDir(gate.profile) });
@@ -538,17 +558,21 @@ export async function PUT(request) {
           return NextResponse.json({ error: "History blob unreadable — refusing to overwrite; retry" }, { status: 503 });
         }
         if (!Array.isArray(history)) history = await readLatestLegacy(blobs, LEGACY_HISTORY_RE);
-        baseMeta = meta || {};
+        seedMeta = meta || {};
         baseHistory = Array.isArray(history) ? history : [];
       }
-      const mergedMeta = data.meta ? mergeMeta(baseMeta || {}, data.meta) : null;
       const mergedHistory = Array.isArray(data.history)
         ? mergeHistories(baseHistory || [], data.history)
         : null;
-      await dbUpsertProfile(norm, {
-        meta: mergedMeta ? { ...mergedMeta, syncedAt: new Date().toISOString() } : {},
-        history: mergedHistory || [],
-      });
+      if (mergedHistory) await dbInsertHistory(norm, mergedHistory);
+      let mergedMeta = null;
+      if (data.meta) {
+        mergedMeta = await writeMetaGuarded(norm, async () => {
+          const base = await dbReadMetaBase(norm, null);
+          return Object.keys(base.meta).length ? base : { meta: seedMeta, revs: base.revs };
+        }, (base) => ({ ...mergeMeta(base, data.meta), syncedAt: new Date().toISOString() }));
+        if (!mergedMeta) return withSyncCookie(staleWrite(), gate);
+      }
       return withSyncCookie(NextResponse.json({
         ok: true,
         ...(mergedMeta ? { meta: true } : {}),
