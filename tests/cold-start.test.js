@@ -175,3 +175,21 @@ describe("MCP tools read the same start", () => {
     expect(runTool("programme", {}, d, now).text).toContain("Barbell Glute Bridge 3 × 12 @ 112.5 kg (suggested start)");
   });
 });
+
+describe("an unset (a stored null) is no stored value, at every rung and in the rep repair", () => {
+  const squat = { name: "Barbell Back Squat", weight: 60, reps: 5, loadType: "barbell" };
+  it("the start with a null W equals the start with no key, whatever else is known", () => {
+    for (const opts of [{}, { bodyweight: 80 }, { anchors: { Quadriceps: { bestE1RM: 140 } } }, { bodyweight: 80, anchors: { Quadriceps: { bestE1RM: 140 } } }]) {
+      const withNull = planStartWeight(squat, { ...opts, working: { [squat.name]: null } });
+      expect(withNull).toBe(planStartWeight(squat, { ...opts, working: {} }));
+      expect(Number.isFinite(withNull)).toBe(true);
+    }
+  });
+  it("a null rep target is never repaired into a number, and repairs nothing else", async () => {
+    const { repTargetRepairs, repairRepTarget } = await import("../lib/progression.js");
+    expect(repairRepTarget({ target: null, templateReps: 5, loadType: "barbell" })).toMatchObject({ reps: null, repaired: false });
+    const sessions = [{ blocks: [{ ex: squat }, { ex: { name: "Barbell Bench Press", reps: 5, loadType: "barbell" } }] }];
+    expect(repTargetRepairs({ reps: { [squat.name]: null, "Barbell Bench Press": 3 }, sessions }))
+      .toEqual(repTargetRepairs({ reps: { "Barbell Bench Press": 3 }, sessions }));
+  });
+});

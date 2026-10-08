@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // tests/storage.test.js
 // ─────────────────────────────────────────────────────────────────────────────
 // Durability contract — see the DURABILITY CONTRACT block at the top of
@@ -19,10 +20,13 @@
 //      that aren't accounted for.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+
+import { P, getLocalProfile, pushNow, backgroundSync } from "../lib/storage.js";
+import { DeltaSync } from "../lib/sync-delta.js";
 
 const __dirname  = dirname(fileURLToPath(import.meta.url));
 const storageSrc = readFileSync(resolve(__dirname, "../lib/storage.js"), "utf8");
@@ -102,6 +106,12 @@ describe("storage durability contract", () => {
     }
   });
 
+  it("getLocalProfile reads the raw weights/reps maps, so an unset ships", () => {
+    const getLocalProfile = sliceFunction(storageSrc, "getLocalProfile");
+    expect(getLocalProfile).toContain("weights: P.getWeightsRaw(profile)");
+    expect(getLocalProfile).toContain("reps: P.getRepsRaw(profile)");
+  });
+
   it("every SYNCED meta store is written by persistToLocal", () => {
     const persistToLocal = sliceFunction(storageSrc, "persistToLocal");
     // dayDone / bonusDone retained ONLY as inbound rescue paths from
@@ -117,7 +127,7 @@ describe("storage durability contract", () => {
   it("every SYNCED meta store has a merge rule in mergeMeta (lib/sync-merge.js)", () => {
     // The merge moved to lib/sync-merge.js (shared with the server PUT
     // route, sync audit S3) — the contract check follows it.
-    const mergeSrc = readFileSync(new URL("../lib/sync-merge.js", import.meta.url), "utf-8");
+    const mergeSrc = readFileSync(resolve(__dirname, "../lib/sync-merge.js"), "utf-8");
     const mergeFn = sliceFunction(mergeSrc, "mergeMeta");
     const required = ["weights", "reps", "streak", "mainLifts", "programmeBlock", "userWeek", "userFocus", "bodyweight", "trainingState", "days", "breaks", "addedLoads"];
     for (const field of required) {
@@ -166,3 +176,123 @@ function sliceFunction(src, name) {
   }
   return src.slice(start, i);
 }
+
+// ── Unset: null with a fresh stamp ──────────────────────────────────────────
+describe("unset of one lift's weight or reps", () => {
+  const PROFILE = "sam";
+  const SQUAT = "Barbell Back Squat";
+  const BENCH = "Barbell Bench Press";
+  const OLD = "2026-10-01T10:00:00.000Z";
+  const NOON = new Date("2026-10-05T12:00:00.000Z");
+  const LATER = new Date("2026-10-05T13:00:00.000Z");
+  /** Every key in localStorage, sorted. */
+  const snap = () => {
+    const out = {};
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); out[k] = localStorage.getItem(k); }
+    return Object.fromEntries(Object.entries(out).sort(([a], [b]) => a.localeCompare(b)));
+  };
+  let fetchCalls;
+  const stubFetch = (responder) => {
+    vi.stubGlobal("fetch", async (url, opts = {}) => {
+      fetchCalls.push({ url: String(url), method: opts.method || "GET", body: opts.body ? JSON.parse(String(opts.body)) : null });
+      const { status = 200, body = { ok: true } } = (await responder(String(url), opts)) || {};
+      return { ok: status >= 200 && status < 300, status, json: async () => body };
+    });
+  };
+  /** A profile with a stamped squat and bench, in delta mode with nothing dirty. */
+  const seed = () => {
+    P.add(PROFILE);
+    P.setActive(PROFILE);
+    P.saveWeightsRaw(PROFILE, { [SQUAT]: 105, [BENCH]: 60 }, { [SQUAT]: OLD, [BENCH]: OLD });
+    P.saveRepsRaw(PROFILE, { [SQUAT]: 5, [BENCH]: 8 }, { [SQUAT]: OLD, [BENCH]: OLD });
+    DeltaSync.setCursor(PROFILE, "2026-10-01T11:00:00.000Z");
+    DeltaSync.commitPushState(PROFILE, getLocalProfile(PROFILE));
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    fetchCalls = [];
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOON);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  for (const [label, unset, raw, view, stampsOf, save] of [
+    ["weight", P.unsetWeight, P.getWeightsRaw, P.getWeights, P.getWeightStamps, P.saveWeights],
+    ["reps", P.unsetReps, P.getRepsRaw, P.getReps, P.getRepStamps, P.saveReps],
+  ]) {
+    it(`${label}: writes null with a fresh stamp; readers see no stored value; other lifts untouched`, () => {
+      seed();
+      const before = snap();
+      expect(unset(PROFILE, SQUAT)).toBe(true);
+      expect(raw(PROFILE)).toEqual({ [SQUAT]: null, [BENCH]: label === "weight" ? 60 : 8 });
+      expect(Object.hasOwn(raw(PROFILE), SQUAT)).toBe(true);
+      expect(stampsOf(PROFILE)).toEqual({ [SQUAT]: NOON.toISOString(), [BENCH]: OLD });
+      expect(view(PROFILE)[SQUAT]).toBeUndefined();
+      expect(Object.hasOwn(view(PROFILE), SQUAT)).toBe(false);
+      // Overwrites in place: the same keys, nothing removed.
+      expect(Object.keys(snap())).toEqual(Object.keys(before));
+    });
+
+    it(`${label}: an unset of a lift already unset, or never set, writes nothing`, () => {
+      seed();
+      unset(PROFILE, SQUAT);
+      const after = snap();
+      vi.setSystemTime(LATER);
+      expect(unset(PROFILE, SQUAT)).toBe(false);
+      expect(unset(PROFILE, "Never Lifted")).toBe(false);
+      expect(snap()).toEqual(after);
+    });
+
+    it(`${label}: a whole-map save from a reader's copy keeps the unset and its stamp; naming the lift sets it again`, () => {
+      seed();
+      unset(PROFILE, SQUAT);
+      vi.setSystemTime(LATER);
+      save(PROFILE, { ...view(PROFILE), [BENCH]: 9 });
+      expect(raw(PROFILE)[SQUAT]).toBeNull();
+      expect(stampsOf(PROFILE)[SQUAT]).toBe(NOON.toISOString());
+      expect(stampsOf(PROFILE)[BENCH]).toBe(LATER.toISOString());
+      // The raw map written back unchanged mints no stamp.
+      save(PROFILE, raw(PROFILE));
+      expect(stampsOf(PROFILE)[SQUAT]).toBe(NOON.toISOString());
+      // A session that sets the lift again wins with a newer stamp.
+      save(PROFILE, { ...view(PROFILE), [SQUAT]: 100 });
+      expect(raw(PROFILE)[SQUAT]).toBe(100);
+      expect(stampsOf(PROFILE)[SQUAT]).toBe(LATER.toISOString());
+    });
+  }
+
+  it("the unset ships in the next delta: the field hash changes and the value travels with its stamp", async () => {
+    seed();
+    const hashes = DeltaSync.getPushState(PROFILE).fieldHashes;
+    P.unsetWeight(PROFILE, SQUAT);
+    expect(DeltaSync.diffMeta(getLocalProfile(PROFILE).meta, hashes).newHashes.weights).not.toBe(hashes.weights);
+    stubFetch(() => ({}));
+    expect(await pushNow(PROFILE)).toBe(true);
+    const put = fetchCalls.filter((c) => c.method === "PUT");
+    expect(put).toHaveLength(1);
+    expect(put[0].body.delta.meta).toEqual({
+      weights: { [SQUAT]: null, [BENCH]: 60 },
+      weightStamps: { [SQUAT]: NOON.toISOString(), [BENCH]: OLD },
+    });
+  });
+
+  it("a later pull carrying an older number does not bring the weight back", async () => {
+    seed();
+    P.unsetWeight(PROFILE, SQUAT);
+    P.unsetReps(PROFILE, SQUAT);
+    stubFetch((url) => (url.startsWith("/api/sync?") ? { body: {
+      delta: true, history: [], cursor: "2026-10-05T12:30:00.000Z",
+      meta: { weights: { [SQUAT]: 105 }, weightStamps: { [SQUAT]: OLD }, reps: { [SQUAT]: 5 }, repStamps: { [SQUAT]: OLD } },
+    } } : {}));
+    await backgroundSync(PROFILE);
+    expect(P.getWeights(PROFILE)[SQUAT]).toBeUndefined();
+    expect(P.getWeightsRaw(PROFILE)[SQUAT]).toBeNull();
+    expect(P.getWeightStamps(PROFILE)[SQUAT]).toBe(NOON.toISOString());
+    expect(P.getReps(PROFILE)[SQUAT]).toBeUndefined();
+    expect(P.getRepsRaw(PROFILE)[SQUAT]).toBeNull();
+  });
+});

@@ -163,26 +163,17 @@ const warningText = (codes) => (Array.isArray(codes) ? codes.map((w) => WARNINGS
 const canUndo = (c) => c.undoable === true && !(c.kind === "week" && c.status === "in_force");
 
 /**
- * What an undo did, in one line. An undo of a weight or reps they never had
- * is held by the app (planDeviceSteps RESET): the number stays until their
- * next session changes it, so it never reads as going back (several, all
- * held: none go back).
- * Waiting rows change nothing, so only the rest are described.
+ * What an undo did, in one line. Waiting rows change nothing, so only the
+ * rest are described. One row names the value it goes back to; a weight or
+ * reps they never had goes back to none (the app writes an unset).
  * @param {any[]} rows
  */
 function undoneLine(rows) {
   if (!rows.length) return "Undone.";
   const live = rows.filter((c) => c.status !== "waiting");
   if (!live.length) return "Undone. It won't change your plan.";
-  const isHeld = (c) => c.before == null && (c.kind === "weight" || c.kind === "reps");
-  if (live.length > 1) {
-    if (live.every(isHeld)) return "Undone. These numbers stay until your next session changes them.";
-    return live.some(isHeld)
-      ? "Undone. Numbers you had before go back next time you open the app. A first weight stays until your next session changes it."
-      : "Undone. Your plan goes back next time you open the app.";
-  }
+  if (live.length > 1) return "Undone. Your plan goes back next time you open the app.";
   const [c] = live;
-  if (isHeld(c)) return "Undone. The number stays until your next session changes it.";
   const back = c.kind === "weight" ? (kg(c.before) !== null ? `${kg(c.before)} kg` : null)
     : c.kind === "reps" ? repsText(c.target, c.before)
     : c.kind === "mainLift" ? (c.before || c.target) : null;

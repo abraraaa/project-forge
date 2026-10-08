@@ -28,6 +28,7 @@ const PROFILE = "sam";
 const SQUAT = "Barbell Back Squat";
 const TODAY = "2026-10-05"; // a Monday
 const NOON = new Date(`${TODAY}T12:00:00.000Z`);
+const LATER = new Date(`${TODAY}T13:00:00.000Z`);
 const SET = "hws_" + "a".repeat(26);
 const STAMP = "2026-10-01T10:00:00.000Z";
 
@@ -206,6 +207,33 @@ describe("E6: the engine continues from the trainer's numbers", () => {
   });
 });
 
+describe("E6: the engine after an unset", () => {
+  it("a stored null reads as no weight: the next W and R come out numbers, the same as with the key absent", () => {
+    const outs = [];
+    for (const [p, unset] of [["u", true], ["v", false]]) {
+      P.add(p);
+      P.saveWeightsRaw(p, { [SQUAT]: 100 }, { [SQUAT]: STAMP });
+      P.saveRepsRaw(p, { [SQUAT]: 5 }, { [SQUAT]: STAMP });
+      H.save(p, [squat("2026-09-28"), squat("2026-10-01")]);
+      if (unset) { P.unsetWeight(p, SQUAT); P.unsetReps(p, SQUAT); }
+      else { P.saveWeightsRaw(p, {}, {}); P.saveRepsRaw(p, {}, {}); }
+      const rec = squat("2026-10-06", 100, 5);
+      H.append(p, rec);
+      // ForgeApp hands the engine the raw map (null kept); SessionHost the reader's.
+      for (const current of [P.getWeightsRaw(p), P.getWeights(p)]) {
+        const out = applySessionToEngine(p, rec, { currentWeights: current, repairedReps: {} });
+        expect(Number.isFinite(out.wwUpdates[SQUAT]), p).toBe(true);
+        for (const v of [...Object.values(out.wwUpdates), ...Object.values(out.wrUpdates)]) {
+          expect(v === null || Number.isNaN(v), p).toBe(false);
+        }
+        outs.push(JSON.stringify({ ww: out.wwUpdates, wr: out.wrUpdates }));
+        TS.replaceState(p, { lifts: {}, muscleAnchors: {} }, { touch: false });
+      }
+    }
+    expect(new Set(outs).size).toBe(1);
+  });
+});
+
 // ── Re-checked against the latest training ──────────────────────────────────
 
 describe("applyTrainerRows", () => {
@@ -269,26 +297,38 @@ describe("applyTrainerRows", () => {
     expect(TL.get(PROFILE).outbox).toEqual({ acks: [], reverts: [{ id: r.id, at: NOON.toISOString() }] });
   });
 
-  it("an undo of a first weight is held: nothing written to localStorage, marks and trainerLocal as before, even with a template weight", () => {
+  it("an undo of a first weight writes an unset: no stored weight, null with a newer stamp, the revert reported, nothing removed from localStorage", () => {
     seed();
     BW.set(PROFILE, 80);
     const undone = { undone: true, appliedAt: "2026-10-04T08:00:00.000Z" };
     const w = { ...up(), ...undone, before: null, after: 105 };
     P.saveWeights(PROFILE, { [SQUAT]: 105 });
-    TL.save(PROFILE, { ...TL.get(PROFILE), marks: { [SQUAT]: { weight: { id: w.id, after: 105, by: "Alex", at: STAMP } } } });
+    const trainerStamp = P.getWeightStamps(PROFILE)[SQUAT];
+    const mark = { [SQUAT]: { weight: { id: w.id, after: 105, by: "Alex", at: STAMP } } };
+    TL.save(PROFILE, { ...TL.get(PROFILE), marks: mark });
     const local = getLocalProfile(PROFILE);
     // The plan asks for a reset; the squat's template weight (55) is not put in its place.
     expect(planDeviceSteps([w], { meta: local.meta, history: local.history, todayIso: TODAY }).weights).toEqual({ [SQUAT]: RESET });
     expect(resolvedProgramme(local.meta).find((l) => l.name === SQUAT).ex.weight).toBe(55);
     const start = snap();
-    const tl = TL.get(PROFILE);
-    expect(applyTrainerRows(PROFILE, { rows: [w] })).toEqual({ wrote: false, acks: 0, reverts: 0 });
-    expect(snap()).toEqual(start);
-    expect(TL.get(PROFILE)).toEqual(tl);
-    expect(P.getWeights(PROFILE)).toEqual({ [SQUAT]: 105 });
+    vi.setSystemTime(LATER);
+    expect(applyTrainerRows(PROFILE, { rows: [w] })).toEqual({ wrote: true, acks: 0, reverts: 1 });
+    expect(P.getWeights(PROFILE)[SQUAT]).toBeUndefined();
+    expect(P.getWeightsRaw(PROFILE)).toEqual({ [SQUAT]: null });
+    expect(P.getWeightStamps(PROFILE)[SQUAT]).toBe(LATER.toISOString());
+    expect(P.getWeightStamps(PROFILE)[SQUAT] > trainerStamp).toBe(true);
+    expect(TL.get(PROFILE).outbox).toEqual({ acks: [], reverts: [{ id: w.id, at: LATER.toISOString() }] });
+    // The mark stays; the "Set by" line reads it as no longer in force.
+    expect(TL.get(PROFILE).marks).toEqual(mark);
+    // Every key still there; only the weights, their stamps and trainerLocal moved.
+    const end = snap();
+    expect(Object.keys(end)).toEqual(Object.keys(start));
+    expect(Object.keys(end).filter((k) => end[k] !== start[k]).sort()).toEqual([
+      `forge:${PROFILE}:trainerLocal`, `forge:${PROFILE}:weightStamps`, `forge:${PROFILE}:weights`,
+    ]);
   });
 
-  it("held at any bodyweight or anchors, and for a lift with no template weight: the trainer's number stays, and their plan reads it", () => {
+  it("an unset at any bodyweight or anchors, and for a lift with no template weight: their plan reads no weight, the same everywhere", () => {
     const outs = [];
     for (const [label, body, anchor, main] of [
       ["none", null, null, null], ["b60", 60, null, null], ["b120", 120, null, null],
@@ -305,51 +345,64 @@ describe("applyTrainerRows", () => {
       // Never lifted: the trainer set 60, the client undoes it.
       const row = { ...base, target: lift, before: null, undone: true, appliedAt: "2026-10-04T08:00:00.000Z" };
       P.saveWeights(PROFILE, { [lift]: 60 });
-      const start = snap();
-      expect(applyTrainerRows(PROFILE, { rows: [row] }), label).toEqual({ wrote: false, acks: 0, reverts: 0 });
-      expect(snap(), label).toEqual(start);
+      expect(applyTrainerRows(PROFILE, { rows: [row] }), label).toEqual({ wrote: true, acks: 0, reverts: 1 });
+      expect(P.getWeightsRaw(PROFILE), label).toEqual({ [lift]: null });
       const local = getLocalProfile(PROFILE);
       const view = projectForTrainer({ meta: local.meta, history: local.history }, { todayIso: TODAY, edits: { rows: [], used: 0, freeAt: null } });
       const l = view.plan.lifts.find((x) => x.name === lift);
-      expect([l.w, l.basis.w], label).toEqual([60, 60]);
+      expect([l.w, l.basis.w], label).toEqual([null, null]);
       if (!main) outs.push(JSON.stringify(view.plan));
     }
     expect(new Set(outs).size).toBe(1);
   });
 
-  it("a held undo is no loop: later pulls write, push and report nothing; once their next session changes the number it is reported, still writing nothing", async () => {
+  it("an unset is no loop: pushed, then reported; a pull before the report lands decides nothing again; once reported, pulls write nothing", async () => {
     seed();
     const undone = { undone: true, appliedAt: "2026-10-04T08:00:00.000Z" };
     const w = { ...up(), ...undone, before: null, after: 105 };
     P.saveWeights(PROFILE, { [SQUAT]: 105 });
     DeltaSync.commitPushState(PROFILE, getLocalProfile(PROFILE));
-    stubFetch((url) => (url.startsWith("/api/sync?") ? deltaPull([w]) : {}));
+    vi.setSystemTime(LATER);
+    // The server delivers the row until the device reports its revert.
+    let reported = false;
+    let reportOk = false;
+    stubFetch((url) => {
+      if (url.startsWith("/api/sync?")) return deltaPull(reported ? undefined : [w]);
+      if (url === "/api/sync/trainer") { if (!reportOk) return { status: 503 }; reported = true; }
+      return {};
+    });
     enableAutoSync(PROFILE, vi.fn());
-    /** @type {any} */
+    const first = await backgroundSync(PROFILE, { applyTrainer: true });
+    expect(first.trainer).toMatchObject({ wrote: true, acks: 0, reverts: 1 });
+    expect(await first.trainer.delivery).toBe(false);
+    // The unset was pushed, with its stamp, before any report.
+    expect(puts()).toHaveLength(1);
+    expect(puts()[0].body.delta.meta).toEqual({ weights: { [SQUAT]: null }, weightStamps: { [SQUAT]: LATER.toISOString() } });
+    // The report failed: the next pull carries the row again and it is not decided again.
+    const held = without(snap(), "forge:lastSyncAt");
+    fetchCalls = [];
+    reportOk = true;
+    const second = await backgroundSync(PROFILE, { applyTrainer: true });
+    expect(second.trainer).toMatchObject({ wrote: false, acks: 0, reverts: 0 });
+    expect(await second.trainer.delivery).toBe(true);
+    expect(posts().map((c) => c.body.reverts)).toEqual([[{ id: w.id, at: LATER.toISOString() }]]);
+    expect(puts()).toHaveLength(0);
+    expect(P.getWeightsRaw(PROFILE)).toEqual(JSON.parse(held[`forge:${PROFILE}:weights`]));
+    // Reported: the row no longer comes, and nothing moves.
     let after = null;
-    for (let pull = 0; pull < 3; pull++) {
+    for (let pull = 0; pull < 2; pull++) {
+      fetchCalls = [];
       const res = await backgroundSync(PROFILE, { applyTrainer: true });
-      expect(res.trainer, `pull ${pull}`).toMatchObject({ wrote: false, acks: 0, reverts: 0 });
-      expect(await res.trainer.delivery).toBe(true);
-      // The first pull's own merge lands the profile's stores; from then on, nothing moves.
+      expect(res.trainer ?? null, `pull ${pull}`).toBeNull();
+      expect(fetchCalls.map((c) => c.method), `pull ${pull}`).toEqual(["GET"]);
       if (after) expect(without(snap(), "forge:lastSyncAt"), `pull ${pull}`).toEqual(after);
       after = without(snap(), "forge:lastSyncAt");
     }
-    expect(fetchCalls.map((c) => c.method)).toEqual(["GET", "GET", "GET"]);
-    expect(localStorage.getItem(TL.key(PROFILE))).toBeNull();
-    expect(P.getWeights(PROFILE)[SQUAT]).toBe(105);
-    // Their next session trains at the trainer's number: no longer in force, so the revert is reported, with no write.
-    H.append(PROFILE, squat(TODAY, 105));
-    fetchCalls = [];
-    const res = await backgroundSync(PROFILE, { applyTrainer: true });
-    expect(res.trainer).toMatchObject({ wrote: false, acks: 0, reverts: 1 });
-    expect(await res.trainer.delivery).toBe(true);
-    expect(posts().map((c) => c.body.reverts)).toEqual([[{ id: w.id, at: NOON.toISOString() }]]);
-    expect(P.getWeights(PROFILE)[SQUAT]).toBe(105);
+    expect(P.getWeights(PROFILE)[SQUAT]).toBeUndefined();
     expect(TL.get(PROFILE).outbox).toEqual({ acks: [], reverts: [] });
   });
 
-  it("a held reset waits alone: another undone row on the same target, decided without a write, is reported", () => {
+  it("an unset and another undone row on the same target: one write, both reported", () => {
     seed();
     const FRONT = "Front Squat";
     const base = up(); // drafted while the squat was still their main
@@ -363,23 +416,28 @@ describe("applyTrainerRows", () => {
     expect(plan.weights).toEqual({ [FRONT]: RESET });
     expect(plan.reverts).toEqual([a.id, b.id]);
 
-    expect(applyTrainerRows(PROFILE, { rows: [a, b] })).toEqual({ wrote: false, acks: 0, reverts: 1 });
-    expect(P.getWeights(PROFILE)[FRONT]).toBe(60);
-    expect(TL.get(PROFILE).outbox.reverts).toEqual([{ id: b.id, at: NOON.toISOString() }]);
+    expect(applyTrainerRows(PROFILE, { rows: [a, b] })).toEqual({ wrote: true, acks: 0, reverts: 2 });
+    expect(P.getWeights(PROFILE)[FRONT]).toBeUndefined();
+    expect(P.getWeights(PROFILE)[SQUAT]).toBe(100);
+    expect(TL.get(PROFILE).outbox.reverts).toEqual([{ id: a.id, at: NOON.toISOString() }, { id: b.id, at: NOON.toISOString() }]);
   });
 
-  it("reps undone back to nothing: no reset object and no null in the store or the pushed delta", async () => {
+  it("reps undone back to nothing: an unset in the store and the pushed delta, never a reset object", async () => {
     seed();
     P.saveRepsRaw(PROFILE, {}, {});
     DeltaSync.commitPushState(PROFILE, getLocalProfile(PROFILE));
     const r = { ...rowFor({ kind: "reps", lift: SQUAT, reps: 8 }), undone: true, appliedAt: "2026-10-04T08:00:00.000Z", before: null, after: 8 };
     P.saveReps(PROFILE, { [SQUAT]: 8 });
+    vi.setSystemTime(LATER);
     stubFetch(() => ({}));
-    expect(applyTrainerRows(PROFILE, { rows: [r] })).toEqual({ wrote: false, acks: 0, reverts: 0 });
-    expect(P.getReps(PROFILE)).toEqual({ [SQUAT]: 8 });
-    expect(TL.get(PROFILE).outbox.reverts).toEqual([]);
+    expect(applyTrainerRows(PROFILE, { rows: [r] })).toEqual({ wrote: true, acks: 0, reverts: 1 });
+    expect(P.getReps(PROFILE)).toEqual({});
+    expect(P.getRepsRaw(PROFILE)).toEqual({ [SQUAT]: null });
+    expect(P.getRepStamps(PROFILE)[SQUAT]).toBe(LATER.toISOString());
     await pushNow(PROFILE);
-    for (const c of puts()) expect(JSON.stringify(c.body)).not.toMatch(/"reset"|"Barbell Back Squat":null/);
+    expect(puts()).toHaveLength(1);
+    expect(puts()[0].body.delta.meta).toEqual({ reps: { [SQUAT]: null }, repStamps: { [SQUAT]: LATER.toISOString() } });
+    for (const c of puts()) expect(JSON.stringify(c.body)).not.toMatch(/"reset"/);
   });
 
   it("no top set yet: the max the route offers lands, one step over acks limits, at any bodyweight or anchors", () => {

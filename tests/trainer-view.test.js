@@ -13,7 +13,7 @@ import { addDaysIso, mondayOfWeekIso } from "@/lib/dates";
 import { isResting } from "@/lib/breaks";
 import { projectPlan, PLAN_KEYS, EDITS_STATUSES, editsStatus, projectForTrainer as projectWithPlan } from "@/lib/trainer-plan";
 import { validateChangeSet, boundsFor, liftBasis, rowFromDb, weekBasis, anchorLogged, SETS_PER_WEEK } from "@/lib/trainer-change";
-import { nextRung, CATEGORY_COLD_START_MAX_KG, getLiftProfile, isBodyweightMovement } from "@/lib/lift-translations";
+import { nextRung, CATEGORY_COLD_START_MAX_KG, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights } from "@/lib/lift-translations";
 import { resolvedProgramme } from "@/lib/programme-resolve";
 
 const TODAY = "2026-10-03";
@@ -1012,6 +1012,48 @@ describe("the plan: only on a grant with changes on", () => {
     const view = projectForTrainer(data, { todayIso: TODAY });
     expect(old < view.window.trendFrom).toBe(true);
     expect([...view.sessions, ...view.tops].some((x) => x.date === old)).toBe(false);
+  });
+});
+
+describe("the plan: an unset (a stored null weight or reps) reads as no stored value", () => {
+  /** planData with the squat and pull-up weights and the squat reps unset, or the keys absent. */
+  const variant = (unset) => {
+    const d = planData();
+    const weights = { ...d.meta.weights };
+    const reps = { ...d.meta.reps };
+    for (const m of [weights, reps]) for (const k of [SQUAT, PULL]) { if (unset) m[k] = null; else delete m[k]; }
+    return { ...d, meta: { ...d.meta, weights, reps } };
+  };
+  const planted = variant(true);
+  const absent = variant(false);
+  const opts = { todayIso: TODAY, rows: [], used: 0, freeAt: null };
+
+  it("the plan is the one with the keys absent: w null, the template reps, no NaN or \"null\" copy", () => {
+    const plan = projectPlan(planted, opts);
+    expect(plan).toEqual(projectPlan(absent, opts));
+    const squat = plan.lifts.find((l) => l.name === SQUAT);
+    expect([squat.w, squat.basis.w, squat.basis.r]).toEqual([null, null, null]);
+    expect(squat.reps).toBe(5);
+    expect(JSON.stringify(plan)).not.toMatch(/NaN|"null"/);
+    expect(JSON.stringify(projectWithPlan(planted, { todayIso: TODAY, edits: { rows: [], used: 0, freeAt: null } }))).not.toMatch(/NaN/);
+  });
+
+  it("the validator reads the same basis and before, and a change onto the unset lift is checked the same", () => {
+    expect(liftBasis(SQUAT, { meta: planted.meta, history: planted.history, todayIso: TODAY }))
+      .toEqual(liftBasis(SQUAT, { meta: absent.meta, history: absent.history, todayIso: TODAY }));
+    const a = sendWeight(ctxFrom(planted, projectPlan(planted, opts)), SQUAT, 102.5);
+    const b = sendWeight(ctxFrom(absent, projectPlan(absent, opts)), SQUAT, 102.5);
+    expect(a).toEqual(b);
+    expect(a.ok).toBe(true);
+    expect(a.ops[0].before).toBeNull();
+  });
+
+  it("resolvedProgramme and the working-weight bound leave the null alone", () => {
+    const l = resolvedProgramme(planted.meta).find((x) => x.name === SQUAT);
+    expect(l.w).toBeNull();
+    expect(typeof l.start).toBe("number");
+    expect(resolvedProgramme(planted.meta)).toEqual(resolvedProgramme(absent.meta));
+    expect(sanitiseWorkingWeights(planted.meta.weights)).toBe(planted.meta.weights);
   });
 });
 

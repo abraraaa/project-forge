@@ -13,7 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
-import { mergeMeta, mergeProfileData, mergeProgrammeBlock } from "../lib/sync-merge.js";
+import { mergeMeta, mergeMetaFields, mergeProfileData, mergeProgrammeBlock } from "../lib/sync-merge.js";
 
 const T1 = "2026-07-13T10:00:00.000Z";
 const T2 = "2026-07-13T18:00:00.000Z"; // later
@@ -150,5 +150,85 @@ describe("S4 — exact change detection", () => {
     const { remoteHadMore, localHadMore } = mergeProfileData(local, remote);
     expect(remoteHadMore).toBe(false);
     expect(localHadMore).toBe(false);
+  });
+});
+
+describe("unset: null is a value in the stamped maps", () => {
+  const T3 = "2026-07-14T09:00:00.000Z"; // later still
+  const maps = (field) => (field === "weights" ? ["weights", "weightStamps"] : ["reps", "repStamps"]);
+
+  for (const field of ["weights", "reps"]) {
+    const [v, st] = maps(field);
+    it(`${field}: a newer null beats an older number, whichever side carries it`, () => {
+      const unset = { [v]: { Squat: null }, [st]: { Squat: T2 } };
+      const number = { [v]: { Squat: 8 }, [st]: { Squat: T1 } };
+      for (const [l, r] of [[unset, number], [number, unset]]) {
+        const m = mergeMeta(l, r);
+        expect(Object.hasOwn(m[v], "Squat")).toBe(true);
+        expect(m[v].Squat).toBeNull();
+        expect(m[st].Squat).toBe(T2);
+      }
+    });
+
+    it(`${field}: an older null loses to a newer number, whichever side carries it`, () => {
+      const unset = { [v]: { Squat: null }, [st]: { Squat: T1 } };
+      const number = { [v]: { Squat: 8 }, [st]: { Squat: T3 } };
+      for (const [l, r] of [[unset, number], [number, unset]]) {
+        const m = mergeMeta(l, r);
+        expect(m[v].Squat).toBe(8);
+        expect(m[st].Squat).toBe(T3);
+      }
+    });
+
+    it(`${field}: a null on one side only is carried with its stamp; idempotent`, () => {
+      const one = { [v]: { Squat: null, Bench: 5 }, [st]: { Squat: T2, Bench: T1 } };
+      for (const [l, r] of [[one, {}], [{}, one], [one, one]]) {
+        const m = mergeMeta(l, r);
+        expect(m[v]).toEqual({ Squat: null, Bench: 5 });
+        expect(m[st]).toEqual({ Squat: T2, Bench: T1 });
+        // Normalising again changes nothing: the null is never dropped.
+        const again = mergeMeta(m, m);
+        expect(again[v]).toEqual(m[v]);
+        expect(again[st]).toEqual(m[st]);
+      }
+    });
+  }
+
+  it("two nulls: the newer stamp is kept; the merge commutes on values and stamps", () => {
+    const a = { weights: { Squat: null }, weightStamps: { Squat: T1 } };
+    const b = { weights: { Squat: null }, weightStamps: { Squat: T2 } };
+    expect(mergeMeta(a, b).weightStamps.Squat).toBe(T2);
+    expect(mergeMeta(b, a).weightStamps.Squat).toBe(T2);
+    expect(mergeMeta(a, b).weights).toEqual({ Squat: null });
+  });
+
+  it("change detection: an unset is a real difference both ways; a re-pull of it is not", () => {
+    const local = { meta: { weights: { Squat: null }, weightStamps: { Squat: T2 } }, history: [] };
+    const remote = { meta: { weights: { Squat: 100 }, weightStamps: { Squat: T1 } }, history: [] };
+    const r = mergeProfileData(local, remote);
+    expect(r.meta.weights).toEqual({ Squat: null });
+    expect(r.localHadMore).toBe(true);
+    expect(r.remoteHadMore).toBe(false);
+    const again = mergeProfileData(local, { meta: r.meta, history: [] });
+    expect([again.localHadMore, again.remoteHadMore]).toEqual([false, false]);
+  });
+
+  it("delta PUT (mergeMetaFields): an incoming unset beats the stored number and ships with its stamp", () => {
+    const existing = { weights: { Squat: 105, Bench: 60 }, weightStamps: { Squat: T1, Bench: T1 } };
+    const out = mergeMetaFields(existing, { weights: { Squat: null, Bench: 60 }, weightStamps: { Squat: T2, Bench: T1 } });
+    expect(out).toEqual({ weights: { Squat: null, Bench: 60 }, weightStamps: { Squat: T2, Bench: T1 } });
+    // An older number arriving later (a stale device) does not bring it back.
+    const stale = mergeMetaFields(out, { weights: { Squat: 105 }, weightStamps: { Squat: T1 } });
+    expect(stale.weights.Squat).toBeNull();
+    expect(stale.weightStamps.Squat).toBe(T2);
+  });
+
+  it("the meta rows round-trip keeps a null entry (metaRowsFrom ⇄ JSONB ⇄ assembleMeta)", async () => {
+    const { metaRowsFrom, assembleMeta } = await import("../lib/db.js");
+    const meta = { weights: { Squat: null, Bench: 60 }, weightStamps: { Squat: T2, Bench: T1 }, reps: { Squat: null }, repStamps: { Squat: T2 } };
+    // The upsert sends JSON.stringify(value)::jsonb; a read returns the parsed value.
+    const rows = metaRowsFrom(meta).map(({ field, value }) => ({ field, value: JSON.parse(JSON.stringify(value)) }));
+    expect(assembleMeta(rows)).toEqual(meta);
+    expect(Object.hasOwn(assembleMeta(rows).weights, "Squat")).toBe(true);
   });
 });
