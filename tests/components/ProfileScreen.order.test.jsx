@@ -3,9 +3,10 @@
 // trainer); Your trainer sits under it. A trainer's Your clients row is in a
 // Trainer section of its own, straight after Coaching and above Training; the breather row stays in the Training
 // group, above Account/passkey. Someone who isn't a trainer yet finds
-// "For trainers" as the last row of More, after Privacy; its subline says
-// where an application stands, and opening it after a decision marks the
-// decision seen.
+// "For trainers" as the last link of More, straight after Privacy; its
+// subline says where an application stands, and opening it after a decision
+// marks the decision seen. Only the name switch ("Not you?" / "Sign in as
+// someone else") follows it, at the foot of More.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
@@ -49,6 +50,7 @@ describe("Profile: Coaching placement", () => {
     render(<ProfileScreen {...base} onOpenBreather={vi.fn()} trainerShare={share()} />);
     const passkey = await screen.findByText("Passkey enabled");
     expectOrder([
+      screen.getByRole("button", { name: /^sam, / }),
       screen.getByText("Coaching"),
       screen.getByText("Talk it through"),
       screen.getByText("Add a trainer"),
@@ -59,6 +61,8 @@ describe("Profile: Coaching placement", () => {
       screen.getByText("Need a breather?"),
       screen.getByText("Account"),
       passkey,
+      screen.getByText("Delete this profile"),
+      screen.getByText("Device"),
     ]);
     // The coach link is the section's row and still points at /profile/coach.
     expect(screen.getByText("Talk it through").closest("a").getAttribute("href")).toBe("/profile/coach");
@@ -130,7 +134,7 @@ describe("Profile: Your trainer row", () => {
     expectOrder([screen.getByText("Coaching"), screen.getByText("Trainer"), screen.getByText("Your clients"), screen.getByText("Training"), screen.getByText("Account")]);
   });
 
-  it("everyone else gets For trainers as the last row of More, after Privacy, only when the trainer side is open", async () => {
+  it("everyone else gets For trainers as the last link of More, after Privacy, only when the trainer side is open", async () => {
     const { rerender } = render(<ProfileScreen {...base} trainerShare={share()} />);
     await screen.findByText("Passkey enabled");
     expect(screen.queryByText("For trainers")).toBeNull();
@@ -146,6 +150,8 @@ describe("Profile: Your trainer row", () => {
     expect(privacy.parentElement.nextElementSibling?.contains(forTrainers)).toBe(true);
     const links = [...document.querySelectorAll("a[href]")].filter((a) => before(screen.getByText("More"), a));
     expect(links.filter((a) => a.getAttribute("href").startsWith("/")).at(-1)).toBe(forTrainers);
+    // The name switch is the foot of More, under it.
+    expectOrder([forTrainers, screen.getByRole("button", { name: "Sign in as someone else" })]);
   });
 });
 
