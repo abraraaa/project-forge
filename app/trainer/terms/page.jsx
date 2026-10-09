@@ -1,11 +1,11 @@
 // app/trainer/terms/page.jsx — the Trainer Terms. Server-rendered, plain, like
-// /privacy. DRAFT: the owner's text replaces this. Changing the words means
-// bumping TRAINER_TERMS_VERSION in lib/trainer-terms.js, so trainers re-accept.
+// /privacy. Changing the words means bumping TRAINER_TERMS_VERSION in
+// lib/trainer-terms.js, so trainers re-accept.
 import Link from "next/link";
 import { T, DISPLAY } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
 
-const KICKER = "Draft";
+const KICKER = "For trainers";
 const CONTACT = "ab@heatwayve.app";
 
 export const metadata = {

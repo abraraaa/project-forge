@@ -18,8 +18,8 @@ const L = id26("l"); // a lifter who applies
 const K = id26("k"); // another applicant
 const N = id26("n"); // already a trainer
 // The launch switches, as shipped unless a test says otherwise: the dashboard
-// off (TRAINER_LIVE), applications open (APPLICATIONS_OPEN).
-const live = vi.hoisted(() => ({ value: false }));
+// live (TRAINER_LIVE), applications open (APPLICATIONS_OPEN).
+const live = vi.hoisted(() => ({ value: true }));
 const applications = vi.hoisted(() => ({ value: true }));
 const hooks = vi.hoisted(() => ({ beforeInsert: null }));
 
@@ -208,7 +208,7 @@ const decide = (token, b) => admin.POST(new NextRequest(`${H}/api/diag/trainers`
 
 beforeEach(() => {
   calls.length = 0;
-  live.value = false;
+  live.value = true;
   applications.value = true;
   hooks.beforeInsert = null;
   db = {
@@ -241,8 +241,9 @@ afterEach(() => {
 });
 
 describe("POST /api/trainer/apply", () => {
-  it("with applications closed and the dashboard not live: 503 for anyone but the admin, nothing written", async () => {
+  it("with applications closed: 503 for anyone but the admin, whatever the dashboard switch; nothing written", async () => {
     applications.value = false;
+    live.value = false;
     const authToken = mint(L);
     const res = await apply(body(authToken));
     expect(res.status).toBe(503);
@@ -254,13 +255,14 @@ describe("POST /api/trainer/apply", () => {
     expect(db.tokens.get(hash(authToken)).expires).toBeGreaterThan(Date.now());
     // The admin is always open.
     expect((await apply(body(mint(ADMIN), "dee"))).status).toBe(200);
-    // Once live, everyone is.
+    // The dashboard switch does not reopen applying.
     live.value = true;
-    expect((await apply(body(mint(K), "kim"))).status).toBe(200);
+    expect((await apply(body(mint(K), "kim"))).status).toBe(503);
+    expect(db.apps.size).toBe(1);
   });
 
-  it("open to a signed-in non-admin while applications are open, before the dashboard is live", async () => {
-    expect(live.value).toBe(false);
+  it("open to a signed-in non-admin as shipped: applications open and the dashboard live", async () => {
+    expect(live.value).toBe(true);
     expect(applications.value).toBe(true);
     const res = await apply(body(mint(L)));
     expect(res.status).toBe(200);

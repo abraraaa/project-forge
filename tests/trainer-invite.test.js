@@ -73,6 +73,12 @@ vi.mock("@neondatabase/serverless", () => ({
   },
 }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(() => null), rateLimitShared: vi.fn(async () => null) }));
+// TRAINER_LIVE as shipped unless a test closes it.
+const switchLive = vi.hoisted(() => ({ value: true }));
+vi.mock("@/lib/trainer-terms", async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, get TRAINER_LIVE() { return switchLive.value; } };
+});
 
 const { GET, POST } = await import("@/app/api/trainer/invite/route");
 const { TRAINER_COOKIE } = await import("@/lib/trainer-session");
@@ -129,6 +135,7 @@ beforeEach(() => {
   ];
   process.env.DATABASE_URL = "postgres://fake";
   process.env.ADMIN_ACCOUNT_ID = T;
+  switchLive.value = true;
   vi.mocked(rateLimit).mockClear();
   vi.mocked(rateLimitShared).mockClear();
   vi.mocked(rateLimitShared).mockImplementation(async () => null);
@@ -176,7 +183,6 @@ describe("POST /api/trainer/invite: issue", () => {
   it("another trainer's slot is never touched", async () => {
     await post(session(T, "cT"), { action: "issue" });
     const theirs = { ...db.invites.get(T) };
-    process.env.ADMIN_ACCOUNT_ID = N;
     await post(session(N, "cN"), { action: "issue" });
     expect(db.invites.get(T)).toEqual(theirs);
     expect(db.invites.size).toBe(2);
@@ -230,7 +236,15 @@ describe("POST /api/trainer/invite: gates", () => {
     expect(writes()).toEqual([]);
   });
 
-  it("a trainer other than the admin gets 503 before launch, for issue and cancel alike", async () => {
+  it("live: a trainer other than the admin issues and cancels", async () => {
+    const t = session(N, "cN");
+    expect((await post(t, { action: "issue" })).status).toBe(200);
+    expect(db.invites.get(N)).toMatchObject({ used_at: null, grant_id: null });
+    expect((await post(t, { action: "cancel" })).status).toBe(200);
+  });
+
+  it("with the switch closed, a trainer other than the admin gets 503, for issue and cancel alike", async () => {
+    switchLive.value = false;
     const t = session(N, "cN");
     for (const action of ["issue", "cancel"]) {
       const res = await post(t, { action });

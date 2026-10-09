@@ -1050,9 +1050,8 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           only the name switch follows it.
           Trainers already see "Your clients" in their Trainer section. The
           subline says where an application stands. Shown while applications
-          are open (applyOpen), ahead of the dashboard (trainerOpen). Someone
-          approved before the dashboard opens keeps this row, so tapping it
-          still marks the decision seen. */}
+          are open (applyOpen). With the dashboard switch off, someone already
+          approved keeps this row, so tapping it still marks the decision seen. */}
       {current && trainerShare?.applyOpen && !(trainerShare.trainer && trainerShare.trainerOpen) && (
         <Fade d={309}>
           <Link href="/trainer" onClick={() => markApplicationSeen(current, trainerShare)}

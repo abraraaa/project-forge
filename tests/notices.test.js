@@ -105,6 +105,12 @@ const IDENTITIES = {
   [N]: { accountId: N, storageKey: "nia", handle: "nia", roles: ["lifter", "trainer"], plan: "free" },
   [Z]: { accountId: Z, storageKey: "zed", handle: "zed", roles: ["lifter"], plan: "free" },
 };
+// TRAINER_LIVE as shipped unless a test closes it.
+const switchLive = vi.hoisted(() => ({ value: true }));
+vi.mock("@/lib/trainer-terms", async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, get TRAINER_LIVE() { return switchLive.value; } };
+});
 vi.mock("@/lib/auth-server", async (importOriginal) => ({
   ...(await importOriginal()),
   readTokenData: async (t) => (TOKENS[t] ? { accountId: TOKENS[t].who, scope: TOKENS[t].scope, expires: NOW + DAY } : null),
@@ -143,6 +149,7 @@ const reads = () => calls.filter((c) => /^\s*SELECT\b/.test(c.q)).map((c) => fla
 const envKeys = ["DATABASE_URL", "ADMIN_ACCOUNT_ID", "ADMIN_PROFILE"];
 let savedEnv;
 beforeEach(() => {
+  switchLive.value = true;
   savedEnv = Object.fromEntries(envKeys.map((k) => [k, process.env[k]]));
   for (const k of envKeys) delete process.env[k];
   process.env.DATABASE_URL = "postgres://fake";
@@ -266,7 +273,7 @@ describe("GET /api/sync/notices: the kinds", () => {
 
   describe("clients", () => {
     beforeEach(() => {
-      // Pre-launch only the admin may act as a trainer (trainerOpenFor): make Tia the admin.
+      // Tia is the admin (the admin key shows on her dots); Nia is a trainer who is not.
       process.env.ADMIN_ACCOUNT_ID = T;
       db.grants = [
         grant("cara", C, T, "cC"), grant("xan", X, T, "cX"), grant("pia", P, T, "cP"), grant("oli", O, N, "cO"),
@@ -303,7 +310,13 @@ describe("GET /api/sync/notices: the kinds", () => {
       }
     });
 
+    it("live: a trainer other than the admin is lit by their own client", async () => {
+      db.sessions = [session("sk-oli", daysAgo(1), NOW - 3600_000)];
+      expect(await dots("tok-nia", "nia")).toEqual({ dots: { clients: true } });
+    });
+
     it("a trainer the launch switch does not open, or a lifter: no clients read at all", async () => {
+      switchLive.value = false;
       db.sessions = [session("sk-oli", daysAgo(1), NOW - 3600_000)];
       calls.length = 0;
       expect(await dots("tok-nia", "nia")).toEqual({ dots: {} });
