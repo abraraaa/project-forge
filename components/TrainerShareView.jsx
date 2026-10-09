@@ -27,13 +27,13 @@ import { fetchWithTimeout } from "@/lib/net";
 import { authenticatePasskey } from "@/lib/webauthn";
 import { todayLocalIso } from "@/lib/dates";
 import { timedTargetFor } from "@/lib/programme";
-import { SHARE_CONSENT_VERSION } from "@/lib/trainer-terms";
+import { SHARE_CONSENT_VERSION, SHARE_COPY } from "@/lib/trainer-terms";
 
 const LOG_SHOWN = 20;
 const OFFLINE = "Couldn't reach Heatwayve. Try again.";
 const NOT_STOPPED = "That didn't go through. Try again.";
 const SIGN_IN = "Sign in again to see your trainer.";
-const WENT_WRONG = "Something went wrong. Try again.";
+const WENT_WRONG = "Couldn't do that just now. Try again.";
 const FACE_ID = "Face ID didn't go through. Try again.";
 const NATIVE = "This needs a passkey for heatwayve.app first.";
 const NOT_UNDONE = "That can't be undone now. You've trained at it since, or it was already changed.";
@@ -286,7 +286,7 @@ export default function TrainerShareView() {
     headRef.current?.focus();
   };
 
-  // "Got it": the notice goes now. Write: POST { seen } -> dbSeenEndedNotice,
+  // "Dismiss": the notice goes now. Write: POST { seen } -> dbSeenEndedNotice,
   // an UPDATE of notice_seen_at on the client's own ended grant. If it
   // doesn't get through, the notice shows again next time, nothing more.
   const onSeen = (ref) => {
@@ -386,7 +386,7 @@ export default function TrainerShareView() {
     const undoBtn = { minHeight: 44, flexShrink: 0, background: "none", border: "none", padding: "0 2px", cursor: "pointer", fontFamily: T.text, fontSize: 13, fontWeight: 500, color: T.ink };
     return (
       <Fade d={60}>
-        <h2 style={{ marginTop: 28, marginBottom: 6, fontSize: 13, fontWeight: 400, color: T.ink2 }}>{allTheirs ? `Changes from ${who}` : "Changes to your plan"}</h2>
+        <h2 style={{ marginTop: 28, marginBottom: 6, fontSize: 13, fontWeight: 400, color: T.ink3 }}>{allTheirs ? `Changes from ${who}` : "Changes to your plan"}</h2>
         <p style={{ ...small, margin: "0 0 10px" }}>Undo any change until you&apos;ve trained at it. Your logged sessions never change.</p>
         <div ref={undoLineRef} tabIndex={-1} role="status" aria-live="polite" style={{ ...small, color: T.ink, minHeight: 16, marginBottom: 6, outline: "none" }}>{undoLine || ""}</div>
         {bySet(changes).map((set) => {
@@ -395,7 +395,7 @@ export default function TrainerShareView() {
           return (
             <section key={set.id} aria-label={sent} style={{ borderTop: `1px solid ${T.rule}`, marginBottom: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 12, color: T.ink2 }}>{sent}{set.by && set.by !== who ? ` by ${set.by}` : ""}</span>
+                <span style={{ fontSize: 12, color: T.ink3 }}>{sent}{set.by && set.by !== who ? ` by ${set.by}` : ""}</span>
                 {open.length > 1 && (
                   <button type="button" onClick={() => onUndo(set.id, open)} aria-disabled={!!undoing} className="forge-press"
                     style={{ ...undoBtn, fontWeight: 400, color: T.ink2, opacity: undoing ? 0.6 : 1 }}>
@@ -431,7 +431,7 @@ export default function TrainerShareView() {
     );
   };
 
-  const kicker = <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>Your trainer</div>;
+  const kicker = <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>Your trainer</div>;
   const h1 = (text, ref) => (
     <h1 ref={ref} tabIndex={-1} style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 14px", overflowWrap: "anywhere", outline: "none" }}>{text}</h1>
   );
@@ -449,11 +449,18 @@ export default function TrainerShareView() {
           {h1(who, arrived ? focusOnMount : headRef)}
           {sharing.live ? (
             <>
-              {/* What this share is now: with changes on, the plan and each lift's
-                  last top set come with it; with them off, neither does. */}
-              <p style={line}>{edits?.on
-                ? "Sees your sessions, sets and how you felt for the last 24 weeks, your main-lift trend and bests for 12 months, your plan up to 4 weeks ahead, and each lift's most recent top set. Can change your weights, reps and main lifts from your next session on. Every change shows below, with Undo."
-                : `Sees your sessions, sets and how you felt for the last 24 weeks, and your main-lift trend and bests for 12 months.${edits ? " Can't change your plan." : ""}`}</p>
+              {/* What this share is now, in the approval's own rows: the
+                  sessions, trend and client list always; with changes on,
+                  also the plan, the top sets and what they can change; with
+                  them off, that they can't. */}
+              <ul aria-label={`What ${who} sees`} style={{ listStyle: "none", margin: "0 0 12px", padding: 0, borderTop: `1px solid ${T.rule}` }}>
+                {(edits?.on
+                  ? [0, 1, 2, 7, 8, 9].map((i) => SHARE_COPY.rows[i])
+                  : [SHARE_COPY.rows[0], SHARE_COPY.rows[1], SHARE_COPY.rows[2], ...(edits ? ["Can't change your plan."] : [])]
+                ).map((row) => (
+                  <li key={row} style={{ padding: "12px 2px", borderBottom: `1px solid ${T.rule}`, fontSize: 14, color: T.ink, lineHeight: 1.5 }}>{row}</li>
+                ))}
+              </ul>
               <p style={{ ...line, marginBottom: 28 }}>Sharing since {longDate.format(new Date(sharing.since))}.</p>
             </>
           ) : (
@@ -493,10 +500,8 @@ export default function TrainerShareView() {
         {changesList(who)}
 
         <Fade d={80}>
-          <div style={{ marginTop: 28, marginBottom: 6, fontSize: 13, color: T.ink2 }}>When {who} looked</div>
-          <p style={{ fontSize: 12, color: T.ink2, lineHeight: 1.6, margin: "0 0 10px" }}>
-            Looking at your training opens your sessions and lifts. A roster check-in is {who}&apos;s client list showing when you last trained and your sessions this week. It shows here once a day.
-          </p>
+          <div style={{ marginTop: 28, marginBottom: 6, fontSize: 13, color: T.ink3 }}>When {who} looked</div>
+          <p style={{ fontSize: 12, color: T.ink3, lineHeight: 1.6, margin: "0 0 10px" }}>Roster check-ins show once a day.</p>
           {looks.length ? (
             <ul aria-label={`When ${who} looked`} style={{ listStyle: "none", margin: 0, padding: 0, borderTop: `1px solid ${T.rule}` }}>
               {looks.map((l, i) => (
@@ -504,7 +509,7 @@ export default function TrainerShareView() {
                   <span style={{ fontSize: 14, color: T.ink, minWidth: 0, overflowWrap: "anywhere" }}>
                     {l.kind === "roster" ? `${who} checked in on the roster` : `${who} looked at your training`}
                   </span>
-                  <span style={{ flexShrink: 0, fontSize: 12, color: T.ink2 }}>
+                  <span style={{ flexShrink: 0, fontSize: 12, color: T.ink3 }}>
                     {l.kind === "roster" ? rosterDayLabel(l.day || londonDay.format(new Date(l.at)), now) : ago(l.at, now)}
                   </span>
                 </li>
@@ -539,7 +544,7 @@ export default function TrainerShareView() {
         {ended.ref && (
           <button type="button" onClick={() => onSeen(ended.ref)} className="forge-press"
             style={{ minHeight: 44, background: "none", border: "none", padding: "0 2px", cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2 }}>
-            Got it
+            Dismiss
           </button>
         )}
       </div>

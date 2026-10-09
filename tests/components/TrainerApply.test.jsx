@@ -85,7 +85,7 @@ describe("Apply: the panel", () => {
     await signIn("  COACHKIM ");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Coach on Heatwayve");
     expect(screen.queryByText("Set me up as a trainer")).toBeNull();
-    expect(screen.getByText("Clients see you as Coach Kim.")).toBeTruthy();
+    expect(screen.getByText(/see you as Coach Kim\.$/)).toBeTruthy();
     expect(screen.queryByText(/COACHKIM/)).toBeNull();
     expect(screen.getByText(APPLY_COPY.lead)).toBeTruthy();
     expect(screen.getByLabelText("Where do you coach?").tagName).toBe("TEXTAREA");
@@ -258,7 +258,7 @@ describe("Apply: each reply in its own words", () => {
   it.each([
     ["400", { status: 400, body: { error: SERVER_TEXT } }, APPLY_COPY.checkFields],
     ["429", { status: 429, body: { error: SERVER_TEXT } }, "Too many tries. Wait a minute and try again."],
-    ["500", { status: 500, body: { error: SERVER_TEXT } }, "Something went wrong. Try again."],
+    ["500", { status: 500, body: { error: SERVER_TEXT } }, "Couldn't do that just now. Try again."],
     ["offline", "offline", "Couldn't reach Heatwayve. Try again."],
   ])("%s never shows the server's text", async (_, reply, words) => {
     server.routes["POST /api/trainer/apply"] = reply;
@@ -293,7 +293,7 @@ describe("Apply: where it already stands, and the admin's path", () => {
     server.routes["POST /api/trainer/session"] = { status: 403, body: { needsTerms: true, name: "Coach Kim" } };
     await signIn("COACHKIM");
     expect(screen.getByText("Agree with Face ID")).toBeTruthy();
-    expect(screen.getByText("Clients see you as Coach Kim.")).toBeTruthy();
+    expect(screen.getByText(/see you as Coach Kim\.$/)).toBeTruthy();
   });
 
   it("the admin's 403 opens the upgrade and never posts an application", async () => {
@@ -314,7 +314,7 @@ describe("Apply: where it already stands, and the admin's path", () => {
 describe("TrainerView never shows the server's error text", () => {
   it.each([
     [429, "Too many tries. Wait a minute and try again."],
-    [500, "Something went wrong. Try again."],
+    [500, "Couldn't do that just now. Try again."],
     [401, "Face ID didn't go through. Try again."],
   ])("sign-in %s", async (code, words) => {
     server.routes["POST /api/trainer/session"] = { status: code, body: { error: SERVER_TEXT } };
@@ -337,7 +337,7 @@ describe("TrainerView never shows the server's error text", () => {
     await flush();
     await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
     await flush();
-    expect(within(screen.getByRole("dialog")).getByText("Something went wrong. Try again.")).toBeTruthy();
+    expect(within(screen.getByRole("dialog")).getByText("Couldn't do that just now. Try again.")).toBeTruthy();
     expect(document.body.textContent).not.toContain(SERVER_TEXT);
   });
 

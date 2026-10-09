@@ -82,7 +82,7 @@ const SECTIONS = [
     h: "A trainer you add",
     list: [
       "You add a trainer yourself, with the code they show you and your passkey. That approval is your consent to share; no one else can give it for you.",
-      "They see your last 24 weeks of training in full — sessions, sets, weights, reps, effort and how you felt — and your main-lift trend and bests over 12 months. Their client list shows when you last trained, your sessions this week against your plan, and your recent rhythm. Breathers show as paused.",
+      "They see your last 24 weeks of training in full: sessions, sets, weights, reps, effort and how you felt. They also see your main-lift trend and bests over 12 months. Their client list shows when you last trained, your sessions this week against your plan, and your recent rhythm. Breathers show as paused.",
       "They never see your photos, bodyweight, sleep, why you took a breather, what time of day you trained, or your notes.",
       "Each look, and a once-a-day check-in from their client list, shows on your profile. Stop sharing in one tap, and they lose access straight away.",
       "They can download a copy of what they see, and a download counts as a look. Under the Trainer Terms, they delete that copy when you stop sharing or if you ask.",

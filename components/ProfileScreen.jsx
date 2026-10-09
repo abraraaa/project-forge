@@ -83,7 +83,7 @@ function trainerRowFor(share, dots) {
 // words in the row, never a badge. Anything but a positive count is nothing new.
 const bugsSub = (dots) => (newCount(dots?.bugs) ? `${dots.bugs} new since you looked` : "The list — fill or kill");
 const applicationsSub = (dots) => (newCount(dots?.applications) ? `${dots.applications} waiting` : "Approve or deny coaches");
-const clientsSub = (dots) => (dots?.clients === true ? "Something new from your clients" : "See clients who share with you");
+const clientsSub = (dots) => (dots?.clients === true ? "A client trained since you looked" : "See clients who share with you");
 
 // Opening the trainer side after a decision marks it seen: an UPDATE of
 // seen_at on the caller's own application row (POST /api/sync/trainer).
@@ -585,26 +585,24 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
-      {/* Trainer: a trainer's own section, straight after Coaching, set
-          apart as a raised card with an oxide rule on its left edge so it
-          is easy to find. Everyone else finds the way in at the foot of
-          More ("For trainers"), not up here. For a week after a trainer-
-          facing change ships (lib/trainer-news.js) the row says so with a
-          quiet "New"; a waiting signal from clients takes the row instead. */}
+      {/* Trainer: a trainer's own section, straight after Coaching, with
+          the same kicker and hairline rows. Everyone else finds the way in
+          at the foot of More ("For trainers"), not up here. For a week after
+          a trainer-facing change ships (lib/trainer-news.js) the row says so
+          with a quiet "New"; a waiting signal from clients takes the row
+          instead. The group is unstyled: it only names the section. */}
       {current && trainerShare?.trainerOpen && trainerShare.trainer && (
         <Fade d={235}>
-          <div role="group" aria-labelledby="profile-trainer-kicker"
-            style={{position:"relative",overflow:"hidden",marginTop:20,padding:"12px 16px 2px 18px",background:T.surface,boxShadow:T.elev,borderRadius:T.r}}>
-            <div aria-hidden="true" style={{position:"absolute",left:0,top:0,bottom:0,width:2,background:T.commit}}/>
-            <div id="profile-trainer-kicker" style={{fontSize:13,color:T.ink3}}>Trainer</div>
+          <div role="group" aria-labelledby="profile-trainer-kicker">
+            <div id="profile-trainer-kicker" style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>Trainer</div>
             <Link href="/trainer" onClick={() => markApplicationSeen(current, trainerShare)}
-              style={{padding:"12px 0 13px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,textDecoration:"none",color:"inherit"}}>
+              style={{padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,textDecoration:"none",color:"inherit"}}>
               <div style={{minWidth:0}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:8}}>
                   <span style={{fontSize:15,fontWeight:500,color:T.ink}}>Your clients</span>
                   {trainerNews && <span style={{fontSize:11,color:T.ink3}}>New</span>}
                 </div>
-                <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{trainerNews ? trainerNews.line : clientsSub(noticeDots)}</div>
+                <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{clientsSub(noticeDots)}</div>
               </div>
               <Glyph name="arrowRight" size={13} color={T.ink3}/>
             </Link>

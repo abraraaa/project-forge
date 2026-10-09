@@ -8,6 +8,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { encodeQr, qrToSvgPath } from "@/lib/qr";
+import { T, MODE_HEX } from "@/lib/tokens";
 
 const QUIET = 4;
 
@@ -24,10 +25,10 @@ export default function QrCode({ text, width = 168, height = 168 }) {
       shapeRendering="crispEdges"
       role="img"
       aria-label="QR code for the share link"
-      style={{ display: "block", borderRadius: 6 }}
+      style={{ display: "block", borderRadius: T.rSm }}
     >
-      <rect width={span} height={span} fill="#F7F2EC" />
-      <path d={qrToSvgPath(modules, size)} transform={`translate(${QUIET} ${QUIET})`} fill="#1A1512" />
+      <rect width={span} height={span} fill={MODE_HEX.light.surface} />
+      <path d={qrToSvgPath(modules, size)} transform={`translate(${QUIET} ${QUIET})`} fill={MODE_HEX.light.ink} />
     </svg>
   );
 }

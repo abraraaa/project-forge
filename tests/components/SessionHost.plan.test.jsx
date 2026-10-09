@@ -155,7 +155,7 @@ describe("what the session says about how the engine read the lift", () => {
       reps: { [SQUAT]: 4 },
       lifts: { [SQUAT]: liftState({ adoptedAt: "2026-09-22", adoptedReps: 4, history: [{ date: "2026-09-22", decision: "HOLD", rationale: ["decision_reason=voluntary_shortfall"] }] }) },
     });
-    expect(screen.getByText("Moved your target to 4s — you've done that three times.")).toBeTruthy();
+    expect(screen.getByText("Moved your target to 4s. You've done that three times.")).toBeTruthy();
   });
 
   it("says nothing on an ordinary lift", () => {

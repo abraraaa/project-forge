@@ -23,7 +23,7 @@ import { SHARE_COPY, SHARE_CONSENT_VERSION } from "@/lib/trainer-terms";
 
 export const APPROVE_COPY = Object.freeze({
   label: "The code your trainer showed you",
-  hint: "Letters and numbers. Paste it, or type it with or without spaces.",
+  hint: "Spaces don't matter.",
   next: "Next",
   miss: "That code didn't work. Check it, or ask your trainer for a fresh one.",
   faceId: "Face ID didn't go through. Try again.",
@@ -205,7 +205,7 @@ export default function ShareApprove({ name, code = null, title, lead = null, le
       : body?.self ? APPROVE_COPY.self
       : body?.needsNativePasskey ? APPROVE_COPY.native
       : body?.stale ? APPROVE_COPY.stale
-      : body?.error || APPROVE_COPY.changed,
+      : APPROVE_COPY.changed,
     );
   };
 
@@ -226,7 +226,7 @@ export default function ShareApprove({ name, code = null, title, lead = null, le
   if (phase === "done" && trainer) {
     return (
       <div style={wrap}>
-        {heading(`${trainer.name} can see your training.`, "0 0 10px", "done")}
+        {heading(`${trainer.name} can see your training`, "0 0 10px", "done")}
         <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: "0 0 24px" }}>{APPROVE_COPY.doneLine}</p>
         {onDone && (
           <button type="button" onClick={onDone} className="forge-press forge-tint"

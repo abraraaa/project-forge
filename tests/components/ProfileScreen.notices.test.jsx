@@ -59,7 +59,7 @@ describe("Profile rows read the notices as words", () => {
   });
 
   it.each([
-    ["something new", { clients: true }, "Something new from your clients"],
+    ["something new", { clients: true }, "A client trained since you looked"],
     ["nothing new", {}, "See clients who share with you"],
     ["no answer", null, "See clients who share with you"],
   ])("Your clients, %s", async (_, noticeDots, line) => {
@@ -90,7 +90,7 @@ describe("Profile rows read the notices as words", () => {
     await screen.findByText("Passkey enabled");
     expect(screen.getAllByText("2 new since you looked")).toHaveLength(1);
     expect(screen.getAllByText("3 waiting")).toHaveLength(1);
-    expect(screen.getAllByText("Something new from your clients")).toHaveLength(1);
+    expect(screen.getAllByText("A client trained since you looked")).toHaveLength(1);
     // No element carries a bare count (a pill or a badge would).
     const bare = [...document.body.querySelectorAll("*")].filter((el) => /^\s*[23]\s*$/.test(el.textContent));
     expect(bare).toHaveLength(0);
@@ -114,7 +114,7 @@ describe("ProfileView fetches the notices once per visit", () => {
     const spy = mount(() => Response.json({ dots: { bugs: 2, applications: 1, clients: true }, admin: true }));
     await screen.findByText("2 new since you looked");
     expect(sub("Trainer applications")).toBe("1 waiting");
-    await waitFor(() => expect(sub("Your clients")).toBe("Something new from your clients"));
+    await waitFor(() => expect(sub("Your clients")).toBe("A client trained since you looked"));
     const calls = spy.mock.calls.filter(([url]) => notices(url));
     expect(calls).toHaveLength(1);
     expect(calls[0][0]).toBe("/api/sync/notices?profile=sam");

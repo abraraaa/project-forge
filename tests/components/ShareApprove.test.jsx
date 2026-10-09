@@ -122,7 +122,7 @@ describe("ShareApprove: approval", () => {
     expect(calls("/api/share/approve")).toEqual([
       { code: CODE, authToken: "tok-1", profile: "alex", consent: { version: SHARE_CONSENT_VERSION } },
     ]);
-    expect(screen.getByText("Jo can see your training.")).toBeTruthy();
+    expect(screen.getByText("Jo can see your training")).toBeTruthy();
     expect(screen.getByText("They can see your training and change your plan. Turn changes off, or stop sharing, any time in Profile.")).toBeTruthy();
     // A grant on this consent starts with changes on, so the done line never says read only.
     expect(document.body.textContent).not.toMatch(/read only/i);
@@ -176,7 +176,7 @@ describe("ShareApprove: approval", () => {
     expect(onApproved).not.toHaveBeenCalled();
     server.approve = [[200, { ok: true }]];
     await tap("Share with Jo");
-    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Jo can see your training." }));
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Jo can see your training" }));
     expect(onApproved).toHaveBeenCalledTimes(1);
   });
 
@@ -199,6 +199,7 @@ describe("ShareApprove: approval", () => {
     [[409, { needsNativePasskey: true }], "This needs a passkey for heatwayve.app first."],
     [[400, { stale: true, error: "This page is out of date. Reload and try again." }], "This page is out of date. Reload and try again."],
     [[401, { error: "Face ID didn't go through. Try again.", requiresAuth: true }], "Face ID didn't go through. Try again."],
+    [[500, { error: "Internal error: SENTINEL" }], "Something changed. Try again."],
   ])("says why an approval failed (%j)", async (reply, copy) => {
     await toApprove();
     server.approve = [reply];

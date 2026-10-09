@@ -21,8 +21,9 @@ describe("QrCode", () => {
     expect(paths).toHaveLength(1);
     expect(paths[0].getAttribute("d")).toBe(qrToSvgPath(modules, size));
     expect(paths[0].getAttribute("transform")).toBe("translate(4 4)");
-    expect(paths[0].getAttribute("fill")).toBe("#1A1512"); // dark on a light plate in both themes
-    expect(svg.querySelector("rect").getAttribute("fill")).toBe("#F7F2EC"); // its own light plate, both themes
+    expect(paths[0].getAttribute("fill")).toBe("#241C19"); // light-mode ink on a light plate in both themes
+    expect(svg.querySelector("rect").getAttribute("fill")).toBe("#FBF6F2"); // light-mode surface, both themes
+    expect(svg.style.borderRadius).toBe("8px");
   });
 
   it("takes width and height", () => {

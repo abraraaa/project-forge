@@ -125,7 +125,7 @@ describe("Profile: Your trainer row", () => {
   it("a notice changes the Your clients words, not its place", async () => {
     render(<ProfileScreen {...base} trainerShare={share({ trainerOpen: true, trainer: true })} noticeDots={{ clients: true }} />);
     await screen.findByText("Passkey enabled");
-    expect(row("Your clients").textContent.replace("Your clients", "")).toBe("Something new from your clients");
+    expect(row("Your clients").textContent.replace("Your clients", "")).toBe("A client trained since you looked");
     expect(screen.getByRole("group", { name: "Trainer" }).contains(row("Your clients"))).toBe(true);
     expectOrder([screen.getByText("Coaching"), screen.getByText("Trainer"), screen.getByText("Your clients"), screen.getByText("Training"), screen.getByText("Account")]);
   });
@@ -234,7 +234,7 @@ describe("Profile: the Trainer section says what's new for a week", () => {
     render(<ProfileScreen {...base} trainerShare={trainer} />);
     await screen.findByText("Passkey enabled");
     expect(!!tag()).toBe(shown);
-    expect(row().textContent).toBe(shown ? "Your clientsNewPer-lift ledger and CSV export" : "Your clientsSee clients who share with you");
+    expect(row().textContent).toBe(shown ? "Your clientsNewSee clients who share with you" : "Your clientsSee clients who share with you");
     // The same row either way: same place, same link.
     expect(row().getAttribute("href")).toBe("/trainer");
     expect(screen.getByRole("group", { name: "Trainer" }).contains(row())).toBe(true);
@@ -252,7 +252,7 @@ describe("Profile: the Trainer section says what's new for a week", () => {
     render(<ProfileScreen {...base} trainerShare={trainer} noticeDots={{ clients: true }} />);
     await screen.findByText("Passkey enabled");
     expect(tag()).toBeNull();
-    expect(row().textContent).toBe("Your clientsSomething new from your clients");
+    expect(row().textContent).toBe("Your clientsA client trained since you looked");
   });
 
   it("stores nothing and writes nothing while it shows", async () => {

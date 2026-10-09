@@ -78,7 +78,11 @@ describe("TrainerShareView: sharing", () => {
     expect(fetchWithTimeout).toHaveBeenCalledWith("/api/sync/trainer?profile=sam&today=2026-10-01");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Jo");
     // A reply with no changes switch makes no claim about changes either way.
-    expect(screen.getByText("Sees your sessions, sets and how you felt for the last 24 weeks, and your main-lift trend and bests for 12 months.")).toBeTruthy();
+    expect([...screen.getByRole("list", { name: "What Jo sees" }).querySelectorAll("li")].map((li) => li.textContent)).toEqual([
+      "Your sessions, sets, RPE and how you felt, from the last 24 weeks.",
+      "Your main-lift trend and bests over the last 12 months.",
+      "On their client list: when you last trained, your sessions this week against your plan, and your 28-day rhythm.",
+    ]);
     expect(document.body.textContent).not.toMatch(/read only|change your plan/i);
     expect(screen.getByText("Sharing since 3 September.")).toBeTruthy();
     expect(screen.getByText("Not looked yet.")).toBeTruthy();
@@ -97,7 +101,7 @@ describe("TrainerShareView: sharing", () => {
     // en-GB short month, as Home shows dates ("Sep" or "Sept" by ICU version).
     expect(rows[3].textContent).toMatch(/^Jo checked in on the rosterMon 28 Sept?$/);
     expect(screen.getByText("37 looks in all. The latest 20 show here.")).toBeTruthy();
-    expect(screen.getByText(/A roster check-in is Jo's client list/)).toBeTruthy();
+    expect(screen.getByText("Roster check-ins show once a day.")).toBeTruthy();
   });
 
   it("a roster check-in today says today, and a short log counts what it has", async () => {
@@ -165,7 +169,7 @@ describe("TrainerShareView: sharing", () => {
     });
     await act(async () => { fireEvent.click(screen.getByText("Share with Jo")); });
     expect(screen.queryByText(/^Paused\./)).toBeNull();
-    expect(screen.queryByText("Jo can see your training.")).toBeNull();
+    expect(screen.queryByText("Jo can see your training")).toBeNull();
     expect(screen.getByText("Sharing since 1 October.")).toBeTruthy();
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1.textContent).toBe("Jo");
@@ -253,14 +257,14 @@ describe("TrainerShareView: no trainer", () => {
     expect(notice.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("'Got it' posts the notice as seen and hides it; a notice with no ref offers none", async () => {
+  it("'Dismiss' posts the notice as seen and hides it; a notice with no ref offers none", async () => {
     server.status = status({ ended: { ref: "hwg_old", name: "Max", at: Date.parse("2026-09-20T10:00:00Z"), by: "trainer" } });
     await renderView();
     expect(screen.getByText("Max stopped seeing your training on 20 September.")).toBeTruthy();
-    await act(async () => { fireEvent.click(screen.getByText("Got it")); });
+    await act(async () => { fireEvent.click(screen.getByText("Dismiss")); });
     expect(server.posts).toEqual([{ profile: "sam", seen: "hwg_old" }]);
     expect(screen.queryByText(/Max stopped seeing/)).toBeNull();
-    expect(screen.queryByText("Got it")).toBeNull();
+    expect(screen.queryByText("Dismiss")).toBeNull();
     // The code entry stays, and takes focus.
     expect(document.activeElement).toBe(screen.getByLabelText("The code your trainer showed you"));
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Add a trainer");
@@ -268,13 +272,13 @@ describe("TrainerShareView: no trainer", () => {
     server.status = status({ ended: { name: "Max", at: NOW - DAY, by: "closed" } });
     await renderView();
     expect(screen.getByText("Max's account has closed. They no longer see your training.")).toBeTruthy();
-    expect(screen.queryByText("Got it")).toBeNull();
+    expect(screen.queryByText("Dismiss")).toBeNull();
   });
 
-  it("'Got it' with no code entry here: focus lands on the line that replaces the notice", async () => {
+  it("'Dismiss' with no code entry here: focus lands on the line that replaces the notice", async () => {
     server.status = status({ open: false, ended: { ref: "hwg_old", name: "Max", at: Date.parse("2026-09-20T10:00:00Z"), by: "trainer" } });
     await renderView();
-    const btn = screen.getByRole("button", { name: "Got it" });
+    const btn = screen.getByRole("button", { name: "Dismiss" });
     // A full-size tap target, pressed like the page's other buttons.
     expect(btn.style.minHeight).toBe("44px");
     expect(btn.className).toContain("forge-press");
@@ -307,7 +311,7 @@ describe("TrainerShareView: no trainer", () => {
   it.each([
     [429, { error: "Too many requests" }, "Too many tries. Wait a minute and try again."],
     [401, { error: "Sign in to see your trainer", requiresAuth: true }, "Sign in again to see your trainer."],
-    [500, { error: "Internal error: SENTINEL" }, "Something went wrong. Try again."],
+    [500, { error: "Internal error: SENTINEL" }, "Couldn't do that just now. Try again."],
   ])("a %i on the status reads in the house voice, never the server's words", async (code, body, copy) => {
     fetchWithTimeout.mockResolvedValueOnce({ ok: false, status: code, json: async () => body });
     await renderView();
