@@ -43,7 +43,7 @@ const base = { existing: ["sam"], current: "sam", onActivate: vi.fn(), onCancel:
   bodyweight: 80, setBwEditOpen: vi.fn(), onEditFocus: vi.fn() };
 
 // GET /api/sync/trainer, as ProfileView passes it on.
-const share = (over = {}) => ({ open: true, trainerOpen: false, trainer: false, sharing: null, ended: null, ...over });
+const share = (over = {}) => ({ open: true, trainerOpen: false, applyOpen: false, trainer: false, sharing: null, ended: null, ...over });
 
 describe("Profile: Coaching placement", () => {
   it("renders Coaching, then the trainer row, above Training, breather under Training, then Passkey", async () => {
@@ -108,11 +108,12 @@ describe("Profile: Your trainer row", () => {
 
   it("a trainer gets Your clients in a Trainer section after Coaching, and no For trainers row", async () => {
     at("2026-11-02");
-    const { rerender } = render(<ProfileScreen {...base} trainerShare={share({ trainer: true })} />);
+    // Applications open is not the dashboard: Your clients still needs trainerOpen.
+    const { rerender } = render(<ProfileScreen {...base} trainerShare={share({ trainer: true, applyOpen: true })} />);
     await screen.findByText("Passkey enabled");
     expect(screen.queryByText("Your clients")).toBeNull();
     expect(screen.queryByRole("group", { name: "Trainer" })).toBeNull();
-    rerender(<ProfileScreen {...base} trainerShare={share({ trainerOpen: true, trainer: true })} />);
+    rerender(<ProfileScreen {...base} trainerShare={share({ trainerOpen: true, trainer: true, applyOpen: true })} />);
     const section = screen.getByRole("group", { name: "Trainer" });
     expect(section.contains(row("Your clients"))).toBe(true);
     expect(row("Your clients").getAttribute("href")).toBe("/trainer");
@@ -134,11 +135,14 @@ describe("Profile: Your trainer row", () => {
     expectOrder([screen.getByText("Coaching"), screen.getByText("Trainer"), screen.getByText("Your clients"), screen.getByText("Training"), screen.getByText("Account")]);
   });
 
-  it("everyone else gets For trainers as the last link of More, after Privacy, only when the trainer side is open", async () => {
+  it("everyone else gets For trainers as the last link of More, after Privacy, only while applications are open", async () => {
     const { rerender } = render(<ProfileScreen {...base} trainerShare={share()} />);
     await screen.findByText("Passkey enabled");
     expect(screen.queryByText("For trainers")).toBeNull();
-    rerender(<ProfileScreen {...base} trainerShare={share({ trainerOpen: true })} />);
+    // The row keys on applyOpen, not on the dashboard switch.
+    rerender(<ProfileScreen {...base} trainerShare={share({ trainerOpen: true, applyOpen: false })} />);
+    expect(screen.queryByText("For trainers")).toBeNull();
+    rerender(<ProfileScreen {...base} trainerShare={share({ applyOpen: true })} />);
     const forTrainers = row("For trainers");
     expect(forTrainers.getAttribute("href")).toBe("/trainer");
     expect(forTrainers.textContent.replace("For trainers", "")).toBe("Set up as a trainer");
@@ -158,7 +162,8 @@ describe("Profile: Your trainer row", () => {
 describe("Profile: For trainers, by application state", () => {
   const row = (title) => screen.getByText(title).closest("a");
   const sub = () => row("For trainers").textContent.replace("For trainers", "");
-  const open = (over) => share({ trainerOpen: true, ...over });
+  // Before launch: applications open, the dashboard not.
+  const open = (over) => share({ applyOpen: true, ...over });
   // A denial's wait: still running, and run out.
   const waiting = Date.now() + 5 * 864e5;
   const waited = Date.now() - 864e5;
@@ -178,7 +183,7 @@ describe("Profile: For trainers, by application state", () => {
   });
 
   it("approved: the role moves the row to Your clients in the Trainer section", async () => {
-    render(<ProfileScreen {...base} trainerShare={open({ trainer: true, trainerRole: true,
+    render(<ProfileScreen {...base} trainerShare={open({ trainerOpen: true, trainer: true, trainerRole: true,
       application: { status: "approved", at: 1, decidedAt: 2, nextAt: null, seen: false } })} />);
     await screen.findByText("Passkey enabled");
     expect(screen.queryByText("For trainers")).toBeNull();
@@ -200,10 +205,26 @@ describe("Profile: For trainers, by application state", () => {
     } finally { spy.mockRestore(); }
   });
 
+  it("approved before the dashboard opens: For trainers stays, says so, and opening it marks the decision seen", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    try {
+      render(<ProfileScreen {...base} trainerShare={open({ trainer: true, trainerRole: true,
+        application: { status: "approved", at: 1, decidedAt: 2, nextAt: null, seen: false } })} />);
+      await screen.findByText("Passkey enabled");
+      expect(screen.queryByText("Your clients")).toBeNull();
+      expect(sub()).toBe("Approved · not open yet");
+      expect(row("For trainers").getAttribute("href")).toBe("/trainer");
+      fireEvent.click(row("For trainers"));
+      const calls = seenPosts(spy);
+      expect(calls).toHaveLength(1);
+      expect(JSON.parse(calls[0][1].body)).toEqual({ profile: "sam", seenApplication: true });
+    } finally { spy.mockRestore(); }
+  });
+
   it("approved and unseen: opening Your clients marks it seen", async () => {
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
     try {
-      render(<ProfileScreen {...base} trainerShare={open({ trainer: true, application: { status: "approved", at: 1, decidedAt: 2, nextAt: null, seen: false } })} />);
+      render(<ProfileScreen {...base} trainerShare={open({ trainerOpen: true, trainer: true, application: { status: "approved", at: 1, decidedAt: 2, nextAt: null, seen: false } })} />);
       await screen.findByText("Passkey enabled");
       fireEvent.click(row("Your clients"));
       expect(seenPosts(spy)).toHaveLength(1);
@@ -288,7 +309,7 @@ describe("Profile: nothing changes for someone who isn't a trainer", () => {
     out.push(screen.getByText("For trainers").closest("a").parentElement.innerHTML);
     return out.join("\n");
   };
-  const nonTrainer = share({ trainerOpen: true, sharing: { ref: "g", name: "Jo", since: 1, live: true, looks: [], lookCount: 0 },
+  const nonTrainer = share({ applyOpen: true, sharing: { ref: "g", name: "Jo", since: 1, live: true, looks: [], lookCount: 0 },
     application: { status: "applied", at: 1, decidedAt: null, nextAt: null, seen: false } });
 
   it.each(["2026-10-05", "2026-10-06", "2026-10-12", "2026-10-13"])("same markup on %s, news window or not", async (day) => {

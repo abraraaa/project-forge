@@ -1,5 +1,5 @@
 import { rateLimit } from "@/lib/rate-limit";
-import { readTokenData, resolveTokenIdentity, shareOpenFor, trainerOpenFor } from "@/lib/auth-server";
+import { applyOpenFor, readTokenData, resolveTokenIdentity, shareOpenFor, trainerOpenFor } from "@/lib/auth-server";
 import { neonOAuthStore } from "@/lib/oauth-store";
 import { revokeGrantFor } from "@/lib/oauth";
 import { entitled } from "@/lib/entitlements";
@@ -21,7 +21,8 @@ export const dynamic = "force-dynamic";
 // The client's trainer share, for Profile. Under /api/sync so the hw_sync
 // cookie (path-scoped there) authorises it, as for connected AIs.
 //   GET  /api/sync/trainer?profile=N[&today=YYYY-MM-DD]
-//        -> { open, trainerOpen, trainer, trainerRole, sharing, ended, application, edits, changes }
+//        -> { open, trainerOpen, applyOpen, trainer, trainerRole, sharing, ended, application, edits, changes }
+//        applyOpen: whether they may apply to coach (applyOpenFor); trainerOpen gates the dashboard.
 //        application: null | { status, at, decidedAt, nextAt, seen }, the caller's own
 //        application to coach (never what they wrote).
 //        edits: null | { on, since }, whether their live trainer may change their plan.
@@ -93,6 +94,7 @@ export async function GET(request) {
     return json({
       open: shareOpenFor(identity),
       trainerOpen: trainerOpenFor(identity),
+      applyOpen: applyOpenFor(identity),
       trainer,
       // The role itself, whatever the launch switch says.
       trainerRole: trainer,

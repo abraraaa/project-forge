@@ -17,7 +17,10 @@ const ADMIN = id26("d");
 const L = id26("l"); // a lifter who applies
 const K = id26("k"); // another applicant
 const N = id26("n"); // already a trainer
-const live = vi.hoisted(() => ({ value: true }));
+// The launch switches, as shipped unless a test says otherwise: the dashboard
+// off (TRAINER_LIVE), applications open (APPLICATIONS_OPEN).
+const live = vi.hoisted(() => ({ value: false }));
+const applications = vi.hoisted(() => ({ value: true }));
 const hooks = vi.hoisted(() => ({ beforeInsert: null }));
 
 let db;
@@ -167,7 +170,7 @@ vi.mock("@neondatabase/serverless", () => ({
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(() => null), rateLimitShared: vi.fn(async () => null) }));
 vi.mock("@/lib/trainer-terms", async (importOriginal) => {
   const real = await importOriginal();
-  return { ...real, get TRAINER_LIVE() { return live.value; } };
+  return { ...real, get TRAINER_LIVE() { return live.value; }, get APPLICATIONS_OPEN() { return applications.value; } };
 });
 
 const { POST: applyPOST } = await import("@/app/api/trainer/apply/route");
@@ -205,7 +208,8 @@ const decide = (token, b) => admin.POST(new NextRequest(`${H}/api/diag/trainers`
 
 beforeEach(() => {
   calls.length = 0;
-  live.value = true;
+  live.value = false;
+  applications.value = true;
   hooks.beforeInsert = null;
   db = {
     tokens: new Map(),
@@ -237,13 +241,32 @@ afterEach(() => {
 });
 
 describe("POST /api/trainer/apply", () => {
-  it("is closed until launch: 503 before anything is read", async () => {
-    live.value = false;
-    const res = await apply(body(mint(L)));
+  it("with applications closed and the dashboard not live: 503 for anyone but the admin, nothing written", async () => {
+    applications.value = false;
+    const authToken = mint(L);
+    const res = await apply(body(authToken));
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({ error: "Not open yet." });
     expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(calls).toEqual([]);
+    expect(writes()).toEqual([]);
+    expect(db.apps.size).toBe(0);
+    // The ceremony token is kept.
+    expect(db.tokens.get(hash(authToken)).expires).toBeGreaterThan(Date.now());
+    // The admin is always open.
+    expect((await apply(body(mint(ADMIN), "dee"))).status).toBe(200);
+    // Once live, everyone is.
+    live.value = true;
+    expect((await apply(body(mint(K), "kim"))).status).toBe(200);
+  });
+
+  it("open to a signed-in non-admin while applications are open, before the dashboard is live", async () => {
+    expect(live.value).toBe(false);
+    expect(applications.value).toBe(true);
+    const res = await apply(body(mint(L)));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, status: "applied" });
+    // The Terms on the application are the current version.
+    expect(db.apps.get(L).terms).toMatchObject({ version: TRAINER_TERMS_VERSION, adult: true });
   });
 
   it("sends an application: one INSERT of the caller's own row, then the ceremony token's expiry", async () => {

@@ -3,11 +3,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import {
-  TRAINER_LIVE, TRAINER_TERMS_VERSION, KNOWN_TRAINER_TERMS_VERSIONS, TRAINER_TERMS_COPY,
+  TRAINER_LIVE, APPLICATIONS_OPEN, TRAINER_TERMS_VERSION, KNOWN_TRAINER_TERMS_VERSIONS, TRAINER_TERMS_COPY,
   acceptedTrainerTermsVersion, isCurrentTrainerTerms,
   SHARE_CONSENT_VERSION, SHARE_COPY, acceptedShareConsentVersion, TRAINER_SCOPE,
 } from "../lib/trainer-terms.js";
-import { trainerOpenFor, shareOpenFor } from "../lib/auth-server.js";
+import { trainerOpenFor, shareOpenFor, applyOpenFor } from "../lib/auth-server.js";
 import { publicName, SIGNAL_KEYS } from "../lib/trainer-view.js";
 import { HORIZON_DAYS, LIVE_SLICES } from "../lib/trainer-change.js";
 import { PLAN_KEYS } from "../lib/trainer-plan.js";
@@ -17,6 +17,8 @@ const strings = (o) => (typeof o === "string" ? [o] : Object.values(o).flatMap(s
 describe("trainer terms", () => {
   it("is off until launch, with the placeholder version", () => {
     expect(TRAINER_LIVE).toBe(false);
+    // Applications open ahead of the dashboard.
+    expect(APPLICATIONS_OPEN).toBe(true);
     expect(TRAINER_TERMS_VERSION).toBe("draft-2026-10-05b");
     expect(KNOWN_TRAINER_TERMS_VERSIONS).toEqual([TRAINER_TERMS_VERSION]);
     expect(TRAINER_SCOPE).toBe("trainer:read");
@@ -224,6 +226,36 @@ describe("launch switches", () => {
       expect(shareOpenFor({ storageKey: "x" }, e)).toBe(false);
       expect(shareOpenFor(ADMIN, e)).toBe(true);
     }
+  });
+
+  it("applications are open to everyone signed in, the dashboard still to the admin only", () => {
+    for (const who of [ADMIN, PREVIEW, OTHER]) {
+      expect(applyOpenFor(who, env)).toBe(true);
+      expect(applyOpenFor(who, {})).toBe(true);
+    }
+    expect(trainerOpenFor(OTHER, env)).toBe(false);
+  });
+
+  // The truth table: APPLICATIONS_OPEN on or off, TRAINER_LIVE on or off,
+  // admin or not. Off and off leaves the admin only, as trainerOpenFor.
+  it.each([
+    [true, false, { admin: true, other: true }],
+    [false, false, { admin: true, other: false }],
+    [false, true, { admin: true, other: true }],
+    [true, true, { admin: true, other: true }],
+  ])("applyOpenFor with APPLICATIONS_OPEN %s and TRAINER_LIVE %s", async (applications, live, want) => {
+    vi.resetModules();
+    vi.doMock("../lib/trainer-terms.js", async (importOriginal) => ({
+      ...(await importOriginal()), APPLICATIONS_OPEN: applications, TRAINER_LIVE: live,
+    }));
+    const m = await import("../lib/auth-server.js");
+    expect(m.applyOpenFor(ADMIN, env)).toBe(want.admin);
+    expect(m.applyOpenFor(OTHER, env)).toBe(want.other);
+    expect(m.applyOpenFor(PREVIEW, env)).toBe(want.other);
+    // No admin configured: only the switches open it.
+    expect(m.applyOpenFor(ADMIN, {})).toBe(want.other);
+    // The dashboard never follows APPLICATIONS_OPEN.
+    expect(m.trainerOpenFor(OTHER, env)).toBe(live);
   });
 
   it("once live, both are open to everyone", async () => {

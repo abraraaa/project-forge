@@ -35,7 +35,7 @@ import BodyweightEditModal from "@/components/BodyweightEditModal";
 import TakenNameModal from "@/components/TakenNameModal";
 import ConsentLine from "@/components/ConsentLine";
 import { consentClaim, isCurrentConsent, CONSENT_COPY, CONSENT_VERSION, EXISTING_HOLDER_CONSENT_TAP } from "@/lib/consent";
-import { applyRowSub, decisionUnseen } from "@/lib/trainer-apply-copy";
+import { APPLY_ROW_COPY, applyRowSub, decisionUnseen } from "@/lib/trainer-apply-copy";
 import { fetchWithTimeout } from "@/lib/net";
 import { todayLocalIso } from "@/lib/dates";
 import { newFor } from "@/lib/trainer-news";
@@ -1049,14 +1049,17 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {/* The way in for someone who coaches: last link of More, after Privacy;
           only the name switch follows it.
           Trainers already see "Your clients" in their Trainer section. The
-          subline says where an application stands. */}
-      {current && trainerShare?.trainerOpen && !trainerShare.trainer && (
+          subline says where an application stands. Shown while applications
+          are open (applyOpen), ahead of the dashboard (trainerOpen). Someone
+          approved before the dashboard opens keeps this row, so tapping it
+          still marks the decision seen. */}
+      {current && trainerShare?.applyOpen && !(trainerShare.trainer && trainerShare.trainerOpen) && (
         <Fade d={309}>
           <Link href="/trainer" onClick={() => markApplicationSeen(current, trainerShare)}
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>For trainers</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{applyRowSub(trainerShare.application)}</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{trainerShare.trainer ? APPLY_ROW_COPY.approved : applyRowSub(trainerShare.application)}</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
