@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// /trainer/terms: renders, marked DRAFT until the owner's text lands, never indexed.
+// /trainer/terms: renders the owner's accepted text, never marked draft, never indexed.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { readFileSync } from "node:fs";
@@ -16,10 +16,11 @@ import TrainerTermsPage, { metadata } from "../app/trainer/terms/page.jsx";
 afterEach(cleanup);
 
 describe("Trainer Terms page", () => {
-  it("renders the Terms under a Draft kicker", () => {
+  it("renders the Terms under a For trainers kicker, with no draft or placeholder", () => {
     render(<TrainerTermsPage />);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Trainer Terms");
-    expect(screen.getByText("Draft")).toBeTruthy();
+    expect(screen.getByText("For trainers")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/draft|placeholder/i);
     for (const h of ["Who can be a trainer", "What you agree to", "When access ends", "Law"]) {
       expect(screen.getByRole("heading", { level: 2, name: h })).toBeTruthy();
     }

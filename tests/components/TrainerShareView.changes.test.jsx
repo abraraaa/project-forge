@@ -203,7 +203,7 @@ describe("Undo", () => {
     expect(screen.getByText("Undone. It won't change your plan.")).toBeTruthy();
   });
 
-  it("a weight or reps they never had: the number stays until their next session, never \"goes back\"; this page writes nothing", async () => {
+  it("a weight or reps they never had: the plan goes back, the one normal line; this page writes nothing", async () => {
     const undoOne = async (c) => {
       server.status = status({ changes: [c] });
       server.reply = [200, { ok: true, undone: [c.id] }];
@@ -212,18 +212,19 @@ describe("Undo", () => {
       await act(async () => { fireEvent.click(screen.getByRole("button", { name: /^Undo / })); });
       expect(JSON.stringify({ ...localStorage })).toBe(before);
     };
-    const HELD = "Undone. The number stays until your next session changes it.";
-    // A lift with a template weight is held all the same: nothing is put in its place.
+    const BACK = "Undone. Your plan goes back next time you open the app.";
+    // A lift with a template weight goes back to none all the same: the line never names a number.
     await undoOne(change({ status: "in_force", before: null }));
-    expect(screen.getByText(HELD)).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/goes back|go back|starting weight/);
+    expect(screen.getByText(BACK)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/stays until|null|starting weight/);
     cleanup();
     P.setMainLift("sam", SQUAT, "Front Squat");
     await undoOne(change({ status: "in_force", before: null, target: "Front Squat" }));
-    expect(screen.getByText(HELD)).toBeTruthy();
+    expect(screen.getByText(BACK)).toBeTruthy();
     cleanup();
     await undoOne(change({ status: "in_force", kind: "reps", before: null, after: 8 }));
-    expect(screen.getByText(HELD)).toBeTruthy();
+    expect(screen.getByText(BACK)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/stays until|null/);
     cleanup();
     // With a number to go back to, the line names it, as before.
     await undoOne(change({ status: "in_force" }));
@@ -239,7 +240,7 @@ describe("Undo", () => {
     expect(screen.getByText("Undone. Your plan goes back next time you open the app.")).toBeTruthy();
   });
 
-  it("Undo all with a held row says numbers they had go back and a first weight stays; all held, that they stay", async () => {
+  it("Undo all with a weight or reps they never had: the one normal line, never that a number stays", async () => {
     const undoAll = async (rows) => {
       server.status = status({ changes: rows });
       server.reply = [200, { ok: true, undone: rows.map((r) => r.id) }];
@@ -248,25 +249,22 @@ describe("Undo", () => {
       await act(async () => { fireEvent.click(screen.getByText("Undo all")); });
       expect(JSON.stringify({ ...localStorage })).toBe(before);
     };
-    const MIXED = "Undone. Numbers you had before go back next time you open the app. A first weight stays until your next session changes it.";
+    const BACK = "Undone. Your plan goes back next time you open the app.";
     const bench = { id: `${S1}.1`, target: "Barbell Bench Press", before: 80, after: 82.5, status: "in_force" };
     const repsNew = { id: `${S1}.2`, kind: "reps", before: null, after: 8, status: "in_force" };
-    // One restored, one held (reps they never set).
-    await undoAll([change({ ...bench, id: `${S1}.0` }), change(repsNew)]);
-    expect(screen.getByText(MIXED)).toBeTruthy();
-    cleanup();
-    // One restored, one first weight.
-    await undoAll([change({ ...bench }), change({ status: "in_force", before: null })]);
-    expect(screen.getByText(MIXED)).toBeTruthy();
-    cleanup();
-    // All held: nothing goes back, so the line never says it does.
-    await undoAll([change({ status: "in_force", before: null }), change(repsNew)]);
-    expect(screen.getByText("Undone. These numbers stay until your next session changes them.")).toBeTruthy();
-    expect(screen.queryByText(MIXED)).toBeNull();
-    cleanup();
-    // A waiting row changes nothing: one live held row reads as the single line.
+    for (const rows of [
+      [change({ ...bench, id: `${S1}.0` }), change(repsNew)],
+      [change({ ...bench }), change({ status: "in_force", before: null })],
+      [change({ status: "in_force", before: null }), change(repsNew)],
+    ]) {
+      await undoAll(rows);
+      expect(screen.getByText(BACK)).toBeTruthy();
+      expect(document.body.textContent).not.toMatch(/stays until|stay until/);
+      cleanup();
+    }
+    // A waiting row changes nothing: one live row they never had reads as the single line.
     await undoAll([change({ ...bench, status: "waiting" }), change(repsNew)]);
-    expect(screen.getByText("Undone. The number stays until your next session changes it.")).toBeTruthy();
+    expect(screen.getByText(BACK)).toBeTruthy();
   });
 
   it("refused (trained at since) or offline: says so in its own words", async () => {

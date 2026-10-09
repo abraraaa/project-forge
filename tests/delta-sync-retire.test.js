@@ -46,7 +46,7 @@ describe("PR C code shapes", () => {
       route.indexOf("DUAL-WRITE RETIRED"),
       route.indexOf("Legacy blob path"),
     );
-    expect(dbBranch).toContain("dbUpsertProfile(norm");
+    expect(dbBranch).toContain("writeMetaGuarded(norm");
     expect(dbBranch).not.toContain("await put(");
     // unmigrated profiles still seed their merge base from blobs, guarded
     expect(dbBranch).toContain("blobExists(metaPath(gate.profile))");

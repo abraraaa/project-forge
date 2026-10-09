@@ -3,11 +3,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import {
-  TRAINER_LIVE, TRAINER_TERMS_VERSION, KNOWN_TRAINER_TERMS_VERSIONS, TRAINER_TERMS_COPY,
+  TRAINER_LIVE, APPLICATIONS_OPEN, TRAINER_TERMS_VERSION, KNOWN_TRAINER_TERMS_VERSIONS, TRAINER_TERMS_COPY,
   acceptedTrainerTermsVersion, isCurrentTrainerTerms,
   SHARE_CONSENT_VERSION, SHARE_COPY, acceptedShareConsentVersion, TRAINER_SCOPE,
 } from "../lib/trainer-terms.js";
-import { trainerOpenFor, shareOpenFor } from "../lib/auth-server.js";
+import { trainerOpenFor, shareOpenFor, applyOpenFor } from "../lib/auth-server.js";
 import { publicName, SIGNAL_KEYS } from "../lib/trainer-view.js";
 import { HORIZON_DAYS, LIVE_SLICES } from "../lib/trainer-change.js";
 import { PLAN_KEYS } from "../lib/trainer-plan.js";
@@ -15,8 +15,9 @@ import { PLAN_KEYS } from "../lib/trainer-plan.js";
 const strings = (o) => (typeof o === "string" ? [o] : Object.values(o).flatMap(strings));
 
 describe("trainer terms", () => {
-  it("is off until launch, with the placeholder version", () => {
-    expect(TRAINER_LIVE).toBe(false);
+  it("is live, with the owner's accepted version", () => {
+    expect(TRAINER_LIVE).toBe(true);
+    expect(APPLICATIONS_OPEN).toBe(true);
     expect(TRAINER_TERMS_VERSION).toBe("draft-2026-10-05b");
     expect(KNOWN_TRAINER_TERMS_VERSIONS).toEqual([TRAINER_TERMS_VERSION]);
     expect(TRAINER_SCOPE).toBe("trainer:read");
@@ -193,47 +194,69 @@ describe("share consent", () => {
 
 describe("launch switches", () => {
   const ADMIN = { accountId: "hwa_" + "b".repeat(26), storageKey: "boss" };
-  const PREVIEW = { accountId: "hwa_" + "p".repeat(26), storageKey: "hwa_" + "p".repeat(26) };
+  const LISTED = { accountId: "hwa_" + "p".repeat(26), storageKey: "hwa_" + "p".repeat(26) };
   const OTHER = { accountId: "hwa_" + "o".repeat(26), storageKey: "sam" };
-  const env = { ADMIN_ACCOUNT_ID: ADMIN.accountId, TRAINER_PREVIEW_ACCOUNTS: ` ${PREVIEW.accountId} , hwa_${"q".repeat(26)}` };
+  const env = { ADMIN_ACCOUNT_ID: ADMIN.accountId };
+  // The old preview list, still set until the owner deletes it: never read.
+  const listed = { ...env, TRAINER_PREVIEW_ACCOUNTS: ` ${LISTED.accountId} , hwa_${"q".repeat(26)}` };
 
   afterEach(() => { vi.doUnmock("../lib/trainer-terms.js"); vi.resetModules(); });
 
-  it("while not live, only the admin may be a trainer", () => {
-    expect(trainerOpenFor(ADMIN, env)).toBe(true);
-    expect(trainerOpenFor(PREVIEW, env)).toBe(false);
-    expect(trainerOpenFor(OTHER, env)).toBe(false);
-    expect(trainerOpenFor(null, env)).toBe(false);
-    expect(trainerOpenFor(ADMIN, {})).toBe(false);
-  });
-
-  it("while not live, the admin and listed preview accounts may add a trainer", () => {
-    expect(shareOpenFor(ADMIN, env)).toBe(true);
-    expect(shareOpenFor(PREVIEW, env)).toBe(true);
-    expect(shareOpenFor(OTHER, env)).toBe(false);
-    expect(shareOpenFor(null, env)).toBe(false);
-    // Matched by account id, never by storage key.
-    expect(shareOpenFor({ accountId: OTHER.accountId, storageKey: PREVIEW.accountId }, env)).toBe(false);
-  });
-
-  it("an empty or unset preview list names nobody", () => {
-    for (const list of [undefined, "", " ", ",", " , ,"]) {
-      const e = { ADMIN_ACCOUNT_ID: ADMIN.accountId, TRAINER_PREVIEW_ACCOUNTS: list };
-      expect(shareOpenFor(PREVIEW, e)).toBe(false);
-      expect(shareOpenFor({ accountId: "", storageKey: "x" }, e)).toBe(false);
-      expect(shareOpenFor({ storageKey: "x" }, e)).toBe(false);
-      expect(shareOpenFor(ADMIN, e)).toBe(true);
+  it("live: every account may be a trainer, add a trainer and apply, without any env", () => {
+    for (const who of [ADMIN, LISTED, OTHER]) {
+      for (const e of [env, {}]) {
+        expect(trainerOpenFor(who, e)).toBe(true);
+        expect(shareOpenFor(who, e)).toBe(true);
+        expect(applyOpenFor(who, e)).toBe(true);
+      }
     }
   });
 
-  it("once live, both are open to everyone", async () => {
+  it("shareOpenFor ignores TRAINER_PREVIEW_ACCOUNTS: it is trainerOpenFor, whatever the list says", async () => {
+    for (const who of [ADMIN, LISTED, OTHER, { accountId: "", storageKey: "x" }, { storageKey: "x" }]) {
+      expect(shareOpenFor(who, listed)).toBe(shareOpenFor(who, env));
+    }
+    expect(readFileSync(new URL("../lib/auth-server.js", import.meta.url), "utf8")).not.toMatch(/env\.TRAINER_PREVIEW_ACCOUNTS/);
+    // With the switch closed, the list opens nothing: the admin only.
     vi.resetModules();
-    vi.doMock("../lib/trainer-terms.js", async (importOriginal) => ({ ...(await importOriginal()), TRAINER_LIVE: true }));
-    const live = await import("../lib/auth-server.js");
-    for (const who of [ADMIN, PREVIEW, OTHER]) {
-      expect(live.trainerOpenFor(who, {})).toBe(true);
-      expect(live.shareOpenFor(who, {})).toBe(true);
-    }
+    vi.doMock("../lib/trainer-terms.js", async (importOriginal) => ({ ...(await importOriginal()), TRAINER_LIVE: false }));
+    const closed = await import("../lib/auth-server.js");
+    expect(closed.shareOpenFor(ADMIN, listed)).toBe(true);
+    expect(closed.shareOpenFor(LISTED, listed)).toBe(false);
+    expect(closed.shareOpenFor(OTHER, listed)).toBe(false);
+    expect(closed.shareOpenFor(null, listed)).toBe(false);
+  });
+
+  it("with the switch closed, only the admin may be a trainer", async () => {
+    vi.resetModules();
+    vi.doMock("../lib/trainer-terms.js", async (importOriginal) => ({ ...(await importOriginal()), TRAINER_LIVE: false }));
+    const closed = await import("../lib/auth-server.js");
+    expect(closed.trainerOpenFor(ADMIN, env)).toBe(true);
+    expect(closed.trainerOpenFor(OTHER, env)).toBe(false);
+    expect(closed.trainerOpenFor(null, env)).toBe(false);
+    expect(closed.trainerOpenFor(ADMIN, {})).toBe(false);
+  });
+
+  // The truth table: APPLICATIONS_OPEN on or off, TRAINER_LIVE on or off,
+  // admin or not. Applications off leaves the admin only, whatever the dashboard.
+  it.each([
+    [true, false, { admin: true, other: true }],
+    [false, false, { admin: true, other: false }],
+    [false, true, { admin: true, other: false }],
+    [true, true, { admin: true, other: true }],
+  ])("applyOpenFor with APPLICATIONS_OPEN %s and TRAINER_LIVE %s", async (applications, live, want) => {
+    vi.resetModules();
+    vi.doMock("../lib/trainer-terms.js", async (importOriginal) => ({
+      ...(await importOriginal()), APPLICATIONS_OPEN: applications, TRAINER_LIVE: live,
+    }));
+    const m = await import("../lib/auth-server.js");
+    expect(m.applyOpenFor(ADMIN, env)).toBe(want.admin);
+    expect(m.applyOpenFor(OTHER, env)).toBe(want.other);
+    expect(m.applyOpenFor(LISTED, listed)).toBe(want.other);
+    // No admin configured: only the applications switch opens it.
+    expect(m.applyOpenFor(ADMIN, {})).toBe(applications);
+    // The dashboard never follows APPLICATIONS_OPEN.
+    expect(m.trainerOpenFor(OTHER, env)).toBe(live);
   });
 });
 

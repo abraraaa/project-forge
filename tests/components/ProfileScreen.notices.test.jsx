@@ -24,7 +24,7 @@ const { P } = await import("@/lib/storage");
 
 const base = { existing: ["sam"], current: "sam", onActivate: vi.fn(), onCancel: vi.fn(),
   bodyweight: 80, setBwEditOpen: vi.fn(), onEditFocus: vi.fn() };
-const share = (over = {}) => ({ open: true, trainerOpen: true, trainer: false, sharing: null, ended: null, ...over });
+const share = (over = {}) => ({ open: true, trainerOpen: true, applyOpen: true, trainer: false, sharing: null, ended: null, ...over });
 const sub = (title) => screen.getByText(title).closest("a").textContent.replace(title, "");
 
 // The admin wing shows on this device's admin hint (lib/auth-session.js).

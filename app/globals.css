@@ -349,6 +349,8 @@ html[data-mode="dark"] .forge-page {
    rhythm rows of 8, as it sits in the pane's left column. A solo panel
    (signed out, the upgrade) keeps the phone column at every width. */
 .forge-wide-solo { grid-column: 1 / -1; width: 100%; max-width: 430px; margin: 0 auto; }
+/* The roster's back row spans the columns, so both start level under it. */
+.forge-wide-back { grid-column: 1 / -1; }
 .forge-wide-rhythm {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
@@ -359,7 +361,8 @@ html[data-mode="dark"] .forge-page {
 }
 @media (max-width: 639.98px) {
   .forge-wide[data-view="roster"] > .forge-wide-main,
-  .forge-wide[data-view="client"] > .forge-wide-roster { display: none; }
+  .forge-wide[data-view="client"] > .forge-wide-roster,
+  .forge-wide[data-view="client"] > .forge-wide-back { display: none; }
   .forge-wide-mw-only { display: none; }
   .forge-wide-rhythm:not([data-earlier]) > .forge-wide-rhythm-early { display: none; }
   .forge-wide-lift:not([data-open]) .forge-wide-lift-detail { display: none; }

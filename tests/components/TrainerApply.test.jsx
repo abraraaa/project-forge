@@ -29,10 +29,13 @@ import { TRAINER_TERMS_VERSION } from "../../lib/trainer-terms.js";
 import { APPLY_COPY, REPLY_COPY, ABOUT_MAX, LINK_MAX, aboutProblem, deniedLine, linkProblem, linkToSend, applyRowSub, decisionUnseen } from "../../lib/trainer-apply-copy.js";
 import * as rules from "../../lib/trainer-apply.js";
 
-const { server, auth } = vi.hoisted(() => ({
+const { server, auth, nav } = vi.hoisted(() => ({
   server: { calls: [], routes: {} },
   auth: { result: { verified: true, authToken: "tok-1" } },
+  nav: { back: () => {}, replace: () => {}, push: () => {} },
 }));
+
+vi.mock("next/navigation", () => ({ useRouter: () => nav }));
 
 vi.mock("@/lib/webauthn", () => ({
   authenticatePasskey: vi.fn(async () => auth.result),

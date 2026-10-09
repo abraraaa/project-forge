@@ -13,6 +13,8 @@ import {
   saveFocusCore,
   stashRotationSummary,
   takePendingRotationSummary,
+  stashFirstRun,
+  takePendingFirstRun,
 } from "../lib/profile-actions.js";
 import { P, PB, F } from "../lib/storage.js";
 
@@ -69,5 +71,42 @@ describe("rotation-summary one-shot handoff", () => {
     expect(takePendingRotationSummary("Bob")).toBeNull();
     expect(takePendingRotationSummary(null)).toBeNull();
     stashRotationSummary(null, { blockNumber: 1 }); // no-op, no throw
+  });
+});
+
+describe("first-run one-shot handoff", () => {
+  const MARKER = "forge:pendingFirstRun";
+
+  it("take returns the stashed name once, then null, and leaves no key", () => {
+    stashFirstRun("Alice");
+    expect(window.localStorage.getItem(MARKER)).toBe(JSON.stringify("Alice"));
+    expect(takePendingFirstRun()).toBe("Alice");
+    expect(window.localStorage.getItem(MARKER)).toBeNull();
+    expect(takePendingFirstRun()).toBeNull();
+  });
+
+  it("is one marker per device: a later claim replaces an earlier one", () => {
+    stashFirstRun("Alice");
+    stashFirstRun("Bob");
+    expect(takePendingFirstRun()).toBe("Bob");
+    expect(takePendingFirstRun()).toBeNull();
+  });
+
+  it("stashes nothing without a name, and a malformed marker is taken as null", () => {
+    stashFirstRun("");
+    stashFirstRun(null);
+    expect(window.localStorage.getItem(MARKER)).toBeNull();
+    window.localStorage.setItem(MARKER, JSON.stringify({ name: "Alice" }));
+    expect(takePendingFirstRun()).toBeNull();
+    expect(window.localStorage.getItem(MARKER)).toBeNull();
+  });
+
+  it("touches only its own key", () => {
+    stashRotationSummary("Alice", { blockNumber: 1 });
+    window.localStorage.setItem("forge:profiles", JSON.stringify(["Alice"]));
+    stashFirstRun("Alice");
+    const before = Object.keys(window.localStorage).filter((k) => k !== MARKER).sort();
+    takePendingFirstRun();
+    expect(Object.keys(window.localStorage).sort()).toEqual(before);
   });
 });

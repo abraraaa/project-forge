@@ -98,6 +98,13 @@ vi.mock("@neondatabase/serverless", () => ({
   },
 }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(() => null), rateLimitShared: vi.fn(async () => null) }));
+// APPLICATIONS_OPEN and TRAINER_LIVE as shipped unless a test turns them off.
+const applications = vi.hoisted(() => ({ value: true }));
+const live = vi.hoisted(() => ({ value: true }));
+vi.mock("@/lib/trainer-terms", async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, get APPLICATIONS_OPEN() { return applications.value; }, get TRAINER_LIVE() { return live.value; } };
+});
 
 // Tokens: who they belong to and their scope. Profiles are handles.
 const TOKENS = {
@@ -153,6 +160,8 @@ beforeEach(() => {
   for (const k of envKeys) delete process.env[k];
   process.env.DATABASE_URL = "postgres://fake";
   calls.length = 0;
+  applications.value = true;
+  live.value = true;
   db.accounts = new Map([
     [A, account(A, ["lifter"])], [B, account(B, ["lifter"])],
     [T, account(T, ["lifter", "trainer"], CURRENT)], [N, account(N, ["lifter", "trainer"], CURRENT)],
@@ -182,7 +191,7 @@ describe("GET /api/sync/trainer: status", () => {
     const res = await get();
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
-    expect(await res.json()).toEqual({ open: false, trainerOpen: false, trainer: false, trainerRole: false, sharing: null, ended: null, application: null,
+    expect(await res.json()).toEqual({ open: true, trainerOpen: true, applyOpen: true, trainer: false, trainerRole: false, sharing: null, ended: null, application: null,
       edits: null, changes: [] });
     expect(writes()).toEqual([]);
   });
@@ -305,7 +314,7 @@ describe("GET /api/sync/trainer: status", () => {
     })];
     const body = await (await get()).text();
     const res = JSON.parse(body);
-    expect(Object.keys(res).sort()).toEqual(["application", "changes", "edits", "ended", "open", "sharing", "trainer", "trainerOpen", "trainerRole"]);
+    expect(Object.keys(res).sort()).toEqual(["application", "applyOpen", "changes", "edits", "ended", "open", "sharing", "trainer", "trainerOpen", "trainerRole"]);
     // A share approved before changes existed: read only.
     expect(res.edits).toEqual({ on: false, since: null });
     expect(Object.keys(res.sharing).sort()).toEqual(["consentVersion", "live", "lookCount", "looks", "name", "ref", "since"]);
@@ -316,13 +325,31 @@ describe("GET /api/sync/trainer: status", () => {
     }
   });
 
-  it("the launch flags: off for a lifter; a preview account sees Add a trainer; a trainer is a trainer", async () => {
-    expect(await status()).toMatchObject({ open: false, trainerOpen: false, trainer: false });
+  it("the launch flags, live: a lifter sees Add a trainer and may apply; a trainer other than the admin is a trainer", async () => {
+    expect(await status()).toMatchObject({ open: true, trainerOpen: true, applyOpen: true, trainer: false });
+    // The old preview list is ignored either way.
     process.env.TRAINER_PREVIEW_ACCOUNTS = `${B}, ${A}`;
-    expect(await status()).toMatchObject({ open: true, trainerOpen: false, trainer: false });
+    expect(await status()).toMatchObject({ open: true, trainerOpen: true, applyOpen: true, trainer: false });
     delete process.env.TRAINER_PREVIEW_ACCOUNTS;
-    process.env.ADMIN_ACCOUNT_ID = T;
-    expect(await status("tok-tia", "tia")).toMatchObject({ open: true, trainerOpen: true, trainer: true, trainerRole: true });
+    expect(await status("tok-tia", "tia")).toMatchObject({ open: true, trainerOpen: true, applyOpen: true, trainer: true, trainerRole: true });
+  });
+
+  it("with the switch closed: the admin only, and a preview list opens nothing", async () => {
+    live.value = false;
+    expect(await status()).toMatchObject({ open: false, trainerOpen: false, applyOpen: true });
+    process.env.TRAINER_PREVIEW_ACCOUNTS = `${B}, ${A}`;
+    expect(await status()).toMatchObject({ open: false, trainerOpen: false });
+    process.env.ADMIN_ACCOUNT_ID = A;
+    expect(await status()).toMatchObject({ open: true, trainerOpen: true });
+  });
+
+  it("with applications closed, applyOpen is the admin's only, whatever the dashboard switch", async () => {
+    applications.value = false;
+    expect(await status()).toMatchObject({ trainerOpen: true, applyOpen: false });
+    live.value = false;
+    expect(await status()).toMatchObject({ trainerOpen: false, applyOpen: false });
+    process.env.ADMIN_ACCOUNT_ID = A;
+    expect(await status()).toMatchObject({ trainerOpen: true, applyOpen: true });
   });
 
   it("refuses: no sign-in, no profile, another account's profile, a photos or trainer token", async () => {
@@ -338,7 +365,7 @@ describe("GET /api/sync/trainer: status", () => {
 
   it("without a database: no share, still 200", async () => {
     delete process.env.DATABASE_URL;
-    expect(await status()).toEqual({ open: false, trainerOpen: false, trainer: false, trainerRole: false, sharing: null, ended: null, application: null,
+    expect(await status()).toEqual({ open: true, trainerOpen: true, applyOpen: true, trainer: false, trainerRole: false, sharing: null, ended: null, application: null,
       edits: null, changes: [] });
   });
 });

@@ -346,6 +346,43 @@ function e8Fixtures() {
   return out;
 }
 
+describe("an unset (a stored null weight or reps) reads as no stored value", () => {
+  const SQ = "Barbell Back Squat";
+  const BENCH = "Barbell Bench Press";
+  const base = { programmeBlock: { number: 1, config: {} }, userFocus: "Forged", mainLifts: {}, bodyweight: { kg: 80 } };
+  const planted = { ...base, weights: { [SQ]: null, [BENCH]: 60 }, weightStamps: { [SQ]: T1, [BENCH]: T1 }, reps: { [SQ]: null, [BENCH]: 8 }, repStamps: { [SQ]: T1, [BENCH]: T1 } };
+  const absent = { ...base, weights: { [BENCH]: 60 }, reps: { [BENCH]: 8 } };
+  const tools = ["programme", "current_loads", "training_snapshot"];
+
+  it("no tool prints null, NaN or undefined, or throws", () => {
+    for (const t of tools) {
+      const text = runTool(t, {}, { meta: planted, history: data.history }, now).text;
+      expect(text, t).not.toMatch(/null|NaN|undefined/);
+    }
+  });
+  it("the programme reads exactly as with the key absent: the squat a suggested start at its template reps", () => {
+    const a = runTool("programme", {}, { meta: planted, history: [] }, now).text;
+    expect(a).toBe(runTool("programme", {}, { meta: absent, history: [] }, now).text);
+    expect(a).toContain(`${SQ} 3 × 5 @ 60 kg (suggested start)`);
+    expect(a).toContain(`${BENCH} 3 × 8 @ 60 kg`);
+  });
+  it("current_loads reads exactly as with the key absent", () => {
+    const a = runTool("current_loads", {}, { meta: planted, history: [] }, now).text;
+    expect(a).toBe(runTool("current_loads", {}, { meta: absent, history: [] }, now).text);
+    expect(a).toBe(`- ${BENCH}: 60 kg × 8`);
+  });
+  it("current_loads with only unsets reads as no working weights", () => {
+    const onlyUnsets = { ...base, weights: { [SQ]: null }, weightStamps: { [SQ]: T1 }, reps: { [SQ]: null }, repStamps: { [SQ]: T1 } };
+    expect(runTool("current_loads", {}, { meta: onlyUnsets, history: [] }, now).text).toBe("No working weights set yet.");
+  });
+  it("resolvedProgramme: w null, start the planned number", () => {
+    const l = resolvedProgramme(planted).find((x) => x.name === SQ);
+    expect(l.w).toBeNull();
+    expect(l.reps).toBe(5);
+    expect(l.start).toBe(60);
+  });
+});
+
 describe("resolvedProgramme behind describeProgramme (E8)", () => {
   // Digests of the programme and current_loads tool text over e8Fixtures,
   // captured from describeProgramme before resolvedProgramme was extracted.

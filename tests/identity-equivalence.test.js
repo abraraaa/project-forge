@@ -157,8 +157,9 @@ vi.mock("@/lib/db", async (importOriginal) => ({
   dbReadProfile: vi.fn(async () => ({ meta: { displayName: "Sam" }, history: [], cursor: "c" })),
   dbReadProfileSince: vi.fn(async () => ({ meta: {}, history: [], cursor: "c" })),
   dbCursorNow: vi.fn(async () => "c"),
-  dbReadMetaFields: vi.fn(async () => ({})),
-  dbUpsertProfile: vi.fn(async () => {}),
+  dbReadMetaBase: vi.fn(async () => ({ meta: {}, revs: {} })),
+  dbInsertHistory: vi.fn(async () => {}),
+  dbWriteMetaGuarded: vi.fn(async () => true),
   dbDeleteProfile: vi.fn(async () => {}),
   dbUpsertPhoto: vi.fn(async () => {}),
   dbGetPhoto: vi.fn(async () => null),
@@ -236,8 +237,8 @@ describe("token half: an existing account keys exactly as before", () => {
       body: JSON.stringify({ profile: "SAM", delta: { meta: { bodyweight: 80 }, history: [] } }),
     }));
     expect(res.status).toBe(200);
-    expect(call(dbm.dbReadMetaFields)[0][0]).toBe("sam");
-    expect(call(dbm.dbUpsertProfile)[0][0]).toBe("sam");
+    expect(call(dbm.dbReadMetaBase)[0][0]).toBe("sam");
+    expect(call(dbm.dbWriteMetaGuarded)[0][0]).toBe("sam");
   });
 
   it("fat PUT with no DB rows seeds from the same blob paths as before", async () => {
@@ -250,7 +251,7 @@ describe("token half: an existing account keys exactly as before", () => {
     expect(res.status).toBe(200);
     expect(call(blob.list)[0][0]).toEqual({ prefix: OLD.prefix("sam") });
     expect(call(blob.get).map((c) => c[0])).toEqual([OLD.meta("sam"), OLD.history("sam")]);
-    expect(call(dbm.dbUpsertProfile)[0][0]).toBe("sam");
+    expect(call(dbm.dbInsertHistory)[0][0]).toBe("sam");
   });
 
   it("sliding rotation mints a row with profile = the storage key and the account id", async () => {
@@ -404,7 +405,7 @@ describe("token half: another account's token never crosses", () => {
       () => photos.POST(new NextRequest("https://heatwayve.app/api/photos?profile=sam&date=2026-09-01", { method: "POST", headers: { "x-hw-auth": "mw" }, body: jpeg })),
     ];
     for (const r of reqs) expect((await r()).status).toBe(401);
-    for (const m of [dbm.dbReadProfile, dbm.dbUpsertProfile, dbm.dbListPhotos, dbm.dbGetPhoto, dbm.dbDeletePhoto, dbm.dbUpsertPhoto, dbm.dbDeleteProfile, dbm.dbDeleteToken, blob.del, blob.put, dbm.dbInsertToken]) {
+    for (const m of [dbm.dbReadProfile, dbm.dbInsertHistory, dbm.dbWriteMetaGuarded, dbm.dbListPhotos, dbm.dbGetPhoto, dbm.dbDeletePhoto, dbm.dbUpsertPhoto, dbm.dbDeleteProfile, dbm.dbDeleteToken, blob.del, blob.put, dbm.dbInsertToken]) {
       expect(call(m)).toEqual([]);
     }
   });
@@ -502,7 +503,7 @@ describe("token half: a reclaimed account keys by its own storage key, never the
       body: JSON.stringify({ profile: "sam", data: { history: [] } }),
     }));
     expect(res.status).toBe(200);
-    expect(call(dbm.dbUpsertProfile)[0][0]).toBe(B.storageKey);
+    expect(call(dbm.dbInsertHistory)[0][0]).toBe(B.storageKey);
     expect(call(blob.list)[0][0]).toEqual({ prefix: profileDir(B.storageKey) });
     expect(call(blob.get).map((c) => c[0])).toEqual([metaPath(B.storageKey), historyPath(B.storageKey)]);
   });

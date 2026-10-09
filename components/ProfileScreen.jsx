@@ -35,7 +35,7 @@ import BodyweightEditModal from "@/components/BodyweightEditModal";
 import TakenNameModal from "@/components/TakenNameModal";
 import ConsentLine from "@/components/ConsentLine";
 import { consentClaim, isCurrentConsent, CONSENT_COPY, CONSENT_VERSION, EXISTING_HOLDER_CONSENT_TAP } from "@/lib/consent";
-import { applyRowSub, decisionUnseen } from "@/lib/trainer-apply-copy";
+import { APPLY_ROW_COPY, applyRowSub, decisionUnseen } from "@/lib/trainer-apply-copy";
 import { fetchWithTimeout } from "@/lib/net";
 import { todayLocalIso } from "@/lib/dates";
 import { newFor } from "@/lib/trainer-news";
@@ -50,6 +50,10 @@ const NAME_MAX_LEN = 64;
 // Stable identity, so React calls it on mount only (an inline arrow would
 // re-focus on every render).
 const focusOnMount = (el) => { el?.focus(); };
+
+// A settings row as a button: the same hairline grammar as the links.
+/** @type {import("react").CSSProperties} */
+const ROW = {width:"100%",padding:"15px 2px",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,cursor:"pointer",color:"inherit",textAlign:"left",fontFamily:T.text};
 
 // Anything but a positive whole count is nothing new.
 const newCount = (n) => (Number.isInteger(n) && n > 0 ? n : 0);
@@ -147,6 +151,16 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const themePref = themeState.pref;
   const handleThemeChange=(pref)=>{ applyThemePreference(current, pref); setThemeState({profile:current, pref}); };
   const [confirmWipe,setConfirmWipe]=useState(null);
+  // Signed in, the other names on this device and the name field live at the
+  // foot of More: "Not you?" lists the names, "Sign in as someone else"
+  // reveals the field. Closed until asked for.
+  const [switchOpen,setSwitchOpen]=useState(false);
+  const [signInOpen,setSignInOpen]=useState(false);
+  const switchRef=useRef(null);
+  // Delete this profile: first tap arms, second opens the sheet, 5s disarms.
+  const [deleteArmed,setDeleteArmed]=useState(false);
+  const deleteTimerRef=useRef(null);
+  useEffect(() => () => clearTimeout(deleteTimerRef.current), []);
   const [showTakenHelp,setShowTakenHelp]=useState(false);
   // availability: "idle" | "checking" | "available" | "taken" | "invalid" | "network-err"
   const [availability,setAvailability]=useState("idle");
@@ -193,8 +207,9 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
     isPlatformAuthenticatorAvailable().then(setWebAuthnSupported);
   }, []);
 
-  // Check if each profile has a passkey (only on mount, not when state changes)
-  // Using a ref to track which profiles we've already checked
+  // Passkey and consent status for the signed-in profile only: the Account
+  // rows and the delete sheet (which only ever opens for this profile) read
+  // it. Asked once per profile; the ref remembers which were asked.
   const checkedProfilesRef = useRef(new Set());
   useEffect(() => {
     // null = check failed — keep whatever we knew rather than storing a
@@ -206,18 +221,11 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       setProfileHasPasskey(prev => prev[who] === true ? prev : { ...prev, [who]: s.hasPasskey });
       setProfileConsent(prev => isCurrentConsent(prev[who]) ? prev : { ...prev, [who]: s.consent });
     };
-    // Check all existing profiles we haven't checked yet
-    existing.forEach(async (profile) => {
-      if (checkedProfilesRef.current.has(profile)) return;
-      checkedProfilesRef.current.add(profile);
-      takeStatus(profile, await passkeyStatus(profile));
-    });
-    // Also explicitly check current profile if not checked
     if (current && !checkedProfilesRef.current.has(current)) {
       checkedProfilesRef.current.add(current);
       passkeyStatus(current).then(s => takeStatus(current, s));
     }
-  }, [existing, current]);
+  }, [current]);
 
   // Expanded wipe: opts.cloud === true also nukes cloud data via DELETE /api/sync.
   // opts.cloud === false only clears local storage (fast, offline-safe).
@@ -421,45 +429,34 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const trainerNews = noticeDots?.clients === true ? null : (newFor(todayLocalIso())[0] ?? null);
   const askConsent = EXISTING_HOLDER_CONSENT_TAP && !!current && webAuthnSupported && profileHasPasskey[current] === true
     && !upgrade?.needed && consentKnown !== undefined && !isCurrentConsent(consentKnown);
+  // The other names on this device, for "Not you?": names only.
+  const others = current ? existing.filter(n => n !== current) : [];
 
-  return (
-    <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"clip"}}>
-      {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text,marginBottom:32,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Home</button>}
-      <Fade d={0}>
-        {/* Kicker — the room's scope. Never absent (§11.3). Three states,
-            not two: a device with profiles but none active (you deleted the
-            active one) is NOT "first run" — the list is right below. */}
-        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
-          {hasAnyProfile?"This device":"New here"}
-        </div>
-        <div style={{...DISPLAY,fontSize:38,color:T.ink,marginBottom:10}}>
-          {hasAnyProfile?"Profiles":"Your name"}
-        </div>
-        <p style={{fontSize:14,color:T.ink2,marginBottom:36,lineHeight:1.6}}>
-          {hasAnyProfile?"Pick a profile, or add someone new.":"Who's training? Pick a name — it travels with you across devices."}
-        </p>
-      </Fade>
-      {existing.length>0&&(
-        <Fade d={60}>
-          {/* Rows between hairlines on the ground — settings are a list,
-              not a stack of documents (§11.2). */}
-          <div style={{marginBottom:28,borderTop:`1px solid ${T.rule}`}}>
-            {existing.map(n=>(
-              <div key={n} style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <span onClick={()=>onActivate(n)} style={{fontSize:17,fontWeight:n===current?500:400,color:T.ink,cursor:"pointer",flex:1}}>{n}</span>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  {n===current&&<span style={{fontSize:12,color:T.ink2,fontWeight:500}}>Active</span>}
-                  <button onClick={()=>setConfirmWipe(n)} style={{background:"none",border:"none",padding:"2px 6px",cursor:"pointer"}} title="Wipe progress" aria-label={`Wipe ${n}`}><Glyph name="cross" size={11} color={T.ink3}/></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Fade>
-      )}
-      <Fade d={120}>
-        <div style={{fontSize:13,color:T.ink3,marginBottom:12}}>
-          {existing.length > 0 ? "Add new" : "Name"}
-        </div>
+  // The name heading leads to the same place as "Not you?": scrolled to,
+  // opened when there are names to show, focus on its first control.
+  const openSwitch = () => {
+    if (others.length > 0) setSwitchOpen(true);
+    const el = switchRef.current;
+    el?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+    el?.querySelector("button")?.focus({ preventScroll: true });
+  };
+
+  const handleDeleteTap = () => {
+    if (!current) return;
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      clearTimeout(deleteTimerRef.current);
+      deleteTimerRef.current = setTimeout(() => setDeleteArmed(false), 5000);
+      return;
+    }
+    clearTimeout(deleteTimerRef.current);
+    setDeleteArmed(false);
+    setConfirmWipe(current);
+  };
+
+  // The name field, availability line and Continue: at the top when signed
+  // out, behind "Sign in as someone else" when signed in.
+  const nameField = (
         <div style={{position:"relative"}}>
           <div style={{display:"flex",gap:10}}>
             <div style={{flex:1,position:"relative"}}>
@@ -483,7 +480,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 </div>
               )}
             </div>
-            <button className={canSubmit?"forge-press":undefined} onClick={handleSubmit} disabled={!canSubmit}
+            <button className={canSubmit?"forge-press":undefined} onClick={handleSubmit} disabled={!canSubmit} aria-label="Continue"
               style={{padding:"14px 20px",background:canSubmit?T.commit:T.well,border:"none",borderRadius:T.r,cursor:canSubmit?"pointer":"default",fontFamily:T.text,fontSize:17,fontWeight:500,color:canSubmit?T.commitInk:T.ink3,boxShadow:canSubmit?T.elevStrong:"none",transition:`background 200ms ${T.ease}`}}>
               {submitting ? "…" : <Glyph name="arrowRight" size={15}/>}
             </button>
@@ -530,7 +527,61 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             </button>
           )}
         </div>
+  );
+
+  return (
+    <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",position:"relative",overflow:"clip"}}>
+      {onCancel&&<button onClick={onCancel} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text,marginBottom:32,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Home</button>}
+      {current ? (
+        <Fade d={0}>
+          {/* Signed in, the page is one person: a kicker for the room (never
+              absent, §11.3), then their name, and a tap leads to "Not you?" at
+              the foot of More. The wrapper gives screen readers the page
+              heading; the button stays the one target. */}
+          <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>Profile</div>
+          <div role="heading" aria-level={1}>
+          <button type="button" onClick={openSwitch} aria-controls="profile-switch"
+            aria-label={`${current}, switch or sign in as someone else`}
+            style={{...DISPLAY,fontSize:38,color:T.ink,display:"block",maxWidth:"100%",background:"none",border:"none",padding:0,margin:0,cursor:"pointer",textAlign:"left",overflowWrap:"anywhere"}}>
+            {current}
+          </button>
+          </div>
+        </Fade>
+      ) : (<>
+      <Fade d={0}>
+        {/* Kicker — the room's scope. Never absent (§11.3). Three states,
+            not two: a device with profiles but none active (you deleted the
+            active one) is NOT "first run" — the list is right below. */}
+        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
+          {hasAnyProfile?"This device":"New here"}
+        </div>
+        <div style={{...DISPLAY,fontSize:38,color:T.ink,marginBottom:10}}>
+          {hasAnyProfile?"Profiles":"Your name"}
+        </div>
+        <p style={{fontSize:14,color:T.ink2,marginBottom:36,lineHeight:1.6}}>
+          {hasAnyProfile?"Pick a profile, or add someone new.":"Who's training? Pick a name — it travels with you across devices."}
+        </p>
       </Fade>
+      {existing.length>0&&(
+        <Fade d={60}>
+          {/* Rows between hairlines on the ground — settings are a list,
+              not a stack of documents (§11.2). */}
+          <div style={{marginBottom:28,borderTop:`1px solid ${T.rule}`}}>
+            {existing.map(n=>(
+              <div key={n} style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span onClick={()=>onActivate(n)} style={{fontSize:17,fontWeight:400,color:T.ink,cursor:"pointer",flex:1}}>{n}</span>
+              </div>
+            ))}
+          </div>
+        </Fade>
+      )}
+      <Fade d={120}>
+        <div style={{fontSize:13,color:T.ink3,marginBottom:12}}>
+          {existing.length > 0 ? "Add new" : "Name"}
+        </div>
+        {nameField}
+      </Fade>
+      </>)}
 
       {/* Tone-of-voice card — sets expectations on data + PII. Shown only at
           the create moment (no active profile): it's a trust pitch for the
@@ -587,7 +638,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
       {/* Trainer: a trainer's own section, straight after Coaching, with
           the same kicker and hairline rows. Everyone else finds the way in
-          at the foot of More ("For trainers"), not up here. For a week after
+          near the foot of More ("For trainers"), not up here. For a week after
           a trainer-facing change ships (lib/trainer-news.js) the row says so
           with a quiet "New"; a waiting signal from clients takes the row
           instead. The group is unstyled: it only names the section. */}
@@ -816,6 +867,17 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
+      {/* The foot of Account: this profile only, two taps to the sheet,
+          which still asks how far the delete goes. */}
+      {current && (
+        <Fade d={295}>
+          <button type="button" onClick={handleDeleteTap}
+            style={{width:"100%",padding:"15px 2px",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,display:"block",cursor:"pointer",textAlign:"left",fontFamily:T.text,fontSize:15,color:deleteArmed?T.heat[4]:T.ink3}}>
+            {deleteArmed ? "Tap again to delete this profile" : "Delete this profile"}
+          </button>
+        </Fade>
+      )}
+
       {current && (
         <Fade d={296}>
           <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>Device</div>
@@ -984,19 +1046,60 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
-      {/* The way in for someone who coaches: last row of More, after Privacy.
+      {/* The way in for someone who coaches: last link of More, after Privacy;
+          only the name switch follows it.
           Trainers already see "Your clients" in their Trainer section. The
-          subline says where an application stands. */}
-      {current && trainerShare?.trainerOpen && !trainerShare.trainer && (
+          subline says where an application stands. Shown while applications
+          are open (applyOpen). With the dashboard switch off, someone already
+          approved keeps this row, so tapping it still marks the decision seen. */}
+      {current && trainerShare?.applyOpen && !(trainerShare.trainer && trainerShare.trainerOpen) && (
         <Fade d={309}>
           <Link href="/trainer" onClick={() => markApplicationSeen(current, trainerShare)}
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>For trainers</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{applyRowSub(trainerShare.application)}</div>
+              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{trainerShare.trainer ? APPLY_ROW_COPY.approved : applyRowSub(trainerShare.application)}</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
+        </Fade>
+      )}
+
+      {/* Not you? The foot of More, and where the name heading leads. Other
+          names on this device switch in one tap; "Sign in as someone else"
+          is the name field the signed-out gate shows. With no other names
+          there is nothing to list, so only the sign-in row shows. */}
+      {current && (
+        <Fade d={309}>
+          <div id="profile-switch" ref={switchRef}>
+            {others.length > 0 && (
+              <button type="button" onClick={()=>setSwitchOpen(o=>!o)} aria-expanded={switchOpen}
+                style={ROW}>
+                <div>
+                  <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Not you?</div>
+                  <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Switch to someone else on this device</div>
+                </div>
+                <Glyph name={switchOpen?"chevronUp":"chevronDown"} size={13} color={T.ink3}/>
+              </button>
+            )}
+            {(others.length === 0 || switchOpen) && (
+              <div>
+                {others.map(n=>(
+                  <button key={n} type="button" onClick={()=>onActivate(n)}
+                    style={{...ROW,paddingLeft:16}}>
+                    <span style={{fontSize:15,color:T.ink,overflowWrap:"anywhere",minWidth:0}}>{n}</span>
+                    <Glyph name="arrowRight" size={13} color={T.ink3}/>
+                  </button>
+                ))}
+                <button type="button" onClick={()=>setSignInOpen(o=>!o)} aria-expanded={signInOpen}
+                  style={{...ROW,paddingLeft:others.length > 0 ? 16 : 2}}>
+                  <span style={{fontSize:15,fontWeight:others.length > 0 ? 400 : 500,color:T.ink}}>Sign in as someone else</span>
+                  <Glyph name={signInOpen?"chevronUp":"chevronDown"} size={13} color={T.ink3}/>
+                </button>
+                {signInOpen && <div style={{padding:"16px 0 4px"}}>{nameField}</div>}
+              </div>
+            )}
+          </div>
         </Fade>
       )}
 

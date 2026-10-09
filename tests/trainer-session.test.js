@@ -90,6 +90,12 @@ vi.mock("@neondatabase/serverless", () => ({
   },
 }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(() => null), rateLimitShared: vi.fn(async () => null) }));
+// TRAINER_LIVE as shipped unless a test closes it.
+const switchLive = vi.hoisted(() => ({ value: true }));
+vi.mock("@/lib/trainer-terms", async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, get TRAINER_LIVE() { return switchLive.value; } };
+});
 
 const { POST: sessionPOST } = await import("@/app/api/trainer/session/route");
 const { POST: upgradePOST } = await import("@/app/api/trainer/upgrade/route");
@@ -152,6 +158,7 @@ beforeEach(() => {
   ];
   process.env.DATABASE_URL = "postgres://fake";
   process.env.ADMIN_ACCOUNT_ID = T;
+  switchLive.value = true;
   vi.mocked(rateLimit).mockClear();
   vi.mocked(rateLimitShared).mockClear();
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -272,7 +279,16 @@ describe("POST /api/trainer/session", () => {
     expect((await signIn(mint(T, { cred: "cT" }))).status).toBe(403);
   });
 
-  it("a trainer other than the admin gets 503 before launch, nothing written", async () => {
+  it("live: a trainer other than the admin signs in and reaches the trainer gate", async () => {
+    const res = await signIn(mint(N, { cred: "cN" }), "nia");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, name: "Nia" });
+    const g = await trainerGate(gateReq(withCookie(res.cookies.get(TRAINER_COOKIE).value)));
+    expect(g).toMatchObject({ identity: { accountId: N }, refresh: null });
+  });
+
+  it("with the switch closed, a trainer other than the admin gets 503, nothing written", async () => {
+    switchLive.value = false;
     const res = await signIn(mint(N, { cred: "cN" }), "nia");
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({ error: "Not open yet." });
@@ -376,7 +392,16 @@ describe("POST /api/trainer/upgrade", () => {
     expect(db.accounts.get(L).roles).toEqual(["lifter"]);
   });
 
-  it("a trainer other than the admin may re-accept only once open: 503 before launch, nothing written", async () => {
+  it("live: a trainer other than the admin re-accepts changed terms", async () => {
+    process.env.ADMIN_ACCOUNT_ID = T;
+    db.accounts.get(N).trainer_terms = { ...CURRENT, version: "older" };
+    const res = await post(upgradePOST, "/api/trainer/upgrade", { authToken: mint(N, { cred: "cN" }), profile: "nia", terms: { version: TRAINER_TERMS_VERSION }, adult: true });
+    expect(res.status).toBe(200);
+    expect(db.accounts.get(N)).toMatchObject({ roles: ["lifter", "trainer"], trainer_terms: { version: TRAINER_TERMS_VERSION, adult: true } });
+  });
+
+  it("with the switch closed, a trainer other than the admin may not re-accept: 503, nothing written", async () => {
+    switchLive.value = false;
     process.env.ADMIN_ACCOUNT_ID = T;
     db.accounts.get(N).trainer_terms = { ...CURRENT, version: "older" };
     const res = await post(upgradePOST, "/api/trainer/upgrade", { authToken: mint(N, { cred: "cN" }), profile: "nia", terms: { version: TRAINER_TERMS_VERSION }, adult: true });

@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
-// First run, end to end through ForgeApp: a claim that is the device's first
-// profile opens FirstRun (Passkey → Focus → Main lifts → Days → Bodyweight)
-// before home, Keep writes nothing, a change writes once through the existing
-// cores, Start training records a bodyweight when none is stored, and a second
-// profile on the device goes straight home. The three
-// step components are stubbed to their contract (components/first-run/*).
+// First run, end to end through ForgeApp: every successful claim opens
+// FirstRun (Passkey → Focus → Main lifts → Days → Bodyweight) before home,
+// from the gate or, through the one-shot marker, from the /profile route,
+// on a fresh device or a used one. Keep writes nothing, a change writes once
+// through the existing cores, Start training records a bodyweight when none
+// is stored, and an activation without a successful claim goes straight home.
+// The three step components are stubbed to their contract
+// (components/first-run/*).
+import { StrictMode } from "react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
+
+// What each gate activation answered, in order.
+const gate = vi.hoisted(() => ({ results: [] }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }) }));
 vi.mock("@vercel/analytics", () => ({ track: vi.fn() }));
@@ -30,16 +36,19 @@ vi.mock("@/lib/storage", async (io) => ({
   ensurePersistentStorage: vi.fn(async () => {}),
 }));
 // The gate: one button per way in. ProfileScreen's own name flow has its tests.
-vi.mock("@/components/ProfileScreen", () => ({
-  default: ({ existing, onActivate }) => (
-    <div>
-      <span data-testid="gate">{existing.join(",")}</span>
-      <button onClick={() => onActivate("Sam", { claim: true })}>Claim Sam</button>
-      <button onClick={() => onActivate("Ali", { claim: true })}>Claim Ali</button>
-      <button onClick={() => onActivate("Sam")}>Sign in Sam</button>
-    </div>
-  ),
-}));
+vi.mock("@/components/ProfileScreen", () => {
+  const go = (onActivate, ...args) => async () => { gate.results.push(await onActivate(...args)); };
+  return {
+    default: ({ existing, onActivate }) => (
+      <div>
+        <span data-testid="gate">{existing.join(",")}</span>
+        <button onClick={go(onActivate, "Sam", { claim: true })}>Claim Sam</button>
+        <button onClick={go(onActivate, "Ali", { claim: true })}>Claim Ali</button>
+        <button onClick={go(onActivate, "Sam")}>Sign in Sam</button>
+      </div>
+    ),
+  };
+});
 vi.mock("@/components/HomeScreen", () => ({ default: ({ profileName }) => <div>Home of {profileName}</div> }));
 // Step stubs, built to the shared contract.
 vi.mock("@/components/first-run/FocusStep", () => ({
@@ -79,12 +88,16 @@ vi.mock("@/components/first-run/DaysStep", async () => {
 const { default: ForgeApp } = await import("@/components/ForgeApp");
 const { default: FirstRun } = await import("@/components/FirstRun");
 const { registerPasskey, isPlatformAuthenticatorAvailable, hasPasskey } = await import("@/lib/webauthn");
-const { F, P, W, BW } = await import("@/lib/storage");
+const { F, P, W, BW, claimProfile } = await import("@/lib/storage");
+const { stashFirstRun } = await import("@/lib/profile-actions");
 const { CONSENT_VERSION, CONSENT_COPY } = await import("@/lib/consent");
 
 afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
+  gate.results.length = 0;
+  // Reset, not clear: a check left unconsumed must not leak into the next test.
+  isPlatformAuthenticatorAvailable.mockReset();
   isPlatformAuthenticatorAvailable.mockResolvedValue(true);
   registerPasskey.mockResolvedValue({ ok: true });
   localStorage.setItem("forge:onboarded", "true");
@@ -199,23 +212,121 @@ describe("first run on a fresh device", () => {
   });
 });
 
-describe("no first run for anyone else", () => {
-  it("a second profile claimed on a device with profiles goes straight home", async () => {
+describe("first run on a used device", () => {
+  it("a second name claimed on a device with names opens first run, and the passkey check runs for it", async () => {
     P.add("Sam");
     await claim("Ali");
-    expect(await screen.findByText("Home of Ali")).toBeTruthy();
-    // ForgeApp's own gate held: only home's hydrate asked, not a first run
-    // (FirstRun's existing guard would otherwise mask a broken gate).
-    expect(isPlatformAuthenticatorAvailable).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: /Add passkey/ })).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Focus" })).toBeNull();
+    expect(await screen.findByRole("button", { name: /Add passkey/ })).toBeTruthy();
+    expect(screen.queryByTestId("gate")).toBeNull();
+    expect(screen.queryByText(/Home of/)).toBeNull();
+    // The claim's own check, then home's hydrate.
+    expect(isPlatformAuthenticatorAvailable).toHaveBeenCalledTimes(2);
+    await press("Later");
+    expect(await screen.findByRole("heading", { name: "Focus" })).toBeTruthy();
   });
+});
 
+describe("no first run without a successful claim", () => {
   it("a sign-in without a claim goes straight home", async () => {
     render(<ForgeApp />);
     await press("Sign in Sam");
     expect(await screen.findByText("Home of Sam")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Add passkey/ })).toBeNull();
+  });
+
+  it("a name already on the device activates straight home, with no first-run check", async () => {
+    P.add("Ali");
+    P.add("Sam");
+    render(<ForgeApp />);
+    await press("Sign in Sam");
+    expect(await screen.findByText("Home of Sam")).toBeTruthy();
+    // Only home's hydrate asked.
+    expect(isPlatformAuthenticatorAvailable).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /Add passkey/ })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Focus" })).toBeNull();
+  });
+
+  it.each([
+    ["taken", { ok: false, taken: true }],
+    ["network", { ok: false }],
+  ])("a failed claim (%s) stays on the gate and never waits on the passkey check", async (reason, answer) => {
+    claimProfile.mockResolvedValueOnce(answer);
+    // A check that never answers would hold the result for the probe's cap.
+    isPlatformAuthenticatorAvailable.mockReturnValueOnce(new Promise(() => {}));
+    P.add("Sam");
+    await claim("Ali");
+    await waitFor(() => expect(gate.results).toEqual([{ ok: false, reason }]), { timeout: 500 });
+    // Started with the claim, never waited on.
+    expect(isPlatformAuthenticatorAvailable).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("gate").textContent).toBe("Sam");
+    expect(P.getActive()).toBeNull();
+    expect(screen.queryByRole("button", { name: /Add passkey/ })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Focus" })).toBeNull();
+    expect(screen.queryByText(/Home of/)).toBeNull();
+  });
+});
+
+describe("a claim on /profile opens first run on home", () => {
+  const MARKER = "forge:pendingFirstRun";
+  // The route activated the claimed name and stashed it, then went home.
+  const claimedOnProfile = (marker) => {
+    P.add("Sam");
+    P.add("Ali");
+    P.setActive("Ali");
+    stashFirstRun(marker);
+  };
+  const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+  it("the marker for the active name opens first run and is consumed; a second mount does not reopen", async () => {
+    claimedOnProfile("Ali");
+    render(<ForgeApp />);
+    expect(await screen.findByRole("button", { name: /Add passkey/ })).toBeTruthy();
+    expect(localStorage.getItem(MARKER)).toBeNull();
+
+    cleanup();
+    render(<ForgeApp />);
+    expect(await screen.findByText("Home of Ali")).toBeTruthy();
+    await settle();
+    expect(screen.getByText("Home of Ali")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Add passkey/ })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Focus" })).toBeNull();
+  });
+
+  it("a marker for another name is consumed and ignored", async () => {
+    claimedOnProfile("Sam");
+    render(<ForgeApp />);
+    expect(await screen.findByText("Home of Ali")).toBeTruthy();
+    await settle();
+    expect(localStorage.getItem(MARKER)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Add passkey/ })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Focus" })).toBeNull();
+    // Only home's hydrate asked.
+    expect(isPlatformAuthenticatorAvailable).toHaveBeenCalledTimes(1);
+  });
+
+  it("under StrictMode's double effect run, first run opens once and the marker is taken once", async () => {
+    claimedOnProfile("Ali");
+    const removes = vi.spyOn(Storage.prototype, "removeItem");
+    try {
+      render(<StrictMode><ForgeApp /></StrictMode>);
+      expect(await screen.findByRole("button", { name: /Add passkey/ })).toBeTruthy();
+      expect(removes.mock.calls.filter(([key]) => key === MARKER)).toHaveLength(1);
+      expect(localStorage.getItem(MARKER)).toBeNull();
+
+      await press("Later");
+      await press("Keep Forged");
+      await press("Keep these");
+      await press("Keep days");
+      await press("Skip");
+      expect(await screen.findByText("Home of Ali")).toBeTruthy();
+      await settle();
+      expect(screen.getByText("Home of Ali")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Add passkey/ })).toBeNull();
+      expect(screen.queryByRole("heading", { name: "Focus" })).toBeNull();
+      expect(removes.mock.calls.filter(([key]) => key === MARKER)).toHaveLength(1);
+    } finally {
+      removes.mockRestore();
+    }
   });
 });
 
@@ -236,7 +347,7 @@ describe("the week is saved only when the days differ", () => {
 
 describe("FirstRun on its own: save props and the closing line", () => {
   const props = () => ({
-    name: "Sam", existing: [], webAuthnSupported: false, bodyweight: null, userFocus: "Forged", mainLifts: {},
+    name: "Sam", webAuthnSupported: false, bodyweight: null, userFocus: "Forged", mainLifts: {},
     onSaveFocus: vi.fn(), onSaveMainLift: vi.fn(), onSaveWeek: vi.fn(), onSaveBodyweight: vi.fn(), onDone: vi.fn(),
   });
   const saves = (p) => [p.onSaveFocus, p.onSaveMainLift, p.onSaveWeek, p.onSaveBodyweight].map((f) => f.mock.calls.length);
@@ -319,10 +430,15 @@ describe("FirstRun on its own: save props and the closing line", () => {
     expect(saves(p)).toEqual([0, 0, 0, 0]);
   });
 
-  it("with profiles already on the device it renders nothing and hands back", async () => {
-    const p = { ...props(), existing: ["Ali"] };
-    const { container } = render(<FirstRun {...p} />);
-    expect(container.textContent).toBe("");
-    await waitFor(() => expect(p.onDone).toHaveBeenCalledTimes(1));
+  it("renders its first step whatever other names are on the device", async () => {
+    P.add("Ali");
+    P.add("Bob");
+    const p = { ...props(), webAuthnSupported: true };
+    // A stale caller still passing the old prop changes nothing.
+    render(<FirstRun {...p} {...{ existing: ["Ali", "Bob"] }} />);
+    expect(screen.getByRole("button", { name: /Add passkey/ })).toBeTruthy();
+    await press("Later");
+    expect(await screen.findByRole("heading", { name: "Focus" })).toBeTruthy();
+    expect(p.onDone).not.toHaveBeenCalled();
   });
 });

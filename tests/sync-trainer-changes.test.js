@@ -299,6 +299,6 @@ describe("one verb per request, behind the sync sign-in", () => {
 describe("source pins", () => {
   const route = readFileSync(resolve(__dirname, "../app/api/sync/trainer/route.js"), "utf8");
   it("the route never writes the client's plan: no meta or profile upsert, no raw SQL", () => {
-    expect(route).not.toMatch(/dbUpsertMetaFields|dbUpsertProfile|dbInsertRecords|\bq`|\bsql\(/);
+    expect(route).not.toMatch(/dbWriteMetaGuarded|dbInsertHistory|dbUpsertMetaFields|dbUpsertProfile|dbInsertRecords|\bq`|\bsql\(/);
   });
 });

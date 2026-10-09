@@ -167,11 +167,17 @@ vi.mock("@/lib/db", async (importOriginal) => ({
   dbReadToken: vi.fn(async (token) => tokens.get(token) || null),
   dbDeleteToken: vi.fn(async (token) => { tokens.delete(token); }),
   dbReadProfile: vi.fn(async (sk) => profiles.get(sk) || null),
-  dbUpsertProfile: vi.fn(async (sk, { meta, history }) => {
+  dbInsertHistory: vi.fn(async (sk, history) => {
     const cur = profiles.get(sk) || { meta: {}, history: [] };
     const byId = new Map(cur.history.map((r) => [r.id, r]));
     for (const r of history || []) if (!byId.has(r.id)) byId.set(r.id, r);
-    profiles.set(sk, { meta: { ...cur.meta, ...(meta || {}) }, history: [...byId.values()], cursor: "c" });
+    profiles.set(sk, { ...cur, history: [...byId.values()], cursor: "c" });
+  }),
+  dbReadMetaBase: vi.fn(async (sk) => ({ meta: { ...(profiles.get(sk)?.meta || {}) }, revs: {} })),
+  dbWriteMetaGuarded: vi.fn(async (sk, meta) => {
+    const cur = profiles.get(sk) || { meta: {}, history: [] };
+    profiles.set(sk, { ...cur, meta: { ...cur.meta, ...(meta || {}) }, cursor: "c" });
+    return true;
   }),
   dbListPhotos: vi.fn(async (sk) => photoRows.filter((r) => r.profile === sk).map((r) => ({ date: r.date, blob_path: r.blob_path }))),
   dbDeleteProfile: vi.fn(async (sk) => {

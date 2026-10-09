@@ -8,8 +8,8 @@ import { TRAINER_NEWS, NEW_DAYS, newFor } from "../lib/trainer-news.js";
 const ledger = TRAINER_NEWS.find((n) => n.key === "ledger-export");
 
 describe("TRAINER_NEWS", () => {
-  it("carries the ledger export, shipped 2026-10-06", () => {
-    expect(ledger).toEqual({ key: "ledger-export", shipped: "2026-10-06" });
+  it("carries the ledger export, dated launch day (2026-10-09) so trainers arriving at launch see it", () => {
+    expect(ledger).toEqual({ key: "ledger-export", shipped: "2026-10-09" });
   });
 
   it("every entry has a unique key and a local date", () => {
@@ -29,12 +29,12 @@ describe("newFor", () => {
   it("a week is seven days", () => { expect(NEW_DAYS).toBe(7); });
 
   it.each([
-    ["2026-10-05", false], // the day before
-    ["2026-10-06", true],  // the day it shipped
-    ["2026-10-07", true],
-    ["2026-10-12", true],  // shipped + 6
-    ["2026-10-13", false], // shipped + 7
-    ["2027-10-06", false], // a year on
+    ["2026-10-08", false], // the day before
+    ["2026-10-09", true],  // the day it shipped
+    ["2026-10-10", true],
+    ["2026-10-15", true],  // shipped + 6
+    ["2026-10-16", false], // shipped + 7
+    ["2027-10-09", false], // a year on
   ])("on %s: %s", (today, shown) => {
     expect(newFor(today).some((n) => n.key === "ledger-export")).toBe(shown);
   });
@@ -63,7 +63,7 @@ describe("newFor", () => {
   // zone is UTC, where local and UTC days agree).
   it.each(["Pacific/Auckland", "America/Los_Angeles", "Europe/London"])("same boundaries in %s", (tz) => {
     const script = `import("./lib/trainer-news.js").then(({ newFor }) => {
-      console.log(JSON.stringify(["2026-10-05","2026-10-06","2026-10-12","2026-10-13"].map((d) => newFor(d).length > 0)));
+      console.log(JSON.stringify(["2026-10-08","2026-10-09","2026-10-15","2026-10-16"].map((d) => newFor(d).length > 0)));
     });`;
     const out = execFileSync(process.execPath, ["--input-type=module", "-e", script], { env: { ...process.env, TZ: tz }, cwd: process.cwd(), encoding: "utf8" });
     expect(JSON.parse(out.trim())).toEqual([false, true, true, false]);

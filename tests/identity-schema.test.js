@@ -125,6 +125,12 @@ describe("identity schema (ensureSchema)", () => {
     expect(statements.filter((s) => /\bedits_/.test(s))).toHaveLength(2);
   });
 
+  it("adds the meta write stamp: nullable, no default, and the statement count moves by one", () => {
+    expect(statements).toContain("ALTER TABLE meta ADD COLUMN IF NOT EXISTS rev BIGINT");
+    expect(statements.filter((s) => /^ALTER TABLE meta\b/.test(s))).toHaveLength(1);
+    expect(statements).toHaveLength(48);
+  });
+
   it("contains no destructive or rewriting verb", () => {
     expect(slice).not.toMatch(/\bDROP\b|ALTER COLUMN|\bDELETE\b|\bUPDATE\b/);
   });

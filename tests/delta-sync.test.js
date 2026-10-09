@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { fieldClosure, mergeMetaFields } from "../lib/sync-merge.js";
@@ -78,8 +78,9 @@ describe("route + db shapes (code)", () => {
 
   it("PUT delta: cursor taken BEFORE the write; merge scoped via fieldClosure; failures 503 (client retries)", () => {
     const branch = route.slice(route.indexOf("parsed.body.delta"), route.indexOf('if (!data) return NextResponse.json({ error: "No data" }'));
-    expect(branch.indexOf("dbCursorNow()")).toBeLessThan(branch.indexOf("dbUpsertProfile"));
+    expect(branch.indexOf("dbCursorNow()")).toBeLessThan(branch.indexOf("writeMetaGuarded("));
     expect(branch).toContain("fieldClosure(Object.keys(incoming))");
+    expect(branch).toContain("dbReadMetaBase(norm, closure)");
     expect(branch).toContain("mergeMetaFields(existing, incoming)");
     expect(branch).toContain("status: 503");
   });
@@ -89,13 +90,50 @@ describe("route + db shapes (code)", () => {
     // overwrite newer DB meta with the frozen blob copy. Migration happens on
     // PUT, which merges stamp-aware.
     const get = route.slice(route.indexOf("export async function GET"), route.indexOf("export async function PUT"));
-    expect(get).not.toMatch(/dbUpsertProfile|dbInsertRecords|dbUpsertMetaFields/);
+    expect(get).not.toMatch(/dbWriteMetaGuarded|dbInsertHistory|dbInsertRecords|writeMetaGuarded/);
   });
 
   it("full reads hand out a cursor taken BEFORE the row queries (at-least-once)", () => {
-    const read = db.slice(db.indexOf("export async function dbReadProfile("), db.indexOf("export async function dbUpsertProfile"));
+    const read = db.slice(db.indexOf("export async function dbReadProfile("), db.indexOf("export async function dbInsertRecords"));
     expect(read.indexOf("dbNowCursor")).toBeLessThan(read.indexOf("SELECT field, value"));
     const since = db.slice(db.indexOf("export async function dbReadProfileSince"));
     expect(since.indexOf("dbNowCursor")).toBeLessThan(since.indexOf("updated_at > "));
+  });
+});
+
+describe("meta writers (code)", () => {
+  // Every source file that can ship, minus tests, static files, build output
+  // and local tooling (worktree copies, coverage).
+  const files = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      if (["node_modules", ".next", ".git", ".claude", "coverage"].includes(name)) continue;
+      if (dir === root && ["tests", "public"].includes(name)) continue;
+      const p = resolve(dir, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (/\.(js|jsx|mjs|cjs|ts)$/.test(name)) files.push(p);
+    }
+  };
+  walk(root);
+  const rel = (p) => p.slice(root.length + 1);
+  const db = readFileSync(resolve(root, "lib/db.js"), "utf8");
+  const WRITE = /\b(INSERT\s+INTO|UPDATE|MERGE\s+INTO)\s+("?public"?\.)?"?meta"?\b/gi;
+
+  it("one statement writes meta rows, and it is the guarded upsert", () => {
+    const writers = files.filter((p) => readFileSync(p, "utf8").match(WRITE)).map(rel);
+    expect(writers).toEqual(["lib/db.js"]);
+    expect(db.match(WRITE)).toEqual(["INSERT INTO meta"]);
+    const guarded = db.slice(db.indexOf("export async function dbWriteMetaGuarded"), db.indexOf("// ─── Delta sync"));
+    expect(guarded).toContain("INSERT INTO meta");
+    expect(guarded).toContain("WHERE COALESCE(meta.rev, 0) = ");
+  });
+
+  it("no blind meta writer is left, and only the sync PUT calls the guarded one", () => {
+    // Allowed blind callers: none. The wipe (dbDeleteProfile) removes rows and
+    // never writes them; every other meta access in the repo is a read.
+    const BLIND = /\b(dbUpsertMetaFields|dbUpsertProfile)\b/;
+    expect(files.filter((p) => BLIND.test(readFileSync(p, "utf8"))).map(rel)).toEqual([]);
+    const callers = files.filter((p) => /\bdbWriteMetaGuarded\(/.test(readFileSync(p, "utf8"))).map(rel).sort();
+    expect(callers).toEqual(["app/api/sync/route.js", "lib/db.js"]);
   });
 });

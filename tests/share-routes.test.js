@@ -14,7 +14,7 @@ import { resolve } from "node:path";
 const hash = (t) => createHash("sha256").update(String(t)).digest("hex");
 const id26 = (c) => "hwa_" + c.repeat(26);
 const T = id26("t"); // trainer, the admin
-const N = id26("n"); // trainer, not the admin
+const N = id26("n"); // trainer, not the admin: open once live
 const L = id26("l"); // client
 const M = id26("m"); // another client
 
@@ -162,6 +162,12 @@ vi.mock("@neondatabase/serverless", () => ({
     return tag;
   },
 }));
+// TRAINER_LIVE as shipped unless a test closes it.
+const switchLive = vi.hoisted(() => ({ value: true }));
+vi.mock("@/lib/trainer-terms", async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, get TRAINER_LIVE() { return switchLive.value; } };
+});
 vi.mock("@/lib/rate-limit", async (importOriginal) => ({
   ...(await importOriginal()),
   rateLimit: vi.fn(() => null),
@@ -223,6 +229,7 @@ const TOO_MANY = { error: "Too many tries. Ask your trainer for a fresh code, th
 const UNAVAILABLE = { error: "Sharing is unavailable right now. Try again in a bit." };
 
 beforeEach(() => {
+  switchLive.value = true;
   calls.length = 0;
   failOn = null;
   beforeTxn = null;
@@ -277,6 +284,15 @@ describe("POST /api/share/peek", () => {
     }
   });
 
+  it("live: a trainer other than the admin peeks, with no admin and no preview list set", async () => {
+    delete process.env.ADMIN_ACCOUNT_ID;
+    invite(N, CODE_N);
+    const res = await peek(CODE_N);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ trainer: { name: "Nia" }, expiresAt: db.invites[0].expires_at });
+    expect(writes()).toEqual([]);
+  });
+
   it("one byte-identical 404 for malformed, unknown, used, expired, closed, non-trainer, stale-terms and not-open codes", async () => {
     const cases = {
       malformed: () => "ABCD",
@@ -288,11 +304,13 @@ describe("POST /api/share/peek", () => {
       "not a trainer": () => { db.accounts.get(T).roles = ["lifter"]; return invite(T, CODE); },
       "stale terms": () => { db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" }; return invite(T, CODE); },
       "terms without 18+": () => { db.accounts.get(T).trainer_terms = { version: TRAINER_TERMS_VERSION }; return invite(T, CODE); },
-      "not open (a trainer other than the admin)": () => invite(N, CODE_N),
-      "not open, even for a preview client's own trainer": () => { process.env.TRAINER_PREVIEW_ACCOUNTS = N; return invite(N, CODE_N); },
+      // With the switch closed: only the admin's codes peek, whatever the preview list says.
+      "not open (a trainer other than the admin)": () => { switchLive.value = false; return invite(N, CODE_N); },
+      "not open, even for a preview client's own trainer": () => { switchLive.value = false; process.env.TRAINER_PREVIEW_ACCOUNTS = N; return invite(N, CODE_N); },
     };
     const bodies = new Set();
     for (const [label, setup] of Object.entries(cases)) {
+      switchLive.value = true;
       db.accounts.get(T).deleted_at = null;
       db.accounts.get(T).roles = ["lifter", "trainer"];
       db.accounts.get(T).trainer_terms = CURRENT;
@@ -332,6 +350,18 @@ describe("POST /api/share/peek", () => {
 });
 
 describe("POST /api/share/approve", () => {
+  it("live: a client approves a trainer other than the admin, with no admin and no preview list set", async () => {
+    delete process.env.ADMIN_ACCOUNT_ID;
+    invite(N, CODE_N);
+    const authToken = mint(L, { cred: "cL" });
+    const res = await approve({ code: CODE_N, authToken });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, trainer: { name: "Nia" }, replaced: null });
+    expect(live(L)).toHaveLength(1);
+    expect(live(L)[0]).toMatchObject({ trainer_account_id: N, kind: "trainer" });
+    expect(strikes()).toBe(0);
+  });
+
   it("approves: one transaction marks the code used and writes the grant; then the ceremony token expires", async () => {
     invite(T, CODE);
     const authToken = mint(L, { cred: "cL" });
@@ -392,7 +422,8 @@ describe("POST /api/share/approve", () => {
     expect(writes()).toEqual(["INSERT INTO rate_buckets"]);
     expect(strikes()).toBe(1);
     expect(tokenLive(authToken)).toBe(true);
-    // A malformed code and a not-open trainer's code strike the same way.
+    // A malformed code and, with the switch closed, a not-open trainer's code strike the same way.
+    switchLive.value = false;
     invite(N, CODE_N);
     expect((await approve({ code: "ABC", authToken })).status).toBe(404);
     expect((await approve({ code: CODE_N, authToken })).status).toBe(404);
