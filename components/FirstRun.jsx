@@ -2,11 +2,12 @@
 
 // components/FirstRun.jsx
 // ─────────────────────────────────────────────────────────────────────────────
-// The first-run steps after a name is claimed on a device with no profiles:
+// The first-run steps after a name is claimed, first on the device or not:
 // Passkey (when the device can) → Focus → Main lifts → Strength days →
-// Bodyweight + Start training. ForgeApp mounts this once the profile is active, so
-// the steps outlive the gate's unmount (they used to live in ProfileScreen,
-// which activation unmounted before they could show).
+// Bodyweight + Start training. ForgeApp decides when (a successful claim,
+// from the gate or the /profile route) and mounts this once the profile is
+// active, so the steps outlive the gate's unmount (they used to live in
+// ProfileScreen, which activation unmounted before they could show).
 //
 // Writes go only through the save props, and only for a real change: Keep
 // writes nothing. Focus and main lifts save as they change; the week saves
@@ -14,7 +15,7 @@
 // (Skip writes nothing).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { T, DISPLAY } from "@/lib/tokens";
 import { registerPasskey } from "@/lib/webauthn";
 import { consentClaim } from "@/lib/consent";
@@ -62,7 +63,6 @@ const sameWeek = (a, b) => a.length === b.length && a.every((d, i) => d?.type ==
 /**
  * @param {{
  *   name: string,
- *   existing?: string[],
  *   webAuthnSupported?: boolean,
  *   bodyweight?: number | null,
  *   userFocus?: string,
@@ -77,14 +77,10 @@ const sameWeek = (a, b) => a.length === b.length && a.every((d, i) => d?.type ==
  * }} props  todayIdx is for tests and screenshots; the app leaves it to the clock.
  */
 export default function FirstRun({
-  name, existing = [], webAuthnSupported = false, bodyweight = null,
+  name, webAuthnSupported = false, bodyweight = null,
   userFocus = DEFAULT_FOCUS, mainLifts = {}, userWeek = WEEK,
   onSaveFocus, onSaveMainLift, onSaveWeek, onSaveBodyweight, onDone, todayIdx,
 }) {
-  // Only a device's first profile runs this; anyone else goes straight home.
-  const notFirst = existing.length > 0;
-  useEffect(() => { if (notFirst) onDone(); }, [notFirst, onDone]);
-
   const [step, setStep] = useState(() => (webAuthnSupported ? "passkey" : "focus"));
   const go = (next) => withNavTransition(() => setStep(next), null);
 
@@ -103,8 +99,6 @@ export default function FirstRun({
 
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [passkeyError, setPasskeyError] = useState(/** @type {string|null} */ (null));
-
-  if (notFirst) return null;
 
   // Passkey: quiet and optional, unchanged from the old post-claim step.
   // Accept registers with the consent claim; a cancel or failure stays here

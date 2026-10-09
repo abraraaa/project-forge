@@ -7,7 +7,9 @@
 // canonical) and calls the shared cores in lib/profile-actions:
 //
 //   activate → activateProfileCore, then router.push("/") — the app shell
-//              remounts and hydrates the new profile from LS naturally.
+//              remounts and hydrates the new profile from LS naturally. A
+//              successful claim is a new person, so first run is STASHED the
+//              same way (one-shot LS marker) for the shell to open.
 //   focus    → saveFocusCore persists F + the re-rotated block; the summary
 //              is STASHED (one-shot LS handoff) because the rotation-summary
 //              modal lives on the home shell, which isn't mounted here —
@@ -23,7 +25,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { P, BW, F, Bk, pushNow } from "@/lib/storage";
 import { withNavTransition } from "@/lib/nav-transitions";
-import { activateProfileCore, saveFocusCore, stashRotationSummary } from "@/lib/profile-actions";
+import { activateProfileCore, saveFocusCore, stashRotationSummary, stashFirstRun } from "@/lib/profile-actions";
 import { DEFAULT_FOCUS } from "@/lib/programme";
 import ProfileScreen from "@/components/ProfileScreen";
 import FocusPickerSheet from "@/components/FocusPickerSheet";
@@ -116,7 +118,10 @@ export default function ProfileView() {
 
   const onActivate = useCallback(async (name, opts = {}) => {
     const result = await activateProfileCore(name, opts);
-    if (result.ok) withNavTransition(() => router.push("/"), "nav-back");
+    if (result.ok) {
+      if (opts.claim) stashFirstRun(result.name);
+      withNavTransition(() => router.push("/"), "nav-back");
+    }
     return result;
   }, [router]);
 

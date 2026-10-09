@@ -68,9 +68,10 @@ describe("ForgeApp hands FirstRun the existing save paths", () => {
     expect(body("handleFirstRunMainLift")).not.toContain("stashRotationSummary");
   });
 
-  it("opens only on a claim that is the device's first profile, in memory only", () => {
+  it("opens on a successful claim, whatever else is on the device, in memory only", () => {
     const act = body("activateProfile");
-    expect(act).toMatch(/const fresh = !!opts\.claim && existing\.length === 0;/);
+    expect(act).toMatch(/const fresh = !!opts\.claim && result\.ok;/);
+    expect(act).not.toMatch(/P\.list\(\)/);
     expect(act).toContain('setScreenRaw("first-run")');
     expect(code(act)).not.toMatch(/\bLS\.set\s*\(/);
   });

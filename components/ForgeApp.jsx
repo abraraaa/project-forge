@@ -52,7 +52,7 @@ import { dayNote } from "@/lib/first-run";
 import FocusPickerSheet from "@/components/FocusPickerSheet";
 import HomeScreen from "@/components/HomeScreen";
 import { consentClaim } from "@/lib/consent";
-import { activateProfileCore, saveFocusCore, saveMainLiftCore, takePendingRotationSummary } from "@/lib/profile-actions";
+import { activateProfileCore, saveFocusCore, saveMainLiftCore, takePendingRotationSummary, takePendingFirstRun } from "@/lib/profile-actions";
 
 
 // getLoadType / weightStepForLoadType / parseTimedReps / WEIGHT_CAPTIONS now
@@ -157,9 +157,13 @@ export default function ForgeApp(){
   const [userFocus,setUserFocus]=useState(DEFAULT_FOCUS);
   const [mainLifts,setMainLifts]=useState({});
   const [focusPickerOpen,setFocusPickerOpen]=useState(false);
-  // First run: set by a claim that is the device's first profile, in memory
-  // only (a reload lands on home). { existing, webAuthnSupported } | null.
+  // First run: set by a successful claim, in memory only (a reload lands on
+  // home). { webAuthnSupported } | null.
   const [firstRun,setFirstRun]=useState(null);
+  // A name claimed on /profile, taken from its one-shot marker by the seed
+  // effect; the effect after it opens first run. State, so a re-run of the
+  // seed effect (dev runs effects twice) cannot lose a marker already taken.
+  const [routeClaim,setRouteClaim]=useState(/** @type {string|null} */ (null));
   // Session overview — lets users jump between blocks when gym constraints
   // dictate a different order than the prescribed flow. Auto-advance still
   // happens; this is the escape hatch.
@@ -404,6 +408,10 @@ export default function ForgeApp(){
     const pendingSummary = takePendingRotationSummary(activeProfile);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot LS handoff consumed on profile change; store-sync is what effects are for (see note below)
     if (pendingSummary) setRotationSummary(pendingSummary);
+    // Same handoff for a claim on /profile: first run opens for the active
+    // name only; a marker for any other name is taken and dropped.
+    const claimed = takePendingFirstRun();
+    if (claimed === activeProfile) setRouteClaim(claimed);
     // Hydrating React state from the localStorage cache on profile change —
     // synchronising with an external store, which is exactly what effects are
     // for. The seed runs once per profile, no cascade. Intentional.
@@ -552,6 +560,20 @@ export default function ForgeApp(){
     };
   },[activeProfile, bumpDays]);
 
+  // First run for a /profile claim: the passkey capability is settled first
+  // so the step order is fixed, then the same state the gate's claim sets.
+  useEffect(() => {
+    if (!routeClaim) return undefined;
+    let off = false;
+    passkeyCapable().then((webAuthnSupported) => {
+      if (off) return;
+      setRouteClaim(null);
+      setFirstRun({ webAuthnSupported });
+      setScreenRaw("first-run");
+    });
+    return () => { off = true; };
+  }, [routeClaim]);
+
   // PWA install prompt — iOS needs a custom overlay because Safari has no
   // beforeinstallprompt event. Android/Chrome handles this natively via
   // the manifest, so we only target iOS Safari here.
@@ -623,17 +645,18 @@ export default function ForgeApp(){
   // route calls the same core then navigates home, where this component
   // remounts and hydrates from LS.
   //
-  // A claim on a device with no profiles opens FirstRun in the same commit
-  // that activates, so its steps never depend on the gate staying mounted.
-  // The passkey capability is settled first so the step order is fixed.
+  // A successful claim is a new person, whatever else is on the device: it
+  // opens FirstRun in the same commit that activates, so its steps never
+  // depend on the gate staying mounted. The passkey capability is settled
+  // first so the step order is fixed; it starts with the claim and is
+  // awaited only when the claim succeeded.
   const activateProfile = async (name, opts = {}) => {
-    const existing = P.list();
-    const fresh = !!opts.claim && existing.length === 0;
-    const webAuthn = fresh ? passkeyCapable() : null;
+    const webAuthn = opts.claim ? passkeyCapable() : null;
     const result = await activateProfileCore(name, opts);
+    const fresh = !!opts.claim && result.ok;
     if (result.ok) {
       if (fresh) {
-        setFirstRun({ existing, webAuthnSupported: await webAuthn });
+        setFirstRun({ webAuthnSupported: await webAuthn });
         setScreenRaw("first-run");
       }
       setActiveProfileState(result.name);
@@ -803,7 +826,6 @@ export default function ForgeApp(){
       <ErrorBoundary>
         <FirstRun
           name={activeProfile}
-          existing={firstRun?.existing ?? []}
           webAuthnSupported={!!firstRun?.webAuthnSupported}
           bodyweight={bodyweight}
           userFocus={userFocus}
