@@ -43,11 +43,14 @@ import { todayLocalIso, addDaysIso } from "../../lib/dates.js";
 import { TRAINER_TERMS_VERSION } from "../../lib/trainer-terms.js";
 import { encodeQr, qrToSvgPath } from "../../lib/qr.js";
 
-const { server, auth, panes } = vi.hoisted(() => ({
+const { server, auth, panes, nav } = vi.hoisted(() => ({
   server: { calls: [], routes: {} },
   auth: { result: { verified: true, authToken: "tok-1" } },
   panes: { props: [] },
+  nav: { back: () => {}, replace: () => {}, push: () => {} },
 }));
+
+vi.mock("next/navigation", () => ({ useRouter: () => nav }));
 
 // The real pane, with the props TrainerView hands it kept for a look.
 vi.mock("@/components/TrainerClientView", async (importOriginal) => {
@@ -309,7 +312,7 @@ describe("TrainerView: the roster", () => {
     expect(shell.className).toBe("forge-wide");
     expect(shell.style.maxWidth).toBe("");
     expect(shell.getAttribute("data-view")).toBe("roster");
-    expect([...shell.children].map((c) => c.className)).toEqual(["forge-wide-roster", "forge-wide-main"]);
+    expect([...shell.children].map((c) => c.className)).toEqual(["forge-wide-back", "forge-wide-roster", "forge-wide-main"]);
     expect(screen.getByText("Pick a client to see their training.")).toBeTruthy();
     const src = readFileSync(resolve(root, "components/TrainerView.jsx"), "utf8");
     expect(src).not.toMatch(/position:\s*["']?(?:sticky|fixed)/);
@@ -917,5 +920,122 @@ describe("TrainerView: changing a client's plan", () => {
     expect([mine.onChange, mine.onFaceId, mine.onChanged, mine.onRemove]).toEqual([undefined, undefined, undefined, undefined]);
     expect(document.querySelector('[data-section="plan"]')).toBeNull();
     expect(posts("/api/trainer/change")).toHaveLength(0);
+  });
+});
+
+// ── Ways back ───────────────────────────────────────────────────────────────
+
+describe("TrainerView: one way back at each level", () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+  /** The house row: a plain button, ink3 glyph, ink2 label. */
+  const expectHouseRow = (btn, label) => {
+    expect(btn.tagName).toBe("BUTTON");
+    expect(btn.textContent.trim()).toBe(label);
+    expect(btn.style.color).toBe("var(--ink-2)");
+    expect(btn.style.fontSize).toBe("13px");
+    expect(btn.querySelector("svg path").getAttribute("stroke")).toBe("var(--ink-3)");
+  };
+  /** History as deep as `n`, for the Back-or-replace choice. */
+  const depth = (n) => vi.spyOn(window.history, "length", "get").mockReturnValue(n);
+
+  it("sign-in: Profile first on the page; Back when there's history, else Profile replaces", async () => {
+    server.routes["POST /api/trainer/clients"] = { status: 401, body: {} };
+    const back = vi.spyOn(nav, "back"); const replace = vi.spyOn(nav, "replace");
+    const { container } = await mount();
+    const row = screen.getByRole("button", { name: "Profile" });
+    expect(container.querySelector(".forge-wide-solo").firstElementChild).toBe(row);
+    expectHouseRow(row, "Profile");
+    expect(row.style.marginBottom).toBe("32px");
+    const len = depth(3);
+    fireEvent.click(row);
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(replace).not.toHaveBeenCalled();
+    len.mockReturnValue(1);
+    fireEvent.click(row);
+    expect(replace).toHaveBeenCalledWith("/profile");
+    expect(back).toHaveBeenCalledTimes(1);
+  });
+
+  it("the applicant's landing and the Terms panel keep the same row", async () => {
+    server.routes["POST /api/trainer/clients"] = { status: 401, body: {} };
+    server.routes["POST /api/trainer/session"] = { status: 403, body: { notTrainer: true, name: "coachkim" } };
+    const { container } = await mount();
+    typeName("coachkim");
+    fireEvent.click(screen.getByText("Sign in with Face ID"));
+    await flush();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Coach on Heatwayve");
+    expect(container.querySelector(".forge-wide-solo").firstElementChild).toBe(screen.getByRole("button", { name: "Profile" }));
+    cleanup();
+    server.routes["POST /api/trainer/clients"] = { status: 403, body: { needsTerms: true } };
+    const again = await mount();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("The Trainer Terms changed");
+    expect(again.container.querySelector(".forge-wide-solo").firstElementChild).toBe(screen.getByRole("button", { name: "Profile" }));
+  });
+
+  it("roster: the row spans the shell above both columns; with a client open it steps past the client's entry", async () => {
+    signedIn();
+    const back = vi.spyOn(nav, "back");
+    const { container } = await mount();
+    const top = container.querySelector(".forge-wide-back");
+    expect(container.firstChild.firstElementChild).toBe(top);
+    const row = within(top).getByRole("button", { name: "Profile" });
+    expectHouseRow(row, "Profile");
+    depth(5);
+    fireEvent.click(row);
+    expect(back).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    const go = vi.spyOn(window.history, "go").mockImplementation(() => {});
+    fireEvent.click(row);
+    expect(go).toHaveBeenCalledWith(-2);
+    expect(back).toHaveBeenCalledTimes(1);
+  });
+
+  it("client pane: Clients in the house row goes Back, and that Back closes the pane", async () => {
+    signedIn();
+    const { container } = await mount();
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    const row = screen.getByRole("button", { name: "Clients" });
+    expectHouseRow(row, "Clients");
+    expect(row.parentElement.className).toBe("forge-wide-n-only");
+    const hb = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    fireEvent.click(row);
+    expect(hb).toHaveBeenCalledTimes(1);
+    await act(async () => { window.dispatchEvent(new PopStateEvent("popstate", { state: null })); });
+    expect(container.firstChild.getAttribute("data-view")).toBe("roster");
+    expect(screen.queryByRole("button", { name: "Clients" })).toBeNull();
+  });
+
+  it("the invite sheet closes from Done, Escape and the scrim", async () => {
+    signedIn();
+    server.routes["POST /api/trainer/invite"] = { status: 500, body: {} };
+    await mount();
+    for (const close of [
+      (d) => fireEvent.click(within(d).getByRole("button", { name: "Done" })),
+      (d) => fireEvent.keyDown(d, { key: "Escape" }),
+      (d) => fireEvent.click(d.parentElement),
+    ]) {
+      await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
+      await flush();
+      const d = screen.getByRole("dialog", { name: "Show them this" });
+      close(d);
+      expect(screen.queryByRole("dialog")).toBeNull();
+    }
+  });
+
+  it("the sign-out sheet closes from Cancel, Escape and the scrim, and signs nothing out", async () => {
+    signedIn();
+    await mount();
+    for (const close of [
+      (d) => fireEvent.click(within(d).getByRole("button", { name: "Cancel" })),
+      (d) => fireEvent.keyDown(d, { key: "Escape" }),
+      (d) => fireEvent.click(d.parentElement),
+    ]) {
+      fireEvent.click(screen.getByText("Sign out"));
+      close(screen.getByRole("dialog", { name: "Sign out" }));
+      expect(screen.queryByRole("dialog")).toBeNull();
+    }
+    expect(posts("/api/trainer/session/end")).toHaveLength(0);
   });
 });

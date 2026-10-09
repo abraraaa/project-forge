@@ -569,7 +569,7 @@ export default function TrainerShareView() {
       <div style={{ background: "transparent", maxWidth: 430, margin: "0 auto", fontFamily: T.text, color: T.ink, WebkitFontSmoothing: "antialiased", padding: "72px 24px 48px" }}>
         <button type="button" onClick={toProfile}
           style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2, display: "inline-flex", alignItems: "center", gap: 5, marginBottom: 32 }}>
-          <Glyph name="arrowLeft" size={12} color={T.ink2}/> Profile
+          <Glyph name="arrowLeft" size={12} color={T.ink3}/> Profile
         </button>
         {content}
       </div>

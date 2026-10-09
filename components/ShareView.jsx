@@ -14,7 +14,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { T, DISPLAY } from "@/lib/tokens";
+import Glyph from "@/components/Glyph";
 import { Fade } from "@/components/ui";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ShareApprove, { APPROVE_COPY } from "@/components/ShareApprove";
@@ -136,6 +138,10 @@ export default function ShareView() {
   return (
     <ErrorBoundary>
       <div style={{ background: "transparent", maxWidth: 430, margin: "0 auto", fontFamily: T.text, color: T.ink, WebkitFontSmoothing: "antialiased", padding: "72px 24px 48px" }}>
+        {/* A link, not Back: this page usually opens from a QR or a message, with no app page behind it. */}
+        <Link href="/" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5, marginBottom: 32 }}>
+          <Glyph name="arrowLeft" size={12} color={T.ink3}/> Home
+        </Link>
         {code ? (
           <>
             <Fade d={0} opaque>

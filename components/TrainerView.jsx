@@ -20,7 +20,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { T, DISPLAY } from "@/lib/tokens";
+import { withNavTransition } from "@/lib/nav-transitions";
 import { pressLiftHandlers } from "@/lib/press-lift";
 import { useInlineModalA11y } from "@/lib/a11y";
 import Glyph from "@/components/Glyph";
@@ -147,6 +149,11 @@ const linkBtn = {
   background: "none", border: "none", padding: "8px 0", cursor: "pointer",
   fontFamily: T.text, fontSize: 13, color: T.ink2,
 };
+/** The house back row, as Profile's "← Home". @type {import("react").CSSProperties} */
+const backRow = {
+  background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2,
+  marginBottom: 32, display: "inline-flex", alignItems: "center", gap: 5,
+};
 /** @type {import("react").CSSProperties} */
 const kickerStyle = { fontSize: 13, color: T.ink3, marginBottom: 8 };
 /** @type {import("react").CSSProperties} */
@@ -162,6 +169,7 @@ const rowTitle = { display: "block", fontSize: 15, fontWeight: 500, overflow: "h
 const rowLine = { display: "block", fontSize: 12, color: T.ink3, marginTop: 3, lineHeight: 1.45 };
 
 export default function TrainerView() {
+  const router = useRouter();
   // loading · signedOut · apply (not a trainer yet) · upgrade (the admin, not a
   // trainer yet) · terms (terms changed) · error · roster
   const [phase, setPhase] = useState("loading");
@@ -483,6 +491,21 @@ export default function TrainerView() {
   };
   const closeInvite = () => { inviteSeq.current += 1; setInvite(null); };
 
+  // Back, not a push, as on the other pages under Profile: a pushed /profile
+  // would leave this page behind it. An open client's own entry sits on top,
+  // so step past that too.
+  const toProfile = () => withNavTransition(() => {
+    const steps = window.history.state?.view === "client" ? 2 : 1;
+    if (window.history.length <= steps) router.replace("/profile");
+    else if (steps === 2) window.history.go(-2);
+    else router.back();
+  }, "nav-back");
+  const profileRow = (style) => (
+    <button type="button" onClick={toProfile} style={style}>
+      <Glyph name="arrowLeft" size={12} color={T.ink3}/> Profile
+    </button>
+  );
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   const root = {
@@ -494,6 +517,7 @@ export default function TrainerView() {
     return (
       <div {...root}>
         <div className="forge-wide-solo">
+          {profileRow(backRow)}
           {phase === "loading" && <div role="status" style={{ fontSize: 13, color: T.ink3 }}>One moment</div>}
           {phase === "error" && (
             <>
@@ -541,6 +565,8 @@ export default function TrainerView() {
   const shown = open && pane?.ref === open.ref ? pane : null;
   return (
     <div {...root} data-view={open ? "client" : "roster"}>
+      {/* Above both columns; under 640 the open client's own row stands in. The shell's gap spaces it. */}
+      <div className="forge-wide-back">{profileRow({ ...backRow, marginBottom: 0 })}</div>
       <div className="forge-wide-roster">
         <div style={kickerStyle}>For trainers</div>
         <h1 style={h1Style}>Your clients</h1>
@@ -597,10 +623,9 @@ export default function TrainerView() {
       <div className="forge-wide-main" ref={mainRef} style={{ minWidth: 0 }}>
         {open && (
           // The tier class sits on the wrapper: the button's inline display would beat it.
-          <div className="forge-wide-n-only" style={{ marginBottom: 24 }}>
-            <button type="button" onClick={closeClient}
-              style={{ ...linkBtn, display: "inline-flex", alignItems: "center", gap: 5, padding: 0 }}>
-              <Glyph name="arrowLeft" size={12} color={T.ink2}/> Clients
+          <div className="forge-wide-n-only">
+            <button type="button" onClick={closeClient} style={backRow}>
+              <Glyph name="arrowLeft" size={12} color={T.ink3}/> Clients
             </button>
           </div>
         )}

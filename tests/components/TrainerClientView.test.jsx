@@ -1205,3 +1205,44 @@ describe("TrainerClientView: Download CSV", () => {
     expect(screen.queryByRole("link", { name: "Download CSV" })).toBeNull();
   });
 });
+
+// ── Closing the sheets ──────────────────────────────────────────────────────
+
+describe("TrainerClientView: every sheet closes from its foot control, Escape and the scrim", () => {
+  const CLOSERS = [
+    ["its control", (d, label) => fireEvent.click(within(d).getByRole("button", { name: label }))],
+    ["Escape", (d) => fireEvent.keyDown(d, { key: "Escape" })],
+    ["the scrim", (d) => fireEvent.click(d.parentElement)],
+  ];
+
+  it.each(CLOSERS)("stop sharing: Keep, from %s, stops nothing", (_, close) => {
+    const onRemove = vi.fn(async () => true);
+    render(<TrainerClientView client={client} view={view()} onRemove={onRemove}/>);
+    fireEvent.click(screen.getByText("Stop seeing Sam's training"));
+    close(screen.getByRole("dialog", { name: "Stop seeing Sam's training?" }), "Keep");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(onRemove).not.toHaveBeenCalled();
+  });
+
+  it.each(CLOSERS)("a lift: Cancel, from %s, drafts nothing", (_, close) => {
+    render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()}/>);
+    openLift("Barbell Back Squat");
+    tap("More weight");
+    close(screen.getByRole("dialog", { name: "Barbell Back Squat" }), "Cancel");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.querySelector('[data-plan-lift="Barbell Back Squat"]').textContent).not.toContain("not sent");
+  });
+
+  it.each(CLOSERS)("the review: Keep editing, from %s, sends nothing and keeps the draft", async (_, close) => {
+    const route = fakeRoute();
+    render(<TrainerClientView client={client} view={planView()} onChange={route}/>);
+    openLift("Barbell Back Squat");
+    tap("More weight"); tap("More weight");
+    tap("Add to changes");
+    await review();
+    close(screen.getByRole("dialog", { name: "Change Sam's plan?" }), "Keep editing");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(route.mock.calls.every(([b]) => b.dryRun === true)).toBe(true);
+    expect(document.querySelector('[data-plan-lift="Barbell Back Squat"]').textContent).toContain("new 105, not sent");
+  });
+});
