@@ -36,13 +36,17 @@ const liveGrant = (g, t) => {
   return g.kind === "trainer" && g.trainer_account_id === t && g.revoked_at == null && a && a.deleted_at == null
     && db.credentials.some((c) => c.id === g.credential_id && c.account_id === g.account_id && c.rp_id === "heatwayve.app");
 };
-/** The budget over every grant between the client and trainer of `grant`. */
-const budget = (grant, since) => {
+/** The budget over every grant between the client and trainer of `grant`: plan sets, or sessions apart. */
+const budget = (grant, since, sessions = false) => {
   const r = db.grants.find((g) => g.id === grant);
   const ids = new Set(db.grants.filter((g) => r && g.account_id === r.account_id && g.trainer_account_id === r.trainer_account_id).map((g) => g.id));
-  const rows = db.changes.filter((c) => ids.has(c.grant_id) && c.source === "trainer" && c.created_at > since);
+  const rows = db.changes.filter((c) => ids.has(c.grant_id) && c.source === "trainer" && c.created_at > since && (c.kind === "session") === sessions);
   return [{ used: new Set(rows.map((c) => c.set_id)).size, oldest: rows.length ? big(Math.min(...rows.map((c) => c.created_at))) : null }];
 };
+/** A session standing for the client's day and letter: not withdrawn, and waiting or kept; not undelivered on a revoked grant. */
+const standingFor = (client, target) => db.changes.some((d) => d.client_account_id === client && d.kind === "session" && d.target === target
+  && d.undone_at == null && (d.outcome == null || d.outcome === "kept" || d.outcome === "auto_kept")
+  && !(d.outcome == null && d.delivered_at == null && db.grants.some((g) => g.id === d.grant_id && g.revoked_at != null)));
 const pad = (i) => String(i).padStart(2, "0");
 const blank = (v) => (v === null || v === undefined ? null : v);
 
@@ -57,10 +61,21 @@ const SQL = {
     + " FROM jsonb_array_elements(?::jsonb) WITH ORDINALITY AS o(op, i)"
     + " WHERE NOT EXISTS (SELECT 1 FROM trainer_changes x WHERE x.set_id = ?::text)"
     + " AND EXISTS (SELECT 1 FROM oauth_grants r WHERE r.id = ?::text AND r.account_id = ?::text AND r.trainer_account_id = ?::text)"
-    + " AND (SELECT count(DISTINCT b.set_id) FROM trainer_changes b"
+    + " AND (o.op->>'kind' = 'session' OR (SELECT count(DISTINCT b.set_id) FROM trainer_changes b"
     + " WHERE b.grant_id IN (SELECT g.id FROM oauth_grants g WHERE g.account_id = ?::text AND g.trainer_account_id = ?::text)"
-    + " AND b.source = 'trainer' AND b.created_at > ?::bigint) < ?::int"
+    + " AND b.source = 'trainer' AND b.kind <> 'session' AND b.created_at > ?::bigint) < ?::int)"
+    + " AND (o.op->>'kind' <> 'session' OR ((SELECT count(DISTINCT s.set_id) FROM trainer_changes s"
+    + " WHERE s.grant_id IN (SELECT g.id FROM oauth_grants g WHERE g.account_id = ?::text AND g.trainer_account_id = ?::text)"
+    + " AND s.source = 'trainer' AND s.kind = 'session' AND s.created_at > ?::bigint) < ?::int"
+    + " AND NOT EXISTS (SELECT 1 FROM trainer_changes d WHERE d.client_account_id = ?::text AND d.kind = 'session'"
+    + " AND d.target = o.op->>'target' AND d.undone_at IS NULL AND (d.outcome IS NULL OR d.outcome IN ('kept', 'auto_kept'))"
+    + " AND NOT (d.outcome IS NULL AND d.delivered_at IS NULL"
+    + " AND EXISTS (SELECT 1 FROM oauth_grants dg WHERE dg.id = d.grant_id AND dg.revoked_at IS NOT NULL)))))"
     + " ON CONFLICT (id) DO NOTHING RETURNING id",
+  standing: "SELECT EXISTS (SELECT 1 FROM trainer_changes d WHERE d.client_account_id = ?::text AND d.kind = 'session'"
+    + " AND d.target = ?::text AND d.undone_at IS NULL AND (d.outcome IS NULL OR d.outcome IN ('kept', 'auto_kept'))"
+    + " AND NOT (d.outcome IS NULL AND d.delivered_at IS NULL"
+    + " AND EXISTS (SELECT 1 FROM oauth_grants dg WHERE dg.id = d.grant_id AND dg.revoked_at IS NOT NULL))) AS standing",
   seen: "SELECT EXISTS (SELECT 1 FROM trainer_changes WHERE set_id = ? AND grant_id = ? AND author_account_id = ?) AS mine,"
     + " EXISTS (SELECT 1 FROM trainer_changes WHERE set_id = ?) AS taken,"
     + " EXISTS (SELECT 1 FROM oauth_grants WHERE id = ? AND account_id = ? AND trainer_account_id = ?) AS fits,"
@@ -73,19 +88,24 @@ const SQL = {
   budget: "SELECT count(DISTINCT set_id)::int AS used, min(created_at) AS oldest FROM trainer_changes"
     + " WHERE grant_id IN (SELECT g.id FROM oauth_grants g JOIN oauth_grants r"
     + " ON r.account_id = g.account_id AND r.trainer_account_id = g.trainer_account_id WHERE r.id = ?)"
-    + " AND source = 'trainer' AND created_at > ?::bigint",
+    + " AND source = 'trainer' AND kind <> 'session' AND created_at > ?::bigint",
+  sessionBudget: "SELECT count(DISTINCT set_id)::int AS used, min(created_at) AS oldest FROM trainer_changes"
+    + " WHERE grant_id IN (SELECT g.id FROM oauth_grants g JOIN oauth_grants r"
+    + " ON r.account_id = g.account_id AND r.trainer_account_id = g.trainer_account_id WHERE r.id = ?)"
+    + " AND source = 'trainer' AND kind = 'session' AND created_at > ?::bigint",
   withdraw: "UPDATE trainer_changes SET undone_at = ?, undone_by = 'trainer'"
     + " WHERE (id = ? OR set_id = ?) AND grant_id = ? AND author_account_id = ? AND undone_at IS NULL"
     + " AND (outcome IS NULL"
-    + " OR (outcome = 'applied' AND kind <> 'week' AND id IN (SELECT jsonb_array_elements_text(?::jsonb)))) RETURNING id",
+    + " OR (outcome = 'applied' AND kind <> 'week' AND id IN (SELECT jsonb_array_elements_text(?::jsonb))))"
+    + " AND (kind <> 'session' OR delivered_at IS NULL) RETURNING id",
   openGrant: "SELECT c.id, c.set_id, c.kind, c.target, c.effective_from, c.old_value, c.new_value, c.warnings,"
-    + " c.created_at, c.applied_at, c.outcome, c.undone_at, c.undone_by, c.reverted_at,"
+    + " c.created_at, c.applied_at, c.outcome, c.undone_at, c.undone_by, c.reverted_at, c.delivered_at,"
     + " (SELECT count(*) FROM trainer_changes s WHERE s.set_id = c.set_id)::int AS set_size"
     + " FROM trainer_changes c JOIN oauth_grants g ON g.id = c.grant_id"
     + " WHERE c.grant_id = ? AND c.author_account_id = ? AND c.source = 'trainer' AND c.status = 'sent'"
     + " AND c.outcome IS NULL AND c.undone_at IS NULL AND c.created_at > COALESCE(g.edits_at, 0) ORDER BY c.created_at, c.id",
   trainerList: "SELECT c.id, c.set_id, c.kind, c.target, c.effective_from, c.old_value, c.new_value, c.warnings,"
-    + " c.created_at, c.applied_at, c.outcome, c.undone_at, c.undone_by, c.reverted_at,"
+    + " c.created_at, c.applied_at, c.outcome, c.undone_at, c.undone_by, c.reverted_at, c.delivered_at,"
     + " COALESCE(g.revoked_at IS NULL AND g.edits_at IS NOT NULL AND (g.edits_off_at IS NULL OR g.edits_off_at < g.edits_at)"
     + " AND c.created_at > g.edits_at, false) AS edits_live"
     + " FROM trainer_changes c LEFT JOIN oauth_grants g ON g.id = c.grant_id"
@@ -95,20 +115,28 @@ const SQL = {
 const fits = (grant, client, trainer) => db.grants.some((g) => g.id === grant && g.account_id === client && g.trainer_account_id === trainer);
 const stored = (c) => ({ id: c.id, set_id: c.set_id, kind: c.kind, target: c.target, effective_from: c.effective_from ?? null,
   old_value: c.old_value ?? null, new_value: c.new_value ?? null, warnings: c.warnings ?? null, created_at: big(c.created_at),
-  applied_at: c.applied_at ?? null, outcome: c.outcome ?? null, undone_at: big(c.undone_at), undone_by: c.undone_by ?? null, reverted_at: c.reverted_at ?? null });
+  applied_at: c.applied_at ?? null, outcome: c.outcome ?? null, undone_at: big(c.undone_at), undone_by: c.undone_by ?? null, reverted_at: c.reverted_at ?? null,
+  delivered_at: c.delivered_at ?? null });
 const CHANGE_HANDLERS = {
   [flat(SQL.lock)]: () => [{ pg_advisory_xact_lock: "" }],
-  [flat(SQL.insert)]: ([id1, set, grant, profile, client, author, now, ops, set2, grant2, client2, author2, client3, author3, since, cap]) => {
-    expect([id1, set2, grant2, client2, author2, client3, author3]).toEqual([set, set, grant, client, author, client, author]);
+  [flat(SQL.insert)]: ([id1, set, grant, profile, client, author, now, ops, set2, grant2, client2, author2, client3, author3, since, cap,
+    client4, author4, since2, sessionCap, client5]) => {
+    expect([id1, set2, grant2, client2, author2, client3, author3, client4, author4, since2, client5])
+      .toEqual([set, set, grant, client, author, client, author, client, author, since, client]);
     if (db.changes.some((c) => c.set_id === set)) return [];
     if (!fits(grant, client, author)) return [];
-    if (budget(grant, since)[0].used >= cap) return [];
-    return JSON.parse(ops).map((op, i) => {
+    const list = JSON.parse(ops);
+    // Per row, as the SQL filters: a plan change on the plan count, a session on its own count and its day and letter.
+    const ok = (op) => (op.kind === "session"
+      ? budget(grant, since, true)[0].used < sessionCap && !standingFor(client, op.target)
+      : budget(grant, since)[0].used < cap);
+    if (!list.every(ok)) return [];
+    return list.map((op, i) => {
       const id = `${set}.${pad(i)}`;
       db.changes.push({ id, set_id: set, grant_id: grant, profile, client_account_id: client, author_account_id: author,
         source: "trainer", status: "sent", kind: op.kind, target: op.target, old_value: blank(op.before), new_value: blank(op.after),
         basis: blank(op.basis), warnings: blank(op.warnings), effective_from: op.from ?? null, created_at: now,
-        applied_at: null, outcome: null, undone_at: null, undone_by: null, reverted_at: null, cleared_at: null });
+        applied_at: null, outcome: null, undone_at: null, undone_by: null, reverted_at: null, cleared_at: null, delivered_at: null });
       return { id };
     });
   },
@@ -124,9 +152,12 @@ const CHANGE_HANDLERS = {
     }];
   },
   [flat(SQL.budget)]: ([grant, since]) => budget(grant, since),
+  [flat(SQL.sessionBudget)]: ([grant, since]) => budget(grant, since, true),
+  [flat(SQL.standing)]: ([client, target]) => [{ standing: standingFor(client, target) }],
   [flat(SQL.withdraw)]: ([now, x, x2, ref, me, inForce]) => db.changes
     .filter((c) => (c.id === x || c.set_id === x2) && c.grant_id === ref && c.author_account_id === me && c.undone_at == null
-      && (c.outcome == null || (c.outcome === "applied" && c.kind !== "week" && JSON.parse(inForce).includes(c.id))))
+      && (c.outcome == null || (c.outcome === "applied" && c.kind !== "week" && JSON.parse(inForce).includes(c.id)))
+      && (c.kind !== "session" || c.delivered_at == null))
     .map((c) => { Object.assign(c, { undone_at: now, undone_by: "trainer" }); return { id: c.id }; }),
   [flat(SQL.openGrant)]: ([ref, me]) => db.changes
     .filter((c) => {
@@ -182,12 +213,13 @@ vi.mock("@neondatabase/serverless", () => ({
         const h = db.handles.find((x) => x.account_id === v[0] && x.released_at == null);
         return h ? [{ handle: h.handle, display: h.display }] : [];
       }
-      if (/^\s*SELECT g\.id, g\.profile, g\.scope, g\.created_at, g\.last_used_at, g\.edits_at, g\.edits_off_at, h\.handle, h\.display\s+FROM oauth_grants g/.test(text)) {
+      if (/^\s*SELECT g\.id, g\.profile, g\.scope, g\.created_at, g\.last_used_at, g\.edits_at, g\.edits_off_at, g\.consent_version, h\.handle, h\.display\s+FROM oauth_grants g/.test(text)) {
         const [t, ref] = v;
         return db.grants.filter((g) => liveGrant(g, t) && (ref === undefined || g.id === ref)).map((g) => {
           const h = db.handles.find((x) => x.account_id === g.account_id && x.released_at == null);
           return { id: g.id, profile: g.profile, scope: g.scope, created_at: big(g.created_at), last_used_at: big(g.last_used_at),
-            edits_at: big(g.edits_at), edits_off_at: big(g.edits_off_at), handle: h?.handle ?? null, display: h?.display ?? null };
+            edits_at: big(g.edits_at), edits_off_at: big(g.edits_off_at), consent_version: g.consent_version ?? null,
+            handle: h?.handle ?? null, display: h?.display ?? null };
         });
       }
       if (/^\s*UPDATE oauth_grants SET\s+looks = CASE/.test(text)) {
@@ -226,7 +258,7 @@ vi.mock("@/lib/identity-store", async (importOriginal) => {
 
 const { POST } = await import("@/app/api/trainer/change/route");
 const { TRAINER_COOKIE, faceIdFresh, FACE_ID_WRITE_MS } = await import("@/lib/trainer-session");
-const { TRAINER_TERMS_VERSION } = await import("@/lib/trainer-terms");
+const { TRAINER_TERMS_VERSION, SHARE_CONSENT_VERSION } = await import("@/lib/trainer-terms");
 const { liftBasis } = await import("@/lib/trainer-change");
 const { rateLimit, rateLimitShared } = await import("@/lib/rate-limit");
 const { dbOpenChangesForGrant } = await import("@/lib/trainer-changes-store");
@@ -251,7 +283,7 @@ const session = (acct, cred, { ageMs = 60_000, authAgeMs = ageMs } = {}) => {
 const grant = (id, client, trainer, cred, extra = {}) => ({
   id, account_id: client, profile: db.accounts.get(client).storage_key, credential_id: cred, scope: "trainer:read",
   kind: "trainer", trainer_account_id: trainer, created_at: Date.now() - 30 * DAY, revoked_at: null, looks: [],
-  last_used_at: null, edits_at: Date.now() - 20 * DAY, edits_off_at: null, ...extra,
+  last_used_at: null, edits_at: Date.now() - 20 * DAY, edits_off_at: null, consent_version: SHARE_CONSENT_VERSION, ...extra,
 });
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -770,6 +802,301 @@ describe("withdraw", () => {
   });
 });
 
+// ── Coached sessions (kind "session") ───────────────────────────────────────
+
+const { newDraftLog, logSet, finaliseDraft, scaleForReadiness } = await import("@/lib/storage");
+const { SESSIONS, EXERCISE_POOLS, applyRotationToSession, applyMainLiftsToSession, applyFocusToSession } = await import("@/lib/programme");
+const { repTargets, planStartWeight, validMainLifts } = await import("@/lib/programme-resolve");
+const { getLoadType } = await import("@/lib/lift-translations");
+const { addDaysIso, jsDow, mondayOfWeekIso } = await import("@/lib/dates");
+const { trainerToday } = await import("@/lib/trainer-view");
+
+const LETTERS = ["strength-a", "strength-b", "strength-c"];
+/** Abe's profile as the route reads it. */
+const abeMeta = () => Object.fromEntries(db.meta.filter((m) => m.profile === "sk-abe").map((m) => [m.field, m.value]));
+/**
+ * A finished record as the trainer's device builds it for Abe: his programme
+ * composed as his app would, no bodyweight and no anchors, through the real
+ * newDraftLog, logSet and finaliseDraft, then over the wire. `date` re-dates it.
+ */
+function coached(idx = 0, { date = null, meta = abeMeta() } = {}) {
+  const config = meta.programmeBlock?.config || {};
+  const mains = validMainLifts(meta) || {};
+  const active = scaleForReadiness(applyFocusToSession(applyMainLiftsToSession(applyRotationToSession(SESSIONS[idx], config), mains),
+    meta.userFocus || "Forged", config, mains), "normal");
+  const targets = repTargets(meta);
+  const draft = newDraftLog({ profileName: null, session: LETTERS[idx], blockNumber: 1, readiness: "normal" });
+  for (const b of active.blocks) {
+    for (const [k, suffix] of [["ex", ""], ["exA", "-A"], ["exB", "-B"]]) {
+      const ex = b[k];
+      if (!ex) continue;
+      const key = `${b.id}${suffix}`;
+      const loadType = getLoadType(ex);
+      const weight = loadType === "bodyweight" ? null : planStartWeight(ex, { working: meta.weights ?? {}, bodyweight: null, anchors: {} });
+      const reps = targets[ex.name] ?? ex.reps;
+      for (let n = 0; n < b.sets; n++) {
+        logSet(draft, { blockId: b.id, blockType: b.type, exerciseName: ex.name, muscle: ex.muscle, swapped: false,
+          fromPool: EXERCISE_POOLS[key] ? key : null, loadType, bodyweight: null, weight, reps,
+          rpe: b.type === "main" ? 8 : null, prescribed: { reps, weight, sets: b.sets } });
+      }
+    }
+  }
+  const rec = JSON.parse(JSON.stringify(finaliseDraft(draft)));
+  if (date) Object.assign(rec, { date, dow: jsDow(date), weekStart: mondayOfWeekIso(date), id: `${date}T10:00:00.000Z` });
+  return rec;
+}
+/** The trainer's today: the record's own day, as the iPad sends it. */
+let DAY0 = "";
+const sbody = (record, { set = S1, drum = {}, ...extra } = {}) => ({
+  ref: "hwg_abe", today: DAY0, set: { id: set, ops: [{ kind: "session", record, drum }] }, basis: { programme: { number: 1 } }, ...extra,
+});
+/** A session row already in the log, as the store writes one. */
+const sessionRow = (c, target, extra = {}) => ({
+  id: `${setId(c)}.00`, set_id: setId(c), grant_id: "hwg_abe", profile: "sk-abe", client_account_id: A, author_account_id: T,
+  source: "trainer", status: "sent", kind: "session", target, old_value: null, new_value: { record: { id: "x" }, drum: {} },
+  basis: null, warnings: null, effective_from: target.slice(0, 10), created_at: Date.now() - HOUR, applied_at: null, outcome: null,
+  undone_at: null, undone_by: null, reverted_at: null, cleared_at: null, delivered_at: null, ...extra,
+});
+const ALLOWED_WRITE = /^(UPDATE oauth_grants SET looks|INSERT INTO trainer_changes|UPDATE trainer_changes SET undone_at|INSERT INTO auth_tokens)/;
+
+describe("coached sessions: sending one", () => {
+  let rec;
+  beforeEach(() => {
+    rec = coached(0);
+    DAY0 = rec.date;
+  });
+
+  it("needs the grant approved at the current share consent: an older one is 403 fresh, before the look and any read", async () => {
+    for (const v of ["2026-10-05b", null]) {
+      db.grants[0].consent_version = v;
+      calls.length = 0;
+      for (const extra of [{}, { dryRun: true }]) {
+        const res = await post(tia, sbody(rec, extra));
+        expect(res.status, String(v)).toBe(403);
+        expect(await res.json()).toEqual({ fresh: true, error: "Ask Abe for a fresh code." });
+      }
+      expect(looks()).toEqual([]);
+      expect(dataReads()).toEqual([]);
+      expect(writes()).toEqual([]);
+      // Plan changes on that grant go on as before.
+      expect((await post(tia, body(setId("b"), 105, { dryRun: true }))).status).toBe(200);
+    }
+    db.grants[0].consent_version = SHARE_CONSENT_VERSION;
+    expect((await post(tia, sbody(rec))).status).toBe(200);
+  });
+
+  it("runs behind the route's gates: Face ID within the day, a real grant, changes on", async () => {
+    const stale = session(T, "cT", { authAgeMs: 25 * HOUR });
+    expect(await (await post(stale, sbody(rec))).json()).toEqual({ needsFaceId: true });
+    expect((await post(tia, { ...sbody(rec), ref: "hwg_oli" })).status).toBe(404);
+    db.grants[0].edits_off_at = db.grants[0].edits_at + 1;
+    expect(await (await post(tia, sbody(rec))).json()).toEqual({ editsOff: true });
+    expect(writes()).toEqual([]);
+  });
+
+  it("a dry run previews its letter, day and size, on the session count, and writes nothing but the look", async () => {
+    const res = await post(tia, sbody(rec, { dryRun: true }));
+    expect(res.status).toBe(200);
+    const exercises = rec.blocks.flatMap((b) => b.exercises);
+    const out = await res.json();
+    expect(out).toEqual({
+      preview: { letter: "A", date: DAY0, day: "today", exercises: exercises.length, sets: exercises.reduce((n, e) => n + e.sets.length, 0) },
+      budget: { used: 0, of: 7, freeAt: null },
+    });
+    // Never the record back.
+    expect(JSON.stringify(out)).not.toMatch(/blocks|summary|drum|record/);
+    expect(writes().map((c) => c.q.slice(0, 29))).toEqual(["UPDATE oauth_grants SET looks"]);
+    expect(db.changes).toEqual([]);
+  });
+
+  it("logs the look, reads their profile, then INSERTs one row: the record and drum, dated by the record, on its own count", async () => {
+    // The drum: the squat moved on the day, beside the record.
+    const res = await post(tia, sbody(rec, { drum: { [SQUAT]: 102.5 } }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ sent: { set: S1, ids: [`${S1}.00`] }, budget: { used: 1, of: 7, freeAt: db.changes[0].created_at + 7 * DAY } });
+    const order = calls.map((c) => c.q);
+    const at = (re) => order.findIndex((q) => re.test(q));
+    expect(at(/FROM meta WHERE/)).toBeGreaterThan(at(/^UPDATE oauth_grants SET looks/));
+    expect(at(/^INSERT INTO trainer_changes/)).toBeGreaterThan(at(/FROM sessions WHERE/));
+    expect(inserts()).toHaveLength(1);
+    expect(db.changes).toEqual([expect.objectContaining({
+      id: `${S1}.00`, set_id: S1, grant_id: "hwg_abe", profile: "sk-abe", client_account_id: A, author_account_id: T,
+      kind: "session", target: `${DAY0}:A`, old_value: null, new_value: { record: rec, drum: { [SQUAT]: 102.5 } },
+      basis: null, warnings: null, effective_from: DAY0, outcome: null, delivered_at: null,
+    })]);
+    // The plan sets are untouched: a plan change still has all 10.
+    expect((await (await post(tia, body(setId("b"), 105, { dryRun: true }))).json()).budget).toEqual({ used: 0, of: 10, freeAt: null });
+    for (const w of writes()) expect(w.q, w.q).toMatch(ALLOWED_WRITE);
+  });
+
+  it("the day is today or yesterday on the trainer's clock: two days back, or tomorrow, is refused", async () => {
+    const y = coached(1, { date: addDaysIso(DAY0, -1) });
+    const dry = await post(tia, sbody(y, { set: setId("y"), dryRun: true }));
+    expect((await dry.json()).preview).toMatchObject({ letter: "B", date: addDaysIso(DAY0, -1), day: "yesterday" });
+    expect((await post(tia, sbody(y, { set: setId("y") }))).status).toBe(200);
+    for (const [c, date] of [["p", addDaysIso(DAY0, -2)], ["q", addDaysIso(DAY0, 1)]]) {
+      const res = await post(tia, sbody(coached(2, { date }), { set: setId(c) }));
+      expect(res.status, date).toBe(422);
+      expect(await res.json()).toEqual({ refusals: [{ i: 0, code: "day", rule: "S4", field: "date" }] });
+    }
+    // The window is the trainer's today as sent (held within a day of UTC by
+    // trainerToday): from tomorrow's today, yesterday's record is two days back.
+    const tomorrow = addDaysIso(DAY0, 1);
+    const ahead = await post(tia, { ...sbody(coached(2, { date: addDaysIso(DAY0, -1) }), { set: setId("r") }), today: tomorrow });
+    expect(ahead.status).toBe(trainerToday(tomorrow) === tomorrow ? 422 : 200);
+    expect(db.changes.filter((c) => c.target.endsWith(":B")).map((c) => c.target)).toEqual([`${addDaysIso(DAY0, -1)}:B`]);
+  });
+
+  it("one per letter per day: a second set for it is 409 already_sent, dry run too; their own log of it is 422 already_logged", async () => {
+    expect((await post(tia, sbody(rec))).status).toBe(200);
+    const again = coached(0);
+    for (const extra of [{}, { dryRun: true }]) {
+      const res = await post(tia, sbody(again, { set: setId("b"), ...extra }));
+      expect(res.status, JSON.stringify(extra)).toBe(409);
+      expect(await res.json()).toEqual({ error: "Abe already has Strength A for today.", code: "already_sent", budget: { used: 1, of: 7, freeAt: expect.any(Number) } });
+    }
+    expect(inserts()).toHaveLength(1);
+    // Another letter the same day goes.
+    expect((await post(tia, sbody(coached(1), { set: setId("c") }))).status).toBe(200);
+    // They logged C themselves today: refused, whatever the trainer's device built.
+    db.sessions.push({ profile: "sk-abe", record: { ...squatRecord(DAY0, 100), id: `${DAY0}T06:00:00.000Z`, session: "strength-c" } });
+    const own = await post(tia, sbody(coached(2), { set: setId("d") }));
+    expect(own.status).toBe(422);
+    expect(await own.json()).toEqual({ refusals: [{ i: 0, code: "already_logged", rule: "S13" }] });
+    expect(db.changes.map((c) => c.target)).toEqual([`${DAY0}:A`, `${DAY0}:B`]);
+  });
+
+  it("one per letter per day holds across trainers and grants: the INSERT's own guard answers 409 already_sent", async () => {
+    // Nia logged Abe's A today through a grant of her own: Tia's open list can't see it, the guard can.
+    db.grants.push(grant("hwg_abe_nia", A, N, "cA"));
+    db.changes.push(sessionRow("n", `${DAY0}:A`, { grant_id: "hwg_abe_nia", author_account_id: N }));
+    const res = await post(tia, sbody(rec));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "Abe already has Strength A for today.", code: "already_sent", budget: { used: 0, of: 7, freeAt: null } });
+    expect(db.changes).toHaveLength(1);
+    // Discarded, superseded or withdrawn, it no longer stands.
+    for (const over of [{ outcome: "discarded" }, { outcome: "superseded" }, { undone_at: Date.now(), undone_by: "trainer" }]) {
+      Object.assign(db.changes[0], { outcome: null, undone_at: null, undone_by: null, ...over });
+      db.changes.splice(1);
+      expect((await post(tia, sbody(rec))).status, JSON.stringify(over)).toBe(200);
+    }
+  });
+
+  it("a session that never reached their device, on a grant since revoked, no longer holds the day; one that did still does", async () => {
+    db.grants.push({ ...grant("hwg_abe_nia", A, N, "cA"), revoked_at: Date.now() - HOUR });
+    db.changes.push(sessionRow("n", `${DAY0}:A`, { grant_id: "hwg_abe_nia", author_account_id: N }));
+    expect((await post(tia, sbody(rec))).status).toBe(200);
+    expect(db.changes.map((c) => c.grant_id)).toEqual(["hwg_abe_nia", "hwg_abe"]);
+    db.changes.splice(1);
+    db.changes[0].delivered_at = new Date(Date.now() - 2 * HOUR).toISOString();
+    const res = await post(tia, sbody(rec));
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("already_sent");
+  });
+
+  it("the session count: 7 in 7 days between them, withdrawn ones counted; the 8th is 429, and plan sets don't spend it", async () => {
+    // Seven earlier sessions this week (one withdrawn), on days the new one doesn't touch.
+    for (const [i, c] of [..."bcdefgh"].entries()) {
+      db.changes.push(sessionRow(c, `${addDaysIso(DAY0, -2 - i)}:A`, { created_at: Date.now() - (i + 1) * HOUR,
+        ...(i === 0 ? { undone_at: Date.now(), undone_by: "trainer" } : {}) }));
+    }
+    // Plan sets still have all 10.
+    expect((await post(tia, body(setId("p")))).status).toBe(200);
+    const dry = await post(tia, sbody(rec, { dryRun: true }));
+    expect((await dry.json()).budget).toMatchObject({ used: 7, of: 7 });
+    const res = await post(tia, sbody(rec));
+    expect(res.status).toBe(429);
+    const out = await res.json();
+    const oldest = Math.min(...db.changes.filter((c) => c.kind === "session").map((c) => c.created_at));
+    const day = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(oldest + 7 * DAY));
+    expect(out).toEqual({ error: `That's this week's sessions for Abe. More from ${day}.`, budget: { used: 7, of: 7, freeAt: oldest + 7 * DAY } });
+    expect(db.changes.some((c) => c.set_id === S1)).toBe(false);
+    // Out of the window, it frees up.
+    for (const c of db.changes) if (c.kind === "session") c.created_at -= 8 * DAY;
+    expect((await post(tia, sbody(rec))).status).toBe(200);
+  });
+
+  it("a resend of the same record is a replay and writes once; that set id with another record is 409 replay_mismatch", async () => {
+    expect((await post(tia, sbody(rec))).status).toBe(200);
+    const again = await post(tia, sbody(rec));
+    expect(await again.json()).toEqual({ sent: { set: S1, ids: [] }, replay: true, budget: { used: 1, of: 7, freeAt: db.changes[0].created_at + 7 * DAY } });
+    // Even after it reached their phone, and after they logged the letter themselves.
+    db.changes[0].delivered_at = new Date().toISOString();
+    db.sessions.push({ profile: "sk-abe", record: { ...squatRecord(DAY0, 100), id: `${DAY0}T06:00:00.000Z` } });
+    expect(await (await post(tia, sbody(rec))).json()).toMatchObject({ replay: true });
+    const other = { ...coached(0), id: `${DAY0}T00:00:01.000Z` };
+    const res = await post(tia, sbody(other));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "That didn't send. Try again.", code: "replay_mismatch" });
+    // The same record id, re-dated to yesterday (another day and letter), edited,
+    // or with another drum: each is a mismatch, never a replay of what's stored.
+    const y = addDaysIso(DAY0, -1);
+    const redated = { ...rec, date: y, dow: jsDow(y), weekStart: mondayOfWeekIso(y) };
+    const edited = JSON.parse(JSON.stringify(rec));
+    edited.blocks[0].exercises[0].sets[0].reps += 1;
+    for (const [what, b] of [["redated", sbody(redated)], ["edited", sbody(edited)], ["drum", sbody(rec, { drum: { [SQUAT]: 102.5 } })]]) {
+      const out = await post(tia, b);
+      expect(out.status, what).toBe(409);
+      expect(await out.json(), what).toEqual({ error: "That didn't send. Try again.", code: "replay_mismatch" });
+    }
+    // Key order is not a change.
+    const reordered = Object.fromEntries(Object.entries(rec).reverse());
+    expect(await (await post(tia, sbody(reordered))).json()).toMatchObject({ replay: true });
+    expect(inserts()).toHaveLength(1);
+  });
+
+  it("a record that moved since the device composed it is 409 stale; a malformed one is 422; nothing is written", async () => {
+    db.meta[0].value = { [SQUAT]: 105 }; // their squat moved since
+    const stale = await post(tia, sbody(rec));
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toEqual({ stale: true, error: "They've trained or changed it since you looked. Refresh." });
+    db.meta[0].value = { [SQUAT]: 100 };
+    const cases = [
+      [{ ...rec, loggedBy: { name: "Tia" } }, "S3"],
+      [{ ...rec, travel: true }, "S3"],
+      [{ ...rec, bodyweight: 80 }, "S3"],
+    ];
+    for (const [r, rule] of cases) {
+      const res = await post(tia, sbody(r));
+      expect(res.status).toBe(422);
+      expect((await res.json()).refusals[0]).toMatchObject({ rule });
+    }
+    // A session never rides with plan changes, either way round.
+    const mixed = [
+      { id: S1, ops: [{ kind: "session", record: rec, drum: {} }, { kind: "weight", lift: SQUAT, kg: 105 }] },
+      { id: S1, ops: [{ kind: "weight", lift: SQUAT, kg: 105 }, { kind: "session", record: rec, drum: {} }] },
+    ];
+    for (const set of mixed) expect((await post(tia, { ...sbody(rec), set })).status, set.ops[0].kind).toBe(422);
+    // No profile on the server: stale.
+    db.meta = [];
+    db.sessions = [];
+    expect((await post(tia, sbody(rec))).status).toBe(409);
+    expect(inserts()).toEqual([]);
+  });
+
+  it("goes back only before it reaches their device; after that the decision is theirs", async () => {
+    expect((await post(tia, sbody(rec))).status).toBe(200);
+    expect((await post(tia, sbody(coached(1), { set: setId("b") }))).status).toBe(200);
+    db.changes[1].delivered_at = new Date().toISOString();
+    expect(await (await post(tia, { ref: "hwg_abe", withdraw: setId("b") })).json()).toEqual({ withdrawn: [] });
+    expect(db.changes[1].undone_at).toBe(null);
+    expect(await (await post(tia, { ref: "hwg_abe", withdraw: S1 })).json()).toEqual({ withdrawn: [`${S1}.00`] });
+    expect(db.changes[0]).toMatchObject({ undone_by: "trainer" });
+    // Withdrawing reads nothing of theirs.
+    expect(dataReads().length).toBe(4);
+  });
+
+  it("zero writes to the client's meta or sessions, and no client-data writer anywhere on the path", async () => {
+    await post(tia, sbody(rec, { dryRun: true }));
+    await post(tia, sbody(rec));
+    await post(tia, sbody(rec));
+    await post(tia, sbody(coached(1), { set: setId("b") }));
+    await post(tia, { ref: "hwg_abe", withdraw: S1 });
+    for (const w of writes()) expect(w.q, w.q).toMatch(ALLOWED_WRITE);
+    expect(calls.some((c) => /\b(meta|sessions)\b/.test(c.q) && /^(INSERT|UPDATE|DELETE)/.test(c.q))).toBe(false);
+  });
+});
+
 describe("source pins", () => {
   const src = readFileSync(resolve(__dirname, "..", "app/api/trainer/change/route.js"), "utf8");
   const inOrder = (text, order) => {
@@ -784,7 +1111,9 @@ describe("source pins", () => {
     const withdraw = post.slice(post.indexOf('if ("withdraw" in b)'), post.indexOf("await dbWithdrawChanges("));
     inOrder(withdraw, ["await dbChangesForTrainer(", "if (landed.length)", "await logLook(", "dbReadProfile(", "changeStatus("]);
     const send = post.slice(post.indexOf("await dbWithdrawChanges("));
-    inOrder(send, ["await logLook(", "dbReadProfile(", "validateChangeSet(", "await dbInsertChangeSet("]);
+    inOrder(send, ["await logLook(", "dbReadProfile(", "validateSessionSet(", "validateChangeSet(", "await dbInsertChangeSet("]);
+    // A session's consent gate comes before the look, so an old grant reads nothing.
+    inOrder(send, ["grant.consentVersion !== SHARE_CONSENT_VERSION", "await logLook("]);
     // Exactly two reads of the profile, each straight after its look.
     expect(post.match(/dbReadProfile\(/g)).toHaveLength(2);
     expect(post.match(/await logLook\(ref, me, now\);\n\s+if \(failed\) return slid\(g, failed\);/g)).toHaveLength(2);
