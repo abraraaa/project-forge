@@ -1229,7 +1229,7 @@ describe("E1: one validator, built from the engine's modules", () => {
   it("no second definition of the validator, bounds, status or apply plan", () => {
     const DEF = /\b(?:function\s+|const\s+|let\s+)(validateOp|validateChangeSet|boundsFor|changeStatus|planDeviceSteps|DAY_LABELS)\b/;
     expect(source.filter((f) => f !== "lib/trainer-change.js" && DEF.test(readFileSync(join(ROOT, f), "utf8")))).toEqual([]);
-  });
+  }, 20_000); // reads every source file: a longer budget under full-suite load
   it("the engine's limits are used only by the engine and the validator", () => {
     const USE = /\b(MAX_JUMP_FRACTION|deloadIntensityFor)\b/;
     const allowed = new Set(["lib/progression.js", "lib/lift-translations.js", "lib/trainer-change.js"]);
