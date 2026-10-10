@@ -398,12 +398,16 @@ describe("SessionHost wiring", () => {
     const slice = src.slice(src.indexOf("const pushSetToDraft"), src.indexOf("logSet(draftLogRef.current"));
     // The pure-bodyweight arm ends at the added load: no fallback to W.
     expect(slice).toMatch(/const resolvedWeight = loadType === "bodyweight" \? addedLoadFor\(addedLoads, ex\.name\)\s*\n\s*:/);
-    expect(src).toContain("P.getAddedLoads(profile)");
+    // Reads and writes go through the host's adapter (lib/session-source.js).
+    const adapter = readFileSync(resolve(__dirname, "../lib/session-source.js"), "utf8");
+    expect(adapter).toContain("P.getAddedLoads(profile)");
+    expect(src).toContain("useState(() => source.addedLoads())");
+    expect(adapter).toMatch(/const addedLoad = \(name, kg\) => \{\s*const next = P\.setAddedLoad\(profile, name, kg\);\s*pushNow\(profile\);/);
 
     const at = (s, from = 0) => { const i = src.indexOf(s, from); expect(i, s).toBeGreaterThan(-1); return i; };
     // The setter updates the screen's state, not just the store.
     const setterAt = at("const setAddedLoad = useCallback");
-    expect(src.slice(setterAt, at("}, [profile]);", setterAt))).toContain("setAddedLoadsState(P.setAddedLoad(profile, name, kg))");
+    expect(src.slice(setterAt, at("}, [profile, sinks]);", setterAt))).toContain("setAddedLoadsState(sinks.addedLoad(name, kg))");
     // pushSetToDraft re-reads the map when it changes.
     const depsAt = at("}, [", at("const pushSetToDraft"));
     expect(src.slice(depsAt, at("]);", depsAt))).toMatch(/\baddedLoads\b/);

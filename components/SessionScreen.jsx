@@ -28,7 +28,7 @@ import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
 import { WEEK, SWAP_DB } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
-import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, usesOptionalChrome, addedLoadFor, loggedAddedKg } from "@/lib/lift-translations";
+import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, usesOptionalChrome, addedLoadFor, loggedAddedKg, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 import { resolveVid } from "@/lib/exercise-videos";
 
@@ -498,7 +498,7 @@ function RestProgressLine({ active, remain, total }) {
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,planWeights={},setPlanWeights,planReps={},setPlanReps,prescribedReps={},coachLine=null,travel=false,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null}){
+export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,planWeights={},setPlanWeights,planReps={},setPlanReps,prescribedReps={},coachLine=null,travel=false,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null,maxSets=null}){
   const [swapEx,setSwapEx]=useState(null);
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
   const vidEx    =isSS?(phase==="A"?resolvedExA:resolvedExB):resolvedEx;
@@ -514,6 +514,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const adding=addKey===thisKey;
   // A finished block forks: add another set, or move on. Nothing auto-advances.
   const fork=blockDone&&!adding;
+  // maxSets (a coached session's ten): no more sets offered once a lift holds that many.
+  const canAdd=maxSets==null||Math.max(setNum-1,loggedSets.length)<maxSets;
   // Last block only: an earlier block left short turns the fork back towards
   // it (host's backTo), with finishing still one tap away.
   const guard=fork&&!!backTo;
@@ -921,7 +923,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           )}
           {/* Guarded fork: two full buttons fit 390px, three don't, so adding
               a set steps back to a quiet text control above the row. */}
-          {guard&&(
+          {guard&&canAdd&&(
             <div style={{margin:"12px 20px 0",display:"flex",justifyContent:"flex-end"}}>
               <button onClick={()=>{haptic.tap();focusLogRef.current=true;setAddKey(thisKey);}}
                 style={{...linkBtn,minHeight:36,padding:"0 4px",color:T.ink2}}>
@@ -961,12 +963,12 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               </>
             ):fork?(
               <>
-                <button className="forge-press" onClick={()=>{haptic.tap();focusLogRef.current=true;setAddKey(thisKey);}}
+                {canAdd&&<button className="forge-press" onClick={()=>{haptic.tap();focusLogRef.current=true;setAddKey(thisKey);}}
                   style={{flex:"0 0 auto",height:56,padding:"0 16px",background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",
                     display:"flex",alignItems:"center",justifyContent:"center",whiteSpace:"nowrap",
                     fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink2}}>
                   Add another set
-                </button>
+                </button>}
                 <button className="forge-press forge-lift" {...pressLiftHandlers} onClick={()=>{haptic.tap();focusLogRef.current=true;onNext?.();}}
                   style={{flex:1,minWidth:0,height:56,padding:"0 14px",background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",
                     display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",lineHeight:1.2,
@@ -1121,7 +1123,6 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
 // steps derived per-lift from the equipment increment (leg press: .0 only;
 // lateral raise: .0/.25/.5/.75). Depth from tonal falloff + type scale —
 // zero blur, no glass cylinder.
-const ADDED_LOAD_MAX_KG = 100; // vest / plate range on a bodyweight lift
 // The drum is what you did: it edits today's plan (the host's session layer),
 // which the log reads and the next set inherits. It never writes the
 // prescription; the dot on the reps wheel marks that.
