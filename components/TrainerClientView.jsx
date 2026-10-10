@@ -7,10 +7,13 @@
 // sharing dates, no looks, nothing to stop. When the client has the trainer's
 // changes on, the view carries their plan: the trainer can change it, and
 // the client sees every change and can undo it (the plan section below).
-// Otherwise read only. Every number is computed here from the projection the trainer
+// The trainer can also run a session with them on /trainer/coach and see
+// what became of each one sent (Sessions you ran), which stays listed after
+// changes stop (view.ran). Otherwise read only. Every number is computed here from the projection the trainer
 // routes send (lib/trainer-view.js projectForTrainer), with the same pure
 // functions the client's own Lab uses. Nothing about the viewer's own device
-// is read. Sessions carry synthetic ids, so nothing here parses an id as a
+// is read: an unsent coached draft for this client comes from the parent
+// (unsent). Sessions carry synthetic ids, so nothing here parses an id as a
 // time.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -23,14 +26,17 @@ import { mainLiftTrend, readinessBreakdown } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
 import { makeDayContext, weeklyStrength } from "@/lib/day-state";
 import { isResting } from "@/lib/breaks";
-import { localDateStr, todayLocalIso } from "@/lib/dates";
+import { localDateStr, todayLocalIso, addDaysIso } from "@/lib/dates";
 import { runsWeekFor, SELF_REF } from "@/lib/trainer-view";
-import { ledgerFor, ledgerKg, ledgerReps, ledgerRepsText, ledgerSetText, ledgerVolumeText, ledgerSetsShown } from "@/lib/trainer-ledger";
+import { ledgerFor, ledgerKg, ledgerReps, ledgerRepsText, ledgerSetText, ledgerVolumeText, ledgerSetsShown, ledgerMarkText } from "@/lib/trainer-ledger";
 import { exportFilename } from "@/lib/trainer-export";
-import { MAX_OPS, MAX_KG, REP_LIMITS, TIMED_SECONDS, WEEK_JUMP_FRACTION, BIG_DROP_FRACTION } from "@/lib/trainer-change";
+import {
+  MAX_OPS, MAX_KG, REP_LIMITS, TIMED_SECONDS, WEEK_JUMP_FRACTION, BIG_DROP_FRACTION,
+  SESSION_KIND, SESSIONS_PER_WEEK, AUTO_KEEP_MS, sessionDayWords,
+} from "@/lib/trainer-change";
 import { EFFECTIVE_REP_BAND } from "@/lib/rep-band";
 import { nextRung, snapToImplement, isBodyweightMovement } from "@/lib/lift-translations";
-import { timedTargetFor } from "@/lib/programme";
+import { timedTargetFor, nextStrengthIdx, SESSIONS } from "@/lib/programme";
 
 const PAGE = 10;
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -152,7 +158,11 @@ const quietBtn = {
  *   onChanged?: () => Promise<unknown> | unknown,
  *   clientRef?: string | null,
  *   onExport?: (body: { ref: string, today: string }) => Promise<Response | null | undefined>,
+ *   onRunSession?: (letter: "A" | "B" | "C") => void,
+ *   unsent?: { letter: "A" | "B" | "C", date: string | null, sets: number } | null,
  * }} props
+ * unsent: a session with this client run on this device and not sent yet
+ * (lib/session-source.js unsentDraft, read by the parent).
  * clientRef is the ref the parent opened this pane by (a client's; your own
  * training is "me"). onExport posts the body to /api/trainer/export through
  * the parent's fetch, as onChange does, and hands back the raw response; the
@@ -160,9 +170,10 @@ const quietBtn = {
  * onChange posts to /api/trainer/change for this client (the parent adds
  * the grant and the date); onFaceId runs the trainer's sign-in again for a
  * fresh Face ID; onChanged reloads the pane after a send or a withdraw, and
- * answers false when the reload didn't land.
+ * answers false when the reload didn't land. onRunSession opens a session
+ * with this client on the trainer's device, at the letter picked.
  */
-export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false, onChange, onFaceId, onChanged, clientRef = null, onExport }) {
+export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false, onChange, onFaceId, onChanged, clientRef = null, onExport, onRunSession, unsent: unsentProp = null }) {
   const name = client?.name || null;
   const title = self ? "You" : name || "Your client";
   const they = self ? "you" : "they";
@@ -214,6 +225,11 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   const sentenceName = name || "They";
   // The plan comes only for a client who has the trainer's changes on.
   const plan = !self && view?.plan && typeof view.plan === "object" ? view.plan : null;
+  // Otherwise the sessions the trainer ran still come (view.ran), with no plan.
+  const ran = !self && !plan && view?.ran && typeof view.ran === "object" ? view.ran : null;
+  const ranRows = useMemo(() => (Array.isArray(ran?.changes) ? ran.changes.filter((c) => c?.kind === SESSION_KIND) : []), [ran]);
+  // A session run on this device and not sent yet (the parent reads it).
+  const unsent = !self && unsentProp && LETTERS.includes(unsentProp.letter) ? unsentProp : null;
   // Where their changes stand (view.edits); "on" without a plan means it couldn't be read.
   const edits = plan ? "on" : view?.edits === "on" ? "unavailable" : view?.edits;
   const lead = self ? "Read only." : leadLine(edits, name);
@@ -287,7 +303,15 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
           </div>
 
           {/* 3b. Plan: only when the client has the trainer's changes on */}
-          {plan && <PlanSection plan={plan} name={name} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>}
+          {plan && <PlanSection plan={plan} name={name} sessions={sessions} todayIso={todayIso} unsent={unsent}
+            onChange={onChange} onFaceId={onFaceId} onChanged={onChanged} onRunSession={onRunSession}/>}
+          {/* 3c. Changes not on: the sessions you ran, and nothing of the plan */}
+          {!plan && !self && (ranRows.length > 0 || unsent) && (
+            <div style={section} data-section="ran">
+              <SessionsYouRan ran={ranRows} name={name} budget={ran?.budget} programme={false} sessions={sessions} todayIso={todayIso}
+                unsent={unsent} onRunSession={onRunSession} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
+            </div>
+          )}
 
           {/* 4. Main lifts: the 12-month line and the bests */}
           <div style={section} data-section="lifts">
@@ -572,6 +596,7 @@ function LiftLedger({ lift, rows, from }) {
                 <button type="button" aria-expanded={open} onClick={() => flip(r.key)} className="forge-press forge-tint"
                   style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 44, padding: "8px 0", background: "none", border: "none", cursor: "pointer", fontFamily: T.text, fontSize: 14, color: T.ink, textAlign: "left" }}>
                   <span style={{ flex: 1, minWidth: 0 }}><Nums text={summary}/></span>
+                  {ledgerMarkText(r) && <span data-ledger-mark="" style={{ fontSize: 12, color: T.ink3, flexShrink: 0 }}>{ledgerMarkText(r)}</span>}
                   {r.changes.length > 0 && <span style={{ fontSize: 12, color: T.ink3, flexShrink: 0 }}>Your change</span>}
                   <Glyph name={open ? "chevronUp" : "chevronDown"} size={11} color={T.ink3}/>
                 </button>
@@ -626,7 +651,12 @@ function LiftLedger({ lift, rows, from }) {
                   <tbody data-ledger-row={r.key} data-tier={r.tier}>
                     {sets.map((s, j) => (
                       <tr key={s.n} data-ledger-set={s.n} style={{ borderTop: j === 0 ? `1px solid ${T.ruleFaint}` : "none" }}>
-                        {j === 0 && <th scope="rowgroup" rowSpan={sets.length} style={{ ...cell, color: T.ink, whiteSpace: "nowrap" }}><Nums text={isoDayMonth(r.date)}/></th>}
+                        {j === 0 && (
+                          <th scope="rowgroup" rowSpan={sets.length} style={{ ...cell, color: T.ink, whiteSpace: "nowrap" }}>
+                            <Nums text={isoDayMonth(r.date)}/>
+                            {ledgerMarkText(r) && <div data-ledger-mark="" style={{ fontSize: 12, color: T.ink3 }}>{ledgerMarkText(r)}</div>}
+                          </th>
+                        )}
                         {mode === "all" && <td style={{ ...cell, fontFamily: T.measured }}>{s.n}</td>}
                         {prescribed && <td style={{ ...cell, fontFamily: T.measured }}>{j === 0 && r.prescribed != null ? ledgerReps(r.prescribed) : ""}</td>}
                         <td style={{ ...cell, fontFamily: T.measured, color: T.ink }}>{ledgerReps(s.reps) || "–"}</td>
@@ -677,6 +707,8 @@ function SessionRow({ session }) {
     <div data-session={session.date} style={{ borderTop: `1px solid ${T.ruleFaint}`, padding: "12px 0" }}>
       <div style={{ fontSize: 15, fontWeight: 500, color: T.ink }}><Nums text={head}/></div>
       {session.travel === true && <div style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}>Travel session</div>}
+      {/* A trainer logged it with them: the flag only, never who. */}
+      {session.coached === true && <div data-coached="" style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}>Coached</div>}
       {rows.map((r, i) => (
         <div key={i} style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, marginTop: 4 }}>
           <span style={{ color: T.ink }}>{r.name}</span> · <Nums text={r.text}/>
@@ -843,6 +875,7 @@ const NOT_APPLIED = {
 
 /** A change's status, in the trainer's words (lib/trainer-change.js changeStatus). */
 export function trainerStatusText(c, name) {
+  if (c?.kind === SESSION_KIND) return sessionStatusText(c, name);
   switch (c.status) {
     case "waiting": return c.from ? `From ${isoDayLabel(c.from)}` : `Waiting for ${name ? `${name}'s` : "their"} app`;
     case "in_force": return "In their plan";
@@ -872,6 +905,69 @@ export function changeLine(c) {
   if (c.kind === "reps") return `${c.target} · ${repsWords(c.after, timed)}${c.before != null ? `, was ${repCount(c.before)}` : ""}`;
   if (c.kind === "mainLift") return `Main lift · ${c.after}${c.before ? `, was ${c.before}` : ""}`;
   return c.from ? `Week from ${isoDayLabel(c.from)}` : "Week";
+}
+
+// ── Sessions the trainer ran ────────────────────────────────────────────────
+
+const LETTERS = /** @type {const} */ (["A", "B", "C"]);
+/** "Strength A" from "A"; any other letter reads as a session. @param {unknown} letter */
+const sessionName = (letter) => SESSIONS[LETTERS.indexOf(/** @type {any} */ (letter))]?.name ?? "A session";
+
+/** "16:40", "16:40 tomorrow" or "16:40 Mon 12 Oct", on the viewer's own clock. */
+function keepsAtText(ms, nowMs) {
+  const d = new Date(ms);
+  const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const day = localDateStr(d);
+  const today = localDateStr(new Date(nowMs));
+  if (day === today) return time;
+  return day === addDaysIso(today, 1) ? `${time} tomorrow` : `${time} ${msDayLabel(ms)}`;
+}
+
+/**
+ * A session the trainer sent, in the trainer's words, by its status
+ * (lib/trainer-change.js sessionStatus). seen: on their phone, kept five
+ * hours after it arrived (c.delivered) unless they say otherwise; once
+ * sharing or changes stopped since, it waits for them to decide and is never
+ * kept on its own.
+ * @param {any} c  a plan change of kind "session"
+ * @param {string | null} name  the client's name
+ * @param {number} [nowMs]  the viewer's now, for when it will be kept
+ */
+export function sessionStatusText(c, name, nowMs = 0) {
+  const whose = name ? `${name}'s` : "their";
+  const They = name || "They";
+  switch (c?.status) {
+    case "waiting": return `Sent · waiting for ${whose} phone`;
+    case "seen": {
+      if (c.reason === "stopped") return `On ${whose} phone · it waits for ${name || "them"} to decide`;
+      const keepsAt = typeof c.delivered === "string" ? Date.parse(c.delivered) + AUTO_KEEP_MS : NaN;
+      if (!Number.isFinite(keepsAt)) return `On ${whose} phone · kept after five hours unless they say otherwise`;
+      // Past the five hours, their app keeps it the next time it opens.
+      if (keepsAt <= nowMs) return `On ${whose} phone · kept when ${whose} app next opens`;
+      return `On ${whose} phone · kept at ${keepsAtText(keepsAt, nowMs)} unless they say otherwise`;
+    }
+    case "kept": return name ? `Kept by ${name}` : "Kept";
+    case "auto_kept": return "Kept after five hours";
+    case "discarded": return `${They} didn't keep it`;
+    case "superseded": return `${They} logged ${sessionName(c.after?.letter)} themselves`;
+    case "withdrawn": return "Withdrawn";
+    default: return c?.reason === "stopped" ? "Stopped before it arrived" : "Didn't arrive";
+  }
+}
+
+/**
+ * One sent session: "Strength A, yesterday · 26 sets". The day is the
+ * record's own, in words for the viewer's today, so it never says today for
+ * a day that isn't.
+ * @param {any} c  a plan change of kind "session" (after: { letter, date, exercises, sets })
+ * @param {string | null | undefined} todayIso
+ */
+export function sessionRunLine(c, todayIso) {
+  const v = c?.after && typeof c.after === "object" ? c.after : {};
+  const date = v.date ?? c?.from ?? c?.date ?? null;
+  const day = date ? sessionDayWords(date, todayIso) : null;
+  const sets = Number.isFinite(v.sets) ? `${v.sets} set${v.sets === 1 ? "" : "s"}` : null;
+  return [`${sessionName(v.letter)}${day ? `, ${day}` : ""}`, sets].filter(Boolean).join(" · ");
 }
 
 /** A drafted or previewed change, before → after. */
@@ -949,16 +1045,21 @@ const chip = (on) => ({
  * The plan section and its sheets. Every request goes through onChange
  * (POST /api/trainer/change, the parent adds the grant and the date).
  * @param {{
- *   plan: any, name: string | null,
+ *   plan: any, name: string | null, sessions: any[], todayIso: string | undefined,
+ *   unsent?: { letter: "A" | "B" | "C", date: string | null, sets: number } | null,
  *   onChange?: (body: any) => Promise<{ status: number, body: any }>,
  *   onFaceId?: () => Promise<boolean>,
  *   onChanged?: () => Promise<unknown> | unknown,
+ *   onRunSession?: (letter: "A" | "B" | "C") => void,
  * }} props
  */
-function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
+function PlanSection({ plan, name, sessions, todayIso, unsent = null, onChange, onFaceId, onChanged, onRunSession }) {
   const lifts = useMemo(() => (Array.isArray(plan?.lifts) ? plan.lifts : []), [plan]);
   const mains = useMemo(() => (Array.isArray(plan?.mains) ? plan.mains : []), [plan]);
-  const changes = useMemo(() => (Array.isArray(plan?.changes) ? plan.changes : []), [plan]);
+  // Sessions the trainer ran list apart from plan changes: they spend their own budget.
+  const all = useMemo(() => (Array.isArray(plan?.changes) ? plan.changes : []), [plan]);
+  const changes = useMemo(() => all.filter((c) => c?.kind !== SESSION_KIND), [all]);
+  const ran = useMemo(() => all.filter((c) => c?.kind === SESSION_KIND), [all]);
   const budget = plan?.budget || { used: 0, of: 10, freeAt: null };
   const outOfSends = budget.used >= budget.of;
   const mainFor = (liftName) => mains.find((m) => m.choice === liftName && Array.isArray(m.options) && m.options.length > 1) || null;
@@ -1058,6 +1159,9 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
         )}
       </div>
       <div role="status" aria-live="polite" style={{ ...statusLine, marginTop: 8 }}>{status}</div>
+
+      <SessionsYouRan ran={ran} name={name} budget={budget.sessions} programme={!!plan?.programme} sessions={sessions} todayIso={todayIso}
+        unsent={unsent} onRunSession={onRunSession} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
 
       <YourChanges changes={changes} lifts={lifts} name={name} budget={budget}
         onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
@@ -1418,15 +1522,66 @@ function ReviewSheet({ name, ops, basis, lifts, mains, budget, onChange, onFaceI
 }
 
 /**
+ * Taking back a change or a session through onChange ({ withdraw: id }). A
+ * 403 needsFaceId holds the withdraw until "Confirm it's you"; a reply that
+ * withdrew nothing says so and reloads. `words` are the caller's: done(ctx)
+ * for what was taken back, nothing, and editsOff.
+ * @param {{
+ *   onChange?: (body: any) => Promise<{ status: number, body: any }>,
+ *   onFaceId?: () => Promise<boolean>,
+ *   onChanged?: () => Promise<unknown> | unknown,
+ *   words: { done: (ctx: any) => string, nothing: string, editsOff: string },
+ * }} opts
+ */
+function useWithdraw({ onChange, onFaceId, onChanged, words }) {
+  const [busy, setBusy] = useState(/** @type {string | null} */ (null));
+  // A withdraw waiting on Face ID: what it takes back, and the caller's context for its words.
+  const [face, setFace] = useState(/** @type {{ x: string, ctx: any } | null} */ (null));
+  const [msg, setMsg] = useState("");
+  /** @param {string} x @param {any} [ctx] */
+  const withdraw = async (x, ctx) => {
+    if (busy || !onChange) return;
+    setBusy(x); setMsg(""); setFace(null);
+    const r = await onChange({ withdraw: x }).catch(() => ({ status: 0, body: {} }));
+    setBusy(null);
+    if (r.status === 200 && Array.isArray(r.body?.withdrawn) && r.body.withdrawn.length === 0) {
+      // Nothing matched: it was undone already, or has moved past taking back.
+      setMsg(words.nothing);
+      onChanged?.();
+    } else if (r.status === 200) {
+      setMsg(words.done(ctx));
+      onChanged?.();
+    } else if (r.status === 403 && r.body?.needsFaceId) {
+      setFace({ x, ctx });
+    } else if (r.status === 403 && r.body?.editsOff) {
+      setMsg(words.editsOff);
+    } else {
+      setMsg(r.status === 0 ? "You're offline. Try again when you're back." : "Couldn't withdraw that just now. Try again.");
+    }
+  };
+  const confirmIt = async () => {
+    if (!face) return;
+    const ok = await onFaceId?.();
+    if (!ok) { setMsg("Face ID didn't go through. Try again."); return; }
+    withdraw(face.x, face.ctx);
+  };
+  return { busy, face, msg, withdraw, confirmIt };
+}
+
+/**
  * The trainer's own changes, grouped by set, newest first, with their
  * status and Withdraw where a change can still be taken back.
  */
 function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChanged }) {
   const [shown, setShown] = useState(SETS_PAGE);
-  const [busy, setBusy] = useState(/** @type {string | null} */ (null));
-  // A withdraw waiting on Face ID: what it takes back, and whether any of it is in force.
-  const [face, setFace] = useState(/** @type {{ x: string, inForce: boolean } | null} */ (null));
-  const [msg, setMsg] = useState("");
+  const { busy, face, msg, withdraw, confirmIt } = useWithdraw({
+    onChange, onFaceId, onChanged,
+    words: {
+      done: (inForce) => (inForce ? `Withdrawn. ${name ? `${name}'s` : "Their"} app puts it back next time it opens.` : `Withdrawn. It won't reach ${name || "them"}.`),
+      nothing: "Nothing to withdraw. It's already undone, or it can't be taken back now.",
+      editsOff: `Changes are off for ${name || "them"} now. Anything not landed won't land.`,
+    },
+  });
 
   const sets = useMemo(() => {
     /** @type {Map<string, any[]>} */
@@ -1445,33 +1600,6 @@ function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChang
     if (latest?.id !== c.id) return null;
     const now = lifts.find((l) => l.name === c.target)?.reps;
     return now != null && repCount(now) !== repCount(c.after) ? repCount(now) : null;
-  };
-
-  const withdraw = async (x, wasInForce) => {
-    if (busy || !onChange) return;
-    setBusy(x); setMsg(""); setFace(null);
-    const r = await onChange({ withdraw: x }).catch(() => ({ status: 0, body: {} }));
-    setBusy(null);
-    if (r.status === 200 && Array.isArray(r.body?.withdrawn) && r.body.withdrawn.length === 0) {
-      // Nothing matched: it was undone already, or has moved past taking back.
-      setMsg("Nothing to withdraw. It's already undone, or it can't be taken back now.");
-      onChanged?.();
-    } else if (r.status === 200) {
-      setMsg(wasInForce ? `Withdrawn. ${name ? `${name}'s` : "Their"} app puts it back next time it opens.` : `Withdrawn. It won't reach ${name || "them"}.`);
-      onChanged?.();
-    } else if (r.status === 403 && r.body?.needsFaceId) {
-      setFace({ x, inForce: wasInForce });
-    } else if (r.status === 403 && r.body?.editsOff) {
-      setMsg(`Changes are off for ${name || "them"} now. Anything not landed won't land.`);
-    } else {
-      setMsg(r.status === 0 ? "You're offline. Try again when you're back." : "Couldn't withdraw that just now. Try again.");
-    }
-  };
-  const confirmIt = async () => {
-    if (!face) return;
-    const ok = await onFaceId?.();
-    if (!ok) { setMsg("Face ID didn't go through. Try again."); return; }
-    withdraw(face.x, face.inForce);
   };
 
   return (
@@ -1528,6 +1656,139 @@ function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChang
       </div>
       {face && (
         <button type="button" onClick={confirmIt} className="forge-press forge-tint" style={{ ...quietBtn, marginTop: 8 }}>Confirm it's you</button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Sessions the trainer ran with this client: the week's count against its
+ * own cap, the way to run one (the letter, defaulting to the next in their
+ * rotation), and each one sent, newest first, with what became of it.
+ * Withdraw shows only before it reaches their phone; after that the
+ * decision is theirs. Running one is the parent's (onRunSession): nothing
+ * here writes to the device. A session run on this device and not sent yet
+ * (unsent) lists first, and the run control continues it, whatever letter
+ * is picked; it is there even when no new one can start, so it can still be
+ * sent or discarded.
+ * @param {{
+ *   ran: any[], name: string | null, unsent?: { letter: "A" | "B" | "C", date: string | null, sets: number } | null,
+ *   budget: { used?: number, of?: number, freeAt?: number | null } | null | undefined,
+ *   programme: boolean, sessions: any[], todayIso: string | undefined,
+ *   onRunSession?: (letter: "A" | "B" | "C") => void,
+ *   onChange?: (body: any) => Promise<{ status: number, body: any }>,
+ *   onFaceId?: () => Promise<boolean>,
+ *   onChanged?: () => Promise<unknown> | unknown,
+ * }} props
+ */
+function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unsent = null, onRunSession, onChange, onFaceId, onChanged }) {
+  const used = Number.isFinite(budget?.used) ? Number(budget?.used) : 0;
+  const of = Number.isFinite(budget?.of) ? Number(budget?.of) : SESSIONS_PER_WEEK;
+  const full = used >= of;
+  // Next in their rotation, counting sessions sent and not yet decided, so a
+  // phone left in a locker doesn't get the same letter twice.
+  const next = useMemo(() => {
+    const pending = ran.filter((c) => c?.status === "waiting" || c?.status === "seen")
+      .map((c) => ({ id: String(c.id ?? ""), date: c.after?.date, scheduledLetter: c.after?.letter }));
+    return LETTERS[nextStrengthIdx([...sessions, ...pending])] ?? "A";
+  }, [ran, sessions]);
+  // The trainer's pick; until they pick, the next one (it follows a reload).
+  const [picked, setPick] = useState(/** @type {"A" | "B" | "C" | null} */ (null));
+  const pick = picked ?? next;
+  const [shown, setShown] = useState(SETS_PAGE);
+  // The viewer's now, for when a session on their phone will be kept: a
+  // minute's tick, so a pane left open moves on past the five hours.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const rows = useMemo(() => [...ran].sort((a, b) => (b.at || 0) - (a.at || 0)), [ran]);
+  const { busy, face, msg, withdraw, confirmIt } = useWithdraw({
+    onChange, onFaceId, onChanged,
+    words: {
+      done: () => `Withdrawn. It won't reach ${name || "them"}.`,
+      nothing: `Nothing to withdraw. It's already withdrawn, or on ${name ? `${name}'s` : "their"} phone now.`,
+      editsOff: `Changes are off for ${name || "them"} now, so it won't reach them.`,
+    },
+  });
+  const canRun = !!onRunSession && programme;
+  // The draft on this device opens as it is: its own letter, never the chips'.
+  const canContinue = !!onRunSession && !!unsent;
+
+  return (
+    <div data-section="coach" style={{ marginTop: 24 }}>
+      <div style={{ ...kicker, marginBottom: 4 }}>Sessions you ran</div>
+      <div data-session-budget="" style={{ fontSize: 12, color: T.ink3, marginBottom: 8 }}>
+        <Nums text={`${used} of ${of} this week`}/>
+        {full && budget?.freeAt ? <> · <Nums text={`more from ${msDayLabel(budget.freeAt)}`}/></> : null}
+      </div>
+
+      {canContinue ? (
+        <div data-run="" style={{ marginBottom: 12 }}>
+          <button type="button" onClick={() => onRunSession?.(unsent.letter)}
+            className="forge-press forge-tint" style={{ ...quietBtn, width: "100%", color: T.ink, cursor: "pointer" }}>
+            Continue
+          </button>
+          <div style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 6 }}>
+            Opens where you left it on this device.
+          </div>
+        </div>
+      ) : canRun && (
+        <div data-run="" style={{ marginBottom: 12 }}>
+          <div role="radiogroup" aria-label="Session to run" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {LETTERS.map((l) => (
+              <button key={l} type="button" role="radio" aria-checked={pick === l} onClick={() => setPick(l)} style={chip(pick === l)}>
+                {sessionName(l)}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 6 }}>
+            {sessionName(next)} is next for {name || "them"}.
+          </div>
+          <button type="button" onClick={() => { if (!full) onRunSession?.(pick); }} disabled={full}
+            className="forge-press forge-tint" style={{ ...quietBtn, width: "100%", marginTop: 12, color: full ? T.ink3 : T.ink, cursor: full ? "default" : "pointer" }}>
+            {name ? `Run a session with ${name}` : "Run a session"}
+          </button>
+          <div style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 6 }}>
+            A session you haven&apos;t sent yet opens where you left it on this device.
+          </div>
+        </div>
+      )}
+
+      {unsent && (
+        <div data-unsent="" style={{ padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>
+          <div style={{ fontSize: 14, color: T.ink, overflowWrap: "anywhere" }}>
+            <Nums text={sessionRunLine({ after: { letter: unsent.letter, date: unsent.date, sets: unsent.sets } }, todayIso)}/>
+          </div>
+          <div style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}>Not sent yet · on this iPad</div>
+        </div>
+      )}
+      {rows.length === 0 && !unsent && <div style={{ fontSize: 13, color: T.ink2 }}>None sent yet.</div>}
+      {rows.slice(0, shown).map((c) => (
+        <div key={c.id} data-ran={c.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, color: T.ink, overflowWrap: "anywhere" }}><Nums text={sessionRunLine(c, todayIso)}/></div>
+            <div style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}><Nums text={sessionStatusText(c, name, nowMs)}/></div>
+          </div>
+          {/* Only before it reaches their phone: once there, keeping it is theirs (the route agrees). */}
+          {c.status === "waiting" && (
+            <button type="button" onClick={() => withdraw(c.id)} aria-disabled={!!busy} style={smallBtn}>
+              {busy === c.id ? "One moment" : "Withdraw"}
+            </button>
+          )}
+        </div>
+      ))}
+      {rows.length > shown && (
+        <button type="button" onClick={() => setShown((n) => n + SETS_PAGE)} className="forge-press forge-tint" aria-label="Show earlier sessions you ran" style={{ ...quietBtn, width: "100%", marginTop: 8 }}>
+          Show earlier
+        </button>
+      )}
+      <div role="status" aria-live="polite" style={{ ...statusLine, marginTop: 8 }}>
+        {face ? "Confirm it's you to withdraw a session." : msg}
+      </div>
+      {face && (
+        <button type="button" onClick={confirmIt} className="forge-press forge-tint" style={{ ...quietBtn, marginTop: 8 }}>Confirm it&apos;s you</button>
       )}
     </div>
   );
