@@ -2,22 +2,32 @@
 // The trainer-change validator, statuses and device plan (lib/trainer-change.js).
 // Pure. Every rule is pinned at its boundary and one rung past it; the
 // mutation witnesses are named after the guard they hold (spec §11).
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import {
   validateOp, validateChangeSet, boundsFor, checkWeek, liftBasis, weekBasis, anchorIdOf, currentMainLift,
   changeStatus, isUndoable, planDeviceSteps, rowFromDb, anchorLogged,
   DAY_LABELS, LIVE_SLICES, OUTCOMES, KINDS, MAX_OPS, HORIZON_DAYS, SET_ID_RE, REP_LIMITS, TIMED_SECONDS, MAX_KG, RESET,
+  validateSessionSet, sessionStatus, planSessionSteps, isSwapFor, sessionTarget, sessionDayWords, sessionPreview,
+  SESSION_KIND, MAX_SETS_PER_LIFT, SESSION_CAP, SESSIONS_PER_WEEK, AUTO_KEEP_MS, RECORD_MAX_BYTES, DRUM_MAX, MAX_DURATION_S,
+  SESSION_LETTERS, READINESS, READINESS_REASONS, RECORD_KEYS, RPE_TRACK,
 } from "@/lib/trainer-change";
 import { climbRungs, MAX_JUMP_FRACTION } from "@/lib/progression";
-import { STEP_SIZES, nextRung, weightStepForLoadType, CATEGORY_COLD_START_MAX_KG, WORKING_WEIGHT_MAX_KG, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights } from "@/lib/lift-translations";
-import { MAIN_LIFT_FUNCTIONAL_EQUIVALENTS, EXERCISE_POOLS, WEEK } from "@/lib/programme";
+import { STEP_SIZES, nextRung, weightStepForLoadType, CATEGORY_COLD_START_MAX_KG, WORKING_WEIGHT_MAX_KG, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights, getLoadType, swapLoadType, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
+import {
+  MAIN_LIFT_FUNCTIONAL_EQUIVALENTS, EXERCISE_POOLS, WEEK, SESSIONS, SWAP_DB,
+  applyRotationToSession, applyMainLiftsToSession, applySwapsToSession, applyFocusToSession,
+} from "@/lib/programme";
+import { repTargets, planStartWeight, validMainLifts } from "@/lib/programme-resolve";
 import { bandViolations } from "@/lib/rotation-solver";
 import { resolvedProgramme } from "@/lib/mcp-server";
 import { TYPE_LABEL, ensureScheduleHistory } from "@/lib/sync-merge";
-import { addDaysIso } from "@/lib/dates";
-import { P, W, H, getLocalProfile, startingWeightForLift } from "@/lib/storage";
+import { addDaysIso, jsDow, mondayOfWeekIso } from "@/lib/dates";
+import {
+  P, W, H, getLocalProfile, startingWeightForLift,
+  newDraftLog, logSet, finaliseDraft, scaleForReadiness, rpeToRir, SCHEMA_VERSION,
+} from "@/lib/storage";
 import { assembleMeta } from "@/lib/db";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -124,7 +134,7 @@ describe("set-level rules", () => {
   });
   it("an unknown kind and a free-text note are not ops", () => {
     expect(run({ id: SET_ID, ops: [{ kind: "note", text: "hi" }] }).refusals).toEqual([{ i: 0, code: "kind" }]);
-    expect(KINDS).toEqual(["weight", "reps", "mainLift", "week"]);
+    expect(KINDS).toEqual(["weight", "reps", "mainLift", "week", "session"]);
   });
   it("returns the accepted ops with before, after and the device-only basis", () => {
     const r = run({ id: SET_ID, ops: [ok] });
@@ -1234,5 +1244,675 @@ describe("E1: one validator, built from the engine's modules", () => {
   it("is pure: no storage, fetch, window or database", () => {
     const code = SRC.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*\*)/.test(l)).join("\n");
     expect(code).not.toMatch(/\blocalStorage\b|\bfetch\s*\(|\bwindow\b|\bsql\b|from "\.\/db\.js"|from "\.\/net\.js"/);
+  });
+});
+
+// ── Coached sessions (kind "session") ───────────────────────────────────────
+
+const NOW = Date.parse(`${TODAY}T10:00:00.000Z`);
+const HOUR = 3600 * 1000;
+const S_META = { programmeBlock: { number: 2, config: {} }, userFocus: "Forged", mainLifts: {}, weights: { [SQUAT]: 100, [BENCH]: 80 }, reps: {} };
+const HIP = "45-Degree Hip Extension"; // A's pure bodyweight slot (ass2-A)
+
+/** What the swap overlay hands the host (components/SessionScreen.jsx SwapOverlay). */
+function swapPick(activeEx, optionName) {
+  const option = SWAP_DB[activeEx.name].find((o) => o.name === optionName);
+  const loadType = swapLoadType(option);
+  return { name: option.name, muscle: option.muscle, reps: activeEx.reps ?? 10, weight: loadType === getLoadType(activeEx) ? (activeEx.weight ?? null) : null, vid: option.vid ?? null, loadType };
+}
+
+/**
+ * A record as the live host builds it on the trainer's device: the same
+ * composition chain, no bodyweight and no anchors, through the real
+ * newDraftLog, logSet and finaliseDraft, then over the wire.
+ */
+function liveRecord(meta = S_META, idx = 0, { readiness = "normal", reason = null, swaps = {}, sets = null, rpe = 8 } = {}) {
+  const config = meta.programmeBlock?.config || {};
+  const mains = validMainLifts(meta) || {};
+  const main = applyMainLiftsToSession(applyRotationToSession(SESSIONS[idx], config), mains);
+  const picks = typeof swaps === "function" ? swaps(main) : swaps;
+  const active = scaleForReadiness(applyFocusToSession(applySwapsToSession(main, picks), meta.userFocus || "Forged", config, mains), readiness);
+  const targets = repTargets(meta);
+  const draft = newDraftLog({ profileName: null, session: SESSION_LETTERS[idx], blockNumber: meta.programmeBlock.number, readiness, readinessReason: reason });
+  for (const b of active.blocks) {
+    for (const [k, suffix] of [["ex", ""], ["exA", "-A"], ["exB", "-B"]]) {
+      const ex = b[k];
+      if (!ex) continue;
+      const key = `${b.id}${suffix}`;
+      const loadType = getLoadType(ex);
+      const weight = loadType === "bodyweight" ? null : planStartWeight(ex, { working: meta.weights, bodyweight: null, anchors: {} });
+      const reps = targets[ex.name] ?? ex.reps;
+      for (let n = 0; n < (sets ?? b.sets); n++) {
+        logSet(draft, {
+          blockId: b.id, blockType: b.type, exerciseName: ex.name, muscle: ex.muscle, swapped: !!picks[key],
+          fromPool: EXERCISE_POOLS[key] ? key : null, loadType, bodyweight: null, weight, reps,
+          rpe: b.type === "main" ? rpe : null, prescribed: { reps, weight, sets: b.sets },
+        });
+      }
+    }
+  }
+  return JSON.parse(JSON.stringify(finaliseDraft(draft)));
+}
+
+const edit = (record, fn) => { const r = structuredClone(record); fn(r); return r; };
+const redate = (r, date, idDate = date) => { r.date = date; r.dow = jsDow(date); r.weekStart = mondayOfWeekIso(date); r.id = `${idDate}T10:00:00.000Z`; };
+const exOf = (r, name) => r.blocks.flatMap((b) => b.exercises).find((e) => e.name === name);
+const sset = (record, drum = {}) => ({ id: SET_ID, ops: [{ kind: "session", record, drum }] });
+/** The verdict in one word: ok, stale, or "<rule>:<code>". */
+function vs(record, { drum = {}, meta = S_META, history = [], ...extra } = {}) {
+  const r = validateSessionSet(sset(record, drum), { meta, history, todayIso: TODAY, phase: "write", ...extra });
+  return r.ok ? "ok" : r.stale ? "stale" : `${r.rule}:${r.code}`;
+}
+const sessionClock = () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(NOW); });
+  afterEach(() => { vi.useRealTimers(); });
+};
+
+describe("coached session: the limits", () => {
+  it("are the owner's numbers", () => {
+    expect(SESSION_KIND).toBe("session");
+    expect(MAX_SETS_PER_LIFT).toBe(10);
+    expect(SESSION_CAP).toBe(7);
+    expect(SESSIONS_PER_WEEK).toBe(SESSION_CAP);
+    expect(AUTO_KEEP_MS).toBe(5 * 60 * 60 * 1000);
+    expect(RECORD_MAX_BYTES).toBe(32768);
+    expect(DRUM_MAX).toBe(32);
+    expect(MAX_DURATION_S).toBe(21600);
+    expect(OUTCOMES).toEqual(expect.arrayContaining(["kept", "auto_kept", "discarded", "superseded", "limits"]));
+  });
+  it("the readiness lists are the readiness screen's own", () => {
+    const src = readFileSync(join(ROOT, "components/SessionScreen.jsx"), "utf8");
+    const block = src.slice(src.indexOf("const reasons = ["), src.indexOf("];", src.indexOf("const reasons = [")));
+    expect([...block.matchAll(/id:"([a-z_]+)"/g)].map((m) => m[1])).toEqual([...READINESS_REASONS]);
+    const opts = src.slice(src.indexOf("const opts=["), src.indexOf("];", src.indexOf("const opts=[")));
+    expect([...opts.matchAll(/id:"([a-z_]+)"/g)].map((m) => m[1])).toEqual([...READINESS]);
+    expect(src).toMatch(/max=\{target\.timed\?180:30\}/);
+  });
+  it("the added-load bound is the drum's own", () => {
+    expect(ADDED_LOAD_MAX_KG).toBe(100);
+    expect(readFileSync(join(ROOT, "components/SessionScreen.jsx"), "utf8")).toMatch(/max=\{Math\.max\(ADDED_LOAD_MAX_KG,initKg\)\}/);
+  });
+});
+
+describe("coached session: validateSessionSet, S1-S14", () => {
+  sessionClock();
+  const base = () => liveRecord();
+
+  it("a live record of every letter, focus and readiness is accepted", () => {
+    for (const idx of [0, 1, 2]) expect(vs(liveRecord(S_META, idx))).toBe("ok");
+    for (const userFocus of ["Strong", "Sculpt"]) {
+      const meta = { ...S_META, userFocus };
+      for (const idx of [0, 1, 2]) expect(vs(liveRecord(meta, idx), { meta }), `${userFocus} ${idx}`).toBe("ok");
+    }
+    // Strong logs its accessories' range ("6-8") when no target was set.
+    expect(exOf(liveRecord({ ...S_META, userFocus: "Strong" }, 0), "DB Reverse Lunge").sets[0].reps).toBe("6-8");
+    expect(vs(liveRecord(S_META, 0, { readiness: "cooked", reason: "sore" }))).toBe("ok");
+    // No W on a cooked day: the main lift prescribes its deloaded template.
+    const noW = { ...S_META, weights: {} };
+    expect(vs(liveRecord(noW, 0, { readiness: "cooked" }), { meta: noW })).toBe("ok");
+    expect(vs(liveRecord(S_META, 1, { readiness: "fresh", sets: MAX_SETS_PER_LIFT }))).toBe("ok");
+  });
+  it("returns the change to store and the preview", () => {
+    const record = base();
+    const r = validateSessionSet(sset(record, { [SQUAT]: 102.5 }), { meta: S_META, history: [], todayIso: TODAY });
+    expect(r.ok).toBe(true);
+    expect(r.change).toEqual({ kind: "session", target: `${TODAY}:A`, before: null, after: { record, drum: { [SQUAT]: 102.5 } }, from: TODAY, basis: null });
+    expect(r.ops).toEqual([{ i: 0, ...r.change, warnings: [] }]);
+    expect(sessionTarget(record)).toBe(`${TODAY}:A`);
+    const sets = record.blocks.flatMap((b) => b.exercises).reduce((n, e) => n + e.sets.length, 0);
+    const exercises = record.blocks.flatMap((b) => b.exercises).length;
+    expect(exercises).toBe(8);
+    expect(r.preview).toEqual({ letter: "A", date: TODAY, day: "today", exercises, sets });
+    expect(sessionPreview(record)).toEqual({ letter: "A", date: TODAY, day: null, exercises, sets });
+  });
+  it("S1: one session op on a real set id, and nothing else on it", () => {
+    const record = base();
+    const run = (set) => { const r = validateSessionSet(set, { meta: S_META, history: [], todayIso: TODAY }); return r.ok ? "ok" : `${r.rule}:${r.code}`; };
+    expect(run({ id: "hws_short", ops: [{ kind: "session", record }] })).toBe("S1:set_id");
+    expect(run({ id: SET_ID, ops: [] })).toBe("S1:set_size");
+    expect(run({ id: SET_ID, ops: [{ kind: "session", record }, { kind: "session", record }] })).toBe("S1:set_size");
+    expect(run({ id: SET_ID, ops: [{ kind: "weight", record }] })).toBe("S1:kind");
+    expect(run({ id: SET_ID, ops: [{ kind: "session", record, note: "hi" }] })).toBe("S1:op_shape");
+    expect(run({ id: SET_ID, ops: [{ kind: "session" }] })).toBe("S1:op_shape");
+    expect(run({ id: SET_ID, ops: [{ kind: "session", record }] })).toBe("ok");
+  });
+  it("S2: 32,768 bytes pass the size bound, 32,769 do not", () => {
+    const record = base();
+    const bytes = (r) => new TextEncoder().encode(JSON.stringify({ record: r, drum: {} })).length;
+    const padded = (n) => edit(record, (r) => { r.pad = ""; r.pad = "x".repeat(n - bytes(r)); });
+    expect(bytes(padded(RECORD_MAX_BYTES))).toBe(RECORD_MAX_BYTES);
+    // No legal record comes near the bound (a full Strength C is about half), so the
+    // padding is the junk the bound exists for: at the bound it passes S2 and S3 names it.
+    expect(vs(padded(RECORD_MAX_BYTES))).toBe("S3:record_shape");
+    expect(vs(padded(RECORD_MAX_BYTES + 1))).toBe("S2:size");
+    expect(vs(edit(record, (r) => { r.loggedTz = "é".repeat(RECORD_MAX_BYTES / 2); }))).toBe("S2:size");
+  });
+  it("S2: the drum holds the record's own lifts, on the drum's bounds", () => {
+    const record = base();
+    expect(vs(record, { drum: { [SQUAT]: 102.5, [BENCH]: 400 } })).toBe("ok");
+    expect(vs(record, { drum: { [SQUAT]: 400.25 } })).toBe("S2:drum");
+    expect(vs(record, { drum: { [SQUAT]: 102.6 } })).toBe("S2:drum");
+    expect(vs(record, { drum: { [SQUAT]: null } })).toBe("S2:drum");
+    expect(vs(record, { drum: { "Hack Squat": 100 } })).toBe("S2:drum");
+    expect(vs(record, { drum: { [HIP]: 100 } })).toBe("ok");
+    expect(vs(record, { drum: { [HIP]: 100.25 } })).toBe("S2:drum");
+    const many = Object.fromEntries(Array.from({ length: DRUM_MAX + 1 }, (_, i) => [`Lift ${i}`, 10]));
+    expect(vs(record, { drum: many })).toBe("S2:drum");
+  });
+  it("S3: exactly the producer's fields, and nothing the client's device owns", () => {
+    const record = base();
+    const no = (fn) => vs(edit(record, fn));
+    expect(no((r) => { r.schemaVersion = SCHEMA_VERSION - 1; })).toBe("S3:record_shape");
+    expect(no((r) => { r.profileName = "sam"; })).toBe("S3:record_shape");
+    expect(no((r) => { r.bodyweight = 80; })).toBe("S3:record_shape");
+    expect(no((r) => { r.hoursSlept = 7; })).toBe("S3:record_shape");
+    expect(no((r) => { r.daysSinceLast = 2; })).toBe("S3:record_shape");
+    expect(no((r) => { r.blocks[0].exercises[0].sets[0].bodyweightUsed = 80; })).toBe("S3:record_shape");
+    expect(no((r) => { r.mesocyclePhase = "deload"; })).toBe("S3:record_shape");
+    expect(no((r) => { r.travel = true; })).toBe("S3:record_shape");
+    expect(no((r) => { r.retrospective = true; })).toBe("S3:record_shape");
+    expect(no((r) => { r.loggedAt = new Date(NOW).toISOString(); })).toBe("S3:record_shape");
+    expect(no((r) => { r.loggedBy = { by: "trainer", name: "Sam" }; })).toBe("S3:record_shape");
+    expect(no((r) => { r.blocks[0].exercises[0].sets[0].note = "x"; })).toBe("S3:record_shape");
+    expect(no((r) => { r.blocks[0].exercises[0].prescribed.rir = 2; })).toBe("S3:record_shape");
+    expect(no((r) => { delete r.summary; })).toBe("S3:record_shape");
+    expect(no((r) => { r.summary.mainLiftPRs = [SQUAT]; })).toBe("S3:record_shape");
+    expect(no((r) => { r.summary.volumeByMuscle = {}; })).toBe("S3:record_shape");
+    expect(no((r) => { r.blocks[0].exercises[0].summary.totalVolume = "lots"; })).toBe("S3:record_shape");
+    expect(no((r) => { r.blocks[0].exercises[0].sets[0].reach = false; })).toBe("S3:record_shape");
+    expect(no((r) => { r.blocks[0].exercises[0].sets[0].loadType = "per_db"; })).toBe("S3:record_shape");
+    expect(no((r) => { r.blocks = []; })).toBe("S3:record_shape");
+    // Derived numbers are shape only: the client's device rebuilds them at Keep.
+    expect(no((r) => { r.blocks[0].exercises[0].sets[0].est1rm = 999; r.summary.totalVolume = 1; })).toBe("ok");
+  });
+  it("S3: RECORD_KEYS is every field the producer writes, and no other", () => {
+    const record = liveRecord(S_META, 0, { readiness: "fresh" });
+    const reach = edit(record, (r) => { r.blocks[0].exercises[0].sets[2].reach = true; });
+    expect(vs(reach)).toBe("ok");
+    const ex = reach.blocks[0].exercises[0];
+    const sorted = (a) => [...a].sort();
+    expect(sorted(Object.keys(reach))).toEqual(sorted(RECORD_KEYS.record));
+    expect(sorted(Object.keys(reach.blocks[0]))).toEqual(sorted(RECORD_KEYS.block));
+    expect(sorted(Object.keys(ex))).toEqual(sorted(RECORD_KEYS.exercise));
+    expect(sorted(Object.keys(ex.prescribed))).toEqual(sorted(RECORD_KEYS.prescribed));
+    expect(sorted(Object.keys(ex.sets[2]))).toEqual(sorted(RECORD_KEYS.set));
+    expect(sorted(Object.keys(ex.summary))).toEqual(sorted(RECORD_KEYS.exerciseSummary));
+    expect(sorted(Object.keys(ex.summary.topSet))).toEqual(sorted(RECORD_KEYS.topSet));
+    expect(sorted(Object.keys(reach.summary))).toEqual(sorted(RECORD_KEYS.summary));
+  });
+  it("S4: today and yesterday on the trainer's clock, never two days back or tomorrow", () => {
+    const record = base();
+    expect(vs(edit(record, (r) => redate(r, TODAY)))).toBe("ok");
+    expect(vs(edit(record, (r) => redate(r, ago(1), TODAY)))).toBe("ok");
+    expect(vs(edit(record, (r) => redate(r, ago(2))))).toBe("S4:day");
+    expect(vs(edit(record, (r) => redate(r, ago(2), ago(1))))).toBe("S4:day");
+    expect(vs(edit(record, (r) => redate(r, addDaysIso(TODAY, 1))))).toBe("S4:day");
+    expect(vs(record, { todayIso: null })).toBe("S4:day");
+    // A trainer whose clock is a day ahead of the server sends for their today.
+    expect(vs(edit(record, (r) => redate(r, addDaysIso(TODAY, 1))), { todayIso: addDaysIso(TODAY, 1) })).toBe("ok");
+  });
+  it("S4: the id is an instant within a day of the date; dow, weekStart and duration follow", () => {
+    const record = base();
+    expect(vs(edit(record, (r) => { r.id = `${addDaysIso(TODAY, 1)}T02:00:00.000Z`; }))).toBe("ok");
+    expect(vs(edit(record, (r) => { r.id = `${addDaysIso(TODAY, 2)}T02:00:00.000Z`; }))).toBe("S4:date");
+    expect(vs(edit(record, (r) => { r.id = `${TODAY}T10:00:00Z`; }))).toBe("S4:date");
+    expect(vs(edit(record, (r) => { r.date = "2026-02-30"; }))).toBe("S4:date");
+    expect(vs(edit(record, (r) => { r.dow = (r.dow + 1) % 7; }))).toBe("S4:date");
+    expect(vs(edit(record, (r) => { r.weekStart = ago(7); }))).toBe("S4:date");
+    expect(vs(edit(record, (r) => { r.duration = MAX_DURATION_S; }))).toBe("ok");
+    expect(vs(edit(record, (r) => { r.duration = MAX_DURATION_S + 1; }))).toBe("S4:duration");
+    expect(vs(edit(record, (r) => { r.duration = -1; }))).toBe("S4:duration");
+    expect(vs(edit(record, (r) => { r.duration = 1.5e3 + 0.5; }))).toBe("S4:duration");
+  });
+  it("S5: a strength letter, and the letter it names", () => {
+    const record = base();
+    expect(vs(edit(record, (r) => { r.session = "strength-d"; }))).toBe("S5:letter");
+    expect(vs(edit(record, (r) => { r.session = "cardio"; }))).toBe("S5:letter");
+    expect(vs(edit(record, (r) => { r.scheduledLetter = "B"; }))).toBe("S5:letter");
+  });
+  it("S6: the letter's own blocks, once each, in session order; skipped blocks pass", () => {
+    const record = base();
+    expect(vs(edit(record, (r) => { r.blocks.splice(2, 1); }))).toBe("ok");
+    expect(vs(edit(record, (r) => { r.blocks = [r.blocks[0]]; }))).toBe("ok");
+    expect(vs(edit(record, (r) => { [r.blocks[0], r.blocks[1]] = [r.blocks[1], r.blocks[0]]; }))).toBe("S6:block");
+    expect(vs(edit(record, (r) => { r.blocks.push(structuredClone(r.blocks[0])); }))).toBe("S6:block");
+    expect(vs(edit(record, (r) => { r.blocks[0].id = "b1"; }))).toBe("S6:block");
+    expect(vs(edit(record, (r) => { r.blocks[2].type = "main"; }))).toBe("S6:block");
+    expect(vs(liveRecord(S_META, 1), { meta: S_META })).toBe("ok");
+  });
+  it("S7: the slot's lift, or an option the swap overlay offers for that slot", () => {
+    const swapped = liveRecord(S_META, 0, { swaps: (main) => ({ a1: swapPick(main.blocks[0].ex, "Hack Squat") }) });
+    const hack = exOf(swapped, "Hack Squat");
+    expect(hack).toMatchObject({ swapped: true, loadType: swapLoadType(SWAP_DB[SQUAT][1]) });
+    expect(isSwapFor(SQUAT, "Hack Squat")).toBe(true);
+    expect(vs(swapped)).toBe("ok");
+    const dips = liveRecord(S_META, 0, { swaps: (main) => ({ a2: swapPick(main.blocks[1].ex, "Weighted Dips") }) });
+    expect(exOf(dips, "Weighted Dips").loadType).toBe(swapLoadType(SWAP_DB[BENCH][3]));
+    expect(vs(dips)).toBe("ok");
+    expect(vs(edit(swapped, (r) => { exOf(r, "Hack Squat").swapped = false; }))).toBe("S7:exercise");
+    expect(vs(edit(swapped, (r) => { exOf(r, "Hack Squat").loadType = "barbell"; for (const s of exOf(r, "Hack Squat").sets) s.loadType = "barbell"; }))).toBe("S7:exercise");
+    expect(isSwapFor(SQUAT, "Leg Press")).toBe(false);
+    expect(isSwapFor("constructor", "Leg Press")).toBe(false);
+    expect(vs(edit(record0(), (r) => { r.blocks[0].exercises[0].name = "Leg Press"; r.blocks[0].exercises[0].swapped = true; }))).toBe("S7:exercise");
+    // At most one exercise per slot.
+    expect(vs(edit(swapped, (r) => { r.blocks[0].exercises.push(structuredClone(r.blocks[0].exercises[0])); }))).toBe("S7:exercise");
+    expect(vs(edit(record0(), (r) => { r.blocks[2].exercises[0].fromPool = null; }))).toBe("S7:exercise");
+  });
+  it("S8: 1 to 10 sets a lift, one reach a session", () => {
+    const ten = liveRecord(S_META, 2, { sets: MAX_SETS_PER_LIFT });
+    expect(vs(ten)).toBe("ok");
+    expect(vs(edit(ten, (r) => { r.blocks[0].exercises[0].sets.push(structuredClone(r.blocks[0].exercises[0].sets[0])); }))).toBe("S8:sets");
+    expect(vs(edit(ten, (r) => { r.blocks[1].exercises[1].sets = []; }))).toBe("S8:sets");
+    const fresh = liveRecord(S_META, 0, { readiness: "fresh" });
+    expect(vs(edit(fresh, (r) => { r.blocks[0].exercises[0].sets[2].reach = true; }))).toBe("ok");
+    expect(vs(edit(fresh, (r) => { r.blocks[0].exercises[0].sets[2].reach = true; r.blocks[1].exercises[0].sets[2].reach = true; }))).toBe("S8:reach");
+  });
+  it("S8: a reach only where the live host offers it", () => {
+    expect(readFileSync(join(ROOT, "components/SessionHost.jsx"), "utf8")).toMatch(/const REACH_EARLIEST_SET = 3;/);
+    const fresh = liveRecord(S_META, 0, { readiness: "fresh" });
+    const reach = (record, fn, extra) => vs(edit(record, fn), extra);
+    // The headline's last prescribed set, or a set added after it.
+    expect(reach(fresh, (r) => { r.blocks[0].exercises[0].sets[2].reach = true; })).toBe("ok");
+    expect(reach(fresh, (r) => { const sets = r.blocks[0].exercises[0].sets; sets.push({ ...structuredClone(sets[2]), reach: true }); })).toBe("ok");
+    // Not before the last prescribed set, and never before the third.
+    expect(reach(fresh, (r) => { r.blocks[0].exercises[0].sets[1].reach = true; })).toBe("S8:reach");
+    expect(reach(liveRecord(S_META, 0, { readiness: "fresh", sets: 2 }), (r) => {
+      r.blocks[0].exercises[0].prescribed.sets = 2; r.blocks[0].exercises[0].sets[1].reach = true;
+    }, { meta: S_META, phase: "apply", at: NOW })).toBe("S8:reach");
+    // Only on a fresh day, only on the session's first main block, never on a superset.
+    for (const readiness of ["normal", "cooked"]) {
+      expect(reach(liveRecord(S_META, 0, { readiness }), (r) => { r.blocks[0].exercises[0].sets[2].reach = true; }), readiness).toBe("S8:reach");
+    }
+    expect(reach(fresh, (r) => { r.blocks[1].exercises[0].sets[2].reach = true; })).toBe("S8:reach");
+    const ss = fresh.blocks.findIndex((b) => b.type === "superset");
+    expect(reach(fresh, (r) => { const e = r.blocks[ss].exercises[0]; e.sets[e.sets.length - 1].reach = true; })).toBe("S8:reach");
+    // Never a pure bodyweight lift (the device's own check: the write path refuses the load type first).
+    const apply = (r) => { const v = validateSessionSet(sset(r), { phase: "apply", at: NOW }); return v.ok ? "ok" : `${v.rule}:${v.code}`; };
+    expect(apply(edit(fresh, (r) => { r.blocks[0].exercises[0].sets[2].reach = true; }))).toBe("ok");
+    expect(apply(edit(fresh, (r) => {
+      const e = r.blocks[0].exercises[0];
+      e.loadType = "bodyweight";
+      for (const st of e.sets) Object.assign(st, { loadType: "bodyweight", weight: null });
+      e.sets[2].reach = true;
+    }))).toBe("S8:reach");
+  });
+  it("S8-S10: the prescription the engine reads is bounded, swapped or not, at write and on the device", () => {
+    const swapped = liveRecord(S_META, 0, { swaps: (main) => ({ a1: swapPick(main.blocks[0].ex, "Hack Squat") }) });
+    const pre = (over, record = swapped, name = "Hack Squat") => vs(edit(record, (r) => { Object.assign(exOf(r, name).prescribed, over); }));
+    expect(pre({})).toBe("ok");
+    expect(pre({ reps: 30, weight: MAX_KG, sets: MAX_SETS_PER_LIFT })).toBe("ok");
+    expect(pre({ reps: 31 })).toBe("S10:reps");
+    expect(pre({ reps: 0 })).toBe("S10:reps");
+    expect(pre({ reps: -5 })).toBe("S10:reps");
+    expect(pre({ reps: "999" })).toBe("S10:reps");
+    expect(pre({ reps: "9".repeat(5000) })).toBe("S10:reps");
+    // The template's own strings in the lift's own shape; a hold's seconds on a
+    // lift that isn't one would make the client's engine store it as a hold.
+    for (const reps of ["6-8", "12-15", "8/leg"]) expect(pre({ reps }), reps).toBe("ok");
+    for (const reps of ["45s", "180s"]) expect(pre({ reps }), reps).toBe("S10:reps");
+    // A live timed swap (Leg Press to Wall Sit) carries its own seconds.
+    const wall = liveRecord(S_META, 1, { swaps: (main) => ({ "bss1-A": swapPick(main.blocks.find((b) => b.id === "bss1").exA, "Wall Sit") }) });
+    expect(exOf(wall, "Wall Sit").prescribed.reps).toBe("45s");
+    expect(vs(wall)).toBe("ok");
+    expect(pre({ weight: MAX_KG + 0.25 })).toBe("S9:load");
+    expect(pre({ weight: 1e9 })).toBe("S9:load");
+    expect(pre({ weight: -50 })).toBe("S9:load");
+    expect(pre({ weight: null })).toBe("ok");
+    expect(pre({ sets: MAX_SETS_PER_LIFT + 1 })).toBe("S8:sets");
+    expect(pre({ sets: 100000 })).toBe("S8:sets");
+    expect(pre({ sets: -3 })).toBe("S8:sets");
+    expect(pre({ sets: 0 })).toBe("S8:sets");
+    // A pure bodyweight lift's prescribed load is the added kg, at most.
+    const record = record0();
+    expect(pre({ weight: ADDED_LOAD_MAX_KG }, record, HIP)).toBe("stale");
+    expect(pre({ weight: ADDED_LOAD_MAX_KG + 0.25 }, record, HIP)).toBe("S9:load");
+    // The device holds the same bounds on every lift.
+    const apply = (over) => {
+      const v = validateSessionSet(sset(edit(record, (r) => { Object.assign(r.blocks[0].exercises[0].prescribed, over); })), { phase: "apply", at: NOW });
+      return v.ok ? "ok" : `${v.rule}:${v.code}`;
+    };
+    expect(apply({ sets: MAX_SETS_PER_LIFT, reps: 30, weight: MAX_KG })).toBe("ok");
+    expect(apply({ reps: 999 })).toBe("S10:reps");
+    expect(apply({ weight: 1e9 })).toBe("S9:load");
+    expect(apply({ sets: 100000 })).toBe("S8:sets");
+    expect(apply({ reps: "45s" })).toBe("S10:reps");
+    expect(apply({ reps: "180s" })).toBe("S10:reps");
+  });
+  it("S9: weight on the drum's grid, 0 to 400 kg; a pure bodyweight lift's added kg to 100", () => {
+    const record = base();
+    const set0 = (w) => vs(edit(record, (r) => { r.blocks[0].exercises[0].sets[0].weight = w; }));
+    expect(set0(400)).toBe("ok");
+    expect(set0(400.25)).toBe("S9:load");
+    expect(set0(0)).toBe("ok");
+    expect(set0(null)).toBe("ok");
+    expect(set0(-1)).toBe("S9:load");
+    expect(set0(102.75)).toBe("ok");
+    expect(set0(102.6)).toBe("S9:load");
+    expect(set0("100")).toBe("S9:load");
+    const hip = (w) => vs(edit(record, (r) => { exOf(r, HIP).sets[0].weight = w; }));
+    expect(exOf(record, HIP).loadType).toBe("bodyweight");
+    expect(hip(ADDED_LOAD_MAX_KG)).toBe("ok");
+    expect(hip(ADDED_LOAD_MAX_KG + 0.25)).toBe("S9:load");
+  });
+  it("S10: reps 1 to 30 (also per leg, or a template's range); a timed hold 5 to 180 s in fives", () => {
+    const record = base();
+    const reps = (v, name = SQUAT) => vs(edit(record, (r) => { exOf(r, name).sets[0].reps = v; }));
+    expect(reps(30)).toBe("ok");
+    expect(reps(31)).toBe("S10:reps");
+    expect(reps(1)).toBe("ok");
+    expect(reps(0)).toBe("S10:reps");
+    expect(reps(5.5)).toBe("S10:reps");
+    expect(reps("5")).toBe("S10:reps");
+    expect(reps("30/leg", "DB Reverse Lunge")).toBe("ok");
+    expect(reps("31/leg", "DB Reverse Lunge")).toBe("S10:reps");
+    expect(reps("0/leg", "DB Reverse Lunge")).toBe("S10:reps");
+    expect(reps("6-8")).toBe("ok");
+    expect(reps("8-6")).toBe("S10:reps");
+    expect(reps("6-31")).toBe("S10:reps");
+    // A timed hold, rotated into A's finisher.
+    const meta = { ...S_META, programmeBlock: { number: 2, config: { "afin-A": pool("afin-A", "L-Sit Hold") } } };
+    const held = liveRecord(meta, 0);
+    expect(exOf(held, "L-Sit Hold").sets[0].reps).toBe("20s");
+    const sec = (v) => vs(edit(held, (r) => { exOf(r, "L-Sit Hold").sets[0].reps = v; }), { meta });
+    expect(sec("20s")).toBe("ok");
+    expect(sec(TIMED_SECONDS.max)).toBe("ok");
+    expect(sec(TIMED_SECONDS.max + TIMED_SECONDS.step)).toBe("S10:reps");
+    expect(sec(TIMED_SECONDS.min)).toBe("ok");
+    expect(sec(0)).toBe("S10:reps");
+    expect(sec(7)).toBe("S10:reps");
+    expect(sec("185s")).toBe("S10:reps");
+    expect(sec("20/leg")).toBe("S10:reps");
+  });
+  it("S11: felt on the track (6 to 10 in halves) with the engine's RIR, or none", () => {
+    const record = base();
+    const felt = (rpe, rir) => vs(edit(record, (r) => { Object.assign(r.blocks[0].exercises[0].sets[0], { rpe, rir }); }));
+    for (let rpe = RPE_TRACK.min; rpe <= RPE_TRACK.max; rpe += RPE_TRACK.step) expect(felt(rpe, rpeToRir(rpe)), String(rpe)).toBe("ok");
+    expect(felt(5.5, rpeToRir(5.5))).toBe("S11:felt");
+    expect(felt(10.5, 0)).toBe("S11:felt");
+    expect(felt(7.25, rpeToRir(7.25))).toBe("S11:felt");
+    expect(felt(8, 3)).toBe("S11:felt");
+    expect(felt(null, null)).toBe("ok");
+    expect(felt(null, 2)).toBe("S11:felt");
+    expect(felt("normal", 2)).toBe("S11:felt");
+  });
+  it("S12: what the trainer's device prescribed is the client's plan now; swapped lifts are bounds only", () => {
+    const record = base();
+    expect(vs(record, { meta: { ...S_META, weights: { [SQUAT]: 105, [BENCH]: 80 } } })).toBe("stale");
+    // Strong drops blocks: the record no longer fits the plan at all.
+    expect(vs(record, { meta: { ...S_META, userFocus: "Strong" } })).toBe("S6:block");
+    expect(vs(record, { meta: { ...S_META, reps: { [SQUAT]: 6 } } })).toBe("stale");
+    expect(vs(edit(record, (r) => { r.blocks[0].exercises[0].prescribed.sets = 4; }))).toBe("stale");
+    expect(vs(edit(record, (r) => { r.blocks[0].exercises[0].prescribed.weight = null; }))).toBe("ok");
+    expect(vs(edit(record, (r) => { r.blocks[0].exercises[0].prescribed.weight = SESSIONS[0].blocks[0].ex.weight; }))).toBe("ok");
+    const swapped = liveRecord(S_META, 0, { swaps: (main) => ({ a1: swapPick(main.blocks[0].ex, "Hack Squat") }) });
+    expect(vs(edit(swapped, (r) => { Object.assign(exOf(r, "Hack Squat").prescribed, { reps: 12, weight: 140, sets: 5 }); }))).toBe("ok");
+    // A cooked day trims a superset's sets: fewer pass, more do not.
+    const cooked = liveRecord(S_META, 0, { readiness: "cooked" });
+    expect(cooked.blocks.find((b) => b.id === "ass1").exercises[0].prescribed.sets).toBe(2);
+    expect(vs(edit(cooked, (r) => { r.blocks.find((b) => b.id === "ass1").exercises[0].prescribed.sets = 4; }))).toBe("stale");
+  });
+  it("S12: with no W on a cooked day, a main lift's prescribed weight is the template or lighter", () => {
+    const meta = { ...S_META, weights: {} };
+    const tmpl = SESSIONS[0].blocks[0].ex.weight;
+    const cooked = liveRecord(meta, 0, { readiness: "cooked" });
+    expect(exOf(cooked, SQUAT).prescribed.weight).toBeLessThan(tmpl);
+    expect(vs(cooked, { meta })).toBe("ok");
+    const w = (kg) => vs(edit(cooked, (r) => { exOf(r, SQUAT).prescribed.weight = kg; }), { meta });
+    expect(w(tmpl)).toBe("ok");
+    expect(w(tmpl + 0.25)).toBe("stale");
+    expect(w(MAX_KG)).toBe("stale");
+  });
+  it("S13: they logged this letter that day themselves", () => {
+    const record = base();
+    expect(vs(record, { history: [{ id: `${TODAY}T07:00:00.000Z`, date: TODAY, session: "strength-a", scheduledLetter: "A", blocks: [] }] })).toBe("S13:already_logged");
+    expect(vs(record, { history: [{ id: `${TODAY}T12:00:00.000Z`, date: TODAY, session: "strength-a", retrospective: true, blocks: [] }] })).toBe("S13:already_logged");
+    expect(vs(record, { history: [{ id: `${TODAY}T07:00:00.000Z`, date: TODAY, session: "strength-b", scheduledLetter: "B", blocks: [] }] })).toBe("ok");
+    expect(vs(record, { history: [{ id: `${ago(2)}T07:00:00.000Z`, date: ago(2), session: "strength-a", scheduledLetter: "A", blocks: [] }] })).toBe("ok");
+  });
+  it("S13: a record reusing one of their record ids is refused", () => {
+    const theirs = { id: `${ago(1)}T18:00:00.000Z`, date: ago(1), session: "strength-b", scheduledLetter: "B", blocks: [] };
+    const reused = edit(record0(), (r) => { r.id = theirs.id; });
+    const v = validateSessionSet(sset(reused), { meta: S_META, history: [theirs], todayIso: TODAY, phase: "write" });
+    expect(v.ok).toBe(false);
+    expect(v.refusals).toEqual([{ i: 0, code: "already_logged", rule: "S13", field: "id" }]);
+    expect(vs(reused, { history: [{ ...theirs, id: `${ago(1)}T18:00:00.001Z` }] })).toBe("ok");
+  });
+  it("S14: readiness and its reason from the readiness screen's lists", () => {
+    const record = base();
+    expect(vs(edit(record, (r) => { r.readiness = "tired"; }))).toBe("S14:readiness");
+    expect(vs(edit(record, (r) => { r.readinessReason = "hungover"; }))).toBe("S14:readiness");
+    for (const reason of READINESS_REASONS) expect(vs(edit(record, (r) => { r.readinessReason = reason; }))).toBe("ok");
+  });
+  it("the device re-checks bounds, not programme membership, and measures the day from the send", () => {
+    const record = base();
+    const apply = (r, at = NOW) => {
+      const v = validateSessionSet(sset(r), { phase: "apply", at });
+      return v.ok ? "ok" : v.stale ? "stale" : `${v.rule}:${v.code}`;
+    };
+    // A rotation between send and Keep never refuses what they trained.
+    expect(apply(edit(record, (r) => { r.blocks[0].id = "zz"; r.blocks[0].exercises[0].name = "Leg Press"; }))).toBe("ok");
+    expect(apply(edit(record, (r) => { r.blocks[0].exercises[0].prescribed.sets = 9; }))).toBe("ok");
+    // Sent a week ago, still in its window: it never goes stale waiting.
+    const old = edit(record, (r) => redate(r, ago(7)));
+    expect(apply(old, Date.parse(`${ago(7)}T22:00:00.000Z`))).toBe("ok");
+    expect(apply(edit(record, (r) => redate(r, ago(2), ago(1))))).toBe("ok");
+    expect(apply(edit(record, (r) => redate(r, ago(3), ago(2))))).toBe("S4:day");
+    expect(apply(edit(record, (r) => redate(r, addDaysIso(TODAY, 1))))).toBe("ok");
+    expect(apply(edit(record, (r) => redate(r, addDaysIso(TODAY, 2), addDaysIso(TODAY, 1))))).toBe("S4:day");
+    // The bounds hold on the device.
+    expect(apply(edit(record, (r) => { r.blocks[0].exercises[0].sets[0].weight = 400.25; }))).toBe("S9:load");
+    expect(apply(edit(record, (r) => { r.blocks[0].exercises[0].sets[0].bodyweightUsed = 80; }))).toBe("S3:record_shape");
+    expect(apply(edit(record, (r) => { r.loggedBy = { name: "Sam" }; }))).toBe("S3:record_shape");
+  });
+  it("a session never rides validateOp or a plan set", () => {
+    const record = base();
+    expect(validateOp({ kind: "session", record }, { meta: S_META, history: [], todayIso: TODAY }).code).toBe("kind");
+    expect(validateOp({ kind: "session", record }, { meta: S_META, history: [], todayIso: TODAY, phase: "apply" }).code).toBe("kind");
+    const set = (ops) => validateChangeSet({ id: SET_ID, ops }, { meta: S_META, history: [], todayIso: TODAY }).refusals;
+    expect(set([{ kind: "session", record }])).toEqual([{ i: null, code: "set_kind" }]);
+    expect(set([{ kind: "reps", lift: SQUAT, reps: 6 }, { kind: "session", record }])).toEqual([{ i: null, code: "set_kind" }]);
+  });
+});
+
+/** A plain Strength A record for the edits above. */
+function record0() { return liveRecord(); }
+
+describe("coached session: the day in words", () => {
+  it("today, yesterday, else the record's own day, never today when clocks disagree", () => {
+    expect(sessionDayWords(TODAY, TODAY)).toBe("today");
+    expect(sessionDayWords(ago(1), TODAY)).toBe("yesterday");
+    expect(sessionDayWords("2026-10-06", "2026-10-08")).toBe("Tuesday 6 Oct");
+    // The trainer's today is the client's yesterday: the client reads the record's day.
+    expect(sessionDayWords(addDaysIso(TODAY, 1), TODAY)).toBe("Tuesday 6 Oct");
+    expect(sessionDayWords("2026-13-01", TODAY)).toBe(null);
+  });
+  it("the preview names the day the trainer chose", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    try {
+      const y = edit(liveRecord(), (r) => redate(r, ago(1), TODAY));
+      expect(validateSessionSet(sset(y), { meta: S_META, history: [], todayIso: TODAY }).preview).toMatchObject({ date: ago(1), day: "yesterday" });
+    } finally { vi.useRealTimers(); }
+  });
+});
+
+// ── Session statuses (§7) ───────────────────────────────────────────────────
+
+const DELIVERED = `${TODAY}T11:00:00.000Z`;
+/** A stored session row, as rowFromDb returns it. */
+const srowDb = (over = {}) => rowFromDb({
+  id: `${SET_ID}.0`, set_id: SET_ID, kind: "session", target: `${TODAY}:A`, old_value: null,
+  new_value: { record: { date: TODAY }, drum: {} }, effective_from: TODAY, basis: null, created_at: String(NOW),
+  applied_at: null, outcome: null, undone_at: null, undone_by: null, reverted_at: null, warnings: null, delivered_at: null, ...over,
+});
+
+describe("sessionStatus", () => {
+  const st = (over, editsLive = true) => sessionStatus(srowDb(over), { editsLive });
+  it("waiting: sent, not yet on their phone", () => {
+    expect(st({})).toEqual({ status: "waiting", reason: null, date: TODAY });
+  });
+  it("seen: on their phone, kept five hours after it arrived unless they say otherwise", () => {
+    expect(st({ delivered_at: DELIVERED })).toEqual({ status: "seen", reason: null, date: TODAY, keepsAt: Date.parse(DELIVERED) + AUTO_KEEP_MS });
+  });
+  it("seen, sharing stopped: it stays until they decide, with no auto-keep", () => {
+    expect(st({ delivered_at: DELIVERED }, false)).toEqual({ status: "seen", reason: "stopped", date: TODAY, keepsAt: null });
+  });
+  it("kept, kept after five hours, discarded, superseded", () => {
+    expect(st({ outcome: "kept", applied_at: DELIVERED, delivered_at: DELIVERED })).toEqual({ status: "kept", reason: null, date: TODAY });
+    expect(st({ outcome: "auto_kept", applied_at: DELIVERED, delivered_at: DELIVERED })).toEqual({ status: "auto_kept", reason: null, date: TODAY });
+    expect(st({ outcome: "discarded", delivered_at: DELIVERED })).toEqual({ status: "discarded", reason: null, date: TODAY });
+    expect(st({ outcome: "superseded" })).toEqual({ status: "superseded", reason: null, date: TODAY });
+    // An outcome stands whether or not sharing is live now.
+    expect(st({ outcome: "kept" }, false).status).toBe("kept");
+  });
+  it("not_applied: limits, or sharing stopped before it arrived", () => {
+    expect(st({ outcome: "limits" })).toEqual({ status: "not_applied", reason: "limits", date: TODAY });
+    expect(st({}, false)).toEqual({ status: "not_applied", reason: "stopped", date: TODAY });
+  });
+  it("withdrawn: by the trainer, before it arrived", () => {
+    expect(st({ undone_at: String(NOW + 1), undone_by: "trainer" })).toEqual({ status: "withdrawn", reason: null, date: TODAY });
+  });
+  it("a keep that lands after a withdraw reads as kept: it is in their history", () => {
+    // The phone had it, its arrival report had not landed, the trainer withdrew.
+    const late = { undone_at: String(NOW + 1), undone_by: "trainer", applied_at: DELIVERED };
+    expect(st({ ...late, outcome: "kept" })).toEqual({ status: "kept", reason: null, date: TODAY });
+    expect(st({ ...late, outcome: "auto_kept" }).status).toBe("auto_kept");
+    expect(st({ undone_at: String(NOW + 1), undone_by: "trainer", outcome: "discarded" }).status).toBe("withdrawn");
+  });
+  it("the date is the record's day; changeStatus delegates; the client never undoes one", () => {
+    const y = srowDb({ effective_from: null, new_value: { record: { date: ago(1) }, drum: {} } });
+    expect(sessionStatus(y, {}).date).toBe(ago(1));
+    const r = srowDb({ delivered_at: DELIVERED });
+    const s = changeStatus(r, { meta: {}, history: [], todayIso: TODAY, editsLive: true });
+    expect(s).toEqual(sessionStatus(r, { editsLive: true }));
+    expect(isUndoable(srowDb(), changeStatus(srowDb(), { meta: {}, history: [], todayIso: TODAY, editsLive: true }), { meta: {} })).toBe(false);
+    expect(r.deliveredAt).toBe(DELIVERED);
+  });
+});
+
+// ── The device's session plan, and W-D ──────────────────────────────────────
+
+describe("planSessionSteps", () => {
+  sessionClock();
+  /** A session row as the pull delivers it. */
+  const srow = (record, over = {}) => ({
+    id: `${SET_ID}.0`, set: SET_ID, kind: "session", target: sessionTarget(record), from: record.date,
+    before: null, after: { record, drum: { [SQUAT]: 102.5 } }, basis: null, at: NOW - HOUR, appliedAt: null, undone: false,
+    by: "Sam", deliveredAt: null, editsLive: true, ...over,
+  });
+  const steps = (rows, { history = [], nowMs = NOW, local = {}, acked = [], holding = [] } = {}) => planSessionSteps(rows, { history, nowMs, local, acked, holding });
+
+  it("first sight: marks it seen and shows the card", () => {
+    const record = liveRecord();
+    const p = steps([srow(record)]);
+    expect(p.seen).toEqual([{ id: `${SET_ID}.0`, at: new Date(NOW).toISOString() }]);
+    expect(p.acks).toEqual([]);
+    expect(p.keep).toEqual([]);
+    expect(p.cards).toEqual([{ id: `${SET_ID}.0`, record, drum: { [SQUAT]: 102.5 }, by: "Sam", startMs: NOW, keepsAt: NOW + AUTO_KEEP_MS }]);
+  });
+  it("W-D: never auto-keeps a record no device has had, at any time", () => {
+    const record = liveRecord();
+    for (const nowMs of [NOW, NOW + AUTO_KEEP_MS, NOW + 50 * HOUR, NOW + 365 * 24 * HOUR]) {
+      const p = steps([srow(record)], { nowMs });
+      expect(p.keep, String(nowMs)).toEqual([]);
+      expect(p.cards[0].keepsAt).toBe(nowMs + AUTO_KEEP_MS);
+    }
+  });
+  it("W-D: the five hours start at first sight, never at the send", () => {
+    // Sent long ago, never delivered: the send time starts nothing.
+    const record = liveRecord();
+    const p = steps([srow(record, { at: NOW - 10 * HOUR })], { nowMs: NOW });
+    expect(p.keep).toEqual([]);
+    expect(p.cards[0].startMs).toBe(NOW);
+  });
+  it("W-D: keeps at seen + five hours, not a millisecond before", () => {
+    const record = liveRecord();
+    const local = { [`${SET_ID}.0`]: { seenAt: NOW } };
+    expect(steps([srow(record)], { local, nowMs: NOW + AUTO_KEEP_MS - 1 }).keep).toEqual([]);
+    const p = steps([srow(record)], { local, nowMs: NOW + AUTO_KEEP_MS });
+    expect(p.keep).toEqual([{ id: `${SET_ID}.0`, record, drum: { [SQUAT]: 102.5 }, by: "Sam", startMs: NOW, keepsAt: NOW + AUTO_KEEP_MS, auto: true }]);
+    expect(p.cards).toEqual([]);
+    expect(p.seen).toEqual([]);
+  });
+  it("W-D: the buffer starts at the earlier of the server's delivered and this device's seen", () => {
+    const record = liveRecord();
+    const id = `${SET_ID}.0`;
+    const delivered = new Date(NOW - 2 * HOUR).toISOString();
+    // Another device had it two hours ago.
+    expect(steps([srow(record, { deliveredAt: delivered })], { local: { [id]: { seenAt: NOW } } }).cards[0].startMs).toBe(NOW - 2 * HOUR);
+    expect(steps([srow(record, { deliveredAt: delivered })], {}).cards[0].startMs).toBe(NOW - 2 * HOUR);
+    // This device had it first (offline before its report landed).
+    expect(steps([srow(record, { deliveredAt: delivered })], { local: { [id]: { seenAt: NOW - 3 * HOUR } } }).cards[0].startMs).toBe(NOW - 3 * HOUR);
+    // A phone saw it at 10:00, this device opens at 15:00: kept now.
+    expect(steps([srow(record, { deliveredAt: new Date(NOW - AUTO_KEEP_MS).toISOString() })], {}).keep.map((k) => k.id)).toEqual([id]);
+  });
+  it("sharing stopped after delivery: the card stays, with no auto-keep", () => {
+    const record = liveRecord();
+    const old = new Date(NOW - 20 * HOUR).toISOString();
+    for (const editsLive of [false, undefined]) {
+      const p = steps([srow(record, { deliveredAt: old, editsLive })]);
+      expect(p.keep).toEqual([]);
+      expect(p.cards).toMatchObject([{ id: `${SET_ID}.0`, keepsAt: null }]);
+    }
+  });
+  it("limits: the device's own checks fail; no card, nothing seen", () => {
+    const record = liveRecord();
+    const bad = edit(record, (r) => { r.blocks[0].exercises[0].sets[0].bodyweightUsed = 80; });
+    expect(steps([srow(bad)])).toEqual({ seen: [], acks: [{ id: `${SET_ID}.0`, outcome: "limits" }], keep: [], cards: [] });
+    expect(steps([srow(record, { after: { record, drum: {}, extra: 1 } })]).acks).toEqual([{ id: `${SET_ID}.0`, outcome: "limits" }]);
+    expect(steps([srow(record, { after: null })]).acks).toEqual([{ id: `${SET_ID}.0`, outcome: "limits" }]);
+    // Sent three days after its date: outside the window from the send.
+    expect(steps([srow(record, { at: NOW + 3 * 24 * HOUR })]).acks).toEqual([{ id: `${SET_ID}.0`, outcome: "limits" }]);
+  });
+  it("W-E: they logged that letter that day themselves: superseded, nothing written", () => {
+    const record = liveRecord();
+    const own = { id: `${TODAY}T08:00:00.000Z`, date: TODAY, session: "strength-a", scheduledLetter: "A", blocks: [] };
+    expect(steps([srow(record)], { history: [own] })).toEqual({ seen: [], acks: [{ id: `${SET_ID}.0`, outcome: "superseded" }], keep: [], cards: [] });
+    const retro = { id: `${TODAY}T12:00:00.000Z`, date: TODAY, session: "strength-a", retrospective: true, blocks: [] };
+    expect(steps([srow(record)], { history: [retro] }).acks).toEqual([{ id: `${SET_ID}.0`, outcome: "superseded" }]);
+    const otherDay = { ...own, date: ago(1), id: `${ago(1)}T08:00:00.000Z` };
+    expect(steps([srow(record)], { history: [otherDay] }).cards).toHaveLength(1);
+  });
+  it("kept on another of their devices: ack kept, no write", () => {
+    const record = liveRecord();
+    const id = `${SET_ID}.0`;
+    for (const loggedBy of [{ by: "trainer", name: "Sam", changeId: id }, { name: "Sam", accountId: "acc_1" }]) {
+      expect(steps([srow(record)], { history: [{ ...record, loggedBy }] })).toEqual({ seen: [], acks: [{ id, outcome: "kept" }], keep: [], cards: [] });
+    }
+  });
+  it("an id that matches anything but this row's own kept record is never read as kept", () => {
+    const record = liveRecord();
+    const id = `${SET_ID}.0`;
+    const ack = (history) => steps([srow(record)], { history }).acks;
+    // Their own log of another letter or day under that id: the trainer's record is forged.
+    expect(ack([{ ...record, date: ago(1), loggedBy: undefined }])).toEqual([{ id, outcome: "limits" }]);
+    expect(ack([{ id: record.id, date: ago(1), session: "strength-b", scheduledLetter: "B", blocks: [] }])).toEqual([{ id, outcome: "limits" }]);
+    // That letter that day, but not kept from this row: theirs stands.
+    expect(ack([{ ...record }])).toEqual([{ id, outcome: "superseded" }]);
+    expect(ack([{ ...record, loggedBy: { by: "trainer", name: "Sam", changeId: `${SET_ID}.1` } }])).toEqual([{ id, outcome: "superseded" }]);
+  });
+  it("nothing auto-keeps while the client has the record open", () => {
+    const record = liveRecord();
+    const id = `${SET_ID}.0`;
+    const local = { [id]: { seenAt: NOW - AUTO_KEEP_MS - HOUR } };
+    const held = steps([srow(record)], { local, holding: [id] });
+    expect(held.keep).toEqual([]);
+    expect(held.cards).toMatchObject([{ id, keepsAt: NOW - HOUR }]);
+    expect(steps([srow(record)], { local, holding: ["other"] }).keep.map((k) => k.id)).toEqual([id]);
+  });
+  it("leaves alone what this device decided, what it already acked, and every other row", () => {
+    const record = liveRecord();
+    const id = `${SET_ID}.0`;
+    const none = { seen: [], acks: [], keep: [], cards: [] };
+    expect(steps([srow(record)], { local: { [id]: { seenAt: NOW - 9 * HOUR, decided: "kept" } } })).toEqual(none);
+    expect(steps([srow(record)], { acked: [id] })).toEqual(none);
+    expect(steps([srow(record, { undone: true })])).toEqual(none);
+    expect(steps([srow(record, { outcome: "discarded" })])).toEqual(none);
+    expect(steps([{ ...srow(record), kind: "weight" }, null, { id: 3 }])).toEqual(none);
+  });
+  it("the plan-change applier never touches a session row", () => {
+    const record = liveRecord();
+    expect(planDeviceSteps([srow(record)], { meta: {}, history: [], todayIso: TODAY }))
+      .toEqual({ weights: {}, reps: {}, mainLifts: {}, weeks: [], acks: [], reverts: [], applied: [] });
   });
 });
