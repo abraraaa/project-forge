@@ -68,7 +68,7 @@ function run(q, v) {
     const h = db.handles.find((x) => x.account_id === v[0] && x.released_at == null);
     return h ? [{ handle: h.handle, display: h.display }] : [];
   }
-  if (/^\s*SELECT g\.id, g\.profile, g\.scope, g\.created_at, g\.last_used_at, g\.edits_at, g\.edits_off_at, h\.handle, h\.display\s+FROM oauth_grants g/.test(q)) {
+  if (/^\s*SELECT g\.id, g\.profile, g\.scope, g\.created_at, g\.last_used_at, g\.edits_at, g\.edits_off_at, g\.consent_version, h\.handle, h\.display\s+FROM oauth_grants g/.test(q)) {
     const [t, ref] = v;
     return db.grants
       .filter((g) => liveGrant(g, t) && (ref === undefined || g.id === ref))

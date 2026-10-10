@@ -59,15 +59,17 @@ const ROW = {width:"100%",padding:"15px 2px",background:"none",border:"none",bor
 const newCount = (n) => (Number.isInteger(n) && n > 0 ? n : 0);
 
 // The "Your trainer" row, from GET /api/sync/trainer (ProfileView), or null
-// when there is nothing to show. A change new since the list was last seen
-// (the notices' count of change sets) is said first; otherwise a live share
-// says whether they can change the plan.
+// when there is nothing to show. A session they logged with you, waiting on
+// Home, is said first; then a change new since the list was last seen (the
+// notices' count of change sets); otherwise a live share says whether they
+// can change the plan.
 const shortDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
 function trainerRowFor(share, dots) {
   if (!share) return null;
   const { sharing, ended, open } = share;
   const fresh = newCount(dots?.trainerChange);
-  const changed = fresh ? `Changed your plan · ${fresh} new` : null;
+  const changed = newCount(dots?.trainerSession) ? "Logged a session with you · on Home"
+    : fresh ? `Changed your plan · ${fresh} new` : null;
   if (sharing?.name) {
     if (changed) return { title: sharing.name, sub: changed };
     if (!sharing.live) return { title: sharing.name, sub: "Paused" };

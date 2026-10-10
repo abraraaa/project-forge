@@ -11,10 +11,21 @@ import { makeDayContext, weeklyStrength, strengthRhythm } from "@/lib/day-state"
 import { ensureScheduleHistory, scheduleEntryOn } from "@/lib/sync-merge";
 import { addDaysIso, mondayOfWeekIso } from "@/lib/dates";
 import { isResting } from "@/lib/breaks";
-import { projectPlan, PLAN_KEYS, EDITS_STATUSES, editsStatus, projectForTrainer as projectWithPlan } from "@/lib/trainer-plan";
-import { validateChangeSet, boundsFor, liftBasis, rowFromDb, weekBasis, anchorLogged, SETS_PER_WEEK } from "@/lib/trainer-change";
+import { projectPlan, projectRan, PLAN_KEYS, EDITS_STATUSES, editsStatus, projectForTrainer as projectWithPlan } from "@/lib/trainer-plan";
+import { ledgerFor } from "@/lib/trainer-ledger";
+import { csvFromView } from "@/lib/trainer-export";
+import {
+  validateChangeSet, boundsFor, liftBasis, rowFromDb, weekBasis, anchorLogged, SETS_PER_WEEK, SESSIONS_PER_WEEK,
+  validateSessionSet, sessionStatus, AUTO_KEEP_MS,
+} from "@/lib/trainer-change";
 import { nextRung, CATEGORY_COLD_START_MAX_KG, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights } from "@/lib/lift-translations";
-import { resolvedProgramme } from "@/lib/programme-resolve";
+import { resolvedProgramme, planStartWeight, validMainLifts, repTargets } from "@/lib/programme-resolve";
+import {
+  SESSIONS, EXERCISE_POOLS, FOCUS_OPTIONS, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS,
+  applyRotationToSession, applyMainLiftsToSession, applySwapsToSession, applyFocusToSession,
+} from "@/lib/programme";
+import { getLoadType } from "@/lib/lift-translations";
+import { newDraftLog, logSet, finaliseDraft, scaleForReadiness } from "@/lib/storage";
 
 const TODAY = "2026-10-03";
 const ago = (n, from = TODAY) => addDaysIso(from, -n);
@@ -91,7 +102,8 @@ const canaryData = () => ({
   meta: canaryMeta(),
   history: [
     canaryRecord(ago(2), "07:13:42"),
-    canaryRecord(ago(2), "18:04:05", { readiness: "cooked", travel: true }),
+    canaryRecord(ago(2), "18:04:05", { readiness: "cooked", travel: true,
+      loggedBy: { name: "CANARY-trainerName", accountId: "hwa_CANARYtrainerAccount0000" }, loggedAt: `${ago(1)}T09:41:27.000Z` }),
     canaryRecord(ago(200), "07:13:42", { readiness: "normal" }),
     canaryRecord(ago(300), "18:04:05", { readiness: "weird" }),
   ],
@@ -224,6 +236,20 @@ describe("projectForTrainer: what is always shared", () => {
     ]);
     expect(out.sessions[1].travel).toBe(true);
     expect(out.sessions[0]).not.toHaveProperty("travel");
+  });
+
+  it("a session a trainer logged carries the coached flag only: never the name, the account or loggedBy itself", () => {
+    const out = projectForTrainer(canaryData(), { todayIso: TODAY });
+    expect(out.sessions[1].coached).toBe(true);
+    expect(out.sessions[0]).not.toHaveProperty("coached");
+    const text = JSON.stringify(out);
+    for (const c of ["loggedBy", "loggedAt", "accountId", "trainerName", "hwa_"]) expect(text, c).not.toContain(c);
+    // The trend tier carries no flag at all.
+    for (const t of out.tops) expect(t).not.toHaveProperty("coached");
+    // Anything but an object is not a trainer's record.
+    const one = (loggedBy) => projectForTrainer({ history: [{ id: "x", date: TODAY, loggedBy, blocks: [] }] }, { todayIso: TODAY }).sessions[0];
+    for (const v of [undefined, null, "Sam", true]) expect(one(v), String(v)).not.toHaveProperty("coached");
+    expect(one({ name: null, accountId: null }).coached).toBe(true);
   });
 
   it("synthetic ids: noon plus a per-day ordinal by the original id; the start time is gone", () => {
@@ -625,10 +651,29 @@ function assertPlanAllowed(plan) {
   }
   for (const c of plan.changes) {
     keys(c, PLAN_KEYS.planChange, "change");
-    for (const k of ["before", "after"]) if (c.kind === "week" && c[k] !== null) days(c[k], k); else flat(c[k], k);
+    for (const k of ["before", "after"]) {
+      if (c.kind === "week" && c[k] !== null) days(c[k], k);
+      else if (c.kind === "session" && c[k] !== null) {
+        keys(c[k], PLAN_KEYS.planSession, "session");
+        for (const v of Object.values(c[k])) flat(v, "session");
+      } else flat(c[k], k);
+    }
+    if ("delivered" in c) expect(c.kind).toBe("session");
+    flat(c.delivered, "delivered");
     for (const w of c.warnings) expect(typeof w).toBe("string");
   }
   keys(plan.budget, PLAN_KEYS.planBudget, "budget");
+  keys(plan.budget.sessions, PLAN_KEYS.planSessionBudget, "budget.sessions");
+  for (const v of Object.values(plan.budget.sessions)) flat(v, "budget.sessions");
+  const p = plan.programme;
+  keys(p, PLAN_KEYS.planProgramme, "programme");
+  for (const k of ["number", "focus"]) flat(p[k], `programme.${k}`);
+  for (const [slot, pick] of Object.entries(p.config)) {
+    expect(Object.keys(EXERCISE_POOLS), slot).toContain(slot);
+    keys(pick, PLAN_KEYS.planSlot, `config.${slot}`);
+    for (const v of Object.values(pick)) flat(v, slot);
+  }
+  for (const v of [...Object.values(p.mainLifts), ...Object.values(p.reps)]) flat(v, "programme map");
 }
 
 /** The plan as the route sends it to the validator: the basis the pane shows, sent back. */
@@ -657,7 +702,8 @@ describe("the plan: only on a grant with changes on", () => {
     for (const k of Object.keys(without)) expect(withPlan[k]).toEqual(without[k]);
     expect(withPlan.plan).toEqual(projectPlan(data, { todayIso: TODAY, rows: [], used: 0, freeAt: null }));
     expect(withPlan.edits).toBe("on");
-    expect(VIEW_KEYS.root).toEqual(["window", "breaks", "schedule", "sessions", "tops", "plan", "edits"]);
+    expect(withPlan).not.toHaveProperty("ran");
+    expect(VIEW_KEYS.root).toEqual(["window", "breaks", "schedule", "sessions", "tops", "plan", "ran", "edits"]);
   });
 
   it("the edits status: on with the trainer's changes read; unavailable when they could not be; fresh on the old consent; off", () => {
@@ -673,14 +719,16 @@ describe("the plan: only on a grant with changes on", () => {
     expect(EDITS_STATUSES).toEqual(["on", "off", "fresh", "unavailable"]);
   });
 
-  it("the view carries each status as given, and a plan only when on with the changes read", () => {
+  it("the view carries each status as given, a plan only when on with the changes read, and otherwise only the sessions ran", () => {
     const data = planData();
     const base = projectForTrainer(data, { todayIso: TODAY });
     const changes = { rows: [], used: 0, freeAt: null };
     for (const status of /** @type {const} */ (["off", "fresh", "unavailable"])) {
       for (const edits of [null, changes]) {
         const v = projectWithPlan(data, { todayIso: TODAY, edits, status });
-        expect(v, `${status} ${!!edits}`).toEqual({ ...base, edits: status });
+        // Changes read on a live grant: the sessions the trainer ran and the session count, nothing of the plan.
+        const ran = edits ? { ran: { changes: [], budget: { used: 0, of: 7, freeAt: null } } } : {};
+        expect(v, `${status} ${!!edits}`).toEqual({ ...base, edits: status, ...ran });
         expect(v).not.toHaveProperty("plan");
       }
     }
@@ -1184,9 +1232,16 @@ describe("the plan: deload, recovery, main lifts, budget", () => {
     expect(plan.lifts.some((l) => l.name === "Front Squat")).toBe(true);
   });
 
-  it("the budget: used, of 10, and when one frees up", () => {
-    expect(projectPlan(planData(), { todayIso: TODAY, used: 7, freeAt: 1_790_604_800_000 }).budget).toEqual({ used: 7, of: SETS_PER_WEEK, freeAt: 1_790_604_800_000 });
-    expect(projectPlan(planData(), { todayIso: TODAY }).budget).toEqual({ used: 0, of: 10, freeAt: null });
+  it("the budget: used, of 10, and when one frees up; sessions counted apart, of 7", () => {
+    const none = { used: 0, of: SESSIONS_PER_WEEK, freeAt: null };
+    expect(projectPlan(planData(), { todayIso: TODAY, used: 7, freeAt: 1_790_604_800_000 }).budget)
+      .toEqual({ used: 7, of: SETS_PER_WEEK, freeAt: 1_790_604_800_000, sessions: none });
+    expect(projectPlan(planData(), { todayIso: TODAY }).budget).toEqual({ used: 0, of: 10, freeAt: null, sessions: { used: 0, of: 7, freeAt: null } });
+    expect(projectPlan(planData(), { todayIso: TODAY, used: 2, sessions: { used: 3, freeAt: 1_790_604_800_000 } }).budget)
+      .toEqual({ used: 2, of: 10, freeAt: null, sessions: { used: 3, of: 7, freeAt: 1_790_604_800_000 } });
+    for (const junk of [null, {}, { used: "3", freeAt: "x" }, { used: NaN }]) {
+      expect(projectPlan(planData(), /** @type {any} */ ({ todayIso: TODAY, sessions: junk })).budget.sessions, JSON.stringify(junk)).toEqual(none);
+    }
   });
 });
 
@@ -1266,5 +1321,246 @@ describe("the plan: the trainer's changes and what each reads as", () => {
     ] });
     expect(plan.changes.map((c) => c.after)).toEqual([null, null, null]);
     expect(projectPlan(planData(), { todayIso: TODAY, rows: [null, { id: 3 }, "x"] }).changes).toEqual([]);
+  });
+});
+
+// ── Coached sessions: what the trainer's device composes from, and the rows ──
+
+const LETTERS = ["strength-a", "strength-b", "strength-c"];
+/** The first pool slot of each session, picked away from its default (the last of its pool). */
+const PICKS = Object.fromEntries([0, 1, 2].map((idx) => {
+  const slot = SESSIONS[idx].blocks.flatMap((b) => [b.id, `${b.id}-A`, `${b.id}-B`]).find((k) => Object.hasOwn(EXERCISE_POOLS, k));
+  const pool = EXERCISE_POOLS[slot].pool;
+  return [slot, { ...pool[pool.length - 1] }];
+}));
+const coachMeta = (userFocus = "Forged") => ({
+  weights: { [SQUAT]: 100, [BENCH]: 80, "Front Squat": 82.5, [LUNGE]: 16 },
+  reps: { [SQUAT]: 6, [BENCH]: 5 },
+  programmeBlock: { number: 3, startDate: "2026-09-01", config: structuredClone(PICKS), history: {} },
+  userFocus,
+  mainLifts: { [SQUAT]: "Front Squat" },
+});
+
+/**
+ * A session as the trainer's device builds it from the plan alone: the
+ * host's composition chain fed plan.programme, W from plan.lifts, R from
+ * plan.programme.reps (else the slot's template), no bodyweight and no
+ * anchors, through the real newDraftLog, logSet and finaliseDraft.
+ */
+function ipadRecord(plan, idx, { programme = plan.programme, R = programme.reps } = {}) {
+  const { config, focus, mainLifts, number } = programme;
+  const W = Object.fromEntries(plan.lifts.filter((l) => l.w !== null).map((l) => [l.name, l.w]));
+  const main = applyMainLiftsToSession(applyRotationToSession(SESSIONS[idx], config), mainLifts);
+  const active = scaleForReadiness(applyFocusToSession(applySwapsToSession(main, {}), focus, config, mainLifts), "normal");
+  const draft = newDraftLog({ profileName: null, session: LETTERS[idx], blockNumber: number, readiness: "normal" });
+  for (const b of active.blocks) {
+    for (const [k, suffix] of [["ex", ""], ["exA", "-A"], ["exB", "-B"]]) {
+      const ex = b[k];
+      if (!ex) continue;
+      const key = `${b.id}${suffix}`;
+      const loadType = getLoadType(ex);
+      const weight = loadType === "bodyweight" ? null : planStartWeight(ex, { working: W, bodyweight: null, anchors: {} });
+      const reps = R[ex.name] ?? ex.reps;
+      for (let n = 0; n < b.sets; n++) {
+        logSet(draft, { blockId: b.id, blockType: b.type, exerciseName: ex.name, muscle: ex.muscle, swapped: false,
+          fromPool: EXERCISE_POOLS[key] ? key : null, loadType, bodyweight: null, weight, reps,
+          rpe: b.type === "main" ? 8 : null, prescribed: { reps, weight, sets: b.sets } });
+      }
+    }
+  }
+  return JSON.parse(JSON.stringify(finaliseDraft(draft)));
+}
+/** The server's verdict on a record (the change route's write phase), in one word. */
+const serverSays = (record, meta) => {
+  const v = validateSessionSet({ id: SET_B, ops: [{ kind: "session", record, drum: {} }] }, { meta, history: [], todayIso: record.date, phase: "write" });
+  return v.ok ? "ok" : v.stale ? "stale" : `${v.rule}:${v.code}`;
+};
+
+describe("the plan: what a coached session is composed from", () => {
+  it("the keys: programme on the plan; a session's value, delivered and the session count on the changes and budget", () => {
+    expect(PLAN_KEYS.plan).toEqual(["lifts", "mains", "deload", "week", "programme", "changes", "budget"]);
+    expect(PLAN_KEYS.planProgramme).toEqual(["number", "config", "focus", "mainLifts", "reps"]);
+    expect(PLAN_KEYS.planSlot).toEqual(["name", "reps", "weight", "muscle", "vid", "loadType", "loadProfile"]);
+    expect(PLAN_KEYS.planSession).toEqual(["letter", "date", "exercises", "sets"]);
+    expect(PLAN_KEYS.planChange).toContain("delivered");
+    expect(PLAN_KEYS.planBudget).toEqual(["used", "of", "freeAt", "sessions"]);
+    expect(PLAN_KEYS.planSessionBudget).toEqual(["used", "of", "freeAt"]);
+  });
+
+  it("a client who never set one: block 1, no rotation, Forged, no main-lift choices, their stored targets", () => {
+    const plan = projectPlan(planData(), { todayIso: TODAY });
+    expect(plan.programme).toEqual({ number: 1, config: {}, focus: "Forged", mainLifts: {}, reps: { [SQUAT]: 5 } });
+    assertPlanAllowed(plan);
+  });
+
+  it("the trainer's device composes each letter, in every focus, exactly as the server checks it", () => {
+    for (const focus of FOCUS_OPTIONS) {
+      const meta = coachMeta(focus);
+      const plan = projectPlan({ meta, history: [] }, { todayIso: TODAY });
+      assertPlanAllowed(plan);
+      expect(plan.programme).toMatchObject({ number: 3, focus, mainLifts: { [SQUAT]: "Front Squat" } });
+      expect(Object.keys(plan.programme.config).sort()).toEqual(Object.keys(PICKS).sort());
+      for (const idx of [0, 1, 2]) expect(serverSays(ipadRecord(plan, idx), meta), `${focus} ${LETTERS[idx]}`).toBe("ok");
+    }
+  });
+
+  it("each input matters: without the rotation, the focus, the main lifts or the rep targets as set, the server refuses it", () => {
+    const meta = coachMeta("Strong");
+    const plan = projectPlan({ meta, history: [] }, { todayIso: TODAY });
+    const p = plan.programme;
+    const verdicts = (programme, R = programme.reps) => [0, 1, 2].map((idx) => serverSays(ipadRecord(plan, idx, { programme, R }), meta));
+    expect(verdicts(p)).toEqual(["ok", "ok", "ok"]);
+    for (const [what, programme] of /** @type {const} */ ([
+      ["config", { ...p, config: {} }], ["focus", { ...p, focus: "Forged" }], ["mainLifts", { ...p, mainLifts: {} }],
+    ])) expect(verdicts(programme).every((v) => v === "ok"), what).toBe(false);
+    // lifts[].reps reads a Strong range ("6-8") as its first count: composing from it is stale.
+    const fromLifts = Object.fromEntries(plan.lifts.map((l) => [l.name, l.reps]));
+    expect(verdicts(p, fromLifts)).toContain("stale");
+  });
+
+  it("only programme data leaves: a pool slot holding a lift of its pool, plain values; the block's other fields never", () => {
+    const meta = coachMeta("CANARY-focus");
+    const [slot, pick] = Object.entries(PICKS)[0];
+    meta.programmeBlock = {
+      number: 4, startDate: "CANARY-start", updatedAt: "CANARY-updated", history: { [slot]: ["CANARY-history"] },
+      config: {
+        [slot]: { ...pick, note: "CANARY-note", tags: ["CANARY-tag"], weight: { kg: 7004.01 } },
+        "zz9-A": { name: "CANARY-other-slot" }, // not a pool slot
+        [Object.keys(PICKS)[1]]: { name: "CANARY-not-in-pool" },
+        [Object.keys(PICKS)[2]]: "CANARY-string",
+        nope: { ...pick },
+      },
+    };
+    meta.mainLifts = { [SQUAT]: "CANARY-choice", [BENCH]: MAIN_LIFT_FUNCTIONAL_EQUIVALENTS[BENCH][0] };
+    meta.reps = { [SQUAT]: 6, "CANARY-lift": 7004, [BENCH]: { n: 7004 } };
+    const p = projectPlan({ meta, history: [] }, { todayIso: TODAY }).programme;
+    expect(p.number).toBe(4);
+    expect(p.focus).toBe("Forged");
+    const { weight, ...rest } = pick;
+    expect(p.config).toEqual({ [slot]: rest });
+    expect(p.mainLifts).toEqual({ [BENCH]: MAIN_LIFT_FUNCTIONAL_EQUIVALENTS[BENCH][0] });
+    expect(p.reps).toEqual({ [SQUAT]: 6 });
+    expect(JSON.stringify(p)).not.toMatch(/CANARY|7004/);
+    for (const number of [0, -1, 2.5, "3", null]) {
+      meta.programmeBlock.number = number;
+      expect(projectPlan({ meta, history: [] }, { todayIso: TODAY }).programme.number, String(number)).toBe(1);
+    }
+  });
+
+  it("nothing in it moves with their bodyweight, anchors or lift state", () => {
+    const meta = coachMeta("Strong");
+    const base = projectPlan({ meta, history: [] }, { todayIso: TODAY }).programme;
+    const moved = { ...meta, bodyweight: { kg: 7004.02 }, bodyweightLog: [{ date: TODAY, kg: 7004.02 }],
+      trainingState: { muscleAnchors: { Quads: 7004.03 } }, addedLoads: { [HIP]: { kg: 7004.05 } } };
+    expect(projectPlan({ meta: moved, history: [] }, { todayIso: TODAY }).programme).toEqual(base);
+    // The rep targets in force are the plan's own (lifts[].reps shows the same targets).
+    const plan = projectPlan({ meta, history: [] }, { todayIso: TODAY });
+    const targets = repTargets(meta);
+    for (const [name, r] of Object.entries(plan.programme.reps)) {
+      expect(r, name).toEqual(targets[name]);
+      expect(plan.lifts.find((l) => l.name === name)?.reps, name).toEqual(r);
+    }
+    expect(validMainLifts(meta)).toEqual(plan.programme.mainLifts);
+  });
+});
+
+describe("the plan: coached session rows", () => {
+  const D = "2026-10-03T09:12:34.000Z";
+  const record = {
+    id: `${TODAY}T08:00:00.000Z`, date: TODAY, session: "strength-a", scheduledLetter: "A", readiness: "fresh",
+    readinessReason: "CANARY-reason", blocks: [{ id: "a1", type: "main", exercises: [
+      { name: "CANARY-lift", sets: [{ weight: 7004.5, reps: 5 }, { weight: 7004.5, reps: 5 }] }, { name: SQUAT, sets: [{ weight: 100, reps: 5 }] }] }],
+  };
+  const srow = (i, over = {}, editsLive = true) => change(i, { kind: "session", target: `${TODAY}:A`, effective_from: TODAY, old_value: null,
+    new_value: { record, drum: { [SQUAT]: 7004.25 } }, warnings: null, ...over }, editsLive, SET_B);
+  const rows = () => [
+    srow(0),
+    srow(1, { delivered_at: D }),
+    srow(2, { delivered_at: D }, false),
+    srow(3, {}, false),
+    srow(4, { delivered_at: D, outcome: "kept", applied_at: "2026-10-03T10:00:00.000Z" }),
+    srow(5, { delivered_at: D, outcome: "auto_kept", applied_at: "2026-10-03T14:12:34.000Z" }),
+    srow(6, { delivered_at: D, outcome: "discarded" }),
+    srow(7, { delivered_at: D, outcome: "superseded" }),
+    srow(8, { outcome: "limits" }),
+    srow(9, { undone_at: "1790000009000", undone_by: "trainer" }),
+    srow(10, { delivered_at: "yesterday" }),
+  ];
+
+  it("each reads as the client's device does (sessionStatus), on the record's day, with when it reached them", () => {
+    const plan = projectPlan(planData(), { todayIso: TODAY, rows: rows(), sessions: { used: 9, freeAt: null } });
+    assertPlanAllowed(plan);
+    const st = plan.changes.map((c) => [c.status, c.reason, c.date, c.delivered]);
+    expect(st).toEqual([
+      ["waiting", null, TODAY, null], ["seen", null, TODAY, D], ["seen", "stopped", TODAY, D], ["not_applied", "stopped", TODAY, null],
+      ["kept", null, TODAY, D], ["auto_kept", null, TODAY, D], ["discarded", null, TODAY, D], ["superseded", null, TODAY, D],
+      ["not_applied", "limits", TODAY, null], ["withdrawn", null, TODAY, null], ["waiting", null, TODAY, null],
+    ]);
+    rows().forEach((r, i) => expect(plan.changes[i].status).toBe(sessionStatus(r, { editsLive: r.editsLive }).status));
+    // Seen and live: the five hours run from delivery (the pane words it from `delivered`).
+    expect(sessionStatus(rows()[1], { editsLive: true }).keepsAt).toBe(Date.parse(D) + AUTO_KEEP_MS);
+    for (const c of plan.changes) {
+      expect(c).toMatchObject({ kind: "session", target: `${TODAY}:A`, before: null, from: TODAY, warnings: [] });
+      expect(c.after).toEqual({ letter: "A", date: TODAY, exercises: 2, sets: 3 });
+    }
+    expect(plan.budget.sessions).toEqual({ used: 9, of: 7, freeAt: null });
+  });
+
+  it("never the record, the drum or the trainer's bookkeeping", () => {
+    const plan = projectPlan(planData(), { todayIso: TODAY, rows: [...rows(), change(20, { new_value: 105 })] });
+    const text = JSON.stringify(plan.changes);
+    for (const c of ["CANARY", "7004", "drum", "record", "blocks", "readiness", "08:00:00"]) expect(text, c).not.toContain(c);
+    // Beside the sessions, the one waiting weight change still reads as the squat's pending.
+    expect(plan.lifts.find((l) => l.name === SQUAT).pending).toEqual({ w: 105, reps: null });
+    expect(plan.changes.find((c) => c.kind === "weight")).not.toHaveProperty("delivered");
+    // A session row without a record reads as nothing.
+    const bare = projectPlan(planData(), { todayIso: TODAY, rows: [srow(0, { new_value: { drum: {} } }), srow(1, { new_value: "x" })] });
+    expect(bare.changes.map((c) => c.after)).toEqual([null, null]);
+  });
+
+  it("with changes off: the session rows exactly as the plan lists them, and the count; nothing of the plan", () => {
+    const all = [...rows(), change(20, { new_value: 105 })];
+    const plan = projectPlan(planData(), { todayIso: TODAY, rows: all, sessions: { used: 3, freeAt: 1_790_604_800_000 } });
+    const ran = projectRan(planData(), { todayIso: TODAY, rows: all, used: 4, freeAt: 1, sessions: { used: 3, freeAt: 1_790_604_800_000 } });
+    expect(Object.keys(ran)).toEqual(PLAN_KEYS.ran);
+    expect(ran.changes).toEqual(plan.changes.filter((c) => c.kind === "session"));
+    expect(ran.budget).toEqual({ used: 3, of: 7, freeAt: 1_790_604_800_000 });
+    for (const c of ran.changes) for (const k of Object.keys(c)) expect(PLAN_KEYS.planChange, k).toContain(k);
+    const text = JSON.stringify(ran);
+    for (const c of ["CANARY", "7004", "drum", "record", "105"]) expect(text, c).not.toContain(c);
+    // Through the route's projection: off with the changes read.
+    const v = projectWithPlan(planData(), { todayIso: TODAY, edits: { rows: all, sessions: { used: 3, freeAt: null } }, status: "off" });
+    expect(v).not.toHaveProperty("plan");
+    expect(v.ran.changes.map((c) => c.status)).toEqual(ran.changes.map((c) => c.status));
+  });
+});
+
+describe("provenance: the trainer's account id never travels back to a trainer", () => {
+  const ACCOUNT = "hwa_CANARYauthorAccount00000";
+  it("not in view.plan, view.ran, the ledger or the CSV, whatever the rows and records carry", () => {
+    const data = canaryData();
+    // A session the client kept (its loggedBy names the account) and the trainer's own rows, one planted with it.
+    data.history.push({
+      ...canaryRecord(ago(3), "08:00:00"), loggedBy: { name: "Sam", accountId: ACCOUNT }, loggedAt: `${ago(3)}T09:00:00.000Z`,
+    });
+    const record = { id: `${TODAY}T08:00:00.000Z`, date: TODAY, session: "strength-a", scheduledLetter: "A",
+      loggedBy: { name: "Sam", accountId: ACCOUNT }, blocks: [{ id: "a1", type: "main", exercises: [{ name: SQUAT, sets: [{ weight: 100, reps: 5 }] }] }] };
+    const rows = [
+      { ...change(0, { kind: "session", target: `${TODAY}:A`, effective_from: TODAY, old_value: null, new_value: { record, drum: {} }, warnings: null }, true, SET_B), authorId: ACCOUNT },
+      { ...change(1), authorId: ACCOUNT, by: ACCOUNT },
+    ];
+    const edits = { rows, used: 1, freeAt: null, sessions: { used: 1, freeAt: null } };
+    const on = projectWithPlan(data, { todayIso: TODAY, edits, status: "on" });
+    const off = projectWithPlan(data, { todayIso: TODAY, edits, status: "off" });
+    expect(on.plan.changes.length).toBe(2);
+    expect(off.ran.changes.length).toBe(1);
+    expect(on.sessions.some((ses) => ses.coached === true)).toBe(true);
+    for (const v of [on, off]) {
+      const ledger = Object.keys(mainLiftTrend([...v.tops, ...v.sessions], { includeCooked: true })).map((l) => ledgerFor(v, l));
+      const csv = csvFromView(v, { name: "Cara", trainer: "Sam", date: TODAY });
+      for (const [what, text] of [["view", JSON.stringify(v)], ["ledger", JSON.stringify(ledger)], ["csv", csv]]) {
+        for (const c of [ACCOUNT, "CANARYauthor", "accountId", "authorId", "loggedBy"]) expect(text, `${what} ${c}`).not.toContain(c);
+      }
+    }
   });
 });

@@ -11,7 +11,7 @@ import { dbReadProfile, dbExpireToken } from "@/lib/db";
 import { dbMarkSeen } from "@/lib/notices";
 import { trainerToday } from "@/lib/trainer-view";
 import { SHARE_CONSENT_VERSION } from "@/lib/trainer-terms";
-import { changeStatus, isUndoable } from "@/lib/trainer-change";
+import { changeStatus, isUndoable, SESSION_KIND, sessionPreview } from "@/lib/trainer-change";
 import { dbChangesForClient, dbUndoChanges, dbAckChanges, dbEditsOff, dbEditsOn, cleanAcks, isIsoInstant } from "@/lib/trainer-changes-store";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
@@ -28,7 +28,9 @@ export const dynamic = "force-dynamic";
 //        edits: null | { on, since }, whether their live trainer may change their plan.
 //        changes: their trainer changes (24 weeks and anything not landed, newest first,
 //        at most 100), each with the status it reads as now (lib/trainer-change.js
-//        changeStatus over their synced training). Never the basis. Read only: the
+//        changeStatus over their synced training). Never the basis. A session a
+//        trainer ran with them carries its record (their own training) and,
+//        once on their device, deliveredAt and keepsAt. Read only: the
 //        notice's seen mark is a POST.
 //   POST /api/sync/trainer { profile, stop } -> { ok }. Stop is revokeGrantFor, an UPDATE of
 //        revoked_at on the client's own trainer grant (revoked_by stays null: the client
@@ -51,9 +53,15 @@ export const dynamic = "force-dynamic";
 //        yet trained at. One that landed stays undone-not-put-back until their
 //        app writes the old value back and reports it. A week in their plan only
 //        with reverted (their app put it back first). No Face ID, any grant state.
-//   POST { profile, acks?, reverts? } -> { ok, acked, reverted }. Their app's
-//        report: dbAckChanges, an UPDATE of outcome and applied_at (first report
-//        stands), and of reverted_at on undone rows, their own rows only.
+//   POST { profile, acks?, reverts?, delivered? } -> { ok, acked, reverted, delivered }.
+//        Their app's report, their own rows only, through dbAckChanges in one
+//        transaction: an UPDATE of delivered_at on each session row that has
+//        reached their device (the device's instant, held between the send and
+//        now; the first report stands), then of outcome and applied_at (the
+//        first report stands; a session's kept, auto_kept, discarded and
+//        superseded among them), and of reverted_at on undone rows. An
+//        auto_kept on a session never marked delivered does not land: 400
+//        { undelivered }, since the five hours start only once it arrived.
 //   POST { profile, seenChanges: true } -> { ok }. dbMarkSeen, the account's
 //        'trainerChange' mark in notice_marks, overwritten in place.
 //   POST { profile, edits: false } -> { ok }. dbEditsOff, an UPDATE of
@@ -118,7 +126,8 @@ export async function POST(request) {
     const { profile, stop, seen, seenApplication, withdrawApplication } = body;
     const identity = typeof profile === "string" && profile ? await gate(request, profile) : null;
     if (!identity) return denied();
-    const verbs = /** @type {("undo" | "acks" | "seenChanges" | "edits")[]} */ (["undo", "acks", "seenChanges", "edits"]).filter((k) => body[k] !== undefined || (k === "acks" && body.reverts !== undefined));
+    const verbs = /** @type {("undo" | "acks" | "seenChanges" | "edits")[]} */ (["undo", "acks", "seenChanges", "edits"])
+      .filter((k) => body[k] !== undefined || (k === "acks" && (body.reverts !== undefined || body.delivered !== undefined)));
     if (verbs.length) {
       // One verb per request, and never beside another branch's key.
       if (verbs.length > 1 || [stop, seen, seenApplication, withdrawApplication].some((v) => v !== undefined)) {
@@ -169,10 +178,14 @@ async function clientChanges(rows, storageKey, todayIso) {
   const state = await trainingState(storageKey, todayIso);
   return rows.map((r) => {
     const st = changeStatus(r, { ...state, editsLive: r.editsLive });
+    // A session's list row needs its letter, day and size, never the record:
+    // the record itself reaches them on Home, through the pull.
+    const after = r.kind === SESSION_KIND ? sessionPreview(r.after?.record) : r.after;
     return {
-      id: r.id, set: r.set, kind: r.kind, target: r.target, before: r.before, after: r.after, from: r.from,
+      id: r.id, set: r.set, kind: r.kind, target: r.target, before: r.before, after, from: r.from,
       status: st.status, reason: st.reason, date: st.date, ...(st.cooked ? { cooked: true } : {}),
       at: r.at, undoable: isUndoable(r, st, state), warnings: codes(r.warnings), by: r.by ?? null,
+      ...(r.kind === SESSION_KIND ? { deliveredAt: r.deliveredAt ?? null, keepsAt: st.keepsAt ?? null } : {}),
     };
   });
 }
@@ -194,9 +207,14 @@ async function changesWrite(verb, body, identity, request) {
     return done ? json({ ok: true }) : json({ error: "Unavailable" }, 503);
   }
   if (verb === "acks") {
-    if (!cleanAcks(body.acks, body.reverts)) return json({ error: "Bad report" }, 400);
-    const r = await dbAckChanges(me, { acks: body.acks, reverts: body.reverts });
-    return r ? json({ ok: true, ...r }) : json({ error: "Unavailable" }, 503);
+    if (!cleanAcks(body.acks, body.reverts, body.delivered)) return json({ error: "Bad report" }, 400);
+    const r = await dbAckChanges(me, { acks: body.acks, reverts: body.reverts, delivered: body.delivered }, now);
+    if (!r) return json({ error: "Unavailable" }, 503);
+    const { undelivered = [], ...done } = r;
+    // Kept after five hours, for a record the server never saw arrive: refused.
+    // The rest of the report stands (first report wins, so a resend is harmless).
+    if (undelivered.length) return json({ error: "Bad report", undelivered, ...done }, 400);
+    return json({ ok: true, ...done });
   }
   if (verb === "edits") {
     if (body.edits === false) {

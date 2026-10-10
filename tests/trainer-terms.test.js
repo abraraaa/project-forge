@@ -89,7 +89,7 @@ describe("trainer terms", () => {
 
 describe("share consent", () => {
   it("copy and version are pinned together", () => {
-    expect(SHARE_CONSENT_VERSION).toBe("2026-10-05b");
+    expect(SHARE_CONSENT_VERSION).toBe("2026-10-10");
     expect(SHARE_COPY).toEqual({
       rows: [
         "Your sessions, sets, RPE and how you felt, from the last 24 weeks.",
@@ -104,6 +104,7 @@ describe("share consent", () => {
         "They can change your working weights, reps and main lifts from your next session on, within the app's limits.",
         "Every change is checked against your training. It shows in Profile with what it was before, and you can undo it in one tap until you've trained at it. Your logged sessions never change.",
         "Turn their changes off in one tap in Profile, and keep sharing. Turning them off, or stopping sharing, cancels any change that hasn't reached your plan yet.",
+        "They can log a session with you. You see it first, and it's kept after five hours unless you say otherwise.",
       ],
       includes: "Includes sessions already logged, and new ones as you log them. Photos, bodyweight, sleep and notes stay yours.",
       line: "Only you decide. Stop any time in Profile, and they lose access straight away.",
@@ -136,7 +137,7 @@ describe("share consent", () => {
   });
 
   it("the version moved with the copy: the previous ones are refused", () => {
-    for (const old of ["2026-10", "2026-10-04", "2026-10-05"]) {
+    for (const old of ["2026-10", "2026-10-04", "2026-10-05", "2026-10-05b"]) {
       expect(SHARE_CONSENT_VERSION).not.toBe(old);
       expect(acceptedShareConsentVersion({ version: old })).toBeNull();
     }
@@ -167,7 +168,8 @@ describe("share consent", () => {
   it("names every part of the plan the trainer is sent, not only the next session", () => {
     const all = strings(SHARE_COPY).join("\n");
     // One phrase per part of the projection, so a new part needs new copy.
-    const named = { lifts: "every lift in your programme", mains: "main lifts", deload: "deload", week: "planned week up to 4 weeks ahead" };
+    const named = { lifts: "every lift in your programme", mains: "main lifts", deload: "deload", week: "planned week up to 4 weeks ahead",
+      programme: "every lift in your programme" };
     for (const k of PLAN_KEYS.plan.filter((k) => k !== "changes" && k !== "budget")) expect(all, k).toContain(named[k]);
     expect(all).toContain("Your current working weights, reps and main lifts for every lift in your programme");
     expect(all).not.toContain("Your next session's");
@@ -182,6 +184,15 @@ describe("share consent", () => {
     const plan = readFileSync(new URL("../lib/trainer-plan.js", import.meta.url), "utf8");
     expect(plan).toContain("findMostRecentLiftSession(history, name)");
     expect(plan).not.toContain("DETAIL_DAYS");
+  });
+
+  it("names coached sessions: the client sees it first, and the five hours; the share still holds no bodyweight", () => {
+    const all = strings(SHARE_COPY).join("\n");
+    expect(all).toContain("They can log a session with you.");
+    expect(all).toContain("You see it first");
+    expect(all).toContain("kept after five hours unless you say otherwise");
+    expect(SHARE_COPY.includes).toContain("Photos, bodyweight, sleep and notes stay yours.");
+    expect(all).not.toMatch(/!/);
   });
 
   it("accepts only the current share version", () => {

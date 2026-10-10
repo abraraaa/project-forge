@@ -137,8 +137,10 @@ export default function PerformanceLab({ history, onBack, resting = false, break
       <div style={{padding:"max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
         <button onClick={onBack} style={{...linkBtn,color:T.ink2}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Home</button>
         {!isEmpty && (
-          <span style={{fontSize:12,color:T.ink3}}>
+          <span style={{fontSize:12,color:T.ink3,textAlign:"right"}}>
             <span style={{fontFamily:T.measured}}>{counts.last7}</span> this week · <span style={{fontFamily:T.measured}}>{counts.total}</span> logged
+            {/* Sessions a trainer logged with them and they kept. */}
+            {counts.coached > 0 && <> · <span style={{fontFamily:T.measured}}>{counts.coached}</span> with your trainer</>}
           </span>
         )}
       </div>

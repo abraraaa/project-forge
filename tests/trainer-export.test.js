@@ -2,7 +2,7 @@
 // pane's rules for kg and effort, the top set, the tops tier, set_by from the
 // trainer's own changes, and a read of nothing outside the view's allow-list.
 import { describe, it, expect } from "vitest";
-import { csvFromView, csvField, exportFilename, EXPORT_COLUMNS } from "../lib/trainer-export.js";
+import { csvFromView, csvField, exportFilename, EXPORT_COLUMNS, LOGGED_BY_TRAINER } from "../lib/trainer-export.js";
 import { projectForTrainer as projectView, VIEW_KEYS } from "../lib/trainer-view.js";
 import { PLAN_KEYS } from "../lib/trainer-plan.js";
 
@@ -62,7 +62,7 @@ describe("csvFromView", () => {
   it("opens with the comment line and the header, CRLF throughout", () => {
     const csv = csvFromView(VIEW, opts);
     expect(csv.split("\r\n")[0]).toBe("# Heatwayve export for Cara, 2026-10-05, shared with Tia");
-    expect(csv.split("\r\n")[1]).toBe("date,session,block,lift,set,prescribed_reps,reps,kg,felt,top_set,set_by");
+    expect(csv.split("\r\n")[1]).toBe("date,session,block,lift,set,prescribed_reps,reps,kg,felt,top_set,set_by,logged_by");
     expect(csv.endsWith("\r\n")).toBe(true);
     // The only bare LF is the one inside the quoted name.
     expect(csv.replace(/\r\n/g, "").split("\n")).toHaveLength(2);
@@ -116,6 +116,29 @@ describe("csvFromView", () => {
     expect(rows.slice(3).every((r) => r.set_by === "" && r.prescribed_reps === "")).toBe(true);
   });
 
+  it("logged_by reads 'trainer' on every row of a session a trainer logged with the client, blank elsewhere; never a name", () => {
+    expect(EXPORT_COLUMNS.slice(-2)).toEqual(["set_by", "logged_by"]);
+    const coached = { ...VIEW, sessions: [{ ...VIEW.sessions[0], coached: true }, session("2026-09-29", VIEW.sessions[0].blocks)] };
+    for (const o of [opts, { name: "Tia", trainer: null, date: "2026-10-05" }]) {
+      const { rows } = records(csvFromView(coached, o));
+      expect(rows.map((r) => [r.date, r.logged_by]).filter(([d]) => d === "2026-10-01").every(([, l]) => l === LOGGED_BY_TRAINER)).toBe(true);
+      expect(rows.filter((r) => r.date !== "2026-10-01").every((r) => r.logged_by === "")).toBe(true);
+      expect(rows.some((r) => r.date === "2026-09-29")).toBe(true);
+    }
+    expect(LOGGED_BY_TRAINER).toBe("trainer");
+    expect(records(csvFromView(VIEW, opts)).rows.every((r) => r.logged_by === "")).toBe(true);
+  });
+
+  it("through the real projection: a kept trainer session reads 'trainer', and loggedBy's name and account never reach the file", () => {
+    const rec = (id, extra = {}) => ({ id, date: "2026-10-01", readiness: "normal", session: "strength-a", scheduledLetter: "A",
+      blocks: [{ type: "main", exercises: [{ name: SQUAT, loadType: "barbell", sets: [{ weight: 100, reps: 5, rpe: 8, loadType: "barbell" }] }] }], ...extra });
+    const view = projectView({ history: [rec("2026-10-01T07:00:00.000Z", { loggedBy: { name: "Sam Price", accountId: "hwa_samaccount" } }),
+      rec("2026-10-01T18:00:00.000Z")] }, { todayIso: "2026-10-05" });
+    const csv = csvFromView(view, opts);
+    expect(records(csv).rows.map((r) => r.logged_by)).toEqual(["trainer", ""]);
+    expect(csv).not.toMatch(/Sam|hwa_|loggedBy/);
+  });
+
   it("the trainer's own export names no one it is shared with", () => {
     const csv = csvFromView(VIEW, { name: "Tia", trainer: null, date: "2026-10-05" });
     expect(csv.split("\r\n")[0]).toBe("# Heatwayve export for Tia, 2026-10-05");
@@ -123,7 +146,7 @@ describe("csvFromView", () => {
 
   it("names in the comment line stay on one line and never start a formula", () => {
     const csv = csvFromView({ sessions: [], tops: [] }, { name: "=cmd,\"x\"\r\ny", trainer: "@t", date: "2026-10-05" });
-    expect(csv).toBe("# Heatwayve export for '=cmd x y, 2026-10-05, shared with '@t\r\ndate,session,block,lift,set,prescribed_reps,reps,kg,felt,top_set,set_by\r\n");
+    expect(csv).toBe("# Heatwayve export for '=cmd x y, 2026-10-05, shared with '@t\r\ndate,session,block,lift,set,prescribed_reps,reps,kg,felt,top_set,set_by,logged_by\r\n");
   });
 
   it("an empty or missing view is the header alone", () => {

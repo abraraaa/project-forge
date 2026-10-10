@@ -31,14 +31,15 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HOSTS = [
   { name: "ForgeApp.jsx", source: readFileSync(resolve(__dirname, "../components/ForgeApp.jsx"), "utf8") },
-  { name: "SessionHost.jsx", source: readFileSync(resolve(__dirname, "../components/SessionHost.jsx"), "utf8") },
+  // The live host's store writes sit in its adapter, lib/session-source.js.
+  { name: "SessionHost.jsx", source: readFileSync(resolve(__dirname, "../components/SessionHost.jsx"), "utf8") + "\n" + readFileSync(resolve(__dirname, "../lib/session-source.js"), "utf8") },
 ];
 
 // Persistence-mutating calls. Any line containing one of these regexes is a
@@ -229,6 +230,72 @@ describe.each(HOSTS)("$name mutation coverage — every persisted mutation pushe
         failures.join("\n  "),
       );
     }
+  });
+});
+
+// commitSessionRecord (lib/session-commit.js) writes history, the day, the
+// engine and W/R but leaves the push to its caller. Every caller in lib/ and
+// components/ must sit in a function that pushes.
+describe("commitSessionRecord callers push", () => {
+  const root = resolve(__dirname, "..");
+  const files = ["lib", "components"].flatMap((dir) =>
+    readdirSync(resolve(root, dir), { recursive: true })
+      .map(String)
+      .filter((f) => /\.(js|jsx)$/.test(f))
+      .map((f) => `${dir}/${f}`))
+    .filter((f) => f !== "lib/session-commit.js");
+  const calls = files.flatMap((file) => {
+    const source = readFileSync(resolve(root, file), "utf8");
+    const lines = source.split("\n");
+    return lines
+      .map((line, lineIdx) => ({ file, source, lines, lineIdx, line }))
+      .filter(({ line }) => !/^\s*(\/\/|\*)/.test(line) && /\bcommitSessionRecord\s*\(/.test(line));
+  });
+
+  it("finds at least the live finish", () => {
+    expect(calls.map((c) => c.file)).toContain("lib/session-source.js");
+  });
+
+  it("every call sits in a function that calls pushNow/pushDeferred", () => {
+    const failures = [];
+    for (const { file, source, lines, lineIdx } of calls) {
+      const decl = findEnclosingDeclaration(source, lines, lineIdx);
+      if (!decl) { failures.push(`${file}:${lineIdx + 1}: no enclosing function found`); continue; }
+      const start = charIdxForLine(source, decl.startIdx);
+      const body = source.slice(start, findFunctionEnd(source, start) + 1);
+      if (!/push(?:Now|Deferred)\s*\(/.test(body)) {
+        failures.push(`${file}:${lineIdx + 1}: ${decl.name} calls commitSessionRecord but never pushes`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  // Keep is handed the commit (setSessionCommit), so it has no literal
+  // commitSessionRecord( call: its push is _deliverTrainer's, which pushes
+  // before it reports. storage.js's functions here are top level, so a body
+  // runs from its declaration to the next line that is just "}".
+  it("Keep's injected commit: every _keepSession caller delivers, and delivery pushes", () => {
+    const file = "lib/storage.js";
+    const lines = readFileSync(resolve(root, file), "utf8").split("\n");
+    const DECL = /^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(/;
+    const bodyOf = (lineIdx) => {
+      let i = lineIdx;
+      while (i >= 0 && !DECL.test(lines[i])) i--;
+      if (i < 0) return { name: null, body: "" };
+      const end = lines.findIndex((l, j) => j > i && l === "}");
+      return { name: lines[i].match(DECL)?.[1] ?? null, body: lines.slice(i, end + 1).join("\n"), end };
+    };
+    const declOf = (name) => lines.findIndex((l) => l.match(DECL)?.[1] === name);
+    const keep = declOf("_keepSession");
+    expect(bodyOf(keep).body).toMatch(/\bcommit\(profile, rec, ctx\)/);
+    expect(bodyOf(declOf("_deliverTrainer")).body).toMatch(/\bpushNow\(/);
+    const callers = lines.map((l, i) => ({ l, i }))
+      .filter(({ l, i }) => i !== keep && /\b_keepSession\(/.test(l) && !/^\s*(\/\/|\*)/.test(l));
+    expect(callers.map(({ i }) => bodyOf(i).name)).toContain("keepTrainerSession");
+    const failures = callers.map(({ i }) => ({ i, ...bodyOf(i) }))
+      .filter(({ body }) => !/\b_deliverTrainer\(/.test(body))
+      .map(({ i, name }) => `${file}:${i + 1}: ${name} keeps but never delivers`);
+    expect(failures).toEqual([]);
   });
 });
 

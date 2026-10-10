@@ -21,7 +21,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  ledgerFor, ledgerKg, ledgerReps, ledgerRepsText, ledgerSetText, ledgerVolumeText, ledgerSetsShown, repCount,
+  ledgerFor, ledgerKg, ledgerReps, ledgerRepsText, ledgerSetText, ledgerVolumeText, ledgerSetsShown, repCount, ledgerMarkText,
 } from "../lib/trainer-ledger.js";
 import { mainLiftTrend } from "../lib/analytics.js";
 import { projectForTrainer } from "../lib/trainer-view.js";
@@ -190,6 +190,34 @@ describe("ledgerFor", () => {
       expect(r.changes).toEqual([]);
       expect(r.prescribed).toBeNull();
     }
+  });
+
+  it("a session the trainer logged with the client reads Coached; nothing else does, and it never attaches as a change", () => {
+    const v = /** @type {any} */ (fixture());
+    v.sessions[1].coached = true;
+    // A plan session change (kind "session") is not a trained-at weight or reps change.
+    v.plan = { changes: [{ id: "s1", kind: "session", target: "2026-09-20:A", status: "kept", date: "2026-09-20", at: 1 }] };
+    const rows = ledgerFor(v, SQ);
+    expect(rows.map((r) => [r.key, r.coached])).toEqual([
+      ["2026-10-01T12:00:00.000Z", false], ["2026-09-20T12:00:01.000Z", false], ["2026-09-20T12:00:00.000Z", true],
+      ["2026-09-01T12:00:00.000Z", false], ["2026-01-10T12:00:00.000Z", false], ["2025-12-01T12:00:00.000Z", false],
+    ]);
+    expect(rows.map(ledgerMarkText)).toEqual(["", "", "Coached", "", "", ""]);
+    expect(rows.flatMap((r) => r.changes)).toEqual([]);
+    // A top row never carries it, even if a view sent one.
+    v.tops[0].coached = true;
+    expect(ledgerFor(v, SQ).filter((r) => r.tier === "top").map((r) => r.coached)).toEqual([false, false]);
+  });
+
+  it("through the real projection: a kept trainer session reads Coached, and the row holds no name or account", () => {
+    const date = "2026-09-29";
+    const rec = (id, extra = {}) => ({ v: 2, id, date, readiness: "normal", session: "strength A", scheduledLetter: "A",
+      blocks: [{ id: "main", type: "main", exercises: [{ name: SQ, muscle: "Quads", loadType: "barbell", sets: [set(100, 5)] }] }], ...extra });
+    const v = projectForTrainer({ history: [rec(`${date}T07:00:00.000Z`, { loggedBy: { name: "Sam", accountId: "hwa_samsamsam" } }),
+      rec(`${date}T18:00:00.000Z`)] }, { todayIso: "2026-10-05" });
+    const rows = ledgerFor(v, SQ);
+    expect(rows.map(ledgerMarkText)).toEqual(["", "Coached"]);
+    expect(JSON.stringify(rows)).not.toMatch(/Sam|hwa_|loggedBy/);
   });
 
   it("an empty or foreign view gives no rows", () => {

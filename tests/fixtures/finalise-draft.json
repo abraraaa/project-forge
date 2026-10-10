@@ -1,0 +1,970 @@
+{
+  "empty": {
+    "id": "2026-10-07T09:30:00.000Z",
+    "date": "2026-10-07",
+    "dow": 3,
+    "profileName": "Tess",
+    "schemaVersion": 3,
+    "loggedTz": "Europe/London",
+    "loggedTzOffset": -60,
+    "session": "strength-a",
+    "blockNumber": 2,
+    "weekStart": "2026-10-05",
+    "scheduledLetter": "A",
+    "mesocyclePhase": "accumulation",
+    "readiness": "normal",
+    "readinessReason": null,
+    "travel": "__undefined__",
+    "bodyweight": null,
+    "hoursSlept": null,
+    "daysSinceLast": null,
+    "duration": 3600,
+    "blocks": [],
+    "summary": {
+      "totalVolume": 0,
+      "avgRir": null,
+      "completionRate": null,
+      "mainLiftPRs": []
+    }
+  },
+  "main lifts, prescribed, mixed effort": {
+    "id": "2026-10-07T09:30:00.000Z",
+    "date": "2026-10-07",
+    "dow": 3,
+    "profileName": "Tess",
+    "schemaVersion": 3,
+    "loggedTz": "Europe/London",
+    "loggedTzOffset": -60,
+    "session": "strength-a",
+    "blockNumber": 2,
+    "weekStart": "2026-10-05",
+    "scheduledLetter": "A",
+    "mesocyclePhase": "accumulation",
+    "readiness": "normal",
+    "readinessReason": null,
+    "travel": "__undefined__",
+    "bodyweight": null,
+    "hoursSlept": null,
+    "daysSinceLast": null,
+    "duration": 3600,
+    "blocks": [
+      {
+        "id": "a1",
+        "type": "main",
+        "intent": null,
+        "exercises": [
+          {
+            "name": "Barbell Back Squat",
+            "muscle": "Quadriceps",
+            "loadType": "external",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": null,
+            "prescribed": {
+              "reps": 5,
+              "weight": 100,
+              "sets": 3
+            },
+            "sets": [
+              {
+                "weight": 100,
+                "reps": 5,
+                "rir": 2.5,
+                "rpe": 7.5,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 100,
+                "est1rm": 116.7,
+                "volume": 500,
+                "reach": "__undefined__"
+              },
+              {
+                "weight": 100,
+                "reps": 5,
+                "rir": 1.5,
+                "rpe": 8.5,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 100,
+                "est1rm": 116.7,
+                "volume": 500,
+                "reach": "__undefined__"
+              },
+              {
+                "weight": 100,
+                "reps": 4,
+                "rir": 0,
+                "rpe": 10,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 100,
+                "est1rm": 113.3,
+                "volume": 400,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 1400,
+              "avgRir": 1.3,
+              "topSet": {
+                "weight": 100,
+                "reps": 5,
+                "rir": 2.5,
+                "rpe": 7.5,
+                "est1rm": 116.7
+              },
+              "hitTarget": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "a2",
+        "type": "main",
+        "intent": "strength",
+        "exercises": [
+          {
+            "name": "Barbell Bench Press",
+            "muscle": "Chest",
+            "loadType": "external",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": "3-1-1-0",
+            "prescribed": {
+              "reps": 5,
+              "weight": 60,
+              "sets": 3
+            },
+            "sets": [
+              {
+                "weight": 62.5,
+                "reps": 5,
+                "rir": 2,
+                "rpe": 8,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 62.5,
+                "est1rm": 72.9,
+                "volume": 312.5,
+                "reach": "__undefined__"
+              },
+              {
+                "weight": 62.5,
+                "reps": 6,
+                "rir": 1,
+                "rpe": 9,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 62.5,
+                "est1rm": 75,
+                "volume": 375,
+                "reach": true
+              },
+              {
+                "weight": 65,
+                "reps": 5,
+                "rir": 0.5,
+                "rpe": 9.5,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 65,
+                "est1rm": 75.8,
+                "volume": 325,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 1012.5,
+              "avgRir": 1.2,
+              "topSet": {
+                "weight": 65,
+                "reps": 5,
+                "rir": 0.5,
+                "rpe": 9.5,
+                "est1rm": 75.8
+              },
+              "hitTarget": true
+            }
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "totalVolume": 2412.5,
+      "avgRir": 1.3,
+      "completionRate": 0.5,
+      "mainLiftPRs": []
+    }
+  },
+  "superset strings, swaps and an uncounted set": {
+    "id": "2026-10-07T09:30:00.000Z",
+    "date": "2026-10-07",
+    "dow": 3,
+    "profileName": "Tess",
+    "schemaVersion": 3,
+    "loggedTz": "Europe/London",
+    "loggedTzOffset": -60,
+    "session": "strength-a",
+    "blockNumber": 2,
+    "weekStart": "2026-10-05",
+    "scheduledLetter": "A",
+    "mesocyclePhase": "accumulation",
+    "readiness": "cooked",
+    "readinessReason": "sleep",
+    "travel": "__undefined__",
+    "bodyweight": null,
+    "hoursSlept": null,
+    "daysSinceLast": null,
+    "duration": 3600,
+    "blocks": [
+      {
+        "id": "ass1",
+        "type": "superset",
+        "intent": null,
+        "exercises": [
+          {
+            "name": "DB Reverse Lunge",
+            "muscle": "Quadriceps",
+            "loadType": "external",
+            "swapped": false,
+            "fromPool": "ass1-A",
+            "tempo": null,
+            "prescribed": {
+              "reps": "8/leg",
+              "weight": 16,
+              "sets": 3
+            },
+            "sets": [
+              {
+                "weight": 16,
+                "reps": "8/leg",
+                "rir": null,
+                "rpe": null,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 16,
+                "est1rm": 20.3,
+                "volume": 128,
+                "reach": "__undefined__"
+              },
+              {
+                "weight": 16,
+                "reps": "8/leg",
+                "rir": 2,
+                "rpe": 8,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 16,
+                "est1rm": 20.3,
+                "volume": 128,
+                "reach": "__undefined__"
+              },
+              {
+                "weight": null,
+                "reps": null,
+                "rir": null,
+                "rpe": null,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": null,
+                "est1rm": null,
+                "volume": 0,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 256,
+              "avgRir": 2,
+              "topSet": {
+                "weight": 16,
+                "reps": "8/leg",
+                "rir": null,
+                "rpe": null,
+                "est1rm": 20.3
+              },
+              "hitTarget": false
+            }
+          },
+          {
+            "name": "Chest-Supported DB Row",
+            "muscle": "Back",
+            "loadType": "external",
+            "swapped": true,
+            "fromPool": "ass1-B",
+            "tempo": null,
+            "prescribed": {
+              "reps": 10,
+              "weight": null,
+              "sets": 3
+            },
+            "sets": [
+              {
+                "weight": 22,
+                "reps": 10,
+                "rir": null,
+                "rpe": null,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 22,
+                "est1rm": 29.3,
+                "volume": 220,
+                "reach": "__undefined__"
+              },
+              {
+                "weight": 22,
+                "reps": 9,
+                "rir": 1,
+                "rpe": 9,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 22,
+                "est1rm": 28.6,
+                "volume": 198,
+                "reach": "__undefined__"
+              },
+              {
+                "weight": null,
+                "reps": 0,
+                "rir": 2,
+                "rpe": 8,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": null,
+                "est1rm": null,
+                "volume": 0,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 418,
+              "avgRir": 1,
+              "topSet": {
+                "weight": 22,
+                "reps": 10,
+                "rir": null,
+                "rpe": null,
+                "est1rm": 29.3
+              },
+              "hitTarget": false
+            }
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "totalVolume": 674,
+      "avgRir": 1.7,
+      "completionRate": 0,
+      "mainLiftPRs": []
+    }
+  },
+  "bodyweight family with a bodyweight": {
+    "id": "2026-10-07T09:30:00.000Z",
+    "date": "2026-10-07",
+    "dow": 3,
+    "profileName": "Tess",
+    "schemaVersion": 3,
+    "loggedTz": "Europe/London",
+    "loggedTzOffset": -60,
+    "session": "strength-a",
+    "blockNumber": 2,
+    "weekStart": "2026-10-05",
+    "scheduledLetter": "A",
+    "mesocyclePhase": "accumulation",
+    "readiness": "normal",
+    "readinessReason": null,
+    "travel": "__undefined__",
+    "bodyweight": 78,
+    "hoursSlept": null,
+    "daysSinceLast": null,
+    "duration": 3600,
+    "blocks": [
+      {
+        "id": "afin",
+        "type": "finisher",
+        "intent": null,
+        "exercises": [
+          {
+            "name": "Hanging Leg Raise",
+            "muscle": "Abs",
+            "loadType": "bodyweight",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": null,
+            "prescribed": {
+              "reps": 10,
+              "weight": null,
+              "sets": 4
+            },
+            "sets": [
+              {
+                "weight": null,
+                "reps": 10,
+                "rir": 2,
+                "rpe": 8,
+                "loadType": "bodyweight",
+                "bodyweightUsed": 78,
+                "effectiveLoad": 78,
+                "est1rm": 104,
+                "volume": 780,
+                "reach": "__undefined__"
+              },
+              {
+                "weight": 5,
+                "reps": 12,
+                "rir": 1,
+                "rpe": 9,
+                "loadType": "bodyweight",
+                "bodyweightUsed": 78,
+                "effectiveLoad": 83,
+                "est1rm": 116.2,
+                "volume": 996,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 1776,
+              "avgRir": 1.5,
+              "topSet": {
+                "weight": 5,
+                "reps": 12,
+                "rir": 1,
+                "rpe": 9,
+                "est1rm": 116.2
+              },
+              "hitTarget": false
+            }
+          },
+          {
+            "name": "Weighted Dip",
+            "muscle": "Chest",
+            "loadType": "loaded_bodyweight",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": null,
+            "prescribed": {
+              "reps": 6,
+              "weight": 20,
+              "sets": 4
+            },
+            "sets": [
+              {
+                "weight": 20,
+                "reps": 6,
+                "rir": 1.5,
+                "rpe": 8.5,
+                "loadType": "loaded_bodyweight",
+                "bodyweightUsed": 78,
+                "effectiveLoad": 98,
+                "est1rm": 117.6,
+                "volume": 588,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 588,
+              "avgRir": 1.5,
+              "topSet": {
+                "weight": 20,
+                "reps": 6,
+                "rir": 1.5,
+                "rpe": 8.5,
+                "est1rm": 117.6
+              },
+              "hitTarget": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "b1",
+        "type": "main",
+        "intent": null,
+        "exercises": [
+          {
+            "name": "Assisted Pull-up",
+            "muscle": "Back",
+            "loadType": "assisted_bodyweight",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": null,
+            "prescribed": {
+              "reps": 8,
+              "weight": 25,
+              "sets": 3
+            },
+            "sets": [
+              {
+                "weight": 25,
+                "reps": 8,
+                "rir": 2,
+                "rpe": 8,
+                "loadType": "assisted_bodyweight",
+                "bodyweightUsed": 78,
+                "effectiveLoad": 53,
+                "est1rm": 67.1,
+                "volume": 424,
+                "reach": "__undefined__"
+              },
+              {
+                "weight": 100,
+                "reps": 8,
+                "rir": 3,
+                "rpe": 7,
+                "loadType": "assisted_bodyweight",
+                "bodyweightUsed": 78,
+                "effectiveLoad": 0,
+                "est1rm": null,
+                "volume": 0,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 424,
+              "avgRir": 2.5,
+              "topSet": {
+                "weight": 25,
+                "reps": 8,
+                "rir": 2,
+                "rpe": 8,
+                "est1rm": 67.1
+              },
+              "hitTarget": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "b2",
+        "type": "accessory",
+        "intent": null,
+        "exercises": [
+          {
+            "name": "Plank",
+            "muscle": "Abs",
+            "loadType": "bodyweight",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": null,
+            "prescribed": {
+              "reps": "45s",
+              "weight": null,
+              "sets": 2
+            },
+            "sets": [
+              {
+                "weight": null,
+                "reps": "45s",
+                "rir": 2,
+                "rpe": 8,
+                "loadType": "bodyweight",
+                "bodyweightUsed": 78,
+                "effectiveLoad": 78,
+                "est1rm": 195,
+                "volume": 3510,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 3510,
+              "avgRir": 2,
+              "topSet": {
+                "weight": null,
+                "reps": "45s",
+                "rir": 2,
+                "rpe": 8,
+                "est1rm": 195
+              },
+              "hitTarget": false
+            }
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "totalVolume": 6298,
+      "avgRir": 1.9,
+      "completionRate": 0,
+      "mainLiftPRs": []
+    }
+  },
+  "bodyweight family without a bodyweight": {
+    "id": "2026-10-07T09:30:00.000Z",
+    "date": "2026-10-07",
+    "dow": 3,
+    "profileName": "Tess",
+    "schemaVersion": 3,
+    "loggedTz": "Europe/London",
+    "loggedTzOffset": -60,
+    "session": "strength-a",
+    "blockNumber": 2,
+    "weekStart": "2026-10-05",
+    "scheduledLetter": "A",
+    "mesocyclePhase": "accumulation",
+    "readiness": "normal",
+    "readinessReason": null,
+    "travel": "__undefined__",
+    "bodyweight": null,
+    "hoursSlept": null,
+    "daysSinceLast": null,
+    "duration": 3600,
+    "blocks": [
+      {
+        "id": "afin",
+        "type": "finisher",
+        "intent": null,
+        "exercises": [
+          {
+            "name": "Hanging Leg Raise",
+            "muscle": "Abs",
+            "loadType": "bodyweight",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": null,
+            "prescribed": {
+              "reps": 10,
+              "weight": null,
+              "sets": 4
+            },
+            "sets": [
+              {
+                "weight": null,
+                "reps": 10,
+                "rir": 2,
+                "rpe": 8,
+                "loadType": "bodyweight",
+                "bodyweightUsed": null,
+                "effectiveLoad": null,
+                "est1rm": null,
+                "volume": 0,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 0,
+              "avgRir": 2,
+              "topSet": {
+                "weight": null,
+                "reps": 10,
+                "rir": 2,
+                "rpe": 8,
+                "est1rm": null
+              },
+              "hitTarget": false
+            }
+          },
+          {
+            "name": "Weighted Dip",
+            "muscle": "Chest",
+            "loadType": "loaded_bodyweight",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": null,
+            "prescribed": {
+              "reps": 6,
+              "weight": 20,
+              "sets": 4
+            },
+            "sets": [
+              {
+                "weight": 20,
+                "reps": 6,
+                "rir": 1.5,
+                "rpe": 8.5,
+                "loadType": "loaded_bodyweight",
+                "bodyweightUsed": null,
+                "effectiveLoad": null,
+                "est1rm": null,
+                "volume": 0,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 0,
+              "avgRir": 1.5,
+              "topSet": {
+                "weight": 20,
+                "reps": 6,
+                "rir": 1.5,
+                "rpe": 8.5,
+                "est1rm": null
+              },
+              "hitTarget": false
+            }
+          }
+        ]
+      },
+      {
+        "id": "b1",
+        "type": "main",
+        "intent": null,
+        "exercises": [
+          {
+            "name": "Assisted Pull-up",
+            "muscle": "Back",
+            "loadType": "assisted_bodyweight",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": null,
+            "prescribed": null,
+            "sets": [
+              {
+                "weight": 25,
+                "reps": 8,
+                "rir": 2,
+                "rpe": 8,
+                "loadType": "assisted_bodyweight",
+                "bodyweightUsed": null,
+                "effectiveLoad": null,
+                "est1rm": null,
+                "volume": 0,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 0,
+              "avgRir": 2,
+              "topSet": {
+                "weight": 25,
+                "reps": 8,
+                "rir": 2,
+                "rpe": 8,
+                "est1rm": null
+              },
+              "hitTarget": null
+            }
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "totalVolume": 0,
+      "avgRir": 1.8,
+      "completionRate": 0,
+      "mainLiftPRs": []
+    }
+  },
+  "travel, a prescription without sets, ties on est1rm": {
+    "id": "2026-10-07T09:30:00.000Z",
+    "date": "2026-10-07",
+    "dow": 3,
+    "profileName": "Tess",
+    "schemaVersion": 3,
+    "loggedTz": "Europe/London",
+    "loggedTzOffset": -60,
+    "session": "strength-b",
+    "blockNumber": 2,
+    "weekStart": "2026-10-05",
+    "scheduledLetter": "B",
+    "mesocyclePhase": "accumulation",
+    "readiness": "fresh",
+    "readinessReason": null,
+    "travel": true,
+    "bodyweight": null,
+    "hoursSlept": null,
+    "daysSinceLast": null,
+    "duration": 3600,
+    "blocks": [
+      {
+        "id": "a1",
+        "type": "main",
+        "intent": null,
+        "exercises": [
+          {
+            "name": "Barbell Back Squat",
+            "muscle": "Quadriceps",
+            "loadType": "external",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": null,
+            "prescribed": {
+              "reps": 5,
+              "weight": 80,
+              "sets": null
+            },
+            "sets": [
+              {
+                "weight": 80,
+                "reps": 5,
+                "rir": 2,
+                "rpe": 8,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 80,
+                "est1rm": 93.3,
+                "volume": 400,
+                "reach": "__undefined__"
+              },
+              {
+                "weight": 80,
+                "reps": 5,
+                "rir": 1,
+                "rpe": 9,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 80,
+                "est1rm": 93.3,
+                "volume": 400,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 800,
+              "avgRir": 1.5,
+              "topSet": {
+                "weight": 80,
+                "reps": 5,
+                "rir": 2,
+                "rpe": 8,
+                "est1rm": 93.3
+              },
+              "hitTarget": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "a2",
+        "type": "main",
+        "intent": null,
+        "exercises": [
+          {
+            "name": "Barbell Bench Press",
+            "muscle": "Chest",
+            "loadType": "external",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": null,
+            "prescribed": null,
+            "sets": [
+              {
+                "weight": 0,
+                "reps": 10,
+                "rir": 3,
+                "rpe": 6,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 0,
+                "est1rm": null,
+                "volume": 0,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 0,
+              "avgRir": 3,
+              "topSet": {
+                "weight": 0,
+                "reps": 10,
+                "rir": 3,
+                "rpe": 6,
+                "est1rm": null
+              },
+              "hitTarget": null
+            }
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "totalVolume": 800,
+      "avgRir": 2,
+      "completionRate": null,
+      "mainLiftPRs": []
+    }
+  },
+  "a hand-shaped draft: exercise with no sets array, late intent": {
+    "id": "2026-10-07T09:30:00.000Z",
+    "date": "2026-10-07",
+    "dow": 3,
+    "profileName": "Tess",
+    "schemaVersion": 3,
+    "loggedTz": "Europe/London",
+    "loggedTzOffset": -60,
+    "session": "strength-a",
+    "blockNumber": 2,
+    "weekStart": "2026-10-05",
+    "scheduledLetter": "A",
+    "mesocyclePhase": "accumulation",
+    "readiness": "normal",
+    "readinessReason": null,
+    "travel": "__undefined__",
+    "bodyweight": null,
+    "hoursSlept": null,
+    "daysSinceLast": null,
+    "duration": 3600,
+    "blocks": [
+      {
+        "id": "x1",
+        "type": "main",
+        "intent": "power",
+        "exercises": [
+          {
+            "name": "Ghost",
+            "muscle": "Back",
+            "loadType": "external",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": null,
+            "prescribed": {
+              "reps": 5,
+              "sets": 3
+            },
+            "sets": "__undefined__",
+            "summary": {
+              "totalVolume": 0,
+              "avgRir": null,
+              "topSet": null,
+              "hitTarget": false
+            }
+          },
+          {
+            "name": "Barbell Back Squat",
+            "muscle": "Quadriceps",
+            "loadType": "external",
+            "swapped": false,
+            "fromPool": null,
+            "tempo": null,
+            "prescribed": {
+              "reps": 3,
+              "weight": 90,
+              "sets": 1
+            },
+            "sets": [
+              {
+                "weight": 90,
+                "reps": 3,
+                "rir": 1,
+                "rpe": 9,
+                "loadType": "external",
+                "bodyweightUsed": null,
+                "effectiveLoad": 90,
+                "est1rm": 99,
+                "volume": 270,
+                "reach": "__undefined__"
+              }
+            ],
+            "summary": {
+              "totalVolume": 270,
+              "avgRir": 1,
+              "topSet": {
+                "weight": 90,
+                "reps": 3,
+                "rir": 1,
+                "rpe": 9,
+                "est1rm": 99
+              },
+              "hitTarget": true
+            }
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "totalVolume": 270,
+      "avgRir": 1,
+      "completionRate": 0.5,
+      "mainLiftPRs": []
+    }
+  }
+}
