@@ -67,6 +67,15 @@ describe("buildCoachContext", () => {
     expect(line).toContain("Landmine Press 18.75 kg × 10/10 @RPE 8.5");
     expect(line).toContain("Chest-Supported DB Row 34 kg × 10/10 @RPE 9");
   });
+  it("sessionLine: a session a trainer logged says so, never the trainer's name or account", () => {
+    const r = { date: "2026-10-05", readiness: "fresh", loggedBy: { name: "Sam Price", accountId: "hwa_" + "t".repeat(26) },
+      blocks: [{ exercises: [{ name: "Barbell Back Squat", sets: [{ weight: 100, reps: 5, rpe: 8 }] }] }] };
+    const line = sessionLine(r);
+    expect(line).toBe("- 2026-10-05 · fresh · logged with your trainer: Barbell Back Squat 100 kg × 5 @RPE 8");
+    expect(line).not.toMatch(/Sam|hwa_/);
+    expect(sessionLine({ ...r, loggedBy: undefined })).not.toMatch(/trainer/);
+    expect(sessionLine({ ...r, loggedBy: { name: null, accountId: null } })).toContain("· logged with your trainer:");
+  });
   it("carries no profile name", () => {
     expect(buildCoachContext({ history: [], now })).not.toMatch(/profile/i);
   });
