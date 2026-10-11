@@ -62,14 +62,15 @@ describe("band contract — rotations stay inside every landmark band", () => {
     });
   }
 
-  it("memory yields to the band: Forged seed 5010, fourth chained rotation", () => {
+  it("memory yields to the band: Sculpt seed 5000, fourth chained rotation", () => {
     // A seed family where the remembered week breaks a band. Remove the
     // relaxed second solve and this goes red; the loop above cannot tell.
-    const rng = seeded(5010);
+    // Re-picked when the pools change (2026-10-11: was Forged seed 5010).
+    const rng = seeded(5000);
     let history = {}, config = null, r;
     for (let block = 0; block < 4; block++) {
       if (config) history = pushHistoryBlock(history, config);
-      r = solveRotation({ history, focus: "Forged", rng });
+      r = solveRotation({ history, focus: "Sculpt", rng });
       config = r.config;
       if (block < 3) expect(r.report.memoryRelaxed).toBe(false);
     }

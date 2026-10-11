@@ -131,14 +131,8 @@ describe("a swapped-in lift arrives with a weight to stand on", () => {
       // Nominal-resistance band moves — no meaningful anchor exists.
       "Resistance Band Crossover",
       "Resistance Band Face Pull",
-      // These two are different, and worth fixing rather than accepting: both
-      // are genuinely loaded lifts with no lift profile, so they fall through
-      // pattern matching without a primary muscle and cannot be cold-started.
-      // Filling them needs an anchor and a translation factor, which is a
-      // programming call — raised, not guessed. Delete from this list when
-      // they get profiles.
-      "Weighted Dips",
-      "Hang Power Clean",
+      // Weighted Dips and Hang Power Clean left this list on 2026-10-11 when
+      // they got lift profiles.
     ]);
     const orphans = new Set();
     for (const alts of Object.values(SWAP_DB)) {

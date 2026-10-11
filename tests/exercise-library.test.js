@@ -156,9 +156,7 @@ describe("exercise library — programme coverage", () => {
 
 // Entries added without verified footage. Named here so the gap is visible and
 // shrinks only when a real clip lands — never filled with a guessed id.
-const AWAITING_FOOTAGE = new Set([
-  "Neutral-Grip Lat Pulldown",   // 2026-10-11
-]);
+const AWAITING_FOOTAGE = new Set([]);
 
 describe("demo videos — joined from the app's own footage, never invented", () => {
   it("carries a video for every catalogue entry not awaiting footage", () => {
