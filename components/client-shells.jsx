@@ -87,6 +87,13 @@ export const TrainerShell = dynamic(() => import("@/components/TrainerView"), {
   loading: FieldBeat,
 });
 
+// A client's session run on the trainer's device (/trainer/coach): the live
+// session host in coached mode, behind its page (components/SessionHost.jsx).
+export const TrainerCoachShell = dynamic(() => import("@/components/SessionHost").then((m) => m.CoachedSessionPage), {
+  ssr: false,
+  loading: FieldBeat,
+});
+
 export const TrainerShareShell = dynamic(() => import("@/components/TrainerShareView"), {
   ssr: false,
   loading: FieldBeat,

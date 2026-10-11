@@ -63,7 +63,7 @@ vi.mock("@neondatabase/serverless", () => ({
       const h = db.handles.find((x) => x.account_id === v[0] && x.released_at == null);
       return h ? [{ handle: h.handle, display: h.display }] : [];
     }
-    if (/^\s*SELECT g\.id, g\.profile, g\.scope, g\.created_at, g\.last_used_at, g\.edits_at, g\.edits_off_at, h\.handle, h\.display\s+FROM oauth_grants g/.test(q)) {
+    if (/^\s*SELECT g\.id, g\.profile, g\.scope, g\.created_at, g\.last_used_at, g\.edits_at, g\.edits_off_at, g\.consent_version, h\.handle, h\.display\s+FROM oauth_grants g/.test(q)) {
       const [t, ref] = v;
       return db.grants
         .filter((g) => liveGrant(g, t) && (ref === undefined || g.id === ref))
@@ -115,7 +115,9 @@ vi.mock("@neondatabase/serverless", () => ({
     }
     if (/^\s*SELECT count\(DISTINCT set_id\)::int AS used, min\(created_at\) AS oldest FROM trainer_changes/.test(q)) {
       const [ref, since] = v;
-      const rows = db.changes.filter((c) => c.grant_id === ref && c.source === "trainer" && c.created_at > since);
+      // The plan-set count, or the session count apart.
+      const sessions = /AND kind = 'session'/.test(q);
+      const rows = db.changes.filter((c) => c.grant_id === ref && c.source === "trainer" && c.created_at > since && (c.kind === "session") === sessions);
       return [{ used: new Set(rows.map((c) => c.set_id)).size, oldest: rows.length ? String(Math.min(...rows.map((c) => c.created_at))) : null }];
     }
     if (/^\s*SELECT field, value FROM meta WHERE profile = \?$/.test(q)) {
@@ -267,9 +269,11 @@ describe("POST /api/trainer/client", () => {
     const body = await res.json();
     expect(Object.keys(body).sort()).toEqual(["client", "view"]);
     expect(body.client).toEqual({ name: "Cara", since: 1_790_000_000_000 });
-    expect(Object.keys(body.view).sort()).toEqual(["breaks", "edits", "schedule", "sessions", "tops", "window"]);
+    expect(Object.keys(body.view).sort()).toEqual(["breaks", "edits", "ran", "schedule", "sessions", "tops", "window"]);
     // A grant approved before plan changes (no edits_at): read only until a fresh approval.
     expect(body.view.edits).toBe("fresh");
+    // No plan; only the sessions this trainer ran with them (none here) and the session count.
+    expect(body.view.ran).toEqual({ changes: [], budget: { used: 0, of: 7, freeAt: null } });
     for (const k of ["meta", "history", "scopes", "scope", "profile", "ref", "cursor"]) {
       expect(body, k).not.toHaveProperty(k);
       expect(body.view, k).not.toHaveProperty(k);
@@ -287,6 +291,8 @@ describe("POST /api/trainer/client", () => {
       expect(calls.indexOf(r)).toBeGreaterThan(iLog);
       expect(r.v).toEqual(["sk-cara"]);
     }
+    // The trainer's own rows on the grant are read after the look too.
+    for (const r of changeReads()) expect(calls.indexOf(r)).toBeGreaterThan(iLog);
     // Only the look was written.
     expect(writes().map((w) => w.q.trim().slice(0, 20))).toEqual(["UPDATE oauth_grants "]);
     const g = db.grants.find((x) => x.id === "hwg_cara");
@@ -395,9 +401,10 @@ describe("POST /api/trainer/client { ref: 'me' }: the trainer's own training", (
     expect(body.self).toBe(true);
     expect(body.client).toEqual({ name: "Tia" });
     // Same allow-list: the projection of the same data is the same, byte for byte.
-    const { edits: _grantOnly, ...theirView } = theirs.view;
+    const { edits: _grantOnly, ran: _grantOnlyToo, ...theirView } = theirs.view;
     expect(body.view).toEqual(theirView);
     expect(body.view).not.toHaveProperty("edits");
+    expect(body.view).not.toHaveProperty("ran");
     for (const f of FORBIDDEN) expect(text, f).not.toContain(f);
 
     const reads = dataReads();
@@ -449,6 +456,7 @@ describe("POST /api/trainer/client { ref: 'me' }: the trainer's own training", (
 describe("POST /api/trainer/client: the plan, with the client's changes on", () => {
   const SQUAT = "Barbell Back Squat";
   const SET = "hws_" + "t".repeat(26);
+  const SET_S = "hws_" + "s".repeat(26);
   const EDITS_AT = Date.now() - 3 * DAY;
   const RECORD_ID = `${daysAgo(1)}T07:13:42.000Z`;
   const editsOn = (ref = "hwg_cara", extra = {}) => Object.assign(db.grants.find((g) => g.id === ref), { edits_at: EDITS_AT, ...extra });
@@ -484,7 +492,7 @@ describe("POST /api/trainer/client: the plan, with the client's changes on", () 
     expect(plan.changes.map((c) => c.id)).toEqual([`${SET}.0`]);
     expect(plan.changes[0]).toEqual({ id: `${SET}.0`, set: SET, kind: "weight", target: SQUAT, before: 100, after: 105, from: null,
       status: "waiting", reason: null, date: null, at: db.changes[0].created_at, warnings: ["big_drop"] });
-    expect(plan.budget).toEqual({ used: 2, of: 10, freeAt: db.changes[0].created_at + 7 * DAY });
+    expect(plan.budget).toEqual({ used: 2, of: 10, freeAt: db.changes[0].created_at + 7 * DAY, sessions: { used: 0, of: 7, freeAt: null } });
     const squat = plan.lifts.find((l) => l.name === SQUAT);
     expect(squat.pending).toEqual({ w: 105, reps: null });
 
@@ -492,12 +500,46 @@ describe("POST /api/trainer/client: the plan, with the client's changes on", () 
     const iLog = calls.findIndex((c) => /^\s*UPDATE oauth_grants SET\s+looks = CASE/.test(c.q));
     expect(iLog).toBeGreaterThan(-1);
     const reads = changeReads();
-    expect(reads).toHaveLength(2);
+    expect(reads).toHaveLength(3); // the list, the plan-set count and the session count
     for (const r of reads) {
       expect(calls.indexOf(r)).toBeGreaterThan(iLog);
       expect(r.v[0]).toBe("hwg_cara");
     }
     expect(reads.find((r) => /edits_live/.test(r.q)).v[1]).toBe(T);
+    expect(writes().map((w) => w.q.trim().slice(0, 20))).toEqual(["UPDATE oauth_grants "]);
+  });
+
+  it("a coached session row: its status, letter, day and size, never the record; counted apart from the plan sets", async () => {
+    editsOn();
+    plainWeights();
+    const SS = "hws_" + "s".repeat(26);
+    const day = daysAgo(0);
+    const record = { id: `${day}T08:15:16.000Z`, date: day, session: "strength-b", scheduledLetter: "B", readiness: "fresh",
+      readinessReason: "SENTINEL-reason", blocks: [{ id: "b1", type: "main", exercises: [
+        { name: "SENTINEL-lift", sets: [{ weight: 777.5, reps: 5 }, { weight: 777.5, reps: 5 }] }, { name: SQUAT, sets: [{ weight: 100, reps: 5 }] }] }] };
+    const delivered = new Date(Date.now() - DAY / 24).toISOString();
+    db.changes = [
+      stored(0),
+      stored(1, { id: `${SS}.00`, set_id: SS, kind: "session", target: `${day}:B`, old_value: null, new_value: { record, drum: { [SQUAT]: 779.5 } },
+        basis: null, warnings: null, effective_from: day, delivered_at: delivered }),
+    ];
+    const text = await (await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).text();
+    for (const f of [...FORBIDDEN, "drum", "readinessReason"]) expect(text, f).not.toContain(f);
+    const { plan } = JSON.parse(text).view;
+    expect(JSON.stringify(plan.changes)).not.toMatch(/blocks|record|"name"/);
+    expect(plan.changes.find((c) => c.kind === "session")).toEqual({
+      id: `${SS}.00`, set: SS, kind: "session", target: `${day}:B`, before: null,
+      after: { letter: "B", date: day, exercises: 2, sets: 3 }, from: day,
+      status: "seen", reason: null, date: day, at: db.changes[1].created_at, delivered, warnings: [],
+    });
+    // A plan change carries no delivered key.
+    expect(plan.changes.find((c) => c.kind === "weight")).not.toHaveProperty("delivered");
+    // A waiting session is never a lift's pending change.
+    expect(plan.lifts.find((l) => l.name === SQUAT).pending).toEqual({ w: 105, reps: null });
+    expect(plan.budget).toEqual({ used: 1, of: 10, freeAt: db.changes[0].created_at + 7 * DAY,
+      sessions: { used: 1, of: 7, freeAt: db.changes[1].created_at + 7 * DAY } });
+    // What the trainer's device composes the session from.
+    expect(Object.keys(plan.programme)).toEqual(PLAN_KEYS.planProgramme);
     expect(writes().map((w) => w.q.trim().slice(0, 20))).toEqual(["UPDATE oauth_grants "]);
   });
 
@@ -579,16 +621,31 @@ describe("POST /api/trainer/client: the plan, with the client's changes on", () 
     for (const f of FORBIDDEN) expect(text, f).not.toContain(f);
   });
 
-  it("changes never on, or turned off: no plan, and the trainer's changes are never read", async () => {
+  it("changes never on, or turned off: no plan, only the sessions the trainer ran and their count", async () => {
     const t = session(T, "cT");
+    // A plan change, and a session already on their phone when changes went off.
+    const delivered = new Date(Date.now() - 3600e3).toISOString();
+    const record = { id: `${daysAgo(1)}T09:00:00.000Z`, date: daysAgo(1), session: "strength-a", scheduledLetter: "A",
+      blocks: [{ id: "a1", type: "main", exercises: [{ name: SQUAT, sets: [{ weight: 100, reps: 5 }, { weight: 100, reps: 5 }] }] }] };
+    const sessionRow = stored(1, { id: `${SET_S}.00`, set_id: SET_S, kind: "session", target: `${daysAgo(1)}:A`, old_value: null,
+      new_value: { record, drum: {} }, basis: null, warnings: null, effective_from: daysAgo(1), delivered_at: delivered });
     for (const [extra, status] of [[null, "fresh"], [{ edits_off_at: EDITS_AT + 1 }, "off"]]) {
       if (extra) editsOn("hwg_cara", extra);
       calls.length = 0;
-      db.changes = [stored(0)];
-      const body = await (await view(t, { ref: "hwg_cara", today: TODAY })).json();
+      db.changes = [stored(0), sessionRow];
+      const res = await view(t, { ref: "hwg_cara", today: TODAY });
+      const text = await res.text();
+      const body = JSON.parse(text);
       expect(body.view, JSON.stringify(extra)).not.toHaveProperty("plan");
       expect(body.view.edits, JSON.stringify(extra)).toBe(status);
-      expect(changeReads(), JSON.stringify(extra)).toEqual([]);
+      // Read on a live grant whatever the status: the session rows only, never the plan change.
+      expect(changeReads().length, JSON.stringify(extra)).toBeGreaterThan(0);
+      expect(body.view.ran.changes.map((c) => [c.id, c.kind, c.status, c.reason, c.delivered]))
+        .toEqual([[`${SET_S}.00`, "session", "seen", "stopped", delivered]]);
+      expect(body.view.ran.changes[0].after).toEqual({ letter: "A", date: daysAgo(1), exercises: 1, sets: 2 });
+      expect(body.view.ran.budget).toEqual({ used: 1, of: 7, freeAt: sessionRow.created_at + 7 * DAY });
+      // Never the record, the basis or the plan change.
+      for (const f of ["record", "basis", "big_drop", RECORD_ID]) expect(text, f).not.toContain(f);
     }
     // Turned back on: the plan is back.
     editsOn("hwg_cara", { edits_at: EDITS_AT + 2, edits_off_at: EDITS_AT + 1 });
@@ -618,6 +675,27 @@ describe("POST /api/trainer/client: the plan, with the client's changes on", () 
     expect((await view(session(T, "cT"), { ref: "hwg_oli", today: TODAY })).status).toBe(404);
     expect(changeReads()).toEqual([]);
     expect(dataReads()).toEqual([]);
+  });
+
+  it("look-before-read holds with changes off: no look, no session rows read; on a look, the read comes after it", async () => {
+    for (const extra of [null, { edits_at: EDITS_AT, edits_off_at: EDITS_AT + 1 }]) {
+      if (extra) editsOn("hwg_cara", extra);
+      calls.length = 0;
+      failOn = /^\s*UPDATE oauth_grants SET\s+looks = CASE/;
+      expect((await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).status, JSON.stringify(extra)).toBe(503);
+      expect(changeReads(), JSON.stringify(extra)).toEqual([]);
+      failOn = null;
+      logMisses = true;
+      expect((await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).status, JSON.stringify(extra)).toBe(404);
+      expect(changeReads(), JSON.stringify(extra)).toEqual([]);
+      logMisses = false;
+      calls.length = 0;
+      expect((await view(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).status, JSON.stringify(extra)).toBe(200);
+      const look = calls.findIndex((c) => /^\s*UPDATE oauth_grants SET\s+looks = CASE/.test(c.q));
+      const read = calls.findIndex((c) => /FROM trainer_changes\b/.test(c.q));
+      expect(look, JSON.stringify(extra)).toBeGreaterThanOrEqual(0);
+      expect(read, JSON.stringify(extra)).toBeGreaterThan(look);
+    }
   });
 
   it("a changes read that fails: the view still answers, without a plan, and the failure is logged", async () => {
@@ -763,7 +841,7 @@ describe("SQL pins", () => {
   const run = async (fn) => { calls.length = 0; await fn(); return calls; };
 
   it("liveness: one join on the open client account and its native approving passkey; with a ref, that grant only", async () => {
-    const BASE = "SELECT g.id, g.profile, g.scope, g.created_at, g.last_used_at, g.edits_at, g.edits_off_at, h.handle, h.display FROM oauth_grants g"
+    const BASE = "SELECT g.id, g.profile, g.scope, g.created_at, g.last_used_at, g.edits_at, g.edits_off_at, g.consent_version, h.handle, h.display FROM oauth_grants g"
       + " JOIN accounts a ON a.id = g.account_id AND a.deleted_at IS NULL"
       + " JOIN credentials c ON c.id = g.credential_id AND c.account_id = g.account_id AND c.rp_id = 'heatwayve.app'"
       + " LEFT JOIN handles h ON h.account_id = g.account_id AND h.kind = 'primary' AND h.released_at IS NULL"

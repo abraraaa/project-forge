@@ -201,6 +201,16 @@ describe("privacy notice stays true", () => {
     }
   });
 
+  it("coached sessions: what waits on the phone, the five hours, provenance, and that the record stays", () => {
+    expect(page).toContain("If your trainer logs a session with you, it waits on your phone. You see it first, and can change how each set felt. It's kept five hours after it reaches your phone unless you say otherwise, and keeping it is final. If sharing stops first, it waits for you to decide. Your trainer sees when it reaches your phone and whether you kept it. A kept session records that your trainer logged it, with their name.");
+    expect(SHARE_COPY.rows).toContain("They can log a session with you. You see it first, and it's kept after five hours unless you say otherwise.");
+    // Provenance is the trainer's name on the client's own record; the trainer's view carries a flag only.
+    expect(VIEW_KEYS.session).toContain("coached");
+    expect(Object.values(VIEW_KEYS).flat()).not.toContain("loggedBy");
+    // True today: the wipe only reports the session rows it would clear, as for plan changes.
+    expect(page).toContain("Sessions a trainer logs with you — each one they send stays with their changes, whether or not you keep it, after sharing ends and after you delete your profile.");
+  });
+
   it("the share approval names what the trainer section says, at the version the server stamps", () => {
     const rows = SHARE_COPY.rows.join("\n");
     // The roster line, the breather rule and the daily check-in, on both.

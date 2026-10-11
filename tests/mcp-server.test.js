@@ -67,6 +67,16 @@ describe("tools", () => {
     expect(t).toContain("Focus: Sculpt");
     expect(t).not.toContain("Main lifts: programme defaults");
   });
+  it("recent_sessions: a trainer-logged session says so, without the name or account; the description says it does", async () => {
+    const withTrainer = { ...data, history: [...data.history, { ...rec("2026-09-07", "Barbell Bench Press", 65, 8, 8),
+      loggedBy: { name: "Sam Price", accountId: "hwa_" + "t".repeat(26) } }] };
+    const text = runTool("recent_sessions", {}, withTrainer, now).text;
+    expect(text.split("\n").at(-1)).toMatch(/^- 2026-09-07 · fresh · logged with your trainer: /);
+    expect(text.split("\n").filter((l) => l.includes("trainer"))).toHaveLength(1);
+    expect(text).not.toMatch(/Sam|hwa_/);
+    const r = await call({ id: 4, method: "tools/list" });
+    expect(r.result.tools.find((t) => t.name === "recent_sessions").description).toMatch(/whether a trainer logged it with them/);
+  });
   it("recent_sessions clamps its limit", () => {
     expect(runTool("recent_sessions", { limit: 1 }, data, now).text.split("\n")).toHaveLength(1);
     expect(runTool("recent_sessions", { limit: 999 }, data, now).text.split("\n")).toHaveLength(3);

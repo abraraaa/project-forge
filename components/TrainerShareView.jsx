@@ -28,6 +28,7 @@ import { authenticatePasskey } from "@/lib/webauthn";
 import { todayLocalIso } from "@/lib/dates";
 import { timedTargetFor } from "@/lib/programme";
 import { SHARE_CONSENT_VERSION, SHARE_COPY } from "@/lib/trainer-terms";
+import { keepsAtWords } from "@/components/TrainerSessionSheet";
 
 const LOG_SHOWN = 20;
 const OFFLINE = "Couldn't reach Heatwayve. Try again.";
@@ -91,8 +92,13 @@ function repsText(lift, v) {
   return typeof v === "string" && /\/leg/.test(v) ? `${n} reps a leg` : `${n} reps`;
 }
 
-/** What changed: "Back Squat · 105 kg, was 102.5". */
+/** What changed: "Back Squat · 105 kg, was 102.5", or "Strength A with Sam · Fri 9 Oct" for a session. */
 export function changeText(c) {
+  if (c.kind === "session") {
+    const what = typeof c.after?.letter === "string" ? `Strength ${c.after.letter}` : "A session";
+    const day = dayOf(c.after?.date ?? c.from);
+    return `${what} with ${c.by || "your trainer"}${day ? ` · ${day}` : ""}`;
+  }
   if (c.kind === "weight") {
     const was = kg(c.before);
     return `${c.target} · ${kg(c.after) ?? "?"} kg${was !== null ? `, was ${was}` : ""}`;
@@ -124,9 +130,11 @@ const NOT_APPLIED = {
  * reads as paused, and with no public name (who null) every one reads as
  * sharing stopped.
  * @param {any} c  a change from GET /api/sync/trainer
- * @param {{ who: string | null, since?: number | null, live?: boolean }} share  the current share, if any
+ * A session reads in its own words (sessionStatusText); nowMs places its keep time.
+ * @param {{ who: string | null, since?: number | null, live?: boolean, nowMs?: number }} share  the current share, if any
  */
-export function changeStatusText(c, { who, since = null, live = false }) {
+export function changeStatusText(c, { who, since = null, live = false, nowMs = Date.now() }) {
+  if (c.kind === "session") return sessionStatusText(c, nowMs);
   switch (c.status) {
     case "waiting": return c.from ? `From ${dayOf(c.from)}` : "Next time you open the app";
     case "in_force": return "In your plan";
@@ -144,6 +152,29 @@ export function changeStatusText(c, { who, since = null, live = false }) {
         return live ? "Changes were off" : "Sharing paused";
       }
       return NOT_APPLIED[c.reason] || "Not in your plan";
+    default: return "";
+  }
+}
+
+/**
+ * Where a session a trainer logged with them stands, in their words. Keep is
+ * final, so none of these offers an undo.
+ * @param {any} c
+ * @param {number} nowMs
+ */
+function sessionStatusText(c, nowMs) {
+  switch (c.status) {
+    case "waiting": return "Waiting for you";
+    case "seen": {
+      const by = keepsAtWords(c.keepsAt, nowMs);
+      return by ? `Keep or discard by ${by}` : "On Home until you decide";
+    }
+    case "kept": return "You kept it";
+    case "auto_kept": return "Kept after five hours";
+    case "discarded": return "You didn't keep it";
+    case "superseded": return "You logged it yourself";
+    case "withdrawn": return `Withdrawn by ${c.by || "your trainer"}`;
+    case "not_applied": return c.reason === "stopped" ? "Sharing stopped before it arrived" : "Outside the app's limits when it arrived";
     default: return "";
   }
 }

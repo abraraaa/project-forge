@@ -28,7 +28,9 @@ const notShared = () => json({ error: "Not shared with you now." }, 404);
 // trainer's own changes could not be read: the failure is logged and the view
 // answers without a plan). When on, view.plan carries what the trainer may
 // change, with their own changes and budget (read after the look, like the
-// profile).
+// profile). Otherwise view.ran carries only the sessions they ran with the
+// client and the session count, so a session on the client's phone still
+// shows after changes stop.
 // { ref: "me" } -> { client: { name }, view, self: true }: the trainer's own
 // training, from their own storage key, through the same projection. No
 // grant and no look: it is their own data.
@@ -70,7 +72,9 @@ export async function POST(request) {
 
     const data = await dbReadProfile(profile);
     let changes = null;
-    if (grant?.edits === true) {
+    // The trainer's own rows on a live grant, whatever the edits status: plan
+    // changes stay gated on edits (projectForTrainer), sessions do not.
+    if (grant) {
       try {
         changes = await dbChangesForTrainer(ref, me, now);
       } catch (e) {

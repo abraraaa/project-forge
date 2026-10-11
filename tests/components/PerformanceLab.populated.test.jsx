@@ -163,6 +163,21 @@ describe("PerformanceLab — populated history", () => {
     expect(badge.textContent.replace(/\s+/g, " ")).toMatch(/2 of 5 away/);
   });
 
+  it("sessions logged with a trainer: a count on the header strip, never a name or an id", () => {
+    const history = buildHistory();
+    history[1].loggedBy = { name: "Sam", accountId: "hwa_" + "t".repeat(26) };
+    history[3].loggedBy = { name: "Sam", accountId: null };
+    const { container } = render(<PerformanceLab history={history} onBack={() => {}} />);
+    const strip = screen.getByText(/with your trainer/);
+    expect(strip.textContent.replace(/\s+/g, " ")).toMatch(/5 logged · 2 with your trainer$/);
+    expect(container.textContent).not.toMatch(/Sam|hwa_/);
+  });
+
+  it("no session logged with a trainer: the strip says nothing about one", () => {
+    render(<PerformanceLab history={buildHistory()} onBack={() => {}} />);
+    expect(screen.queryByText(/with your trainer/)).toBeNull();
+  });
+
   it("travel badge stays away when no session was a travel session", () => {
     render(<PerformanceLab history={buildHistory()} onBack={() => {}} />);
     expect(screen.queryByText(/Sets counted/)).toBeNull();

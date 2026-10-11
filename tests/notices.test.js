@@ -31,6 +31,9 @@ const ms = (t) => (typeof t === "number" ? t : Date.parse(t));
 const LIVE = "FROM oauth_grants g"
   + " JOIN accounts a ON a.id = g.account_id AND a.deleted_at IS NULL"
   + " JOIN credentials c ON c.id = g.credential_id AND c.account_id = g.account_id AND c.rp_id = 'heatwayve.app'";
+// dbOpenChangesFor's grant predicate (lib/trainer-changes-store.js): the grant still delivers the row.
+const DELIVERS = "g.revoked_at IS NULL AND g.trainer_account_id = c.author_account_id"
+  + " AND g.edits_at IS NOT NULL AND (g.edits_off_at IS NULL OR g.edits_off_at < g.edits_at) AND c.created_at > g.edits_at";
 const SQL = {
   bugs: "SELECT count(*)::int AS n FROM bug_reports WHERE status = 'new'"
     + " AND created_at > to_timestamp(COALESCE((SELECT m.seen_at FROM notice_marks m WHERE m.account_id = ? AND m.kind = 'bugs'), 0) / 1000.0)",
@@ -43,8 +46,13 @@ const SQL = {
     + " AND s.updated_at > to_timestamp(GREATEST(COALESCE((SELECT m.seen_at FROM notice_marks m WHERE m.account_id = ? AND m.kind = 'clients'), 0), g.created_at) / 1000.0)"
     + " AND s.record->>'date' BETWEEN ? AND ?)) AS lit",
   trainerChange: "SELECT count(DISTINCT set_id)::int AS n FROM trainer_changes"
-    + " WHERE client_account_id = ? AND source = 'trainer' AND status = 'sent' AND undone_at IS NULL"
+    + " WHERE client_account_id = ? AND source = 'trainer' AND status = 'sent' AND undone_at IS NULL AND kind <> 'session'"
     + " AND created_at > COALESCE((SELECT m.seen_at FROM notice_marks m WHERE m.account_id = ? AND m.kind = 'trainerChange'), 0)",
+  trainerSession: "SELECT count(*)::int AS n FROM trainer_changes c"
+    + " LEFT JOIN oauth_grants g ON g.id = c.grant_id AND g.kind = 'trainer'"
+    + " WHERE c.client_account_id = ? AND c.kind = 'session' AND c.source = 'trainer' AND c.status = 'sent'"
+    + " AND c.outcome IS NULL AND c.undone_at IS NULL AND c.cleared_at IS NULL"
+    + ` AND (c.delivered_at IS NOT NULL OR (${DELIVERS}))`,
   mark: "INSERT INTO notice_marks (account_id, kind, seen_at) VALUES (?, ?, ?) ON CONFLICT (account_id, kind) DO UPDATE SET seen_at = EXCLUDED.seen_at",
   bugList: "SELECT id, profile, message, context, status, created_at FROM bug_reports ORDER BY created_at DESC LIMIT ?",
 };
@@ -81,8 +89,19 @@ vi.mock("@neondatabase/serverless", () => ({
     if (f === SQL.trainerChange) {
       const [me, m] = v;
       const sets = new Set(db.changes.filter((c) => c.client_account_id === me && c.source === "trainer" && c.status === "sent"
-        && c.undone_at == null && Number(c.created_at) > mark(m, "trainerChange")).map((c) => c.set_id));
+        && c.undone_at == null && c.kind !== "session" && Number(c.created_at) > mark(m, "trainerChange")).map((c) => c.set_id));
       return [{ n: sets.size }];
+    }
+    if (f === SQL.trainerSession) {
+      const [me] = v;
+      const delivers = (c) => {
+        const g = db.grants.find((x) => x.id === c.grant_id && x.kind === "trainer");
+        return !!g && g.revoked_at == null && g.trainer_account_id === c.author_account_id && g.edits_at != null
+          && (g.edits_off_at == null || g.edits_off_at < g.edits_at) && Number(c.created_at) > g.edits_at;
+      };
+      return [{ n: db.changes.filter((c) => c.client_account_id === me && c.kind === "session" && c.source === "trainer"
+        && c.status === "sent" && c.outcome == null && c.undone_at == null && c.cleared_at == null
+        && (c.delivered_at != null || delivers(c))).length }];
     }
     if (f === SQL.mark) {
       db.marks.set(`${v[0]}|${v[1]}`, v[2]);
@@ -216,7 +235,7 @@ describe("GET /api/sync/notices: the gate", () => {
 describe("GET /api/sync/notices: the kinds", () => {
   it("a lifter: only their own application is read, and the GET writes nothing", async () => {
     expect(await dots()).toEqual({ dots: {} });
-    expect(reads()).toEqual([SQL.application, SQL.trainerChange]);
+    expect(reads()).toEqual([SQL.application, SQL.trainerChange, SQL.trainerSession]);
     expect(calls[0].v).toEqual([A]);
     expect(writes()).toEqual([]);
   });
@@ -249,16 +268,16 @@ describe("GET /api/sync/notices: the kinds", () => {
     ]);
     // No admin env: nobody is admin, nothing admin is read.
     expect(await dots("tok-zed", "zed")).toEqual({ dots: {} });
-    expect(reads()).toEqual([SQL.application, SQL.trainerChange]);
+    expect(reads()).toEqual([SQL.application, SQL.trainerChange, SQL.trainerSession]);
     process.env.ADMIN_ACCOUNT_ID = Z;
     calls.length = 0;
     expect(await dots("tok-zed", "zed")).toEqual({ dots: { bugs: 2, applications: 2 }, admin: true });
-    expect(reads().sort()).toEqual([SQL.application, SQL.applications, SQL.bugs, SQL.trainerChange].sort());
+    expect(reads().sort()).toEqual([SQL.application, SQL.applications, SQL.bugs, SQL.trainerChange, SQL.trainerSession].sort());
     expect(calls.find((c) => flat(c.q) === SQL.bugs).v).toEqual([Z]);
     // Anyone else, with the env set: no admin key, no admin read.
     calls.length = 0;
     expect(await dots("tok-abe", "abe")).toEqual({ dots: {} });
-    expect(reads()).toEqual([SQL.application, SQL.trainerChange]);
+    expect(reads()).toEqual([SQL.application, SQL.trainerChange, SQL.trainerSession]);
     expect(writes()).toEqual([]);
   });
 
@@ -321,7 +340,7 @@ describe("GET /api/sync/notices: the kinds", () => {
       calls.length = 0;
       expect(await dots("tok-nia", "nia")).toEqual({ dots: {} });
       expect(await dots("tok-abe", "abe")).toEqual({ dots: {} });
-      expect(reads()).toEqual([SQL.application, SQL.trainerChange, SQL.application, SQL.trainerChange]);
+      expect(reads()).toEqual([SQL.application, SQL.trainerChange, SQL.trainerSession, SQL.application, SQL.trainerChange, SQL.trainerSession]);
     });
   });
 });
@@ -389,6 +408,56 @@ describe("trainerChange: the change sets a trainer sent, after the client's mark
   });
 });
 
+describe("trainerSession: a session a trainer logged, waiting for the client to decide", () => {
+  const S = (c) => "hws_" + c.repeat(26);
+  // Cara's grant to Tia, changes on since 20 days ago.
+  const EDITS_AT = NOW - 20 * DAY;
+  const g = (extra = {}) => grant("cara", A, T, "cC", { edits_at: EDITS_AT, edits_off_at: null, ...extra });
+  const sess = (set, extra = {}) => ({ id: `${set}.00`, set_id: set, kind: "session", grant_id: "cara", author_account_id: T,
+    client_account_id: A, source: "trainer", status: "sent", created_at: NOW - DAY, outcome: null, undone_at: null,
+    cleared_at: null, delivered_at: null, ...extra });
+  const plan = (set, extra = {}) => ({ ...sess(set, extra), kind: "weight" });
+
+  it("counts open sessions, delivered or still delivering; the GET writes nothing", async () => {
+    db.grants = [g()];
+    db.changes = [sess(S("a")), sess(S("b"), { delivered_at: NOW - 3600_000 })];
+    expect(await dots()).toEqual({ dots: { trainerSession: 2 } });
+    expect(calls.find((x) => flat(x.q) === SQL.trainerSession).v).toEqual([A]);
+    expect(writes()).toEqual([]);
+  });
+
+  it("clears itself when decided: kept, auto-kept, discarded, superseded, not applied; withdrawn or cleared lights nothing", async () => {
+    db.grants = [g()];
+    for (const outcome of ["kept", "auto_kept", "discarded", "superseded", "limits"]) {
+      db.changes = [sess(S("a"), { outcome, delivered_at: NOW - 3600_000 })];
+      expect((await dots()).dots, outcome).toEqual({});
+    }
+    db.changes = [sess(S("a"), { undone_at: NOW - 60_000 }), sess(S("b"), { cleared_at: NOW - 60_000, delivered_at: NOW - 3600_000 }),
+      sess(S("c"), { client_account_id: O }), sess(S("d"), { status: "proposed" }), sess(S("e"), { source: "ai" })];
+    expect((await dots()).dots).toEqual({});
+  });
+
+  it("sharing stopped: a session already on the phone still lights; one never delivered does not", async () => {
+    for (const stop of [{ revoked_at: NOW - 60_000 }, { edits_off_at: NOW - 60_000 }, { edits_at: null }]) {
+      db.grants = [g(stop)];
+      db.changes = [sess(S("a"), { delivered_at: NOW - 3600_000 }), sess(S("b"))];
+      expect((await dots()).dots, JSON.stringify(stop)).toEqual({ trainerSession: 1 });
+    }
+    // Sent before changes were switched on (again): never delivered, never lit.
+    db.grants = [g({ edits_at: NOW - 60_000 })];
+    db.changes = [sess(S("b"))];
+    expect((await dots()).dots).toEqual({});
+  });
+
+  it("is never a plan change: sessions stay out of trainerChange, plan sets stay out of trainerSession", async () => {
+    db.grants = [g()];
+    db.changes = [sess(S("a")), plan(S("b"))];
+    expect((await dots()).dots).toEqual({ trainerChange: 1, trainerSession: 1 });
+    db.changes = [sess(S("a"))];
+    expect((await dots()).dots).toEqual({ trainerSession: 1 });
+  });
+});
+
 describe("the mark: one row per account and kind, overwritten in place", () => {
   it("dbMarkSeen is the pinned upsert; a second mark overwrites the first", async () => {
     expect(await dbMarkSeen(T, "clients", NOW - 5)).toBe(true);
@@ -397,10 +466,10 @@ describe("the mark: one row per account and kind, overwritten in place", () => {
     expect([...db.marks]).toEqual([[`${T}|clients`, NOW]]);
   });
 
-  it("only bugs, clients and trainerChange have a mark; anything else throws before any SQL; null with no DB", async () => {
-    expect(NOTICE_KINDS).toEqual(["bugs", "applications", "application", "clients", "trainerChange"]);
+  it("only bugs, clients and trainerChange have a mark (trainerSession clears itself); anything else throws before any SQL; null with no DB", async () => {
+    expect(NOTICE_KINDS).toEqual(["bugs", "applications", "application", "clients", "trainerChange", "trainerSession"]);
     expect(MARKED_KINDS).toEqual(["bugs", "clients", "trainerChange"]);
-    for (const k of ["application", "applications", "junk", ""]) await expect(dbMarkSeen(T, k, NOW)).rejects.toThrow();
+    for (const k of ["application", "applications", "trainerSession", "junk", ""]) await expect(dbMarkSeen(T, k, NOW)).rejects.toThrow();
     await expect(dbMarkSeen("", "bugs", NOW)).rejects.toThrow();
     await expect(dbMarkSeen(T, "bugs", NaN)).rejects.toThrow();
     expect(calls).toEqual([]);
@@ -477,6 +546,13 @@ describe("source pins", () => {
     // The window is the share's 24 weeks, in SQL.
     expect(notices).toContain("const from = addDaysIso(today, -DETAIL_DAYS);");
     expect(notices).toContain("AND s.record->>'date' BETWEEN ${from} AND ${to}");
+  });
+
+  it("the session read uses dbOpenChangesFor's delivery predicate verbatim", () => {
+    const store = read("lib/trainer-changes-store.js");
+    const fn = store.slice(store.indexOf("export async function dbOpenChangesFor"));
+    expect(flat(fn.slice(0, fn.indexOf("ORDER BY")))).toContain(DELIVERS);
+    expect(flat(read("lib/notices.js"))).toContain(`AND (c.delivered_at IS NOT NULL OR (${DELIVERS}))`);
   });
 
   it("lib/notices.js writes exactly one statement, the mark, and the route none", () => {

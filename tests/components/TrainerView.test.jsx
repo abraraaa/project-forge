@@ -30,7 +30,10 @@
 //     with the grant and today's date; a 403 needsFaceId runs the quiet
 //     sign-in again for the signed-in name and the check runs again; a send
 //     reloads the pane in place (no "One moment"); a 401 there signs out;
-//     your own pane gets no change wiring, even when its view has a plan.
+//     your own pane gets no change wiring, even when its view has a plan;
+//   - running a session with a client: the trainer's name goes to the coach
+//     page in memory, and /trainer/coach opens with the ref and the letter
+//     in the fragment only, never a query; nothing is posted on the way.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -905,6 +908,82 @@ describe("TrainerView: changing a client's plan", () => {
     expect(document.querySelector('[data-section="plan"] > [role="status"]').textContent).toBe("Showing their latest.");
   });
 
+  it("Run a session: the signed-in name for the coach page, then /trainer/coach with the ref in the fragment only", async () => {
+    const { coachTrainer } = await import("../../lib/session-source.js");
+    coachTrainer.set(null);
+    const push = vi.spyOn(nav, "push");
+    await openAlex();
+    const before = server.calls.length;
+    await act(async () => { fireEvent.click(screen.getByRole("radio", { name: "Strength C" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Run a session with Alex" })); });
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    const [to] = push.mock.calls[0];
+    expect(to).toBe("/trainer/coach#ref=hwg_a&letter=C");
+    expect(to).not.toContain("?");
+    // The name the roster gave (no name was typed this visit), in memory for Face ID on Send.
+    expect(coachTrainer.get()).toBe("Coach Kim");
+    // Nothing posted on the way.
+    expect(server.calls.length).toBe(before);
+    coachTrainer.set(null);
+    // The way back is the next test's; spend it so it doesn't reach another.
+    cleanup();
+    await mount();
+  });
+
+  it("a session with this client run on this device and not sent: listed first, and Continue opens it as it is", async () => {
+    const { CD } = await import("../../lib/session-source.js");
+    const { newDraftLog, logSet } = await import("../../lib/storage.js");
+    const draft = newDraftLog({ profileName: null, session: "strength-c", blockNumber: 1, readiness: "normal" });
+    logSet(draft, { blockId: "c1", blockType: "main", exerciseName: "Barbell Back Squat", muscle: "Quads", swapped: false, fromPool: null,
+      loadType: "barbell", bodyweight: null, weight: 100, reps: 5, rpe: 8, prescribed: { reps: 5, weight: 100, sets: 3 } });
+    CD.save("hwg_a", { letter: "C", name: "Alex", plan: null, draft, swaps: {}, sessionWeights: {}, sessionReps: {}, addedLoads: {}, readiness: "normal", readinessReason: null });
+    // Another client's draft stays theirs.
+    CD.save("hwg_other", { letter: "A", name: "Bo", plan: null, draft, swaps: {}, sessionWeights: {}, sessionReps: {}, addedLoads: {}, readiness: "normal", readinessReason: null });
+    const stored = localStorage.getItem(CD.key);
+    const push = vi.spyOn(nav, "push");
+    try {
+      await openAlex();
+      await vi.waitFor(() => expect(document.querySelector("[data-unsent]")).toBeTruthy());
+      expect(document.querySelector("[data-unsent]").textContent).toBe("Strength C, today · 1 setNot sent yet · on this iPad");
+      expect(panes.props.at(-1).unsent).toEqual({ letter: "C", date: today, sets: 1 });
+      expect(screen.queryByRole("radiogroup", { name: "Session to run" })).toBeNull();
+      const before = server.calls.length;
+      await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Continue" })); });
+      await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+      expect(push.mock.calls[0][0]).toBe("/trainer/coach#ref=hwg_a&letter=C");
+      expect(server.calls.length).toBe(before);
+      // Read only: the device's drafts are as they were.
+      expect(localStorage.getItem(CD.key)).toBe(stored);
+    } finally {
+      localStorage.clear();
+      cleanup();
+      await mount();
+    }
+  });
+
+  it("back from the coach page (Send, or its back row), /trainer opens that client's pane again, once", async () => {
+    const push = vi.spyOn(nav, "push");
+    await openAlex();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Run a session with Alex" })); });
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    // The coach page replaces itself with /trainer: a fresh mount.
+    cleanup();
+    panes.props = [];
+    server.calls = [];
+    await mount();
+    expect(posts("/api/trainer/client").map((c) => c.body)).toEqual([{ ref: "hwg_a", today }]);
+    expect(panes.props.at(-1)?.client?.name).toBe("Alex");
+    expect(document.querySelector('[data-section="coach"]')).toBeTruthy();
+    // Opened as a tap would: Back returns to the list. The ref stays out of history.
+    expect(window.history.state?.view).toBe("client");
+    expect(JSON.stringify(window.history.state)).not.toContain("hwg_a");
+    // Once: the next visit opens on the list.
+    cleanup();
+    server.calls = [];
+    await mount();
+    expect(posts("/api/trainer/client")).toEqual([]);
+  });
+
   it("your own pane gets no plan and no change wiring, even with a plan on its view", async () => {
     await openAlex();
     const alex = panes.props.at(-1);
@@ -917,7 +996,8 @@ describe("TrainerView: changing a client's plan", () => {
     const mine = panes.props.at(-1);
     expect(mine.self).toBe(true);
     expect(mine.view.plan).toBeTruthy();
-    expect([mine.onChange, mine.onFaceId, mine.onChanged, mine.onRemove]).toEqual([undefined, undefined, undefined, undefined]);
+    expect([mine.onChange, mine.onFaceId, mine.onChanged, mine.onRemove, mine.onRunSession]).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    expect(typeof alex.onRunSession).toBe("function");
     expect(document.querySelector('[data-section="plan"]')).toBeNull();
     expect(posts("/api/trainer/change")).toHaveLength(0);
   });

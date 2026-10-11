@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useEffectEvent, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   WEEK, SESSIONS,
@@ -17,7 +17,9 @@ import {
   enableAutoSync, disableAutoSync, pushNow, weeksSince, dateOfWeekdayIdxInCurrentWeek,
   newDraftLog, logSet, finaliseDraft, D, TS,
   planStartWeight,
+  TL, keepTrainerSession, discardTrainerSession, holdTrainerSession, setSessionCommit,
 } from "@/lib/storage";
+import { commitSessionRecord } from "@/lib/session-commit";
 import { makeDayContext, resolveRange, sessionsFrom, owedDays, trainingRhythm, beginSessionIdx } from "@/lib/day-state";
 import { useTodayIso } from "@/lib/use-today-iso";
 import { nudgeAbsence, weeklySlotsFromWeek } from "@/lib/absence";
@@ -51,6 +53,7 @@ import FirstRun from "@/components/FirstRun";
 import { dayNote } from "@/lib/first-run";
 import FocusPickerSheet from "@/components/FocusPickerSheet";
 import HomeScreen from "@/components/HomeScreen";
+import TrainerSessionSheet, { sessionCardsFrom } from "@/components/TrainerSessionSheet";
 import { consentClaim } from "@/lib/consent";
 import { activateProfileCore, saveFocusCore, saveMainLiftCore, takePendingRotationSummary, takePendingFirstRun } from "@/lib/profile-actions";
 
@@ -60,6 +63,10 @@ import { activateProfileCore, saveFocusCore, saveMainLiftCore, takePendingRotati
 // finalise logger, the retro sheet, and components/SessionScreen.jsx).
 
 // ScrollDrum now lives in components/ScrollDrum.jsx (PR3 3c).
+
+// Keep writes through the live finish's commit. Handed in at load so a Keep
+// offline after a deploy has nothing left to fetch.
+setSessionCommit(commitSessionRecord);
 
 // SyncStatusCard + SyncNowRow now live in components/sync-cards.jsx (PR3 3c).
 
@@ -372,6 +379,118 @@ export default function ForgeApp(){
     setAbsenceDismissedStart(absenceNudge.start);
   }, [absenceNudge, activeProfile]);
 
+  // Sessions a trainer ran with them, waiting on this device for Keep or Not
+  // mine (lib/storage.js lists them in trainerLocal on each home pull). One
+  // sheet at a time; felt edits are held per session so a closed sheet keeps
+  // them. The mirror is the hydrate effect's onSyncUpdate, so a keep reaches
+  // React the way a pull does.
+  const [trainerSessions, setTrainerSessions] = useState([]);
+  const [trainerSheetId, setTrainerSheetId] = useState(null);
+  const [trainerFelt, setTrainerFelt] = useState({});
+  const syncMirrorRef = useRef(null);
+  const autoKeepTriedRef = useRef(new Set());
+  const trainerSheet = screen === "home" ? trainerSessions.find((c) => c.id === trainerSheetId) ?? null : null;
+  const openTrainerId = trainerSheet ? trainerSheet.id : null;
+
+  const heldFelt = (id) => {
+    const held = activeProfile ? TL.get(activeProfile)?.sessions?.[id]?.felt : null;
+    return held && typeof held === "object" ? held : {};
+  };
+  const handleOpenTrainerSession = (id) => {
+    setTrainerFelt((prev) => (prev[id] ? prev : { ...prev, [id]: heldFelt(id) }));
+    setTrainerSheetId(id);
+  };
+  // Writes: trainerLocal overwritten in place, this session's felt only.
+  const handleTrainerFelt = (id, felt) => {
+    if (!activeProfile) return;
+    setTrainerFelt((prev) => ({ ...prev, [id]: felt }));
+    const tl = TL.get(activeProfile);
+    const sessions = tl?.sessions && typeof tl.sessions === "object" ? tl.sessions : {};
+    TL.save(activeProfile, { ...tl, sessions: { ...sessions, [id]: { ...(sessions[id] || {}), felt } } });
+  };
+  // Keep and discard write through lib/storage.js (history, the day, the
+  // engine, W/R, then the push and the report); this re-reads what landed.
+  const settleTrainerSessions = (run) => {
+    const profile = activeProfile;
+    const mirror = () => {
+      setTrainerSessions(sessionCardsFrom(TL.get(profile)));
+      try {
+        const now = getLocalProfile(profile);
+        syncMirrorRef.current?.({ meta: now.meta, history: now.history });
+      } catch (e) {
+        console.error("[forge:trainer] home update failed", e?.message || e);
+      }
+    };
+    let out = null;
+    try { out = run(profile); } catch (e) { console.error("[forge:trainer] session not settled", e?.message || e); }
+    mirror();
+    Promise.all([].concat(out)).then(mirror, (e) => console.error("[forge:trainer] session not settled", e?.message || e));
+  };
+  // A session the client decided is off the timer at once: the store's keep
+  // is async, so the card is still listed for a moment after the sheet goes.
+  const handleKeepTrainerSession = (id) => {
+    const felt = trainerFelt[id] ?? heldFelt(id);
+    autoKeepTriedRef.current.add(id);
+    setTrainerSheetId(null);
+    settleTrainerSessions((profile) => keepTrainerSession(profile, id, { auto: false, felt }));
+  };
+  const handleDiscardTrainerSession = (id) => {
+    autoKeepTriedRef.current.add(id);
+    setTrainerSheetId(null);
+    settleTrainerSessions((profile) => discardTrainerSession(profile, id));
+  };
+  // Due sessions only ever keep through a pull that lands: it carries sharing
+  // as it is now, and its own step keeps what is still due (lib/storage.js
+  // _trainerOnPull, which honours the open sheet). Auto-keep runs only while
+  // sharing is live, so a pull that does not land keeps nothing; a manual
+  // Keep still works offline. Each session is tried once per mount: one the
+  // store would not keep is never retried in a loop.
+  const onTrainerSessionsDue = useEffectEvent((ids) => {
+    const fresh = ids.filter((id) => !autoKeepTriedRef.current.has(id));
+    if (!fresh.length) return;
+    for (const id of fresh) autoKeepTriedRef.current.add(id);
+    const onUpdate = syncMirrorRef.current ?? undefined;
+    settleTrainerSessions((profile) => backgroundSync(profile, { onUpdate, applyTrainer: true })
+      .then((res) => (res?.trainer ? res.trainer.delivery : true)));
+  });
+
+  // Auto-keep, on Home only: a waiting session keeps itself at keepsAt, five
+  // hours after it first reached their device. Never while the sheet is open
+  // (it fires on the next tick after it closes), never before the pull has
+  // landed, never off Home (a keep runs the engine, which must not land under
+  // a live session), and never once sharing stopped (keepsAt null, as the
+  // pull a due session triggers finds out). The timer rechecks when the app
+  // comes back to the foreground, like the rest clock.
+  useEffect(() => {
+    if (!activeProfile || screen !== "home" || hydrating || openTrainerId !== null) return undefined;
+    const timed = trainerSessions.filter((c) => typeof c.keepsAt === "number" && Number.isFinite(c.keepsAt));
+    if (!timed.length) return undefined;
+    let timer = null;
+    const check = () => {
+      clearTimeout(timer);
+      const now = Date.now();
+      const open = timed.filter((c) => !autoKeepTriedRef.current.has(c.id));
+      const due = open.filter((c) => c.keepsAt <= now).map((c) => c.id);
+      if (due.length) onTrainerSessionsDue(due);
+      const later = open.filter((c) => c.keepsAt > now);
+      if (!later.length) return;
+      const next = Math.min(...later.map((c) => c.keepsAt));
+      timer = setTimeout(check, Math.min(next - now, 3_600_000));
+    };
+    timer = setTimeout(check, 0);
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearTimeout(timer); document.removeEventListener("visibilitychange", onVisible); };
+  }, [activeProfile, screen, hydrating, openTrainerId, trainerSessions]);
+
+  // The open sheet holds its session: a pull that lands meanwhile shows it,
+  // never keeps it.
+  useEffect(() => {
+    if (openTrainerId === null) return undefined;
+    holdTrainerSession(openTrainerId);
+    return () => holdTrainerSession(null);
+  }, [openTrainerId]);
+
   const handleStartBreather = useCallback((reason) => {
     if (!activeProfile) return;
     Bk.start(activeProfile, reason);
@@ -441,6 +560,8 @@ export default function ForgeApp(){
     setBreaks(Bk.getAll(activeProfile));
     setAbsenceDismissedStart(AN.get(activeProfile));
     setHistory(local.history || []);
+    setTrainerSessions(sessionCardsFrom(TL.get(activeProfile)));
+    setTrainerSheetId(null);
 
     // Retry any failed pushes from previous sessions. NO payload argument,
     // deliberately: this call once hand-built {weights, reps, streak,
@@ -493,14 +614,20 @@ export default function ForgeApp(){
       const ts = TS.get(activeProfile);
       setActiveDeload(ts?.mesocycle?.activeDeload || null);
       setDeloadOffer(shouldOfferDeload(ts, H.get(activeProfile)));
+      setTrainerSessions(sessionCardsFrom(TL.get(activeProfile)));
     };
+    syncMirrorRef.current = onSyncUpdate;
 
     // BLOCKING sync — await blob round-trip before unblocking the UI. On
     // error, still unblock (we'll show whatever's in localStorage — a
     // recoverable error state, not a frozen UI). Home applies any trainer
     // changes the pull carries (lib/storage.js applyTrainerRows).
     backgroundSync(activeProfile, { onUpdate: onSyncUpdate, applyTrainer: true })
-      .then(() => { if (!cancelled) setHydrating(false); })
+      .then(() => {
+        if (cancelled) return;
+        setTrainerSessions(sessionCardsFrom(TL.get(activeProfile)));
+        setHydrating(false);
+      })
       .catch((e) => {
         console.error("[forge:hydrate]", e);
         if (!cancelled) setHydrating(false);
@@ -556,6 +683,7 @@ export default function ForgeApp(){
 
     return () => {
       cancelled = true;
+      syncMirrorRef.current = null;
       disableAutoSync();
     };
   },[activeProfile, bumpDays]);
@@ -1256,8 +1384,9 @@ export default function ForgeApp(){
 
   return (
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={homeWeekDays} strengthDaySessions={homeWeekSessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={homeWeekDone} dayStates={homeWeekStates} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={handleDismissAbsenceNudge}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={homeWeekDays} strengthDaySessions={homeWeekSessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={homeWeekDone} dayStates={homeWeekStates} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={handleDismissAbsenceNudge} trainerSessions={trainerSessions} onOpenTrainerSession={handleOpenTrainerSession}/>}
       {breatherOpen           && <BreatherModal onConfirm={handleStartBreather} onCancel={()=>setBreatherOpen(false)}/>}
+      {trainerSheet           && <TrainerSessionSheet key={trainerSheet.id} card={trainerSheet} todayIso={todayIso} felt={trainerFelt[trainerSheet.id] ?? {}} onFelt={(felt)=>handleTrainerFelt(trainerSheet.id, felt)} onKeep={()=>handleKeepTrainerSession(trainerSheet.id)} onDiscard={()=>handleDiscardTrainerSession(trainerSheet.id)} onClose={()=>setTrainerSheetId(null)}/>}
       {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} muscleAnchors={TS.get(activeProfile)?.muscleAnchors} workingReps={retroReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} history={history} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}

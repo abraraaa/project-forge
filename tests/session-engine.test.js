@@ -60,12 +60,13 @@ describe("applySessionToEngine", () => {
 
 describe("#16 class lock — the engine lives ONCE", () => {
   it("neither component contains the per-exercise engine loop any more", () => {
-    for (const rel of ["components/SessionHost.jsx", "components/ForgeApp.jsx"]) {
+    // The live host reaches the engine through lib/session-commit.js.
+    for (const rel of ["components/SessionHost.jsx", "lib/session-commit.js", "components/ForgeApp.jsx"]) {
       const src = readFileSync(resolve(root, rel), "utf8");
       expect(src, `${rel} re-grew an engine copy`).not.toContain("computeNextPrescription(");
       expect(src, rel).not.toContain("updateLiftStateFromSession(");
       expect(src, rel).not.toContain("reconcileLiftStateWithSession(");
-      expect(src, rel).toContain("applySessionToEngine(");
+      if (rel !== "components/SessionHost.jsx") expect(src, rel).toContain("applySessionToEngine(");
     }
   });
 });

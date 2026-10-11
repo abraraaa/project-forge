@@ -31,7 +31,14 @@
 //     a lift with no weight yet starts empty; Refresh reports the reload;
 //     a never-lifted load names the cold-start cap, the same in the sheet
 //     and a refusal; a withdraw that reaches nothing says so; the reps
-//     stepper starts inside its range.
+//     stepper starts inside its range;
+//   - sessions you ran (the real projection of session rows): listed apart
+//     from "Your changes", newest first, titled with the record's own day
+//     words (today, yesterday, a weekday), each status in the trainer's
+//     words, Withdraw only while it hasn't reached their phone; the week's
+//     count of 7; Run a session hands the parent the letter picked (the next
+//     in their rotation by default) and nothing else, and is off at the cap;
+//   - a session or ledger row a trainer logged reads Coached.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -39,12 +46,18 @@ import { render, screen, fireEvent, cleanup, within, act } from "@testing-librar
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import TrainerClientView, { setsLine, rhythmCellText, refusalText, noHistoryText, leadLine, warningText } from "../../components/TrainerClientView.jsx";
+import TrainerClientView, {
+  setsLine, rhythmCellText, refusalText, noHistoryText, leadLine, warningText, sessionStatusText, sessionRunLine, trainerStatusText,
+} from "../../components/TrainerClientView.jsx";
 import { projectForTrainer } from "../../lib/trainer-plan.js";
 import { addDaysIso, todayLocalIso } from "../../lib/dates.js";
 import { auditHistoryVolume } from "../../lib/volume-audit.js";
-import { validateChangeSet, SET_ID_RE, MAX_KG, REP_LIMITS, TIMED_SECONDS, WEEK_JUMP_FRACTION, BIG_DROP_FRACTION } from "../../lib/trainer-change.js";
+import {
+  validateChangeSet, SET_ID_RE, MAX_KG, REP_LIMITS, TIMED_SECONDS, WEEK_JUMP_FRACTION, BIG_DROP_FRACTION, AUTO_KEEP_MS, SESSIONS_PER_WEEK, sessionDayWords,
+} from "../../lib/trainer-change.js";
 import { EFFECTIVE_REP_BAND } from "../../lib/rep-band.js";
+import { CD, COACH_DRAFT_KEY, unsentDraft } from "../../lib/session-source.js";
+import { newDraftLog, logSet } from "../../lib/storage.js";
 
 afterEach(cleanup);
 
@@ -916,6 +929,311 @@ function isoDayMonthOf(iso) {
   const [, m, d] = iso.split("-").map(Number);
   return `${d} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]}`;
 }
+
+// ── Sessions you ran ────────────────────────────────────────────────────────
+
+/** A sent session's record, as the change route stores it: only its day, letter and size matter here. */
+const ranRecord = (letter, date, sets = 3) => ({
+  date, session: `strength-${letter.toLowerCase()}`, scheduledLetter: letter,
+  blocks: [{ id: `${letter.toLowerCase()}1`, type: "main", exercises: [{ name: "Barbell Back Squat", sets: Array.from({ length: sets }, () => ({ weight: 100, reps: 5 })) }] }],
+});
+/** A session row as dbChangesForTrainer returns it. */
+const ranRow = (id, letter, date, at, extra = {}) => ({
+  id, set: id.split(".")[0], kind: "session", target: `${date}:${letter}`, before: null, after: { record: ranRecord(letter, date, extra.sets), drum: {} },
+  from: date, at, appliedAt: null, outcome: null, undoneAt: null, undoneBy: null, deliveredAt: null, editsLive: true, warnings: null, ...extra,
+});
+const ranBox = () => /** @type {HTMLElement} */ (document.querySelector('[data-section="coach"]'));
+const ranRowEl = (id) => ranBox().querySelector(`[data-ran="${id}"]`);
+
+describe("TrainerClientView: sessions you ran", () => {
+  const now = Date.now();
+  const hourAgo = new Date(now - 3600e3).toISOString();
+  // Newest first by when it was sent.
+  const rows = [
+    ranRow("w.00", "A", today, now - 1e3, { sets: 26 }),
+    ranRow("seen.00", "B", today, now - 2e3, { deliveredAt: hourAgo }),
+    ranRow("off.00", "C", today, now - 3e3, { deliveredAt: hourAgo, editsLive: false }),
+    ranRow("kept.00", "B", ago(1), now - 4e3, { outcome: "kept", appliedAt: hourAgo, deliveredAt: hourAgo }),
+    ranRow("auto.00", "A", ago(1), now - 5e3, { outcome: "auto_kept", appliedAt: hourAgo, deliveredAt: hourAgo }),
+    ranRow("disc.00", "C", ago(2), now - 6e3, { outcome: "discarded", deliveredAt: hourAgo }),
+    ranRow("sup.00", "C", ago(2), now - 7e3, { outcome: "superseded" }),
+    ranRow("wd.00", "A", ago(3), now - 8e3, { undoneAt: now - 9e3, undoneBy: "trainer" }),
+    ranRow("stop.00", "B", ago(3), now - 9e3, { editsLive: false }),
+    ranRow("lim.00", "B", ago(4), now - 10e3, { outcome: "limits" }),
+  ];
+  const ranView = (extra = {}) => planView(planData(), { rows, sessions: { used: 2, freeAt: null }, ...extra });
+
+  it("lists sessions apart from your changes, newest first, by the record's own day, each status in the trainer's words, Withdraw only before it arrives", () => {
+    render(<TrainerClientView client={client} view={ranView()} onChange={fakeRoute()}/>);
+    // Never among the plan changes.
+    expect(document.querySelector('[data-section="changes"]').textContent).toContain("Nothing sent yet.");
+    expect(document.querySelector('[data-section="changes"] [data-change]')).toBeNull();
+    const box = ranBox();
+    expect(box.querySelector("[data-session-budget]").textContent).toBe(`2 of ${SESSIONS_PER_WEEK} this week`);
+    // Five, then the rest behind Show earlier.
+    expect([...box.querySelectorAll("[data-ran]")].map((n) => n.getAttribute("data-ran"))).toEqual(["w.00", "seen.00", "off.00", "kept.00", "auto.00"]);
+    fireEvent.click(within(box).getByRole("button", { name: "Show earlier sessions you ran" }));
+    expect(box.querySelectorAll("[data-ran]")).toHaveLength(10);
+
+    const weekday = sessionDayWords(ago(2), today);
+    expect(weekday).toMatch(/^[A-Z][a-z]+day \d{1,2} [A-Z][a-z]{2}$/);
+    const text = (id) => ranRowEl(id).textContent;
+    expect(text("w.00")).toBe("Strength A, today · 26 setsSent · waiting for Sam's phoneWithdraw");
+    expect(text("seen.00")).toMatch(/^Strength B, today · 3 setsOn Sam's phone · kept at \d\d:\d\d( tomorrow)? unless they say otherwise$/);
+    expect(text("off.00")).toBe("Strength C, today · 3 setsOn Sam's phone · it waits for Sam to decide");
+    expect(text("kept.00")).toBe("Strength B, yesterday · 3 setsKept by Sam");
+    expect(text("auto.00")).toBe("Strength A, yesterday · 3 setsKept after five hours");
+    expect(text("disc.00")).toBe(`Strength C, ${weekday} · 3 setsSam didn't keep it`);
+    expect(text("sup.00")).toBe(`Strength C, ${weekday} · 3 setsSam logged Strength C themselves`);
+    expect(text("wd.00")).toBe(`Strength A, ${sessionDayWords(ago(3), today)} · 3 setsWithdrawn`);
+    expect(text("stop.00")).toBe(`Strength B, ${sessionDayWords(ago(3), today)} · 3 setsStopped before it arrived`);
+    expect(text("lim.00")).toBe(`Strength B, ${sessionDayWords(ago(4), today)} · 3 setsDidn't arrive`);
+    // Withdraw on the one still on its way, and nowhere else.
+    expect(within(box).getAllByRole("button", { name: "Withdraw" })).toHaveLength(1);
+    expect(within(ranRowEl("w.00")).getByRole("button", { name: "Withdraw" })).toBeTruthy();
+  });
+
+  it("withdraws by the change's id; Face ID first when asked; one that reached their phone meanwhile says so", async () => {
+    let fresh = false;
+    let reached = false;
+    const route = vi.fn(async (body) => (!fresh ? { status: 403, body: { needsFaceId: true, error: SERVER_WORDS } }
+      : { status: 200, body: { withdrawn: reached ? [] : [body.withdraw] } }));
+    const onFaceId = vi.fn(async () => { fresh = true; return true; });
+    const onChanged = vi.fn();
+    render(<TrainerClientView client={client} view={ranView()} onChange={route} onFaceId={onFaceId} onChanged={onChanged}/>);
+    const status = () => within(ranBox()).getByRole("status").textContent;
+    await act(async () => { fireEvent.click(within(ranRowEl("w.00")).getByRole("button", { name: "Withdraw" })); });
+    await settle();
+    expect(route.mock.calls[0][0]).toEqual({ withdraw: "w.00" });
+    expect(status()).toBe("Confirm it's you to withdraw a session.");
+    await act(async () => { fireEvent.click(within(ranBox()).getByRole("button", { name: "Confirm it's you" })); });
+    await settle();
+    expect(onFaceId).toHaveBeenCalledTimes(1);
+    expect(route.mock.calls.map((c) => c[0])).toEqual([{ withdraw: "w.00" }, { withdraw: "w.00" }]);
+    expect(status()).toBe("Withdrawn. It won't reach Sam.");
+    expect(onChanged).toHaveBeenCalledTimes(1);
+
+    reached = true;
+    await act(async () => { fireEvent.click(within(ranRowEl("w.00")).getByRole("button", { name: "Withdraw" })); });
+    await settle();
+    expect(status()).toBe("Nothing to withdraw. It's already withdrawn, or on Sam's phone now.");
+    expect(document.body.textContent).not.toContain(SERVER_WORDS);
+  });
+
+  it("Run a session hands the parent the letter picked, the next in their rotation by default, and nothing else", () => {
+    const onRun = vi.fn();
+    const route = fakeRoute();
+    render(<TrainerClientView client={client} view={ranView()} onChange={route} onRunSession={onRun}/>);
+    const run = within(ranBox()).getByRole("button", { name: "Run a session with Sam" });
+    const pick = within(ranBox()).getByRole("radiogroup", { name: "Session to run" });
+    // Their last was A (planData), so B is next.
+    expect(ranBox().textContent).toContain("Strength B is next for Sam.");
+    expect(within(pick).getAllByRole("radio").map((r) => [r.textContent, r.getAttribute("aria-checked")]))
+      .toEqual([["Strength A", "false"], ["Strength B", "true"], ["Strength C", "false"]]);
+    fireEvent.click(run);
+    expect(onRun).toHaveBeenLastCalledWith("B");
+    fireEvent.click(within(pick).getByRole("radio", { name: "Strength C" }));
+    fireEvent.click(run);
+    expect(onRun).toHaveBeenLastCalledWith("C");
+    expect(onRun).toHaveBeenCalledTimes(2);
+    // Running one is the parent's: the pane posts nothing.
+    expect(route).not.toHaveBeenCalled();
+  });
+
+  it("the next letter counts sessions sent and not yet decided, and follows a reload until one is picked", () => {
+    const checked = () => within(ranBox()).getAllByRole("radio").filter((r) => r.getAttribute("aria-checked") === "true").map((r) => r.textContent);
+    const at = (rs) => planView(planData(), { rows: rs, sessions: { used: rs.length, freeAt: null } });
+    const { rerender } = render(<TrainerClientView client={client} view={at([])} onRunSession={vi.fn()}/>);
+    // Their last kept was A: B is next.
+    expect(ranBox().textContent).toContain("Strength B is next for Sam.");
+    expect(checked()).toEqual(["Strength B"]);
+    // B sent today, still on its way: C is next, and the pick follows the reload.
+    rerender(<TrainerClientView client={client} view={at([ranRow("w.00", "B", today, Date.now())])} onRunSession={vi.fn()}/>);
+    expect(ranBox().textContent).toContain("Strength C is next for Sam.");
+    expect(checked()).toEqual(["Strength C"]);
+    // One they decided on counts only once it's in their history.
+    const hourAgo = new Date(Date.now() - 3600e3).toISOString();
+    rerender(<TrainerClientView client={client} view={at([ranRow("d.00", "B", today, Date.now(), { outcome: "discarded", deliveredAt: hourAgo })])} onRunSession={vi.fn()}/>);
+    expect(ranBox().textContent).toContain("Strength B is next for Sam.");
+    // A letter the trainer picked stays picked.
+    fireEvent.click(within(ranBox()).getByRole("radio", { name: "Strength A" }));
+    rerender(<TrainerClientView client={client} view={at([ranRow("w.00", "B", today, Date.now())])} onRunSession={vi.fn()}/>);
+    expect(ranBox().textContent).toContain("Strength C is next for Sam.");
+    expect(checked()).toEqual(["Strength A"]);
+  });
+
+  it("a pane left open moves past the five hours on its own", () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    try {
+      const delivered = new Date(Date.now() - AUTO_KEEP_MS + 30e3).toISOString();
+      render(<TrainerClientView client={client} view={planView(planData(), { rows: [ranRow("s.00", "A", today, Date.now(), { deliveredAt: delivered })] })}/>);
+      expect(ranRowEl("s.00").textContent).toMatch(/kept at \d\d:\d\d( tomorrow)? unless they say otherwise$/);
+      act(() => { vi.advanceTimersByTime(60_000); });
+      expect(ranRowEl("s.00").textContent).toMatch(/kept when Sam's app next opens$/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("at the week's cap, Run is off and says when more come", () => {
+    const freeAt = new Date(2026, 9, 12, 9).getTime();
+    const onRun = vi.fn();
+    render(<TrainerClientView client={client} view={ranView({ sessions: { used: SESSIONS_PER_WEEK, freeAt } })} onRunSession={onRun}/>);
+    const run = within(ranBox()).getByRole("button", { name: "Run a session with Sam" });
+    expect(run.disabled).toBe(true);
+    fireEvent.click(run);
+    expect(onRun).not.toHaveBeenCalled();
+    expect(ranBox().querySelector("[data-session-budget]").textContent).toBe(`${SESSIONS_PER_WEEK} of ${SESSIONS_PER_WEEK} this week · more from Mon 12 Oct`);
+    // Plan changes keep their own budget.
+    expect(document.querySelector('[data-section="changes"]').textContent).toContain("3 of 10 changes this week");
+  });
+
+  it("no way to run one without the parent's handler or the programme; never on your own training", () => {
+    render(<TrainerClientView client={client} view={ranView()}/>);
+    expect(ranBox().querySelector("[data-run]")).toBeNull();
+    expect(ranBox().querySelectorAll("[data-ran]").length).toBe(5);
+    cleanup();
+    const v = ranView();
+    delete v.plan.programme;
+    render(<TrainerClientView client={client} view={v} onRunSession={vi.fn()}/>);
+    expect(ranBox().querySelector("[data-run]")).toBeNull();
+    cleanup();
+    render(<TrainerClientView self client={{ name: "Coach Kim" }} view={ranView()} onRunSession={vi.fn()}/>);
+    expect(document.querySelector('[data-section="coach"]')).toBeNull();
+  });
+
+  it("nothing sent yet says so, and the count starts at none", () => {
+    render(<TrainerClientView client={client} view={planView()} onRunSession={vi.fn()}/>);
+    expect(ranBox().querySelector("[data-session-budget]").textContent).toBe(`0 of ${SESSIONS_PER_WEEK} this week`);
+    expect(ranBox().textContent).toContain("None sent yet.");
+  });
+
+  it("with changes off: the sessions you ran, without the plan; one on their phone waits for them to decide", () => {
+    const off = rows.map((r) => ({ ...r, editsLive: false }));
+    const v = projectForTrainer(planData(), { todayIso: today, edits: { rows: off, used: 3, freeAt: null, sessions: { used: 2, freeAt: null } }, status: "off" });
+    expect(v).not.toHaveProperty("plan");
+    render(<TrainerClientView client={client} view={v} onChange={fakeRoute()} onRunSession={vi.fn()}/>);
+    // Nothing of the plan: no lifts, no changes, nothing to run.
+    expect(document.querySelector('[data-section="plan"]')).toBeNull();
+    expect(document.querySelector('[data-section="changes"]')).toBeNull();
+    expect(ranBox().closest('[data-section="ran"]')).toBeTruthy();
+    expect(ranBox().querySelector("[data-run]")).toBeNull();
+    expect(ranBox().querySelector("[data-session-budget]").textContent).toBe(`2 of ${SESSIONS_PER_WEEK} this week`);
+    expect(ranRowEl("seen.00").textContent).toBe("Strength B, today · 3 setsOn Sam's phone · it waits for Sam to decide");
+    expect(ranRowEl("w.00").textContent).toBe("Strength A, today · 26 setsStopped before it arrived");
+    expect(within(ranBox()).queryByRole("button", { name: "Withdraw" })).toBeNull();
+    expect(document.body.textContent).toContain(leadLine("off", "Sam"));
+    cleanup();
+    // None sent and nothing on this device: no section at all.
+    render(<TrainerClientView client={client} view={projectForTrainer(planData(), { todayIso: today, edits: { rows: [] }, status: "off" })} onRunSession={vi.fn()}/>);
+    expect(document.querySelector('[data-section="ran"]')).toBeNull();
+  });
+
+  describe("a session run on this device and not sent yet", () => {
+    const REF = "hwg_pane_sam";
+    afterEach(() => localStorage.clear());
+    /** Plant a Strength B draft with two squat sets as this device's coached draft for `ref`. */
+    const plant = (ref = REF, letter = "B") => {
+      const draft = newDraftLog({ profileName: null, session: `strength-${letter.toLowerCase()}`, blockNumber: 1, readiness: "normal" });
+      for (let i = 0; i < 2; i++) {
+        logSet(draft, { blockId: "b1", blockType: "main", exerciseName: "Barbell Back Squat", muscle: "Quads", swapped: false, fromPool: null,
+          loadType: "barbell", bodyweight: null, weight: 100, reps: 5, rpe: 8, prescribed: { reps: 5, weight: 100, sets: 3 } });
+      }
+      CD.save(ref, { letter, name: "Sam", plan: null, draft, swaps: {}, sessionWeights: {}, sessionReps: {}, addedLoads: {}, readiness: "normal", readinessReason: null });
+    };
+
+    it("unsentDraft reads this client's entry of the coached draft, and nothing else", () => {
+      plant("hwg_other", "C");
+      expect(unsentDraft(REF)).toBeNull();
+      plant();
+      expect(unsentDraft(REF)).toEqual({ letter: "B", date: today, sets: 2 });
+      expect(unsentDraft(null)).toBeNull();
+      localStorage.setItem(COACH_DRAFT_KEY, "not json");
+      expect(unsentDraft(REF)).toBeNull();
+    });
+
+    it("lists first as not sent, with its letter and day, and Continue opens it whatever letter is picked", () => {
+      plant();
+      const onRun = vi.fn();
+      const route = fakeRoute();
+      render(<TrainerClientView client={client} clientRef={REF} view={ranView()} onChange={route} onRunSession={onRun} unsent={unsentDraft(REF)}/>);
+      const row = /** @type {HTMLElement} */ (ranBox().querySelector("[data-unsent]"));
+      expect(row.textContent).toBe("Strength B, today · 2 setsNot sent yet · on this iPad");
+      // First: before every sent one.
+      const first = ranBox().querySelector("[data-ran]");
+      expect(row.compareDocumentPosition(/** @type {Node} */ (first)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // The run control continues it; the letter chips are not offered.
+      expect(within(ranBox()).queryByRole("radiogroup")).toBeNull();
+      expect(within(ranBox()).queryByRole("button", { name: "Run a session with Sam" })).toBeNull();
+      fireEvent.click(within(ranBox()).getByRole("button", { name: "Continue" }));
+      expect(onRun).toHaveBeenCalledWith("B");
+      expect(route).not.toHaveBeenCalled();
+      expect(ranBox().textContent).not.toContain("None sent yet.");
+    });
+
+    it("Continue stays at the week's cap and with changes off, so it can still be sent or discarded", () => {
+      plant();
+      const onRun = vi.fn();
+      render(<TrainerClientView client={client} clientRef={REF} view={ranView({ sessions: { used: SESSIONS_PER_WEEK, freeAt: null } })} onRunSession={onRun} unsent={unsentDraft(REF)}/>);
+      fireEvent.click(within(ranBox()).getByRole("button", { name: "Continue" }));
+      expect(onRun).toHaveBeenCalledWith("B");
+      cleanup();
+      render(<TrainerClientView client={client} clientRef={REF} view={projectForTrainer(planData(), { todayIso: today, edits: { rows: [] }, status: "off" })} onRunSession={onRun} unsent={unsentDraft(REF)}/>);
+      expect(ranBox().querySelector("[data-unsent]").textContent).toBe("Strength B, today · 2 setsNot sent yet · on this iPad");
+      fireEvent.click(within(ranBox()).getByRole("button", { name: "Continue" }));
+      expect(onRun).toHaveBeenCalledTimes(2);
+      cleanup();
+      // Another client's draft is not this one's.
+      render(<TrainerClientView client={client} clientRef="hwg_someone_else" view={ranView()} onRunSession={onRun} unsent={unsentDraft("hwg_someone_else")}/>);
+      expect(ranBox().querySelector("[data-unsent]")).toBeNull();
+      expect(within(ranBox()).getByRole("button", { name: "Run a session with Sam" })).toBeTruthy();
+      // Your own training never shows one.
+      cleanup();
+      render(<TrainerClientView self client={{ name: "Coach Kim" }} view={ranView()} onRunSession={onRun} unsent={unsentDraft(REF)}/>);
+      expect(document.querySelector("[data-unsent]")).toBeNull();
+    });
+  });
+
+  it("status words: when it will be kept, by the viewer's clock; past the five hours, at their next open; no name still reads", () => {
+    const nowMs = new Date(2026, 9, 10, 11, 40).getTime();
+    const at = (h, m) => new Date(2026, 9, 10, h, m).getTime();
+    const seen = (deliveredMs, extra = {}) => ({ kind: "session", status: "seen", reason: null, delivered: new Date(deliveredMs).toISOString(), after: { letter: "A" }, ...extra });
+    expect(sessionStatusText(seen(at(10, 0)), "Sam", nowMs)).toBe("On Sam's phone · kept at 15:00 unless they say otherwise");
+    expect(sessionStatusText(seen(at(21, 30)), "Sam", nowMs)).toBe("On Sam's phone · kept at 02:30 tomorrow unless they say otherwise");
+    expect(sessionStatusText(seen(at(10, 0) + 2 * 864e5), "Sam", nowMs)).toBe("On Sam's phone · kept at 15:00 Mon 12 Oct unless they say otherwise");
+    expect(sessionStatusText(seen(nowMs - AUTO_KEEP_MS), "Sam", nowMs)).toBe("On Sam's phone · kept when Sam's app next opens");
+    expect(sessionStatusText(seen(at(10, 0), { delivered: null }), "Sam", nowMs)).toBe("On Sam's phone · kept after five hours unless they say otherwise");
+    expect(sessionStatusText({ status: "waiting" }, null)).toBe("Sent · waiting for their phone");
+    expect(sessionStatusText({ status: "kept" }, null)).toBe("Kept");
+    expect(sessionStatusText({ status: "discarded" }, null)).toBe("They didn't keep it");
+    expect(sessionStatusText({ status: "superseded", after: { letter: "B" } }, null)).toBe("They logged Strength B themselves");
+    expect(sessionStatusText({ status: "seen", reason: "stopped" }, null)).toBe("On their phone · it waits for them to decide");
+    // The plan list's words hand a session to the same words.
+    expect(trainerStatusText({ kind: "session", status: "auto_kept" }, "Sam")).toBe("Kept after five hours");
+    // The line: the record's day, never the send's; a size of one.
+    expect(sessionRunLine({ after: { letter: "C", date: "2026-10-06", sets: 1 } }, "2026-10-10")).toBe("Strength C, Tuesday 6 Oct · 1 set");
+    expect(sessionRunLine({ after: { letter: "A", date: "2026-10-10", sets: 2 } }, "2026-10-11")).toBe("Strength A, yesterday · 2 sets");
+  });
+});
+
+describe("TrainerClientView: a session a trainer logged", () => {
+  it("reads Coached on its session row and its ledger rows, and never says who", () => {
+    const hist = [0, 1].map((i) => {
+      const date = ago(2 + i * 3);
+      return { v: 2, id: `${date}T07:00:00.000Z`, date, readiness: "normal", session: "strength A", scheduledLetter: "A",
+        ...(i === 0 ? { loggedBy: { by: "trainer", name: "Coach Kim", changeId: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa.00" } } : {}),
+        blocks: [{ id: "main", type: "main", exercises: [squat(100)] }] };
+    }).reverse();
+    render(<TrainerClientView client={client} view={view(hist)}/>);
+    const rowsOf = [...document.querySelectorAll("[data-session]")];
+    expect(rowsOf.map((r) => !!r.querySelector("[data-coached]"))).toEqual([true, false]);
+    expect(rowsOf[0].querySelector("[data-coached]").textContent).toBe("Coached");
+    const ledger = /** @type {HTMLElement} */ (document.querySelector('[data-ledger="Barbell Back Squat"]'));
+    expect([...ledger.querySelectorAll("[data-ledger-narrow] [data-ledger-row]")].map((r) => r.querySelector("[data-ledger-mark]")?.textContent ?? null)).toEqual(["Coached", null]);
+    expect([...ledger.querySelectorAll("[data-ledger-wide] tbody[data-ledger-row]")].map((r) => r.querySelector("[data-ledger-mark]")?.textContent ?? null)).toEqual(["Coached", null]);
+    expect(document.body.textContent).not.toContain("Coach Kim");
+  });
+});
 
 // ── The ledger ──────────────────────────────────────────────────────────────
 

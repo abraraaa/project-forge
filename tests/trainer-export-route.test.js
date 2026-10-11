@@ -52,7 +52,7 @@ vi.mock("@neondatabase/serverless", () => ({
       const h = db.handles.find((x) => x.account_id === v[0] && x.released_at == null);
       return h ? [{ handle: h.handle, display: h.display }] : [];
     }
-    if (/^\s*SELECT g\.id, g\.profile, g\.scope, g\.created_at, g\.last_used_at, g\.edits_at, g\.edits_off_at, h\.handle, h\.display\s+FROM oauth_grants g/.test(q)) {
+    if (/^\s*SELECT g\.id, g\.profile, g\.scope, g\.created_at, g\.last_used_at, g\.edits_at, g\.edits_off_at, g\.consent_version, h\.handle, h\.display\s+FROM oauth_grants g/.test(q)) {
       const [t, ref] = v;
       return db.grants
         .filter((g) => liveGrant(g, t) && (ref === undefined || g.id === ref))
@@ -232,9 +232,9 @@ describe("POST /api/trainer/export", () => {
     const text = await res.text();
     const lines = text.split("\r\n");
     expect(lines[0]).toBe(`# Heatwayve export for Cara, ${TODAY}, shared with Tia`);
-    expect(lines[1]).toBe("date,session,block,lift,set,prescribed_reps,reps,kg,felt,top_set,set_by");
-    expect(lines).toContain(`${daysAgo(1)},A,main,${SQUAT},1,,5,100,RPE 8,1,`);
-    expect(lines).toContain(`${daysAgo(200)},,main,${SQUAT},top,,5,100,RPE 8,1,`);
+    expect(lines[1]).toBe("date,session,block,lift,set,prescribed_reps,reps,kg,felt,top_set,set_by,logged_by");
+    expect(lines).toContain(`${daysAgo(1)},A,main,${SQUAT},1,,5,100,RPE 8,1,,`);
+    expect(lines).toContain(`${daysAgo(200)},,main,${SQUAT},top,,5,100,RPE 8,1,,`);
   });
 
   it("logs the look before reading the client's data, by the grant's storage key; the only writes are the count and the look", async () => {
@@ -382,9 +382,9 @@ describe("POST /api/trainer/export", () => {
     const text = await (await post(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).text();
     const lines = text.split("\r\n");
     // Trained at the session after it landed (prescribed 100): that set was the trainer's.
-    expect(lines).toContain(`${daysAgo(1)},A,main,${SQUAT},1,,5,100,RPE 8,1,Tia`);
+    expect(lines).toContain(`${daysAgo(1)},A,main,${SQUAT},1,,5,100,RPE 8,1,Tia,`);
     // The older top set predates the change.
-    expect(lines).toContain(`${daysAgo(200)},,main,${SQUAT},top,,5,100,RPE 8,1,`);
+    expect(lines).toContain(`${daysAgo(200)},,main,${SQUAT},top,,5,100,RPE 8,1,,`);
     // The changes are read after the look, like the profile.
     expect(calls.findIndex((c) => /FROM trainer_changes c LEFT JOIN/.test(c.q))).toBeGreaterThan(lookAt());
   });

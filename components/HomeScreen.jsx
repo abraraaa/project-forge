@@ -21,6 +21,7 @@ import { mondayIndex, addDaysIso } from "@/lib/dates";
 import { Fade, Card, Tag, MonoNums } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import ConsentLine from "@/components/ConsentLine";
+import { TrainerSessionCard } from "@/components/TrainerSessionSheet";
 import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
 import { deloadCardCopy } from "@/lib/progression";
@@ -73,7 +74,7 @@ const linkBtn = {
 };
 
 export default
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},dayStates=[],onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,mainLifts={},onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},dayStates=[],onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,mainLifts={},onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge,trainerSessions=[],onOpenTrainerSession}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -562,6 +563,13 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             </div>
           </Card>
         </Fade>
+      )}
+
+      {/* A session the trainer ran with them, waiting for Keep or Not mine.
+          One card at a time, oldest first (ForgeApp orders them). */}
+      {trainerSessions.length > 0 && onOpenTrainerSession && (
+        <TrainerSessionCard card={trainerSessions[0]} more={trainerSessions.length - 1}
+          todayIso={addDaysIso(new Date(nowMs), 0)} nowMs={nowMs} onReview={onOpenTrainerSession}/>
       )}
 
       {/* Deload offer card. Surfaces only when signals warrant. Acknowledgement

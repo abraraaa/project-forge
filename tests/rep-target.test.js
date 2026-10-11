@@ -68,7 +68,7 @@ describe("recommended range", () => {
 describe("wiring", () => {
   const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
   it("both finalise paths apply the engine's rep updates", () => {
-    for (const f of ["components/SessionHost.jsx", "components/ForgeApp.jsx"]) {
+    for (const f of ["lib/session-commit.js", "components/ForgeApp.jsx"]) {
       expect(read(f), f).toContain("engine.wrUpdates");
     }
   });

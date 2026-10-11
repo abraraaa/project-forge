@@ -10,7 +10,8 @@
 // at a time in the pane, and shows an invite code. For a client who has the
 // trainer's changes on, the pane sends plan changes through
 // /api/trainer/change; a send needs a Face ID within the day, so the pane can
-// ask for one here.
+// ask for one here. Running a session with that client opens /trainer/coach
+// (runSession below).
 //
 // Layout is the wide shell (.forge-wide in globals.css): the roster column
 // and the client pane, one at a time under 640. The URL stays /trainer;
@@ -50,6 +51,14 @@ const QR_PX = 185;
 const SELF_ROW = Object.freeze({ ref: SELF_REF, name: null, lastLooked: null });
 /** @param {HTMLElement | null} el */
 const focusOnMount = (el) => { el?.focus(); };
+// The client whose session the trainer went to run: /trainer mounts again
+// after /trainer/coach (Send, or its back row) and opens their pane. Memory
+// only, taken by the next first roster; a reload forgets it.
+const backTo = {
+  /** @type {string | null} */ ref: null,
+  /** @param {string | null} ref */ set(ref) { this.ref = ref; },
+  /** @returns {string | null} */ take() { const r = this.ref; this.ref = null; return r; },
+};
 
 /** JSON in, { status, body } out; status 0 when the network failed. */
 async function call(path, body) {
@@ -240,9 +249,13 @@ export default function TrainerView() {
   };
   const loadRoster = async () => applyRoster(await fetchRoster());
   const onFirstRoster = useEffectEvent(applyRoster);
+  // The first roster's answer, which the way back from a session reads too (below).
+  const firstRoster = useRef(/** @type {Promise<{ status: number, body: any }> | null} */ (null));
   useEffect(() => {
     let off = false;
-    fetchRoster().then((r) => { if (!off) onFirstRoster(r); });
+    const p = fetchRoster();
+    firstRoster.current = p;
+    p.then((r) => { if (!off) onFirstRoster(r); });
     return () => { off = true; };
   }, []);
 
@@ -393,6 +406,20 @@ export default function TrainerView() {
   };
   const openClient = (i) => openRow(i, clients[i]);
   const openSelf = () => openRow(-1, SELF_ROW);
+  // Back from a session with a client (the coach page's Send, or its back
+  // row): /trainer mounts again, and their pane opens once the first roster
+  // is in, where the new row shows.
+  const onBack = useEffectEvent((r) => {
+    const ref = backTo.take();
+    const list = r?.status === 200 && Array.isArray(r.body?.clients) ? r.body.clients : [];
+    const i = ref ? list.findIndex((c) => c?.ref === ref) : -1;
+    if (i >= 0) openRow(i, list[i]);
+  });
+  useEffect(() => {
+    let off = false;
+    firstRoster.current?.then((r) => { if (!off) onBack(r); });
+    return () => { off = true; };
+  }, []);
 
   const closeClient = () => {
     if (window.history.state?.view === "client") window.history.back();
@@ -474,6 +501,28 @@ export default function TrainerView() {
     return false;
   };
 
+  // ── A session with a client ───────────────────────────────────────────────
+
+  // /trainer/coach runs it on this device. The ref rides the fragment, which
+  // never reaches a server or analytics (components/AnalyticsScrubbed.jsx
+  // drops it), and the coach page takes it out of the address bar as it
+  // opens. The name signed in goes along in memory only, for the Face ID a
+  // send may ask for, and the ref stays in memory (backTo) so the pane opens
+  // again on the way back. lib/session-source is loaded on the tap, so the
+  // device stores stay out of the /trainer bundle; from the tap on they run
+  // here as they do on /trainer/coach, which opens next.
+  const runSession = async (ref, letter) => {
+    const name = (who || me || "").trim();
+    backTo.set(ref);
+    try {
+      const { coachTrainer } = await import("@/lib/session-source");
+      coachTrainer.set(name || null);
+    } catch {
+      // Offline before the page loaded: the coach page asks for Face ID by name, and says when it can't.
+    }
+    router.push(`/trainer/coach#${new URLSearchParams({ ref, letter })}`);
+  };
+
   // ── The invite ────────────────────────────────────────────────────────────
 
   const issue = async () => {
@@ -507,6 +556,20 @@ export default function TrainerView() {
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  // A session with the open client run on this device and not sent yet, for
+  // their pane. lib/session-source is loaded once a client's pane is up, as
+  // on the tap that runs one; it only reads here.
+  const [unsent, setUnsent] = useState(/** @type {{ ref: string, draft: any } | null} */ (null));
+  const unsentRef = phase === "roster" && open && pane?.ref === open.ref && pane.state === "ready" && !pane.self ? pane.ref : null;
+  useEffect(() => {
+    if (!unsentRef) return undefined;
+    let live = true;
+    import("@/lib/session-source")
+      .then((m) => { if (live) setUnsent({ ref: unsentRef, draft: m.unsentDraft(unsentRef) }); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [unsentRef]);
 
   const root = {
     className: "forge-wide",
@@ -649,7 +712,9 @@ export default function TrainerView() {
             onChange={shown.self ? undefined : (body) => changePlan(shown.ref, body)}
             onFaceId={shown.self ? undefined : confirmFaceId}
             onChanged={shown.self ? undefined : () => refreshPane(shown.ref)}
-            clientRef={shown.self ? null : shown.ref} onExport={exportCsv}/>
+            clientRef={shown.self ? null : shown.ref} onExport={exportCsv}
+            onRunSession={shown.self ? undefined : (letter) => runSession(shown.ref, letter)}
+            unsent={!shown.self && unsent?.ref === shown.ref ? unsent.draft : null}/>
         )}
       </div>
 

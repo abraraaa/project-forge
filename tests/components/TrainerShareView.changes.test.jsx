@@ -31,6 +31,7 @@ import TrainerShareView from "../../components/TrainerShareView.jsx";
 import { P } from "@/lib/storage";
 import { authenticatePasskey } from "@/lib/webauthn";
 import { SHARE_CONSENT_VERSION } from "@/lib/trainer-terms";
+import { keepsAtWords } from "../../components/TrainerSessionSheet.jsx";
 
 const NOW = Date.parse("2026-10-14T09:00:00Z");
 const DAY = 86_400_000;
@@ -153,6 +154,39 @@ describe("the list", () => {
     server.status = status({ sharing: sharing({ live: false }), changes: [stopped()] });
     await renderView();
     expect(within(rowOf("Barbell Back Squat · 105 kg, was 102.5")).getByText("Sharing paused")).toBeTruthy();
+  });
+
+  it("a session a trainer logged with them reads as a session, in their words, never as their week", async () => {
+    const preview = (letter, date) => ({ letter, date, day: null, exercises: 7, sets: 21 });
+    const sess = (n, date, over) => change({ id: `${S1}.${n}`, kind: "session", target: `${date}:A`, before: null, after: preview("A", date),
+      from: date, undoable: false, warnings: [], ...over });
+    const keepsAt = NOW + 2 * 3_600_000;
+    server.status = status({ changes: [
+      sess(0, "2026-10-01", { status: "waiting" }),
+      sess(1, "2026-10-02", { status: "seen", deliveredAt: new Date(keepsAt - 5 * 3_600_000).toISOString(), keepsAt }),
+      sess(2, "2026-10-03", { status: "seen", reason: "stopped", keepsAt: null }),
+      sess(3, "2026-10-05", { status: "kept" }),
+      sess(4, "2026-10-06", { status: "auto_kept" }),
+      sess(5, "2026-10-07", { status: "discarded" }),
+      sess(6, "2026-10-08", { status: "superseded" }),
+      sess(7, "2026-10-09", { status: "not_applied", reason: "limits" }),
+      sess(8, "2026-10-10", { status: "not_applied", reason: "stopped" }),
+      sess(9, "2026-10-12", { status: "withdrawn" }),
+    ] });
+    await renderView();
+    const row = (date) => within(rowOf(`Strength A with Jo · ${date}`));
+    expect(row("Thu 1 Oct").getByText("Waiting for you")).toBeTruthy();
+    expect(row("Fri 2 Oct").getByText(`Keep or discard by ${keepsAtWords(keepsAt, NOW)}`)).toBeTruthy();
+    expect(row("Sat 3 Oct").getByText("On Home until you decide")).toBeTruthy();
+    expect(row("Mon 5 Oct").getByText("You kept it")).toBeTruthy();
+    expect(row("Tue 6 Oct").getByText("Kept after five hours")).toBeTruthy();
+    expect(row("Wed 7 Oct").getByText("You didn't keep it")).toBeTruthy();
+    expect(row("Thu 8 Oct").getByText("You logged it yourself")).toBeTruthy();
+    expect(row("Fri 9 Oct").getByText("Outside the app's limits when it arrived")).toBeTruthy();
+    expect(row("Sat 10 Oct").getByText("Sharing stopped before it arrived")).toBeTruthy();
+    expect(row("Mon 12 Oct").getByText("Withdrawn by Jo")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Your week");
+    expect(screen.queryByRole("button", { name: /^Undo / })).toBeNull();
   });
 
   it("after sharing ends, changes still show and those in the plan can still be undone", async () => {

@@ -213,7 +213,7 @@ describe("POST acks: their app's report", () => {
     const acks = [{ id: `${S1}.0`, outcome: "applied", at: APPLIED }];
     const res = await post({ profile: "abe", acks });
     expect(await res.json()).toEqual({ ok: true, acked: [`${S1}.0`], reverted: [] });
-    expect(store.ack.mock.calls).toEqual([[A, { acks, reverts: undefined }]]);
+    expect(store.ack.mock.calls).toEqual([[A, { acks, reverts: undefined, delivered: undefined }, expect.any(Number)]]);
     // Reverts alone are a report too.
     expect((await post({ profile: "abe", reverts: [{ id: `${S1}.0`, at: APPLIED }] })).status).toBe(200);
   });

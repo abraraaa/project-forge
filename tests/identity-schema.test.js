@@ -87,7 +87,7 @@ describe("identity schema (ensureSchema)", () => {
     expect(slice).not.toMatch(/CREATE TABLE IF NOT EXISTS notices\b|notice_events/);
   });
 
-  it("adds the trainer changes table: one row per change, epoch-ms server times, no CHECK to widen later; three indexes; the grant's edit columns", () => {
+  it("adds the trainer changes table: one row per change, epoch-ms server times, no CHECK to widen later; three indexes; the grant's edit columns; a session's delivered time", () => {
     const changes = statements.find((s) => s.startsWith("CREATE TABLE IF NOT EXISTS trainer_changes ("));
     expect(changes?.split("\n").slice(1, -1).map((l) => l.trim())).toEqual([
       "id TEXT PRIMARY KEY,",
@@ -120,15 +120,16 @@ describe("identity schema (ensureSchema)", () => {
       "CREATE INDEX IF NOT EXISTS trainer_changes_client ON trainer_changes (client_account_id, created_at)",
       "ALTER TABLE oauth_grants ADD COLUMN IF NOT EXISTS edits_at BIGINT",
       "ALTER TABLE oauth_grants ADD COLUMN IF NOT EXISTS edits_off_at BIGINT",
+      "ALTER TABLE trainer_changes ADD COLUMN IF NOT EXISTS delivered_at TEXT",
     ]) expect(statements).toContain(s);
-    expect(statements.filter((s) => /trainer_changes/.test(s))).toHaveLength(4);
+    expect(statements.filter((s) => /trainer_changes/.test(s))).toHaveLength(5);
     expect(statements.filter((s) => /\bedits_/.test(s))).toHaveLength(2);
   });
 
   it("adds the meta write stamp: nullable, no default, and the statement count moves by one", () => {
     expect(statements).toContain("ALTER TABLE meta ADD COLUMN IF NOT EXISTS rev BIGINT");
     expect(statements.filter((s) => /^ALTER TABLE meta\b/.test(s))).toHaveLength(1);
-    expect(statements).toHaveLength(48);
+    expect(statements).toHaveLength(49);
   });
 
   it("contains no destructive or rewriting verb", () => {

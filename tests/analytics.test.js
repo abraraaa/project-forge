@@ -21,7 +21,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   weeklyTonnage, recentForExercise, mainLiftTrend, detectPlateaus,
   weeklyVolumeByMuscle, totalTonnage, pendingTonnageMilestone,
-  formatTonnage, TONNAGE_MILESTONES_KG, __test_p4__, liftBests,
+  formatTonnage, TONNAGE_MILESTONES_KG, __test_p4__, liftBests, sessionCount,
 } from "../lib/analytics.js";
 import { DISPLAY_BUCKET } from "../lib/exercise-anatomy.js";
 import { MUSCLE_COLOURS } from "../lib/tokens.js";
@@ -739,5 +739,17 @@ describe("liftBests", () => {
   it("returns nothing for a lift with no history", () => {
     expect(liftBests([])).toEqual({});
     expect(liftBests(undefined)).toEqual({});
+  });
+});
+
+describe("sessionCount: sessions logged with a trainer", () => {
+  const rec = (extra = {}) => ({ id: new Date().toISOString(), date: "2026-10-10", ...extra });
+  it("counts records carrying loggedBy, beside travel; nothing else counts", () => {
+    const history = [
+      rec({ loggedBy: { name: "Sam", accountId: "hwa_x" } }), rec({ loggedBy: { name: null, accountId: null } }),
+      rec({ travel: true }), rec(), rec({ loggedBy: null }), rec({ loggedBy: "Sam" }), rec({ retrospective: true }),
+    ];
+    expect(sessionCount(history)).toMatchObject({ total: 7, travel: 1, coached: 2 });
+    expect(sessionCount([])).toEqual({ total: 0, last7: 0, last30: 0, travel: 0, coached: 0 });
   });
 });

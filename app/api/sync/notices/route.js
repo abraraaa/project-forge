@@ -10,8 +10,10 @@ export const dynamic = "force-dynamic";
 
 // What is new, for the dot on home. Under /api/sync so the hw_sync cookie
 // (path-scoped there) authorises it, as for the trainer share.
-//   GET /api/sync/notices?profile=N -> { dots: { bugs?, applications?, application?, clients?, trainerChange? }, admin? }
+//   GET /api/sync/notices?profile=N -> { dots: { bugs?, applications?, application?, clients?, trainerChange?,
+//       trainerSession? }, admin? }
 //       Each key only when there is something; counts and booleans, never a name.
+//       trainerSession: sessions a trainer logged with you, waiting for Keep or Discard.
 //       Read only: marks are written where each list is opened (lib/notices.js).
 
 // The caller's identity, or null. The connections gate, verbatim: a
