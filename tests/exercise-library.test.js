@@ -154,10 +154,24 @@ describe("exercise library — programme coverage", () => {
   });
 });
 
+// Entries added without verified footage. Named here so the gap is visible and
+// shrinks only when a real clip lands — never filled with a guessed id.
+const AWAITING_FOOTAGE = new Set([
+  "Neutral-Grip Lat Pulldown",   // 2026-10-11
+]);
+
 describe("demo videos — joined from the app's own footage, never invented", () => {
-  it("carries a video for every catalogue entry (2026-08-12: the orphan list hit zero)", () => {
-    const orphans = LIBRARY.filter((e) => !e.vid);
+  it("carries a video for every catalogue entry not awaiting footage", () => {
+    const orphans = LIBRARY.filter((e) => !e.vid && !AWAITING_FOOTAGE.has(e.name));
     expect(orphans, orphans.map((e) => e.name).join(", ")).toEqual([]);
+  });
+
+  it("the awaiting-footage list holds only real catalogue entries still without a video", () => {
+    for (const name of AWAITING_FOOTAGE) {
+      const e = LIBRARY.find((x) => x.name === name);
+      expect(e, name).toBeDefined();
+      expect(e?.vid ?? null, name).toBeNull();
+    }
   });
 
   it("every vid is a well-formed YouTube id", () => {

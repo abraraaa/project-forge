@@ -396,7 +396,9 @@ describe("an unset (a stored null weight or reps) reads as no stored value", () 
 describe("resolvedProgramme behind describeProgramme (E8)", () => {
   // Digests of the programme and current_loads tool text over e8Fixtures,
   // captured from describeProgramme before resolvedProgramme was extracted.
-  const BEFORE = { undefined: "0e422ed0f16e1cc0", Forged: "b260f8b6ef1a3b8e", Strong: "0cee9f0eb5c3d8f9", Sculpt: "a7cea783948bf52d" };
+  // The fixtures read the live pools, so a library change re-captures them
+  // (2026-10-11: css2-B and css3-A entries changed; tool code unchanged).
+  const BEFORE = { undefined: "77de5908d5adf5ff", Forged: "eaa80357bba98a39", Strong: "cd3c6b169e875777", Sculpt: "d741c43afdf6e1c2" };
   const fixtures = e8Fixtures();
   const texts = fixtures.map((f) => [runTool("programme", {}, f, now).text, runTool("current_loads", {}, f, now).text]);
 
