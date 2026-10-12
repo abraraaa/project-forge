@@ -22,7 +22,6 @@ const before = (mult, bw) => Math.max(20, Math.round((bw * mult) / 2.5) * 2.5);
 // Equivalents with no start, and why. Everything else must get one.
 const NO_START = {
   "Weighted Dips": "added load is optional (loaded bodyweight); starts empty by design",
-  "Hang Power Clean": "no factor in lift-translations PROFILES; name inference gives none",
 };
 
 const equivalents = [...new Set(Object.values(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS).flat())];

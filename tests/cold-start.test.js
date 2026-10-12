@@ -4,8 +4,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { startWeightFor, coldStartFromAnchor, snapToImplement } from "../lib/lift-translations.js";
-import { planStartWeight, startingWeightForLift } from "../lib/storage.js";
+import { startWeightFor, coldStartFromAnchor, snapToImplement, getLiftProfile, __test__ } from "../lib/lift-translations.js";
+import { planStartWeight, startingWeightForLift, newDraftLog, logSet, finaliseDraft } from "../lib/storage.js";
+import { updateMuscleAnchorFromSession } from "../lib/progression.js";
 import { runTool } from "../lib/mcp-server.js";
 import { EXERCISE_POOLS } from "../lib/programme.js";
 
@@ -191,5 +192,49 @@ describe("an unset (a stored null) is no stored value, at every rung and in the 
     const sessions = [{ blocks: [{ ex: squat }, { ex: { name: "Barbell Bench Press", reps: 5, loadType: "barbell" } }] }];
     expect(repTargetRepairs({ reps: { [squat.name]: null, "Barbell Bench Press": 3 }, sessions }))
       .toEqual(repTargetRepairs({ reps: { "Barbell Bench Press": 3 }, sessions }));
+  });
+});
+
+// Six lifts that used to fall to name inference: the default (no anchor), the
+// dumbbell incline rule, the Chest press rule and the triceps "extension" rule.
+describe("lift profiles: each listed lift reads and writes its own anchor", () => {
+  const CASES = [
+    { name: "Push Press",             loadType: "barbell",           weight: 50, reps: 5,  want: { primaryMuscle: "Shoulders",  category: "upper_push",         factor: 1.2 } },
+    { name: "Hang Power Clean",       loadType: "barbell",           weight: 50, reps: 3,  want: { primaryMuscle: "Power",      category: "power",              factor: 0.9 } },
+    { name: "Weighted Dips",          loadType: "loaded_bodyweight", weight: 10, reps: 8,  want: { primaryMuscle: "Chest",      category: "upper_push",         factor: 1.0 } },
+    { name: "Incline BB Press",       loadType: "barbell",           weight: 50, reps: 8,  want: { primaryMuscle: "Chest",      category: "upper_push",         factor: 0.8 } },
+    { name: "Single-Leg RDL",         loadType: "per_db",            weight: 18, reps: 8,  want: { primaryMuscle: "Hamstrings", category: "accessory_compound", factor: 0.25 } },
+    { name: "Reverse Hyperextension", loadType: "machine",           weight: 25, reps: 12, want: { primaryMuscle: "Glutes",     category: "accessory_compound", factor: 0.35 } },
+  ];
+  const BW = 80;
+
+  for (const c of CASES) {
+    it(`${c.name}: its own profile, not inference`, () => {
+      expect(Object.hasOwn(__test__.PROFILES, c.name)).toBe(true);
+      expect(getLiftProfile(c.name)).toEqual({ ...c.want, progressesByLoad: true });
+    });
+
+    it(`${c.name}: one logged set writes the ${c.want.primaryMuscle} anchor`, () => {
+      const d = newDraftLog({ profileName: "p", session: "strength-b", blockNumber: 1, readiness: "normal", bodyweight: BW });
+      logSet(d, {
+        blockId: "b2", blockType: "main", exerciseName: c.name, muscle: "", swapped: true, fromPool: null,
+        loadType: c.loadType, bodyweight: BW, weight: c.weight, reps: c.reps, rpe: 8, prescribed: { sets: 3, reps: c.reps },
+      });
+      const rec = finaliseDraft(d);
+      const ex = rec.blocks[0].exercises[0];
+      const set = ex.sets[0];
+      // The anchor key, as lib/session-engine.js picks it.
+      expect(getLiftProfile(ex.name).primaryMuscle).toBe(c.want.primaryMuscle);
+      const anchor = updateMuscleAnchorFromSession(null, rec, ex);
+      expect(anchor?.bestE1RMLift).toBe(c.name);
+      // Weighted Dips: the e1RM is on bodyweight plus the belt, as Weighted Pull-Up's.
+      if (c.loadType === "loaded_bodyweight") expect(set.effectiveLoad).toBe(BW + c.weight);
+      expect(anchor?.bestE1RM).toBeCloseTo(set.est1rm / c.want.factor, 0);
+    });
+  }
+
+  it("the dumbbell incline rule no longer reads a barbell incline as per-dumbbell", () => {
+    expect(__test__.inferProfileFromName("Incline Barbell Press").factor).toBe(0.8);
+    expect(__test__.inferProfileFromName("Incline DB Press").factor).toBe(0.4);
   });
 });

@@ -9,15 +9,18 @@
 import { describe, it, expect } from "vitest";
 import { LIBRARY, slugify, getExercise, libraryByMuscle, exerciseDescription } from "../lib/library.js";
 import { EXERCISE_ANATOMY } from "../lib/exercise-anatomy.js";
+import { RETIRED_EXERCISES } from "../lib/programme.js";
 import sitemap from "../app/sitemap.js";
 
 describe("library catalogue", () => {
-  it("covers every hand-tuned anatomy exercise exactly once", () => {
-    expect(LIBRARY.length).toBe(Object.keys(EXERCISE_ANATOMY).length);
+  it("covers every hand-tuned anatomy exercise exactly once, retired names excepted", () => {
+    const live = Object.keys(EXERCISE_ANATOMY).filter((n) => !RETIRED_EXERCISES.has(n));
+    expect(LIBRARY.length).toBe(live.length);
     const names = new Set(LIBRARY.map((e) => e.name));
-    for (const name of Object.keys(EXERCISE_ANATOMY)) {
+    for (const name of live) {
       expect(names.has(name)).toBe(true);
     }
+    for (const name of RETIRED_EXERCISES) expect(names.has(name), name).toBe(false);
   });
 
   it("slugs are unique, non-empty, and URL-safe", () => {
