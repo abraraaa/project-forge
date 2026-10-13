@@ -397,9 +397,9 @@ describe("resolvedProgramme behind describeProgramme (E8)", () => {
   // Digests of the programme and current_loads tool text over e8Fixtures,
   // captured from describeProgramme before resolvedProgramme was extracted.
   // The fixtures read the live pools, swaps and lift profiles, so a library
-  // change re-captures them. Re-captured 2026-10-11 for library data only
-  // (pools, swaps, lift profiles); the tool code was unchanged.
-  const BEFORE = { undefined: "76ef1d2bba7a24f2", Forged: "9acdf2d618275d9c", Strong: "3ba949b3572dec29", Sculpt: "f1aafc086b599e67" };
+  // change re-captures them. Re-captured 2026-10-13 for library data only
+  // (the Single-Leg RDL profile dropped); the tool code was unchanged.
+  const BEFORE = { undefined: "3f925fd861ae05a9", Forged: "caaf5429aa924140", Strong: "bc32d462591c1166", Sculpt: "c5904895b0c4f52e" };
   const fixtures = e8Fixtures();
   const texts = fixtures.map((f) => [runTool("programme", {}, f, now).text, runTool("current_loads", {}, f, now).text]);
 
