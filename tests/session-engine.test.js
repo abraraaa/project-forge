@@ -226,3 +226,68 @@ describe("bodyweight rep climb reaches the session", () => {
     expect(TS.get("p").lifts["L-Sit Hold"].currentRepRange).toMatchObject({ reps: 25, timed: true });
   });
 });
+
+// A lift's first logged session replaces the cold-start guess: the next
+// prescription progresses from what was lifted, never from the anchor
+// (2026-10-13). The anchors are the ones that produced the live numbers.
+describe("a lift's first logged session progresses from what was lifted", () => {
+  beforeEach(() => localStorage.clear());
+  const firstRecord = (name, loadType, weight, reps, rir) => {
+    const sets = reps.map((r) => ({ weight, reps: r, rir, loadType, effectiveLoad: weight, est1rm: weight * (1 + r / 30) }));
+    return {
+      v: 2, id: "2026-10-11T10:00:00.000Z", date: "2026-10-11", readiness: "normal", session: "strength-c",
+      blocks: [{ id: "css2", type: "superset", exercises: [{ name, loadType, sets }] }],
+    };
+  };
+  const apply = (rec, muscleAnchors) => {
+    TS.save("p", { ...TS.get("p"), muscleAnchors });
+    H.append("p", rec);
+    return applySessionToEngine("p", rec);
+  };
+
+  it("a 26 kg cable row: 26 or 27.5, never the anchor's 62.5", () => {
+    const back = { Back: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" } };
+    for (const [rir, want] of [[1.5, 26], [2, 27.5]]) {
+      localStorage.clear();
+      const out = apply(firstRecord("Face-Away Cable Row", "cable", 26, [10, 10, 10, 10], rir), back);
+      expect(out.wwUpdates["Face-Away Cable Row"], `rir ${rir}`).toBe(want);
+      expect(out.wwUpdates["Face-Away Cable Row"]).not.toBe(62.5);
+      const lift = TS.get("p").lifts["Face-Away Cable Row"];
+      expect(lift.currentWeight).toBe(26);
+      expect(lift.nextPrescribed).toBe(want);
+      expect(lift.sessionsCount).toBe(1);
+    }
+  });
+
+  it("a cooked first session holds 26 kg, never the anchor's 62.5", () => {
+    const back = { Back: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" } };
+    const rec = { ...firstRecord("Face-Away Cable Row", "cable", 26, [10, 10, 10, 10], 1), readiness: "cooked" };
+    const out = apply(rec, back);
+    expect(out.wwUpdates["Face-Away Cable Row"]).toBe(26);
+    const lift = TS.get("p").lifts["Face-Away Cable Row"];
+    expect(lift.nextPrescribed).toBe(26);
+    expect(lift.history.at(-1).decision).toBe("HOLD");
+  });
+
+  it("a 6 kg Lu raise adds a kilo, never the anchor's 16", () => {
+    const shoulders = { Shoulders: { bestE1RM: 210, bestE1RMLift: "Overhead Press" } };
+    const out = apply(firstRecord("DB Lu Raise", "per_db", 6, [10, 10, 10], 2), shoulders);
+    expect(out.wwUpdates["DB Lu Raise"]).toBe(7);
+    expect(out.wwUpdates["DB Lu Raise"]).not.toBe(16);
+  });
+
+  it("a 16 kg split squat at RPE 9.5 holds 16, never the anchor's 43", () => {
+    const quads = { Quadriceps: { bestE1RM: 228.9, bestE1RMLift: "Leg Press" } };
+    const out = apply(firstRecord("DB Split Squat", "per_db", 16, [10, 10, 10], 0.5), quads);
+    expect(out.wwUpdates["DB Split Squat"]).toBe(16);
+    expect(out.wwUpdates["DB Split Squat"]).not.toBe(43);
+    expect(TS.get("p").lifts["DB Split Squat"].history.at(-1).decision).toBe("HOLD");
+  });
+
+  it("an unrated first session holds the performed weight", () => {
+    const calves = { Calves: { bestE1RM: 100, bestE1RMLift: "Standing Calf Raise" } };
+    const out = apply(firstRecord("Seated Calf Raise", "machine", 40, [15, 15, 15, 15], null), calves);
+    expect(out.wwUpdates["Seated Calf Raise"]).toBe(40);
+    expect(TS.get("p").lifts["Seated Calf Raise"].history.at(-1).decision).toBe("HOLD");
+  });
+});

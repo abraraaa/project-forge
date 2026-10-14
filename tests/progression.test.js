@@ -1358,4 +1358,50 @@ describe("prescriptions land on weights the implement has", () => {
     expect(result.decision).toBe("ADD");
     expect(result.weight).toBe(51.25);   // 1.25 micro-plate survives
   });
+
+  // A step finer than the grid snapped back onto the same pin, so an earned
+  // add never moved the weight. An add moves at least one rung.
+  const stackSession = (name, weight, reps, rir) => buildSession({
+    exercises: [buildExercise({
+      name,
+      sets: [1, 2, 3].map(() => ({ ...buildSet({ weight, reps, rir }), loadType: "total" })),
+    })],
+  });
+
+  it("an arm accessory on a 2.5 kg stack adds a rung, not 0.5 kg back onto the pin", () => {
+    const result = computeNextPrescription({
+      liftName: "Bayesian Cable Curl",
+      history: [stackSession("Bayesian Cable Curl", 12.5, 12, 3)],
+      liftState: { ...dbState, currentWeight: 12.5, currentRepRange: { reps: 12, sets: 3 } },
+      muscleAnchor: null,
+      context: { readiness: "normal", currentWeight: 12.5 },
+    });
+    expect(result.decision).toBe("ADD");
+    expect(result.weight).toBe(15);
+  });
+
+  it("an add on an off-grid weight never lowers it", () => {
+    const result = computeNextPrescription({
+      liftName: "Face Pull",
+      history: [stackSession("Face Pull", 28, 15, 2)],
+      liftState: { ...dbState, currentWeight: 28, currentRepRange: { reps: 15, sets: 3 } },
+      muscleAnchor: null,
+      context: { readiness: "normal", currentWeight: 28 },
+    });
+    expect(result.decision).toBe("ADD");
+    expect(result.weight).toBeGreaterThan(28);
+    expect(result.weight).toBe(30);
+  });
+
+  it("an easy Tricep Pushdown at 32.5 kg adds to 35, not back onto 32.5", () => {
+    const result = computeNextPrescription({
+      liftName: "Tricep Pushdown",
+      history: [stackSession("Tricep Pushdown", 32.5, 12, 2)],
+      liftState: { ...dbState, currentWeight: 32.5, currentRepRange: { reps: 12, sets: 3 } },
+      muscleAnchor: null,
+      context: { readiness: "normal", currentWeight: 32.5 },
+    });
+    expect(result.decision).toBe("ADD");
+    expect(result.weight).toBe(35);
+  });
 });

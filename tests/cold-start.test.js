@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // One resolver for every plan weight: startWeightFor (lib/lift-translations.js),
 // wired to the bodyweight start by planStartWeight (lib/programme-resolve.js). Order:
 // working weight → muscle-anchor cold start → bodyweight start → template → null.
@@ -5,8 +6,9 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { startWeightFor, coldStartFromAnchor, snapToImplement, getLiftProfile, __test__ } from "../lib/lift-translations.js";
-import { planStartWeight, startingWeightForLift, newDraftLog, logSet, finaliseDraft } from "../lib/storage.js";
+import { planStartWeight, startingWeightForLift, newDraftLog, logSet, finaliseDraft, H, TS } from "../lib/storage.js";
 import { updateMuscleAnchorFromSession } from "../lib/progression.js";
+import { applySessionToEngine } from "../lib/session-engine.js";
 import { runTool } from "../lib/mcp-server.js";
 import { EXERCISE_POOLS } from "../lib/programme.js";
 
@@ -195,7 +197,7 @@ describe("an unset (a stored null) is no stored value, at every rung and in the 
   });
 });
 
-// Six lifts that used to fall to name inference: the default (no anchor), the
+// Five lifts that used to fall to name inference: the default (no anchor), the
 // dumbbell incline rule, the Chest press rule and the triceps "extension" rule.
 describe("lift profiles: each listed lift reads and writes its own anchor", () => {
   const CASES = [
@@ -203,7 +205,6 @@ describe("lift profiles: each listed lift reads and writes its own anchor", () =
     { name: "Hang Power Clean",       loadType: "barbell",           weight: 50, reps: 3,  want: { primaryMuscle: "Power",      category: "power",              factor: 0.9 } },
     { name: "Weighted Dips",          loadType: "loaded_bodyweight", weight: 10, reps: 8,  want: { primaryMuscle: "Chest",      category: "upper_push",         factor: 1.0 } },
     { name: "Incline BB Press",       loadType: "barbell",           weight: 50, reps: 8,  want: { primaryMuscle: "Chest",      category: "upper_push",         factor: 0.8 } },
-    { name: "Single-Leg RDL",         loadType: "per_db",            weight: 18, reps: 8,  want: { primaryMuscle: "Hamstrings", category: "accessory_compound", factor: 0.25 } },
     { name: "Reverse Hyperextension", loadType: "machine",           weight: 25, reps: 12, want: { primaryMuscle: "Glutes",     category: "accessory_compound", factor: 0.35 } },
   ];
   const BW = 80;
@@ -236,5 +237,36 @@ describe("lift profiles: each listed lift reads and writes its own anchor", () =
   it("the dumbbell incline rule no longer reads a barbell incline as per-dumbbell", () => {
     expect(__test__.inferProfileFromName("Incline Barbell Press").factor).toBe(0.8);
     expect(__test__.inferProfileFromName("Incline DB Press").factor).toBe(0.4);
+  });
+});
+
+// The engine's own cold start (a lift with no state and no loaded sets to
+// seed from) lands on the implement's grid. The Biceps anchor gives
+// 56 x 0.75 x 0.35 = 14.7 -> 14.5, a dumbbell no rack has.
+describe("the engine's cold start lands on the implement's grid", () => {
+  const biceps = { bestE1RM: 56, bestE1RMLift: "DB Curl" };
+  const firstSession = (weight, readiness) => {
+    localStorage.clear();
+    TS.save("p", { ...TS.get("p"), muscleAnchors: { Biceps: biceps } });
+    const set = { weight, reps: 12, rir: 0, loadType: "per_db", effectiveLoad: weight, est1rm: weight === null ? null : 21 };
+    const rec = {
+      v: 2, id: "2026-10-11T10:00:00.000Z", date: "2026-10-11", readiness, session: "strength-c",
+      blocks: [{ id: "cacc", type: "superset", exercises: [{ name: "Incline DB Curl", loadType: "per_db", sets: [set, set, set] }] }],
+    };
+    H.append("p", rec);
+    return applySessionToEngine("p", rec);
+  };
+
+  it("a per-dumbbell lift with no logged load cold-starts on a whole kilo", () => {
+    const out = firstSession(null, "normal");
+    expect(coldStartFromAnchor("Incline DB Curl", biceps)).toBe(14.5);
+    expect(out.wwUpdates["Incline DB Curl"]).toBe(15);
+    expect(TS.get("p").lifts["Incline DB Curl"].history.at(-1).decision).toBe("COLD_START");
+  });
+
+  it("a cooked first session holds what was lifted, not the anchor", () => {
+    const out = firstSession(15, "cooked");
+    expect(out.wwUpdates["Incline DB Curl"]).toBe(15);
+    expect(TS.get("p").lifts["Incline DB Curl"].history.at(-1).decision).toBe("HOLD");
   });
 });

@@ -806,13 +806,17 @@ async function bothPaths(setup) {
 
 // The real host, tap by tap: slow on a loaded runner, so a longer timeout.
 describe("W-C: Keep leaves the stores as the live finish does", { timeout: 30_000 }, () => {
-  it("a rep repair, a drum edit, a cold start carried by the drum, a bodyweight lift", async () => {
+  it("a rep repair, a drum edit, a first session lifted at the drum's weight, a bodyweight lift", async () => {
     const { L, K, live, res } = await bothPaths();
     expect(res.outcome).toBe("kept");
     expect(live).toMatchObject({ squatNudged: true, landmineNudged: true });
-    // The witnesses are really in the run.
+    // The witnesses are really in the run. Landmine Press's first session
+    // seeds its state from the drum's top set, and W progresses from it.
     const W = JSON.parse(L.weights);
-    expect(W[LANDMINE]).toBe(live.drum[LANDMINE]);
+    const landmine = JSON.parse(L.trainingState).lifts[LANDMINE];
+    expect(landmine.currentWeight).toBe(live.drum[LANDMINE]);
+    expect(landmine.history.at(-1).decision).not.toBe("COLD_START");
+    expect(W[LANDMINE]).toBe(landmine.nextPrescribed);
     expect(live.rec.blocks.flatMap((b) => b.exercises).find((e) => e.name === LANDMINE).sets[0].weight).not.toBe(live.drum[LANDMINE]);
     expect(JSON.parse(L.reps)[SQUAT]).toBe(5);
     expect(live.rec.blocks.flatMap((b) => b.exercises).find((e) => e.name === HIP).sets[0].bodyweightUsed).toBe(78);

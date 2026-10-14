@@ -11,6 +11,11 @@
 // gaps ("Back at it" over seven days, and a normal week), checked on the done
 // screen since the gap is never stored.
 //
+// Re-recorded for first-session seeding: a never-trained lift's first session
+// now holds or adds from its top set (HOLD, consecutiveHolds 1, the performed
+// rep range) instead of COLD_START, and the swapped-in Dumbbell Bench Press
+// keeps the drum's 28.
+//
 // Text queries, not getByRole: see SessionScreen.surface.test.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
