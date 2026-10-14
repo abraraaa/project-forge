@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { H, TS } from "../lib/storage.js";
 import { applySessionToEngine } from "../lib/session-engine.js";
+import { coldStartFromAnchor } from "../lib/lift-translations.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -289,5 +290,37 @@ describe("a lift's first logged session progresses from what was lifted", () => 
     const out = apply(firstRecord("Seated Calf Raise", "machine", 40, [15, 15, 15, 15], null), calves);
     expect(out.wwUpdates["Seated Calf Raise"]).toBe(40);
     expect(TS.get("p").lifts["Seated Calf Raise"].history.at(-1).decision).toBe("HOLD");
+  });
+
+  // A belted Pull-Up stores the added kg; effectiveLoad carries bodyweight.
+  const back = { Back: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" } };
+  const pullUp = (weight, rir) => {
+    const rec = firstRecord("Pull-Up", "loaded_bodyweight", weight, [8, 8, 8], rir);
+    for (const set of rec.blocks[0].exercises[0].sets) set.effectiveLoad = 80 + weight;
+    return rec;
+  };
+
+  it("a first belted pull-up progresses from the 10 kg added, never the anchor", () => {
+    const out = apply(pullUp(10, 3), back);
+    const w = out.wwUpdates["Pull-Up"];
+    // 10 kg plus one 1.25 kg rung at RIR 3.
+    expect(w).toBe(11.25);
+    expect(w).not.toBe(coldStartFromAnchor("Pull-Up", back.Back));
+    const lift = TS.get("p").lifts["Pull-Up"];
+    expect(lift.currentWeight).toBe(10);
+    expect(lift.history.at(-1).decision).not.toBe("COLD_START");
+  });
+
+  it("a first unloaded pull-up keeps the bodyweight cold start", () => {
+    const out = apply(pullUp(0, 3), back);
+    expect(out.wwUpdates["Pull-Up"]).toBe(0);
+    expect(out.wrUpdates).toEqual({});
+    expect(TS.get("p").lifts["Pull-Up"].history.at(-1).decision).toBe("COLD_START");
+  });
+
+  it("a cooked first belted pull-up holds 10 kg", () => {
+    const out = apply({ ...pullUp(10, 1), readiness: "cooked" }, back);
+    expect(out.wwUpdates["Pull-Up"]).toBe(10);
+    expect(TS.get("p").lifts["Pull-Up"].history.at(-1).decision).toBe("HOLD");
   });
 });
