@@ -26,14 +26,14 @@ const WHO = "Tess";
 const SQUAT = "Barbell Back Squat";
 const flat = (s) => s.replace(/\s+/g, " ").trim();
 
-function start({ weights = { [SQUAT]: 100 }, reps = {}, lifts = null } = {}) {
+function start({ weights = { [SQUAT]: 100 }, reps = {}, lifts = null, readiness = "Normal" } = {}) {
   P.setActive(WHO);
   P.saveWeights(WHO, weights);
   P.saveReps(WHO, reps);
   if (lifts) for (const [name, st] of Object.entries(lifts)) TS.updateLift(WHO, name, st);
   SessionIntent.stash(WHO, { sessionIdx: 0 });
   const view = render(<SessionHost />);
-  fireEvent.click(screen.getByText("Normal"));
+  fireEvent.click(screen.getByText(readiness));
   fireEvent.click(screen.getByText(/Start session/));
   expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(SQUAT);
   return view;
@@ -158,10 +158,43 @@ describe("what the session says about how the engine read the lift", () => {
     expect(screen.getByText("Moved your target to 4s. You've done that three times.")).toBeTruthy();
   });
 
+  it("a climbed target explains itself on the first set, and goes once it is logged", () => {
+    start({
+      weights: { [SQUAT]: 162.5 },
+      reps: { [SQUAT]: 7 },
+      lifts: { [SQUAT]: liftState({
+        currentWeight: 162.5, consecutiveHolds: 3, stallSignal: "stall",
+        currentRepRange: { reps: 7, sets: 3, baseReps: 5 },
+        history: [{ date: "2026-09-22", decision: "HOLD", rationale: ["decision_reason=performed_full_rir1_close_to_limit", "rep_climb_to=7"] }],
+      }) },
+    });
+    expect(repsCell().textContent).toBe("7");
+    const line = "7 reps, not 5. The weight has held for three sessions, so the reps climb to break the stall. Hit 7 at 9.5 or lower and the weight goes up next time.";
+    expect(screen.getByText(line)).toBeTruthy();
+    fireEvent.click(screen.getByText("Log set"));
+    expect(screen.getByText(line)).toBeTruthy(); // still there while the effort is picked
+    fireEvent.click(screen.getByText(/Log at/).closest("button"));
+    expect(screen.queryByText(/reps, not 5/)).toBeNull();
+  });
+
+  it("after a session to failure, the first set asks to finish at 9.5, and the line goes once it is logged", () => {
+    start({ lifts: { [SQUAT]: liftState({ history: [{ date: "2026-09-22", decision: "HOLD", rationale: ["last_performance=PERFORMED_FULL", "decision_reason=performed_full_rir0_grinder"] }] }) } });
+    const line = "Last time went to failure. Finish at 9.5 or lower today and the weight goes up next time.";
+    expect(screen.getByText(line)).toBeTruthy();
+    logSetAt();
+    expect(screen.queryByText(line)).toBeNull();
+  });
+
+  it("a cooked day promises no weight after a session to failure", () => {
+    start({ readiness: "Cooked", lifts: { [SQUAT]: liftState({ history: [{ date: "2026-09-22", decision: "HOLD", rationale: ["last_performance=PERFORMED_FULL", "decision_reason=performed_full_rir0_grinder"] }] }) } });
+    expect(screen.queryByText(/went to failure/)).toBeNull();
+  });
+
   it("says nothing on an ordinary lift", () => {
     start({ lifts: { [SQUAT]: liftState({ history: [{ date: "2026-09-22", decision: "ADD", rationale: ["decision_reason=performed_full_with_rir"] }] }) } });
     expect(screen.queryByText(/Own all/)).toBeNull();
     expect(screen.queryByText(/Moved your target/)).toBeNull();
+    expect(screen.queryByText(/went to failure|reps, not/)).toBeNull();
   });
 
   it("a last set short at full effort, the rest on target, is celebrated", async () => {

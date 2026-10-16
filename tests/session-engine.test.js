@@ -14,6 +14,8 @@ import { dirname, resolve } from "node:path";
 import { H, TS } from "../lib/storage.js";
 import { applySessionToEngine } from "../lib/session-engine.js";
 import { coldStartFromAnchor } from "../lib/lift-translations.js";
+import { lastSessionNote } from "../lib/progression.js";
+import { SESSION_COPY } from "../lib/session-copy.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -210,6 +212,14 @@ describe("bodyweight rep climb reaches the session", () => {
     expect(out.wwUpdates["Pull-Up"]).toBeGreaterThan(5);
   });
 
+  it("a belted session after an unloaded climb banks at RPE 9 too", () => {
+    TS.save("p", { lifts: { "Pull-Up": { currentWeight: 0, sessionsCount: 5, consecutiveAdds: 0, consecutiveHolds: 0, history: [],
+      currentRepRange: { reps: 11, sets: 3, baseReps: 8, bwClimb: true } } } });
+    const out = apply(bwRecord("Pull-Up", 11, { loadType: "loaded_bodyweight", weight: 5, rir: 1 }));
+    expect(out.wrUpdates["Pull-Up"]).toBe(8);
+    expect(out.wwUpdates["Pull-Up"]).toBeGreaterThan(5);
+  });
+
   it("a timed hold logged as integer seconds still never climbs", () => {
     seed("L-Sit Hold");
     apply(bwRecord("L-Sit Hold", "20s", { rir: 3 }));
@@ -225,6 +235,113 @@ describe("bodyweight rep climb reaches the session", () => {
     const out = apply(bwRecord("L-Sit Hold", 25, { rir: 3 }));
     expect(out.wrUpdates).toEqual({});
     expect(TS.get("p").lifts["L-Sit Hold"].currentRepRange).toMatchObject({ reps: 25, timed: true });
+  });
+});
+
+// The loaded rep climb reaches the session the same way: a stall met short
+// of failure raises the target, at most to base + 2, and hitting the top of
+// it at RPE 9.5 banks one rung of weight. Misses and failure never climb.
+describe("loaded rep climb reaches the session", () => {
+  beforeEach(() => localStorage.clear());
+  const SQUAT = "Barbell Back Squat";
+  let n = 0;
+  // Live-shaped: every set logs the target the session showed.
+  const squat = (weight, reps, rir, readiness = "normal") => {
+    n += 1;
+    const counts = Array.isArray(reps) ? reps : [reps, reps, reps];
+    const at = new Date(Date.UTC(2026, 9, n, 10)).toISOString();
+    return {
+      v: 2, id: at, date: at.slice(0, 10), readiness, session: "strength-a",
+      blocks: [{ id: "a1", type: "main", exercises: [{
+        name: SQUAT, muscle: "Quadriceps", loadType: "barbell",
+        sets: counts.map((r) => ({ weight, reps: r, rir, loadType: "barbell", effectiveLoad: weight, est1rm: weight * (1 + r / 30) })),
+      }] }],
+    };
+  };
+  const seed = (extra = {}) => TS.save("p", { lifts: { [SQUAT]: {
+    currentWeight: 162.5, sessionsCount: 8, consecutiveAdds: 0, consecutiveHolds: 0, consecutiveLightMisses: 0,
+    stallSignal: null, history: [], currentRepRange: { reps: 5, sets: 3, baseReps: 5 }, ...extra,
+  } } });
+  const apply = (rec) => { H.append("p", rec); return applySessionToEngine("p", rec); };
+  const lift = () => TS.get("p").lifts[SQUAT];
+
+  it("three tight holds stall it; the next two climb 5 to 6 to 7; 7 at RPE 9.5 banks to 165 x 5", () => {
+    seed();
+    for (let i = 0; i < 3; i++) {
+      const out = apply(squat(162.5, 5, 1));
+      expect(out.wrUpdates).toEqual({});
+      expect(out.wwUpdates[SQUAT]).toBe(162.5);
+    }
+    expect(lift().stallSignal).toBe("stall");
+    expect(apply(squat(162.5, 5, 1)).wrUpdates[SQUAT]).toBe(6);
+    expect(apply(squat(162.5, 6, 1)).wrUpdates[SQUAT]).toBe(7);
+    expect(lift().currentRepRange).toMatchObject({ reps: 7, baseReps: 5 });
+    const out = apply(squat(162.5, 7, 0.5));
+    expect(out.wwUpdates[SQUAT]).toBe(165);
+    expect(out.wrUpdates[SQUAT]).toBe(5);
+    expect(lift().consecutiveHolds).toBe(0);
+  });
+
+  it("the next card's note: the climb with its numbers, then failure, then nothing", () => {
+    seed({ consecutiveHolds: 3, stallSignal: "stall" });
+    apply(squat(162.5, 5, 1));
+    expect(lastSessionNote(lift())).toEqual({ kind: "rep_climb", reps: 6, base: 5, holds: 4, banks: false });
+    expect(SESSION_COPY.repClimb(lastSessionNote(lift())))
+      .toBe("6 reps, not 5. The weight has held for four sessions, so the reps climb to break the stall.");
+    apply(squat(162.5, 6, 1));
+    expect(SESSION_COPY.repClimb(lastSessionNote(lift())))
+      .toBe("7 reps, not 5. The weight has held for five sessions, so the reps climb to break the stall. Hit 7 at 9.5 or lower and the weight goes up next time.");
+    apply(squat(162.5, 7, 0.5));
+    expect(lastSessionNote(lift())).toBe(null);
+    apply(squat(165, 5, 0));
+    expect(lastSessionNote(lift())).toEqual({ kind: "failure" });
+    apply(squat(165, 5, 0.5));
+    expect(lastSessionNote(lift())).toBe(null);
+    expect(lift().nextPrescribed).toBe(167.5);
+  });
+
+  it("7 at RPE 10 holds 162.5 x 7", () => {
+    seed({ consecutiveHolds: 5, stallSignal: "deep_stall", currentRepRange: { reps: 7, sets: 3, baseReps: 5 } });
+    const out = apply(squat(162.5, 7, 0));
+    expect(out.wwUpdates[SQUAT]).toBe(162.5);
+    expect(out.wrUpdates).toEqual({});
+    expect(lift().currentRepRange).toMatchObject({ reps: 7, baseReps: 5 });
+  });
+
+  it("a miss at a stall holds 5: 3 of 5 on the last set changes no target", () => {
+    seed({ consecutiveHolds: 3, stallSignal: "stall" });
+    const out = apply(squat(162.5, [5, 5, 3], 0));
+    expect(out.wrUpdates).toEqual({});
+    expect(lift().currentRepRange).toMatchObject({ reps: 5, baseReps: 5 });
+  });
+
+  it("a miss on a climbed target drops the weight and posts 5 again", () => {
+    seed({ consecutiveHolds: 5, stallSignal: "deep_stall", currentRepRange: { reps: 7, sets: 3, baseReps: 5 } });
+    const out = apply(squat(162.5, [7, 5, 5], 0));
+    expect(out.wwUpdates[SQUAT]).toBeLessThan(162.5);
+    expect(out.wrUpdates[SQUAT]).toBe(5);
+    expect(lift().currentRepRange).toMatchObject({ reps: 5, baseReps: 5 });
+    expect(lastSessionNote(lift())).toBe(null);
+  });
+
+  it("a cooked day after failure keeps the failure note and the add after it", () => {
+    seed({ currentWeight: 165 });
+    apply(squat(165, 5, 0));
+    apply(squat(165, 5, 1, "cooked"));
+    expect(lastSessionNote(lift())).toEqual({ kind: "failure" });
+    apply(squat(165, 5, 0.5));
+    expect(lift().nextPrescribed).toBe(167.5);
+  });
+
+  it("three grinders then a grinder holds 162.5 x 5 and builds the stall", () => {
+    seed();
+    for (let i = 0; i < 4; i++) {
+      const out = apply(squat(162.5, 5, 0));
+      expect(out.wrUpdates).toEqual({});
+      expect(out.wwUpdates[SQUAT]).toBe(162.5);
+    }
+    expect(lift().consecutiveHolds).toBe(4);
+    expect(lift().stallSignal).toBe("deep_stall");
   });
 });
 

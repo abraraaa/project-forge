@@ -73,7 +73,8 @@ describe("repClimb — output, not a smaller step", () => {
     expect(repClimb({ stallSignal: "deep_stall", baseReps: 8, currentReps: 9 })).toEqual({ reps: 10, changed: true });
   });
 
-  it("stops climbing at the ceiling rather than growing forever", () => {
+  it("stops climbing two over base rather than growing forever", () => {
+    expect(repClimb({ stallSignal: "deep_stall", baseReps: 8, currentReps: 10 })).toEqual({ reps: 10, changed: false });
     expect(repClimb({ stallSignal: "stall", baseReps: 8, currentReps: 11 })).toEqual({ reps: 11, changed: false });
   });
 });
