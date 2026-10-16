@@ -10,15 +10,18 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
-// Text next/font prints when it cannot reach Google: either the stylesheet
-// fetch ("Failed to fetch Bodoni Moda from Google Fonts.") or the font file
-// download ("There was an issue establishing a connection while requesting
-// https://fonts.gstatic.com/..."). Both name a Google Fonts host. Config
-// errors (an unknown weight, say) must not match: they would otherwise ship
-// the local fonts silently.
+// Text next/font prints when it cannot reach Google: the stylesheet fetch
+// ("Failed to fetch Bodoni Moda from Google Fonts."), the font file download
+// ("There was an issue establishing a connection while requesting
+// https://fonts.gstatic.com/..."), or Turbopack failing to resolve the font
+// file it could not download ("Can't resolve '@vercel/turbopack-next/internal/
+// font/google/font'", with the host cut short in the printed URL). Config
+// errors (an unknown weight, say) print a different path and must not match:
+// they would otherwise ship the local fonts silently.
 const FETCH_FAILURE = [
   /Failed to fetch .+ from Google Fonts/,
   /fonts\.(googleapis|gstatic)\.com/,
+  /Can't resolve '@vercel\/turbopack-next\/internal\/font\/google\/font'/,
 ];
 
 /** True when build output shows a failed Google Fonts fetch. */

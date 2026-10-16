@@ -121,6 +121,18 @@ describe("build wrapper", () => {
     expect(isGoogleFontFetchFailure(output)).toBe(true);
   });
 
+  it("recognises Turbopack failing to resolve a font file it could not download (host cut short)", () => {
+    const output = [
+      "> Build error occurred",
+      "Error: Turbopack build failed with 8 errors:",
+      "[next]/internal/font/google/bodoni_moda_aff26625.module.css:7:8",
+      "Error: Module not found: Can't resolve '@vercel/turbopack-next/internal/font/google/font'",
+      "  src: url(@vercel/turbopack-next/internal/font/google/font?{%22url%22:%22https://fonts.gs...",
+      "next/font/google queries have exactly one entry",
+    ].join("\n");
+    expect(isGoogleFontFetchFailure(output)).toBe(true);
+  });
+
   it("does not retry an unrelated build error", () => {
     const syntax = [
       "> Build error occurred",
