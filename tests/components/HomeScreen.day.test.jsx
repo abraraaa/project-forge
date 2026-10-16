@@ -6,7 +6,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { Profiler } from "react";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import HomeScreen from "../../components/HomeScreen.jsx";
-import { WEEK, SESSIONS } from "../../lib/programme.js";
+import { WEEK, SESSIONS, EXERCISE_POOLS } from "../../lib/programme.js";
 import { makeDayContext, resolveRange, sessionsFrom } from "../../lib/day-state.js";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
@@ -112,5 +112,46 @@ describe("home clock — header and strip roll over together (#55)", () => {
     const settled = commits;
     act(() => { vi.advanceTimersByTime(5 * 60_000); });
     expect(commits).toBe(settled);
+  });
+});
+
+// The day card prints what the session will open with: the live rep target
+// and working weight, not the programme template.
+describe("home day card — rows read the live prescription", () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 8, 25, 9, 0)); }); // Fri 25 Sep
+
+  const rowFor = (name) => screen.getByText(name).nextSibling.textContent;
+
+  // Today's session is A (Back Squat 3 × 5 from 55 kg in the template).
+  it("a stored target and working weight print as the session shows them", () => {
+    render(home({ workingReps: { "Barbell Back Squat": 7 }, workingWeights: { "Barbell Back Squat": 162.5 } }));
+    expect(rowFor("Barbell Back Squat")).toBe("3 × 7 at 162.5 kg");
+    expect(document.body.textContent).not.toMatch(/× 5 from 55 kg/);
+  });
+
+  it("a lift with no working weight prints from its planned start, not the template", () => {
+    render(home({ bodyweight: 80 }));
+    expect(rowFor("Barbell Bench Press")).toBe("3 × 5 from 52.5 kg");
+  });
+
+  it("a target the session would repair prints repaired", () => {
+    render(home({ workingReps: { "Barbell Back Squat": 3 }, workingWeights: { "Barbell Back Squat": 140 } }));
+    expect(rowFor("Barbell Back Squat")).toBe("3 × 5 at 140 kg");
+  });
+
+  it("a pure bodyweight lift prints no weight, even beside a loaded partner", () => {
+    render(home({ workingWeights: { "Landmine Press": 30 } }));
+    expect(rowFor("45-Degree Hip Extension ↔ Landmine Press")).toBe("3 × 15");
+  });
+
+  it("a per-dumbbell row prints its per-side target and the dumbbell weight", () => {
+    render(home({ workingWeights: { "DB Reverse Lunge": 18 } }));
+    expect(rowFor("DB Reverse Lunge ↔ Chest-Supported DB Row")).toBe("3 × 8/leg at 18 kg");
+  });
+
+  it("a timed hold prints seconds and no weight", () => {
+    const hold = EXERCISE_POOLS["afin-A"].pool.find((ex) => ex.name === "L-Sit Hold");
+    render(home({ programmeBlock: { config: { "afin-A": hold } } }));
+    expect(rowFor("L-Sit Hold ↔ Standing Calf Raise")).toBe("4 × 20s");
   });
 });
