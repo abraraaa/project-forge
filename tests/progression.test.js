@@ -35,7 +35,7 @@ import {
   __test__,
   __test_p3__,
 } from "../lib/progression.js";
-import { startingWeightForLift, roundToHalfPlate } from "../lib/storage.js";
+import { startingWeightForLift, roundToHalfPlate, computeEffectiveLoad } from "../lib/storage.js";
 import { mondayOfWeekIso, addDaysIso } from "../lib/dates.js";
 import {
   coldStartFromAnchor, sanitiseWorkingWeights, CATEGORY_COLD_START_MAX_KG,
@@ -1542,5 +1542,126 @@ describe("prescriptions land on weights the implement has", () => {
     });
     expect(result.decision).toBe("ADD");
     expect(result.weight).toBe(35);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Assisted lifts: the stored kg is assistance, so progress takes it away.
+// One rung is the implement grid for assisted_bodyweight, 1.25 kg.
+// Bodyweight 80, 20 kg of band assistance, base 8.
+// ────────────────────────────────────────────────────────────────────────────
+describe("assisted lifts progress by taking assistance away", () => {
+  const ASSISTED = "assisted_bodyweight";
+  const BODY = 80;
+  const assistedSet = (assist, reps, rir, effective = BODY - assist) => ({
+    weight: assist, reps, rir, loadType: ASSISTED, bodyweightUsed: BODY,
+    effectiveLoad: effective, volume: effective === null ? null : effective * reps,
+  });
+  // A pull-up logged with band assistance: a load-progressing profile.
+  const run = ({ assist = 20, reps = [8, 8, 8], rir = 3, loadType = ASSISTED, liftState = {}, effective = BODY - assist } = {}) => {
+    const sets = reps.map((r) => (loadType === ASSISTED
+      ? assistedSet(assist, r, rir, effective)
+      : { weight: assist, reps: r, rir, loadType, bodyweightUsed: BODY, effectiveLoad: BODY + assist, volume: (BODY + assist) * r }));
+    const ex = { ...buildExercise({ name: "Pull-Up", muscle: "Back", sets, prescribed: { sets: 3, reps: 8, weight: assist } }), loadType };
+    return computeNextPrescription({
+      liftName: "Pull-Up",
+      history: [buildSession({ exercises: [ex] })],
+      liftState: {
+        currentWeight: assist, currentRepRange: { reps: 8, sets: 3, baseReps: 8 },
+        consecutiveHolds: 0, consecutiveAdds: 0, stallSignal: null, sessionsCount: 3, history: [],
+        ...liftState,
+      },
+      context: { readiness: "normal", loadType },
+    });
+  };
+
+  it("a full session at RIR 3 takes one rung of assistance off: 20 to 18.75", () => {
+    const r = run();
+    expect(r.decision).toBe("ADD");
+    expect(r.weight).toBe(18.75);
+  });
+
+  it("a double rung takes two off: 20 to 17.5", () => {
+    expect(__test__.applyMovement("ADD", 20, "bw_progression", null, ASSISTED, 2)).toBe(17.5);
+    expect(__test__.applyMovement("ADD", 20, "upper_pull", null, ASSISTED, 2)).toBe(17.5);
+    // Through the engine: 2.5 kg is well inside 10% of the 60 kg lifted.
+    const r = run({ liftState: { consecutiveAdds: 3 } });
+    expect(r.rationale).toContain("climbing_double_rung");
+    expect(r.weight).toBe(17.5);
+  });
+
+  it("the double rung's jump cap reads the load lifted, not the assistance", () => {
+    // 2.5 kg of help leaves 77.5 kg lifted: two rungs take it to 0.
+    expect(run({ assist: 2.5, liftState: { consecutiveAdds: 3 } }).weight).toBe(0);
+    // 60 kg of help leaves 20 kg lifted: 2.5 kg is over 10% of it, one rung.
+    const heavyHelp = run({ assist: 60, liftState: { consecutiveAdds: 3 } });
+    expect(heavyHelp.rationale).not.toContain("climbing_double_rung");
+    expect(heavyHelp.weight).toBe(58.75);
+  });
+
+  it("with no load lifted logged (bodyweight unknown) the double rung is one rung", () => {
+    const r = run({ effective: null, liftState: { consecutiveAdds: 3 } });
+    expect(r.rationale).not.toContain("climbing_double_rung");
+    expect(r.weight).toBe(18.75);
+  });
+
+  it("Assisted Pull-Up's profile progresses by reps, so its assistance does not move", () => {
+    const sets = [8, 8, 8].map((n) => assistedSet(20, n, 3));
+    const ex = { ...buildExercise({ name: "Assisted Pull-Up", muscle: "Back", sets, prescribed: { sets: 3, reps: 8, weight: 20 } }), loadType: ASSISTED };
+    const r = computeNextPrescription({
+      liftName: "Assisted Pull-Up",
+      history: [buildSession({ exercises: [ex] })],
+      liftState: { currentWeight: 20, consecutiveHolds: 0, consecutiveAdds: 0, stallSignal: null, sessionsCount: 3, history: [] },
+      context: { readiness: "normal", loadType: ASSISTED },
+    });
+    expect(r.weight).toBeNull();
+    expect(r.reps).toBe(9);
+    expect(r.rationale).toContain("bw_rep_progression");
+  });
+
+  it("a heavy miss puts two rungs back: 20 to 22.5", () => {
+    const r = run({ reps: [4, 4, 4], rir: 0 });
+    expect(r.decision).toBe("DROP_10");
+    expect(r.weight).toBe(22.5);
+  });
+
+  it("DROP_5 puts one rung back, HOLD keeps the assistance", () => {
+    expect(__test__.applyMovement("DROP_5", 20, "upper_pull", null, ASSISTED)).toBe(21.25);
+    expect(__test__.applyMovement("DROP_10", 20, "upper_pull", null, ASSISTED)).toBe(22.5);
+    expect(__test__.applyMovement("HOLD", 20, "upper_pull", null, ASSISTED)).toBe(20);
+  });
+
+  it("never goes below 0 assistance", () => {
+    expect(__test__.applyMovement("ADD", 1.25, "upper_pull", null, ASSISTED)).toBe(0);
+    expect(__test__.applyMovement("ADD", 1.25, "upper_pull", null, ASSISTED, 2)).toBe(0);
+  });
+
+  it("at 0 a full session at RIR 3 holds 0 with assistance_at_zero, and that is not a stall", () => {
+    const r = run({ assist: 0, liftState: { consecutiveHolds: 2 } });
+    expect(r.decision).toBe("HOLD");
+    expect(r.weight).toBe(0);
+    expect(r.decisionReason).toBe("assistance_at_zero");
+    expect(r.rationale).toContain("assistance_at_zero");
+    const ex = { name: "Pull-Up", loadType: ASSISTED, sets: [8, 8, 8].map((n) => assistedSet(0, n, 3)) };
+    const state = updateLiftStateFromSession(
+      { currentWeight: 0, consecutiveHolds: 2, history: [] }, { date: "2026-04-27", readiness: "normal" }, ex, r,
+    );
+    expect(state.consecutiveHolds).toBe(0);
+  });
+
+  it("at 0 a heavy miss puts two rungs of assistance back", () => {
+    const r = run({ assist: 0, reps: [4, 4, 4], rir: 0 });
+    expect(r.decision).toBe("DROP_10");
+    expect(r.weight).toBe(2.5);
+  });
+
+  it("effective load is bodyweight minus assistance: 80 with 20 is 60", () => {
+    expect(computeEffectiveLoad(ASSISTED, 20, BODY)).toBe(60);
+  });
+
+  it("a loaded bodyweight lift's ADD still adds: 10 to 11.25", () => {
+    const r = run({ assist: 10, loadType: "loaded_bodyweight" });
+    expect(r.decision).toBe("ADD");
+    expect(r.weight).toBe(11.25);
   });
 });

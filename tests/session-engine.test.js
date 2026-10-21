@@ -435,6 +435,27 @@ describe("a lift's first logged session progresses from what was lifted", () => 
     expect(TS.get("p").lifts["Pull-Up"].history.at(-1).decision).toBe("COLD_START");
   });
 
+  // Assistance kg is help, not load to add to: an assisted first session is
+  // not seeded, so it keeps the cold start whichever way the lift's profile reads.
+  it("a first assisted pull-up keeps the cold start", () => {
+    // Assisted Pull-Up progresses by reps (no weight written); a pull-up
+    // logged assisted holds the 20 kg it started from.
+    for (const [name, ww] of [["Assisted Pull-Up", undefined], ["Pull-Up", 20]]) {
+      localStorage.clear();
+      const rec = firstRecord(name, "assisted_bodyweight", 20, [8, 8, 8], 3);
+      for (const set of rec.blocks[0].exercises[0].sets) {
+        set.bodyweightUsed = 80;
+        set.effectiveLoad = 60;
+        set.est1rm = 60 * (1 + 8 / 30);
+      }
+      const out = apply(rec, back);
+      expect(out.wwUpdates[name], name).toBe(ww);
+      const lift = TS.get("p").lifts[name];
+      expect(lift.history.at(-1).decision, name).toBe("COLD_START");
+      expect(lift.currentWeight, name).toBe(20);
+    }
+  });
+
   it("a cooked first belted pull-up holds 10 kg", () => {
     const out = apply({ ...pullUp(10, 1), readiness: "cooked" }, back);
     expect(out.wwUpdates["Pull-Up"]).toBe(10);
