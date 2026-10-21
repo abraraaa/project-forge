@@ -1,12 +1,15 @@
 // app/trainer/terms/page.jsx — the Trainer Terms. Server-rendered, plain, like
-// /privacy. Changing the words means bumping TRAINER_TERMS_VERSION in
-// lib/trainer-terms.js, so trainers re-accept.
+// /privacy. Changing the words means bumping TRAINER_TERMS_VERSION and
+// TRAINER_TERMS_SINCE in lib/trainer-terms.js, so trainers are told.
 import Link from "next/link";
 import { T, DISPLAY } from "@/lib/tokens";
+import { TRAINER_TERMS_SINCE, termsDate } from "@/lib/trainer-terms";
 import Glyph from "@/components/Glyph";
 
 const KICKER = "For trainers";
 const CONTACT = "ab@heatwayve.app";
+// When the current version took effect, as the roster's notice says it.
+const SINCE = termsDate(TRAINER_TERMS_SINCE);
 
 export const metadata = {
   title: "Trainer Terms",
@@ -43,6 +46,7 @@ const SECTIONS = [
       "Keep it private. Don't pass it on, sell it or publish it, and don't share it with another service.",
       "You decide what you do with what you see, so you're responsible for it under data protection law, as its controller. Your own private coaching notes are fine: keep them secure, and delete them when you stop coaching that client.",
       "A copy you download of what a client shares is still their data. Delete it when they stop sharing with you, or if they ask.",
+      "Log a session with a client only when you trained them.",
     ],
   },
   {
@@ -61,7 +65,7 @@ const SECTIONS = [
   },
   {
     h: "Changes",
-    p: ["If these terms change, we'll ask you to accept the new version before you see your clients' training again."],
+    p: ["If these terms change, we'll tell you on your client list. Carrying on after that means you accept the new version."],
   },
   {
     h: "Law",
@@ -82,6 +86,7 @@ export default function TrainerTermsPage() {
         <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>{KICKER}</div>
         <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: 0 }}>Trainer Terms</h1>
         <p style={{ ...P, fontSize: 16, marginTop: 14 }}>Your clients choose to share their training with you. Here's what that asks of you.</p>
+        {SINCE && <p data-terms-since="" style={{ fontSize: 13, color: T.ink3, margin: "4px 0 0" }}>Updated {SINCE}</p>}
       </div>
       {SECTIONS.map((s) => (
         <section key={s.h} style={{ marginTop: 36 }}>

@@ -277,6 +277,14 @@ describe("POST /api/share/peek", () => {
     expect(writes()).toEqual([]);
   });
 
+  it("a trainer on an older Terms version still peeks", async () => {
+    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "draft-2026-10-05b" };
+    invite(T, CODE);
+    const res = await peek(CODE);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ trainer: { name: "Tia" }, expiresAt: db.invites[0].expires_at });
+  });
+
   it("a spaced lowercase code, a dashed code and a whole share link all peek", async () => {
     invite(T, CODE);
     for (const typed of [formatCode(CODE).toLowerCase(), "abcd-efgh-jkmn", shareUrl(CODE)]) {
@@ -293,7 +301,7 @@ describe("POST /api/share/peek", () => {
     expect(writes()).toEqual([]);
   });
 
-  it("one byte-identical 404 for malformed, unknown, used, expired, closed, non-trainer, stale-terms and not-open codes", async () => {
+  it("one byte-identical 404 for malformed, unknown, used, expired, closed, non-trainer, no-terms and not-open codes", async () => {
     const cases = {
       malformed: () => "ABCD",
       "with a U": () => "ABCDEFGHJKMU",
@@ -302,7 +310,7 @@ describe("POST /api/share/peek", () => {
       expired: () => invite(T, CODE, { expiresAt: Date.now() - 1 }),
       "closed trainer": () => { db.accounts.get(T).deleted_at = "2026-10-02T00:00:00.000Z"; return invite(T, CODE); },
       "not a trainer": () => { db.accounts.get(T).roles = ["lifter"]; return invite(T, CODE); },
-      "stale terms": () => { db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" }; return invite(T, CODE); },
+      "no terms": () => { db.accounts.get(T).trainer_terms = null; return invite(T, CODE); },
       "terms without 18+": () => { db.accounts.get(T).trainer_terms = { version: TRAINER_TERMS_VERSION }; return invite(T, CODE); },
       // With the switch closed: only the admin's codes peek, whatever the preview list says.
       "not open (a trainer other than the admin)": () => { switchLive.value = false; return invite(N, CODE_N); },

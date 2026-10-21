@@ -1,10 +1,12 @@
 // Trainer Terms and share consent: copy pinned with its version, the server
 // validators, the launch switches, and the public-name rule.
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
-  TRAINER_LIVE, APPLICATIONS_OPEN, TRAINER_TERMS_VERSION, KNOWN_TRAINER_TERMS_VERSIONS, TRAINER_TERMS_COPY,
-  acceptedTrainerTermsVersion, isCurrentTrainerTerms,
+  TRAINER_LIVE, APPLICATIONS_OPEN, TRAINER_TERMS_VERSION, TRAINER_TERMS_SINCE, KNOWN_TRAINER_TERMS_VERSIONS, TRAINER_TERMS_COPY,
+  acceptedTrainerTermsVersion, isCurrentTrainerTerms, hasTrainerTerms, trainerTermsChange, termsDate,
   SHARE_CONSENT_VERSION, SHARE_COPY, acceptedShareConsentVersion, TRAINER_SCOPE,
 } from "../lib/trainer-terms.js";
 import { trainerOpenFor, shareOpenFor, applyOpenFor } from "../lib/auth-server.js";
@@ -12,13 +14,15 @@ import { publicName, SIGNAL_KEYS } from "../lib/trainer-view.js";
 import { HORIZON_DAYS, LIVE_SLICES } from "../lib/trainer-change.js";
 import { PLAN_KEYS } from "../lib/trainer-plan.js";
 
+const CURRENT_REC = { version: TRAINER_TERMS_VERSION, at: "2026-10-21T00:00:00.000Z", adult: true };
 const strings = (o) => (typeof o === "string" ? [o] : Object.values(o).flatMap(strings));
 
 describe("trainer terms", () => {
   it("is live, with the owner's accepted version", () => {
     expect(TRAINER_LIVE).toBe(true);
     expect(APPLICATIONS_OPEN).toBe(true);
-    expect(TRAINER_TERMS_VERSION).toBe("draft-2026-10-05b");
+    expect(TRAINER_TERMS_VERSION).toBe("draft-2026-10-21");
+    expect(TRAINER_TERMS_SINCE).toBe("2026-10-21");
     expect(KNOWN_TRAINER_TERMS_VERSIONS).toEqual([TRAINER_TERMS_VERSION]);
     expect(TRAINER_SCOPE).toBe("trainer:read");
   });
@@ -29,6 +33,7 @@ describe("trainer terms", () => {
         "Clients choose to share with you, and can stop at any time.",
         "Use it only to coach them, and keep it private.",
         "Change a client's plan only to coach them. They see every change and can undo it.",
+        "Log a session with a client only when you trained them.",
         "You're 18 or over.",
         "Free.",
       ],
@@ -40,8 +45,8 @@ describe("trainer terms", () => {
     for (const v of strings(TRAINER_TERMS_COPY)) expect(v).not.toMatch(/server/i);
   });
 
-  it("the version moved with the plan-changes and download lines: the previous ones are refused", () => {
-    for (const old of ["draft-2026-10", "draft-2026-10-05"]) {
+  it("the version moved with the plan-changes, download and session lines: the previous ones are refused", () => {
+    for (const old of ["draft-2026-10", "draft-2026-10-05", "draft-2026-10-05b"]) {
       expect(TRAINER_TERMS_VERSION).not.toBe(old);
       expect(acceptedTrainerTermsVersion({ version: old })).toBeNull();
       expect(isCurrentTrainerTerms({ version: old, adult: true })).toBe(false);
@@ -75,6 +80,55 @@ describe("trainer terms", () => {
     expect(acceptedTrainerTermsVersion({ version: TRAINER_TERMS_VERSION })).toBe(TRAINER_TERMS_VERSION);
     for (const bad of [undefined, null, TRAINER_TERMS_VERSION, {}, { version: 1 }, { version: "2026-01" }, [TRAINER_TERMS_VERSION], { version: SHARE_CONSENT_VERSION }]) {
       expect(acceptedTrainerTermsVersion(bad)).toBeNull();
+    }
+  });
+
+  it("the Terms page carries the session line, says a change is told, not gated, and shows the date", () => {
+    const page = readFileSync(new URL("../app/trainer/terms/page.jsx", import.meta.url), "utf8");
+    expect(page).toContain("Log a session with a client only when you trained them.");
+    expect(page).toContain("we'll tell you on your client list. Carrying on after that means you accept the new version.");
+    expect(page).not.toContain("before you see your clients' training again");
+    expect(page).toContain("termsDate(TRAINER_TERMS_SINCE)");
+  });
+
+  it("hasTrainerTerms: some version accepted, with adult: true", () => {
+    for (const ok of [CURRENT_REC, { version: "draft-2026-10-05b", at: "x", adult: true }, { version: "older", adult: true }]) {
+      expect(hasTrainerTerms(ok)).toBe(true);
+    }
+    for (const bad of [null, undefined, {}, { adult: true }, { version: "", adult: true }, { version: 1, adult: true },
+      { version: TRAINER_TERMS_VERSION }, { version: TRAINER_TERMS_VERSION, adult: "true" }, { version: "older", adult: 1 }]) {
+      expect(hasTrainerTerms(bad)).toBe(false);
+    }
+  });
+
+  it("trainerTermsChange: the current version and its date for an older acceptance, else null", () => {
+    expect(trainerTermsChange({ version: "draft-2026-10-05b", at: "x", adult: true }))
+      .toEqual({ version: TRAINER_TERMS_VERSION, since: TRAINER_TERMS_SINCE });
+    for (const none of [CURRENT_REC, null, undefined, {}, { version: "older" }, { version: "older", adult: false }]) {
+      expect(trainerTermsChange(none)).toBeNull();
+    }
+  });
+
+  it("a bump is one constant: no other source names the version, and the old one becomes a change", () => {
+    const files = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? files(join(dir, e.name)) : /\.(js|jsx)$/.test(e.name) ? [join(dir, e.name)] : []);
+    const root = fileURLToPath(new URL("..", import.meta.url));
+    const naming = ["lib", "app", "components"].flatMap((d) => files(join(root, d)))
+      .filter((f) => readFileSync(f, "utf8").includes(TRAINER_TERMS_VERSION));
+    expect(naming.map((f) => f.slice(root.length))).toEqual(["lib/trainer-terms.js"]);
+    expect(KNOWN_TRAINER_TERMS_VERSIONS).toEqual([TRAINER_TERMS_VERSION]);
+    expect(termsDate(TRAINER_TERMS_SINCE)).not.toBe("");
+  });
+
+  it("termsDate reads a calendar date, and nothing else", () => {
+    expect(termsDate("2026-10-21")).toBe("21 October 2026");
+    expect(termsDate("2026-01-05")).toBe("5 January 2026");
+    expect(termsDate("2028-02-29")).toBe("29 February 2028");
+    expect(termsDate("2000-02-29")).toBe("29 February 2000");
+    expect(termsDate("2026-04-30")).toBe("30 April 2026");
+    for (const bad of [undefined, null, 20261021, "", "2026-13-01", "2026-10-00", "21 October 2026", "2026-10-21T00:00:00Z",
+      "2026-02-31", "2026-02-29", "1900-02-29", "2026-04-31", "2026-11-31", "2026-10-32"]) {
+      expect(termsDate(bad)).toBe("");
     }
   });
 

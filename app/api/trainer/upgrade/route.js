@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 // POST /api/trainer/upgrade  { authToken, profile, terms: { version }, adult: true }
 //   -> { ok, name } + the trainer cookie.
 // A fresh heatwayve.app Face ID, 18+ and the current Trainer Terms. Two
-// callers only: a trainer re-accepting changed terms, and the admin's own
+// callers only: a trainer who never accepted the Terms, and the admin's own
 // self-grant. Everyone else applies (/api/trainer/apply): 403 { apply }.
 // Free; plan is never written.
 export async function POST(request) {

@@ -5,7 +5,9 @@
 // /trainer: the trainer's dashboard. Signed out it asks for a Heatwayve name
 // and a quiet Face ID (no lifter cookies are left on this device). Someone
 // who isn't a trainer applies here; the admin sets up directly, and a trainer
-// accepts changed Trainer Terms here. Signed in it lists the clients who
+// who never accepted the Trainer Terms does so here. When the Terms change,
+// the roster carries a notice and Continue accepts them; nothing is locked
+// out meanwhile. Signed in it lists the clients who
 // share with them under the trainer's own training (the "You" row), opens one
 // at a time in the pane, and shows an invite code. For a client who has the
 // trainer's changes on, the pane sends plan changes through
@@ -31,7 +33,7 @@ import { authenticatePasskey } from "@/lib/webauthn";
 import { fetchWithTimeout } from "@/lib/net";
 import { todayLocalIso } from "@/lib/dates";
 import { formatCode, shareUrl } from "@/lib/trainer-code";
-import { TRAINER_TERMS_COPY, TRAINER_TERMS_VERSION } from "@/lib/trainer-terms";
+import { TRAINER_TERMS_COPY, TRAINER_TERMS_VERSION, termsDate } from "@/lib/trainer-terms";
 import {
   APPLY_COPY, REPLY_COPY, ABOUT_MAX, ABOUT_COUNT_FROM, LINK_MAX, aboutProblem, deniedLine, linkProblem, linkToSend, toMs,
 } from "@/lib/trainer-apply-copy";
@@ -59,6 +61,19 @@ const backTo = {
   /** @param {string | null} ref */ set(ref) { this.ref = ref; },
   /** @returns {string | null} */ take() { const r = this.ref; this.ref = null; return r; },
 };
+
+/**
+ * The roster's Terms notice from its reply, or null. Only the date is read.
+ * @param {any} v
+ * @returns {{ since: string } | null}
+ */
+const termsNoticeOf = (v) => (v && typeof v === "object" && typeof v.since === "string" ? { since: v.since } : null);
+
+/** The notice's words. @param {{ since: string }} note */
+export function termsNoticeText(note) {
+  const date = termsDate(note.since);
+  return `The Trainer Terms changed${date ? ` on ${date}` : ""}. Continuing means you accept them.`;
+}
 
 /** JSON in, { status, body } out; status 0 when the network failed. */
 async function call(path, body) {
@@ -180,7 +195,7 @@ const rowLine = { display: "block", fontSize: 12, color: T.ink3, marginTop: 3, l
 export default function TrainerView() {
   const router = useRouter();
   // loading · signedOut · apply (not a trainer yet) · upgrade (the admin, not a
-  // trainer yet) · terms (terms changed) · error · roster
+  // trainer yet) · terms (never accepted the Trainer Terms) · error · roster
   const [phase, setPhase] = useState("loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -200,6 +215,10 @@ export default function TrainerView() {
 
   const [me, setMe] = useState(null);
   const [clients, setClients] = useState([]);
+  // The Terms changed since this trainer accepted: { since } from the roster
+  // reply, and the notice's own error line.
+  const [termsNote, setTermsNote] = useState(/** @type {{ since: string } | null} */ (null));
+  const [noteError, setNoteError] = useState(/** @type {string | null} */ (null));
   const [loadedAt, setLoadedAt] = useState(0);
   // The open client (or SELF_ROW, i -1): { i, ref, name, lastLooked } and its pane state.
   const [open, setOpen] = useState(null);
@@ -220,11 +239,12 @@ export default function TrainerView() {
 
   const reset = () => {
     setMe(null); setClients([]); setOpen(null); setPane(null); setInvite(null); setApplyResult(null);
+    setTermsNote(null); setNoteError(null);
     ceremony.current = null; paneSeq.current += 1; inviteSeq.current += 1; entryRef.current = null;
   };
 
-  // The terms changed under an open session: no client stays half-open, so
-  // the roster comes back clean once they agree again.
+  // A session with no Terms accepted: no client stays half-open, so the
+  // roster comes back clean once they agree.
   const toTerms = () => {
     paneSeq.current += 1; entryRef.current = null;
     setOpen(null); setPane(null);
@@ -237,6 +257,7 @@ export default function TrainerView() {
     if (r.status === 200) {
       setMe(r.body.me?.name ?? null);
       setClients(Array.isArray(r.body.clients) ? r.body.clients : []);
+      setTermsNote(termsNoticeOf(r.body.termsChanged));
       setLoadedAt(Date.now());
       setPhase("roster");
     } else if (r.status === 401) {
@@ -358,11 +379,29 @@ export default function TrainerView() {
     ceremony.current = null;
     setBusy(false);
     if (r.status === 200) { await loadRoster(); return; }
-    // Setting up directly is the admin's (and a trainer re-agreeing); anyone else applies.
+    // Setting up directly is the admin's (and a trainer who never accepted); anyone else applies.
     if (r.status === 403 && r.body.apply) { setPhase("apply"); return; }
     if (r.status === 409 && r.body.needsNativePasskey) { setLegacy(true); return; }
     if (r.status === 503) { setNotOpen(true); return; }
     setError(replyError(r));
+  };
+
+  // Continue on the Terms notice: the signed-in session accepts the current
+  // version, no Face ID. Named write (server): UPDATE accounts.trainer_terms in
+  // place (version, at). The notice goes once it lands.
+  const acceptTerms = async () => {
+    if (busy) return;
+    setBusy(true); setNoteError(null);
+    const r = await call("/api/trainer/terms", { version: TRAINER_TERMS_VERSION });
+    setBusy(false);
+    if (r.status === 200) {
+      setTermsNote(null);
+      await loadRoster();
+      return;
+    }
+    if (r.status === 401) { reset(); setPhase("signedOut"); return; }
+    if (r.status === 403 && r.body.needsTerms) { toTerms(); return; }
+    setNoteError(r.status === 503 ? APPLY_COPY.notOpen : replyError(r));
   };
 
   const [signOutOpen, setSignOutOpen] = useState(false);
@@ -631,6 +670,7 @@ export default function TrainerView() {
       {/* Above both columns; under 640 the open client's own row stands in. The shell's gap spaces it. */}
       <div className="forge-wide-back">{profileRow({ ...backRow, marginBottom: 0 })}</div>
       <div className="forge-wide-roster">
+        {termsNote && <TermsNotice note={termsNote} busy={busy} error={noteError} onContinue={acceptTerms}/>}
         <div style={kickerStyle}>For trainers</div>
         <h1 style={h1Style}>Your clients</h1>
         <button type="button" onClick={issue} className="forge-press forge-tint"
@@ -825,16 +865,37 @@ function ApplyPanel({ who, askName, nameRef, busy, result, about, link, onAbout,
   );
 }
 
-// The admin setting up directly, or a trainer whose Trainer Terms changed.
+// The admin setting up directly, or a trainer who never accepted the Trainer Terms.
 function UpgradePanel({ terms, who, askName, nameRef, busy, onAgree }) {
   return (
     <>
       <div style={kickerStyle}>For trainers</div>
-      <h1 style={h1Style}>{terms ? "The Trainer Terms changed" : "Coach on Heatwayve"}</h1>
+      <h1 style={h1Style}>{terms ? "The Trainer Terms" : "Coach on Heatwayve"}</h1>
       <Pitch who={who}/>
       {askName && <NameField inputRef={nameRef} disabled={busy}/>}
       <TermsCommit label={terms ? "Agree with Face ID" : "Set me up as a trainer"} busy={busy} onCommit={onAgree}/>
     </>
+  );
+}
+
+// The Terms changed since this trainer accepted: read them, or carry on.
+// Continue is the acceptance and the dismissal; nothing waits on it.
+function TermsNotice({ note, busy, error, onContinue }) {
+  return (
+    <div role="region" aria-label="Trainer Terms" data-terms-notice=""
+      style={{ border: `1px solid ${T.rule}`, borderRadius: T.r, padding: "14px 16px", margin: "0 0 24px", background: T.surface }}>
+      <p style={{ fontSize: 14, color: T.ink, lineHeight: 1.5, margin: "0 0 12px" }}>{termsNoticeText(note)}</p>
+      <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <button type="button" onClick={onContinue} aria-disabled={busy} style={{ ...quietBtn, opacity: busy ? 0.6 : 1 }}>
+          {busy ? "One moment" : "Continue"}
+        </button>
+        <a href={TRAINER_TERMS_COPY.href} target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: 13, color: T.ink2, textDecoration: "underline", textUnderlineOffset: 3 }}>Read them</a>
+      </div>
+      <div role="status" aria-live="polite" style={{ fontSize: 12, color: T.ink2, marginTop: error ? 10 : 0, minHeight: 0 }}>
+        {error || ""}
+      </div>
+    </div>
   );
 }
 

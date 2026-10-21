@@ -101,7 +101,7 @@ const { POST: sessionPOST } = await import("@/app/api/trainer/session/route");
 const { POST: upgradePOST } = await import("@/app/api/trainer/upgrade/route");
 const { POST: endPOST } = await import("@/app/api/trainer/session/end/route");
 const ts = await import("@/lib/trainer-session");
-const { TRAINER_TERMS_VERSION } = await import("@/lib/trainer-terms");
+const { TRAINER_TERMS_VERSION, TRAINER_TERMS_SINCE } = await import("@/lib/trainer-terms");
 const { rateLimit, rateLimitShared } = await import("@/lib/rate-limit");
 const { freshCeremony, trainerGate, TRAINER_COOKIE } = ts;
 
@@ -266,17 +266,34 @@ describe("POST /api/trainer/session", () => {
     expect((await freshCeremony({ authToken, profile: "leo" })).identity.accountId).toBe(L);
   });
 
-  it("stale Trainer Terms give 403 needsTerms with the name, nothing written", async () => {
-    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" };
+  it("no Trainer Terms ever accepted: 403 needsTerms with the name, nothing written", async () => {
+    db.accounts.get(T).trainer_terms = null;
     const res = await signIn(mint(T, { cred: "cT" }));
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ needsTerms: true, name: "Tia" });
+    expect(res.headers.get("set-cookie")).toBeNull();
     expect(writes()).toEqual([]);
   });
 
-  it("terms without the 18+ attestation are stale too", async () => {
+  it("terms without the 18+ attestation are not accepted", async () => {
     db.accounts.get(T).trainer_terms = { version: TRAINER_TERMS_VERSION, at: CURRENT.at };
     expect((await signIn(mint(T, { cred: "cT" }))).status).toBe(403);
+    db.accounts.get(T).trainer_terms = { version: "older", at: CURRENT.at };
+    expect((await signIn(mint(T, { cred: "cT" }))).status).toBe(403);
+    expect(writes()).toEqual([]);
+  });
+
+  it("an older Terms version signs in, told of the change; its record is not touched", async () => {
+    const older = { ...CURRENT, version: "older" };
+    db.accounts.get(T).trainer_terms = older;
+    const res = await signIn(mint(T, { cred: "cT" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, name: "Tia", termsChanged: { version: TRAINER_TERMS_VERSION, since: TRAINER_TERMS_SINCE } });
+    // The usual two writes, and none to accounts.
+    expect(writes().map((c) => c.q.trim().split(/\s+/).slice(0, 3).join(" "))).toEqual(["INSERT INTO auth_tokens", "UPDATE auth_tokens SET"]);
+    expect(db.accounts.get(T).trainer_terms).toEqual(older);
+    const g = await trainerGate(gateReq(withCookie(res.cookies.get(TRAINER_COOKIE).value)));
+    expect(g).toMatchObject({ identity: { accountId: T }, termsChanged: { version: TRAINER_TERMS_VERSION, since: TRAINER_TERMS_SINCE } });
   });
 
   it("live: a trainer other than the admin signs in and reaches the trainer gate", async () => {
@@ -366,6 +383,7 @@ describe("POST /api/trainer/upgrade", () => {
 
   const refused = {
     "an unknown terms version": { terms: { version: "draft-2020-01" } },
+    "the previous terms version": { terms: { version: "draft-2026-10-05b" } },
     "no terms": { terms: undefined },
     "a bare version string": { terms: TRAINER_TERMS_VERSION },
     "adult false": { adult: false },
@@ -398,6 +416,8 @@ describe("POST /api/trainer/upgrade", () => {
     const res = await post(upgradePOST, "/api/trainer/upgrade", { authToken: mint(N, { cred: "cN" }), profile: "nia", terms: { version: TRAINER_TERMS_VERSION }, adult: true });
     expect(res.status).toBe(200);
     expect(db.accounts.get(N)).toMatchObject({ roles: ["lifter", "trainer"], trainer_terms: { version: TRAINER_TERMS_VERSION, adult: true } });
+    // The change is no longer reported.
+    expect(await trainerGate(gateReq(withCookie(res.cookies.get(TRAINER_COOKIE).value)))).toMatchObject({ termsChanged: null });
   });
 
   it("with the switch closed, a trainer other than the admin may not re-accept: 503, nothing written", async () => {
@@ -472,11 +492,23 @@ describe("trainerGate", () => {
     expect((await trainerGate(gateReq(withCookie(session(T))))).fail.status).toBe(401);
   });
 
-  it("stale terms are 403 needsTerms", async () => {
-    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" };
-    const g = await trainerGate(gateReq(withCookie(session(T))));
+  it("no Terms accepted is 403 needsTerms, nothing written", async () => {
+    const t = session(T);
+    db.accounts.get(T).trainer_terms = null;
+    const g = await trainerGate(gateReq(withCookie(t)));
     expect(g.fail.status).toBe(403);
     expect(await g.fail.json()).toEqual({ needsTerms: true });
+    expect(writes()).toEqual([]);
+  });
+
+  it("an older Terms version passes, with the change; the current one carries none", async () => {
+    const t = session(T);
+    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" };
+    const g = await trainerGate(gateReq(withCookie(t)));
+    expect("fail" in g).toBe(false);
+    expect(g).toMatchObject({ identity: { accountId: T }, termsChanged: { version: TRAINER_TERMS_VERSION, since: TRAINER_TERMS_SINCE } });
+    db.accounts.get(T).trainer_terms = CURRENT;
+    expect(await trainerGate(gateReq(withCookie(t)))).toMatchObject({ identity: { accountId: T }, termsChanged: null });
   });
 
   it("refuses once the passkey that signed it in is gone from the index or not native", async () => {
@@ -658,7 +690,8 @@ describe("SQL and source pins", () => {
   it("every trainer route runs in lhr1, is dynamic, and never returns e.message", () => {
     const routes = walk("app/api/trainer").filter((f) => f.endsWith("route.js"));
     expect(routes.sort()).toEqual(["app/api/trainer/apply/route.js", "app/api/trainer/change/route.js", "app/api/trainer/client/route.js",
-      "app/api/trainer/clients/route.js", "app/api/trainer/export/route.js", "app/api/trainer/invite/route.js", "app/api/trainer/session/end/route.js", "app/api/trainer/session/route.js", "app/api/trainer/upgrade/route.js"]);
+      "app/api/trainer/clients/route.js", "app/api/trainer/export/route.js", "app/api/trainer/invite/route.js", "app/api/trainer/session/end/route.js", "app/api/trainer/session/route.js", "app/api/trainer/terms/route.js",
+      "app/api/trainer/upgrade/route.js"]);
     for (const f of routes) {
       const s = read(f);
       expect(s, f).toContain('export const preferredRegion = "lhr1";');

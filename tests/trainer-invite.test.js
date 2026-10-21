@@ -228,12 +228,17 @@ describe("POST /api/trainer/invite: gates", () => {
     expect(db.invites.size).toBe(0);
   });
 
-  it("stale terms: 403 needsTerms, nothing written", async () => {
-    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" };
+  it("no Terms accepted: 403 needsTerms, nothing written", async () => {
+    db.accounts.get(T).trainer_terms = null;
     const res = await post(session(T, "cT"), { action: "issue" });
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ needsTerms: true });
     expect(writes()).toEqual([]);
+  });
+
+  it("an older Terms version still issues a code", async () => {
+    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "draft-2026-10-05b" };
+    expect((await post(session(T, "cT"), { action: "issue" })).status).toBe(200);
   });
 
   it("live: a trainer other than the admin issues and cancels", async () => {
