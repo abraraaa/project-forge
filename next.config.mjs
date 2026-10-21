@@ -15,6 +15,16 @@ const nextConfig = {
   // `next dev` would otherwise append its own agent-rules block to CLAUDE.md
   // on every start; that file is the collaboration contract, not Next's.
   agentRules: false,
+  // Font source for app/fonts/active.js: Google by default, the committed
+  // local copies when scripts/build.mjs retries after a font fetch failure.
+  turbopack: {
+    resolveAlias: {
+      "@/app/fonts/active":
+        process.env.HEATWAYVE_FONT_SOURCE === "local"
+          ? "./app/fonts/local.js"
+          : "./app/fonts/google.js",
+    },
+  },
   // View Transitions (PR3 3f). Makes App Router navigations run as React
   // transitions so the <ViewTransition> boundary in app/layout.jsx animates
   // route changes (home ↔ /session ↔ /performance ↔ /profile) with the same
@@ -51,7 +61,8 @@ const nextConfig = {
   //
   // Now a real allow-list, written from what the app ACTUALLY loads rather
   // than from a template:
-  //   · fonts are self-hosted by next/font at build time (.next/static/media)
+  //   · fonts are self-hosted by next/font at build time (.next/static/media),
+  //     from Google or, if that fetch fails, from app/fonts/
   //   · Vercel Analytics + Speed Insights serve from same-origin /_vercel/*
   //   · the ONLY external resource in the whole app is the YouTube exercise
   //     embed, so frame-src names exactly that host and nothing else

@@ -502,10 +502,18 @@ export default function SessionHost({ mode = null } = {}) {
   const declineReach = () => setReachSpent(true);
 
   // One line on the card about how the engine read this lift last time: a
-  // target adopted from the lifter's own repeated choice, or a last set that
-  // came up short on an otherwise full session.
+  // target adopted from the lifter's own repeated choice, a rep target raised
+  // to break a stall, a session taken to failure, or a last set that came up
+  // short on an otherwise full session.
   const lastNote = activeEx?.name ? lastSessionNote(liftStates[activeEx.name]) : null;
+  // The climb and failure lines explain today's first set, so they go once
+  // it is logged. Not on a deload day, whose target is the deload's, nor a
+  // cooked day, which never moves the weight.
+  const firstSetOpen = !activeDeload && readiness !== "cooked" && !(draftView?.blocks?.[block.id]?.exercises?.[activeEx?.name]?.sets?.length > 0);
+  const todayReps = activeEx?.name ? Number.parseInt(String(prescribedReps[activeEx.name] ?? activeEx.reps), 10) : null;
   const coachLine = lastNote?.kind === "adopted" ? SESSION_COPY.adoptedTarget(lastNote.reps, ADOPT_AFTER_SESSIONS)
+    : lastNote?.kind === "rep_climb" ? (firstSetOpen && todayReps === lastNote.reps ? SESSION_COPY.repClimb(lastNote) : null)
+    : lastNote?.kind === "failure" ? (firstSetOpen ? SESSION_COPY.afterFailure : null)
     : lastNote?.kind === "final_set_miss" ? SESSION_COPY.ownAllSets(block.sets)
     : null;
   // A quieter line under it when a trainer set today's number.

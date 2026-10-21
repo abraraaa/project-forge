@@ -518,6 +518,145 @@ describe("updateLiftStateFromSession", () => {
   });
 });
 
+// A stall on a loaded lift is answered with reps, then weight: the target
+// climbs at most two over base, only on a stall met short of failure, and
+// banks as one rung of weight once the top of the climb is met at RPE 9.5.
+describe("the loaded rep climb", () => {
+  const SQUAT = "Barbell Back Squat";
+  const stalled = (extra = {}) => ({
+    currentWeight: 162.5, sessionsCount: 8, consecutiveAdds: 0, consecutiveLightMisses: 0,
+    consecutiveHolds: 3, stallSignal: "stall",
+    currentRepRange: { reps: 5, sets: 3, baseReps: 5 }, history: [], ...extra,
+  });
+  let day = 0;
+  // One session at the state's target: reps per set (or one count for all three).
+  const run = (state, { reps, rir, weight = 162.5 }) => {
+    day += 1;
+    const target = state.currentRepRange.reps;
+    const counts = Array.isArray(reps) ? reps : [reps ?? target, reps ?? target, reps ?? target];
+    const date = `2026-10-${String(day).padStart(2, "0")}`;
+    const rec = buildSession({
+      id: `${date}T10:00:00.000Z`, date,
+      exercises: [buildExercise({
+        name: SQUAT, prescribed: { sets: 3, reps: target, weight },
+        sets: counts.map((r) => buildSet({ weight, reps: r, rir })),
+      })],
+    });
+    const p = computeNextPrescription({ liftName: SQUAT, history: [rec], liftState: state, context: { readiness: "normal", loadType: "barbell" } });
+    return { p, state: updateLiftStateFromSession(state, rec, rec.blocks[0].exercises[0], p) };
+  };
+
+  it("a miss at a stall holds 5: 3 of 5 never earns extra reps", () => {
+    const reasons = [];
+    for (const reps of [[5, 5, 3], [3, 5, 5], [5, 3, 3], [3, 3, 3]]) {
+      const { p } = run(stalled(), { reps, rir: 0 });
+      reasons.push(p.decisionReason);
+      expect(p.reps, String(reps)).toBe(5);
+      expect(p.repRangeChanged, String(reps)).toBe(false);
+      expect(p.rationale.some((r) => r.startsWith("rep_climb_to=")), String(reps)).toBe(false);
+    }
+    expect(reasons).toEqual(["final_set_miss", "missed_light", "missed_moderate", "missed_heavy"]);
+  });
+
+  it("a cut-short session or a chosen shortfall at a stall holds 5", () => {
+    const partial = run(stalled(), { reps: [5, 5], rir: 1 }).p;
+    expect(partial.decisionReason).toBe("partial_session");
+    expect(partial.reps).toBe(5);
+    const chosen = run(stalled(), { reps: [4, 4, 4], rir: 3 }).p;
+    expect(chosen.decisionReason).toBe("voluntary_shortfall");
+    expect(chosen.reps).toBe(5);
+  });
+
+  it("a climbed target survives a miss", () => {
+    const { p } = run(stalled({ currentRepRange: { reps: 6, sets: 3, baseReps: 5 } }), { reps: [6, 4, 6], rir: 0 });
+    expect(p.decision).toBe("HOLD");
+    expect(p.reps).toBe(6);
+  });
+
+  it("three grinders then a grinder holds 162.5 x 5, and still counts as a hold", () => {
+    let state = stalled({ consecutiveHolds: 0, stallSignal: null });
+    for (let i = 0; i < 4; i++) {
+      const r = run(state, { rir: 0 });
+      expect(r.p.decision).toBe("HOLD");
+      expect(r.p.decisionReason).toBe("performed_full_rir0_grinder");
+      expect(r.p.weight).toBe(162.5);
+      expect(r.p.reps).toBe(5);
+      state = r.state;
+    }
+    expect(state.consecutiveHolds).toBe(4);
+    expect(state.stallSignal).toBe("deep_stall");
+    expect(state.currentRepRange).toMatchObject({ reps: 5, baseReps: 5 });
+  });
+
+  it("three holds then a tight hit (RIR 1) climbs to 6; at 6 a tight hit climbs to 7", () => {
+    let r = run(stalled(), { rir: 1 });
+    expect(r.p.decision).toBe("HOLD");
+    expect(r.p.weight).toBe(162.5);
+    expect(r.p.reps).toBe(6);
+    expect(r.p.rationale).toContain("rep_climb_to=6");
+    r = run(r.state, { rir: 1 });
+    expect(r.p.reps).toBe(7);
+    expect(r.p.weight).toBe(162.5);
+    expect(r.state.currentRepRange).toMatchObject({ reps: 7, baseReps: 5 });
+  });
+
+  it("RPE 9.5 counts as a little in the tank: it climbs too", () => {
+    const { p } = run(stalled(), { rir: 0.5 });
+    expect(p.decisionReason).toBe("performed_full_subthreshold_rir");
+    expect(p.reps).toBe(6);
+  });
+
+  it("no climb without a stall, or on two holds", () => {
+    expect(run(stalled({ consecutiveHolds: 0, stallSignal: null }), { rir: 1 }).p.reps).toBe(5);
+    expect(run(stalled({ consecutiveHolds: 2, stallSignal: "mild" }), { rir: 1 }).p.reps).toBe(5);
+  });
+
+  it("7 is the ceiling: a tight hit at 7 never climbs to 8, it banks", () => {
+    const { p } = run(stalled({ consecutiveHolds: 5, stallSignal: "deep_stall", currentRepRange: { reps: 7, sets: 3, baseReps: 5 } }), { rir: 1 });
+    expect(p.reps).toBe(5);
+    expect(p.decision).toBe("ADD");
+    expect(p.weight).toBe(165);
+  });
+
+  it("hitting 7 at RPE 9.5 adds one rung and returns to 5", () => {
+    const { p, state } = run(stalled({ consecutiveHolds: 5, stallSignal: "deep_stall", currentRepRange: { reps: 7, sets: 3, baseReps: 5 } }), { rir: 0.5 });
+    expect(p.decision).toBe("ADD");
+    expect(p.decisionReason).toBe("performed_full_climb_ceiling");
+    expect(p.weight).toBe(165);
+    expect(p.reps).toBe(5);
+    expect(p.repRangeChanged).toBe(true);
+    expect(p.rationale).toContain("rep_climb_banked");
+    expect(p.rationale.filter((r) => r.startsWith("decision_reason="))).toEqual(["decision_reason=performed_full_climb_ceiling"]);
+    expect(state.consecutiveHolds).toBe(0);
+    expect(state.currentRepRange).toMatchObject({ reps: 5, baseReps: 5 });
+  });
+
+  it("hitting 7 at RPE 10 holds 162.5 x 7", () => {
+    const { p } = run(stalled({ consecutiveHolds: 5, stallSignal: "deep_stall", currentRepRange: { reps: 7, sets: 3, baseReps: 5 } }), { rir: 0 });
+    expect(p.decision).toBe("HOLD");
+    expect(p.weight).toBe(162.5);
+    expect(p.reps).toBe(7);
+  });
+
+  it("after a session to failure, finishing at RPE 9.5 adds one rung; RPE 10 again holds", () => {
+    const failed = run(stalled({ consecutiveHolds: 0, stallSignal: null }), { rir: 0 }).state;
+    const ok = run(failed, { rir: 0.5 }).p;
+    expect(ok.decision).toBe("ADD");
+    expect(ok.decisionReason).toBe("performed_full_after_failure");
+    expect(ok.weight).toBe(165);
+    expect(ok.reps).toBe(5);
+    const again = run(failed, { rir: 0 }).p;
+    expect(again.decision).toBe("HOLD");
+    expect(again.weight).toBe(162.5);
+  });
+
+  it("without a session to failure before it, RPE 9.5 at base still holds", () => {
+    const { p } = run(stalled({ consecutiveHolds: 0, stallSignal: null }), { rir: 0.5 });
+    expect(p.decision).toBe("HOLD");
+    expect(p.weight).toBe(162.5);
+  });
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 // 6. Phase 3 — Deload signals
 // ────────────────────────────────────────────────────────────────────────────

@@ -24,7 +24,9 @@ import ConsentLine from "@/components/ConsentLine";
 import { TrainerSessionCard } from "@/components/TrainerSessionSheet";
 import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
-import { deloadCardCopy } from "@/lib/progression";
+import { deloadCardCopy, repTargetRepairs } from "@/lib/progression";
+import { planStartWeight, isWorkingWeight } from "@/lib/programme-resolve";
+import { getLoadType, parseTimedReps, usesOptionalChrome } from "@/lib/lift-translations";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
 import { fetchWithTimeout } from "@/lib/net";
 
@@ -45,6 +47,24 @@ function formatAgo(ms) {
 // ceiling. Drives the heat mark on the session preview rows (colour +
 // height + the printed number: the redundancy law).
 const BLOCK_RPE = { main: 8, superset: 8, finisher: 9 };
+
+// A row's numbers as the session will open them: the live rep target, and
+// the weight the session plans (W, else the planned start). `working` says
+// the weight is the lifter's own, not a start. Pure bodyweight lifts carry
+// no weight; added and assisted kg say which they are.
+function rowPlan(ex, { reps, weights, bodyweight, anchors }) {
+  const loadType = getLoadType(ex);
+  const target = reps[ex.name] ?? ex.reps;
+  const timed = parseTimedReps(ex.reps);
+  const kg = loadType === "bodyweight" ? null : planStartWeight(ex, { working: weights, bodyweight, anchors });
+  return {
+    reps: timed ? `${typeof target === "number" ? target : timed.seconds}s` : target,
+    kg: typeof kg === "number" && kg > 0 ? kg : null,
+    working: isWorkingWeight(weights[ex.name]),
+    prefix: usesOptionalChrome(loadType) ? "bodyweight + " : "",
+    unit: loadType === "assisted_bodyweight" ? "kg assist" : "kg",
+  };
+}
 
 // Stable identity, so React calls it on mount only (an inline arrow would
 // re-focus on every render).
@@ -74,7 +94,7 @@ const linkBtn = {
 };
 
 export default
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},dayStates=[],onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,mainLifts={},onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge,trainerSessions=[],onOpenTrainerSession}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},dayStates=[],onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,mainLifts={},onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge,trainerSessions=[],onOpenTrainerSession,workingWeights={},workingReps={},liftStates={},muscleAnchors={},bodyweight=null}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -180,6 +200,12 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const viewSession    = rotatedViewSession
     ? applyFocusToSession(applyMainLiftsToSession(rotatedViewSession, mainLifts), userFocus, programmeBlock?.config, mainLifts)
     : null;
+  // The prescription the session will open with: R, with any target it
+  // would repair read the way it repairs it (SessionHost prescribedReps).
+  const liveReps = viewSession
+    ? { ...workingReps, ...repTargetRepairs({ reps: workingReps, lifts: liftStates, sessions: [viewSession] }) }
+    : workingReps;
+  const plan = { reps: liveReps, weights: workingWeights, bodyweight, anchors: muscleAnchors };
 
   // Guidance line under the display name. Strength days lead with the
   // session's own noun; non-strength days keep their modality detail.
@@ -351,24 +377,24 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 </div>
               );
             })()}
-            {/* Session list — every row prints the prescription, the heat
-                mark encodes the planned proximity to failure in colour AND
-                height, and the number is always printed. */}
+            {/* Session list — every row prints what the session will open
+                with (a superset reads its A lift), the heat mark encodes the
+                planned proximity to failure in colour AND height, and the
+                number is always printed. */}
             <div style={{padding:"2px 24px 0"}}>
               {viewSession.blocks.map((b)=>{
                 const rpe   = BLOCK_RPE[b.type] ?? 8;
                 const name  = b.type==="main"
                   ? b.ex.name
                   : `${(b.exA||b.ex).name} ↔ ${(b.exB||b.ex).name}`;
-                const reps  = b.type==="main" ? b.ex.reps : (b.exA?.reps||b.exB?.reps);
-                const w     = b.type==="main" ? b.ex.weight : (b.exA?.weight ?? b.exB?.weight);
+                const p     = rowPlan(b.type==="main" ? b.ex : (b.exA||b.exB||b.ex), plan);
                 return (
                   <div key={b.id} style={{display:"flex",alignItems:"center",gap:13,padding:"11px 0",borderBottom:`1px solid ${T.ruleFaint}`}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:16,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
                       <div style={{fontSize:13,color:T.ink3,marginTop:2}}>
-                        <span style={{fontFamily:T.measured}}>{b.sets} × {reps}</span>
-                        {w != null && <> from <span style={{fontFamily:T.measured}}>{w}</span> kg</>}
+                        <span style={{fontFamily:T.measured}}>{b.sets} × {p.reps}</span>
+                        {p.kg != null && <> {p.working ? "at" : "from"} {p.prefix}<span style={{fontFamily:T.measured}}>{p.kg}</span> {p.unit}</>}
                       </div>
                     </div>
                     <span aria-hidden="true" style={{width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe),borderRadius:T.rMark,flexShrink:0,alignSelf:"center"}}/>
