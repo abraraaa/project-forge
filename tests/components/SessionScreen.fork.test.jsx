@@ -122,8 +122,8 @@ describe("the fork on a superset waits for the round", () => {
     expect(btn("Add another set")).toBeTruthy();
     expect(btn("Next: Farmer Carry")).toBeTruthy();
     expect(screen.queryByText("Log A — into B")).toBeNull();
-    expect(screen.queryByText(/Straight into B/)).toBeNull();
-    expect(screen.queryByText(/Immediately after/)).toBeNull();
+    expect(screen.queryByText(/^Then /)).toBeNull();
+    expect(screen.queryByText(/no rest$/)).toBeNull();
     expect(document.body.textContent.replace(/\s+/g, " ")).toContain("All 3 rounds logged");
   });
 

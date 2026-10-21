@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { T, DISPLAY, heatForRpe, onHeatForRpe, heatMarkHeight, rpeValue } from "@/lib/tokens";
-import { Fade, Card, MonoNums } from "@/components/ui";
+import { Fade, MonoNums } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import { pressLiftHandlers } from "@/lib/press-lift";
@@ -497,6 +497,50 @@ function RestProgressLine({ active, remain, total }) {
   );
 }
 
+// m:ss for a rest length in seconds: 90 reads 1:30, not 2:00.
+const clock = (s) => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+
+// One side of a superset round in figures: "22 kg × 10", "+10 kg × 8" for
+// load added to a bodyweight lift, "−20 kg × 8" for an assist (as the card's
+// "− kg"), or the reps alone when no load rides on it. A target that carries
+// its own unit ("8/leg", "20s") prints as it is.
+function roundFigures(ex, kg, reps) {
+  const timed = parseTimedReps(ex?.reps);
+  const r = timed ? `${typeof reps === "number" ? reps : timed.seconds}s` : (reps ?? "—");
+  if (kg == null) return typeof r === "number" ? `${r} reps` : String(r);
+  const lt = getLoadType(ex);
+  const sign = usesOptionalChrome(lt) ? "+" : lt === "assisted_bodyweight" ? "−" : "";
+  return `${sign}${kg} kg × ${r}`;
+}
+
+// ─── Round recap ─────────────────────────────────────────────────────────────
+// While a superset round is rated, the screen shows that round, not the next
+// set's card: both sides as they will be saved, each opening the drum so a
+// number can be put right before it is.
+function RoundRecap({ round, of, label, sides, onEdit }) {
+  return (
+    <div style={{padding:"18px 20px 0"}}>
+      <div style={{fontSize:13,color:T.ink2,marginBottom:10}}>
+        Round <span style={{fontFamily:T.measured}}>{round}</span> of <span style={{fontFamily:T.measured}}>{of}</span> · {label}
+      </div>
+      <div style={{borderTop:`1px solid ${T.rule}`}}>
+        {sides.map((s) => (
+          <button key={s.side} onClick={() => onEdit(s.target)}
+            style={{width:"100%",display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:12,
+              padding:"14px 0",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,
+              cursor:"pointer",textAlign:"left",fontFamily:T.text}}>
+            <span style={{display:"flex",alignItems:"baseline",gap:10,minWidth:0}}>
+              <span style={{fontSize:12,color:T.ink3,flexShrink:0}}>{s.side}</span>
+              <span style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.25}}>{s.name}</span>
+            </span>
+            <span style={{fontSize:15,color:T.ink,flexShrink:0}}><MonoNums>{s.figures}</MonoNums></span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Session ──────────────────────────────────────────────────────────────────
 export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,planWeights={},setPlanWeights,planReps={},setPlanReps,prescribedReps={},coachLine=null,travel=false,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null,maxSets=null}){
   const [swapEx,setSwapEx]=useState(null);
@@ -544,7 +588,9 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
     () => recentForExercise(history, activeEx?.name, 3, { travel: !!travel }),
     [history, activeEx?.name, travel]
   );
-  const showRestHint=!isSS;
+  // A superset rests between rounds, so the ring sits with A; B follows A
+  // without a break.
+  const showRestHint=!isSS||phase==="A";
   const restMins =Math.floor(restRemain/60),restSecs=restRemain%60;
   const restStr  =`${restMins}:${String(restSecs).padStart(2,"0")}`;
   const blocking =awaitRpe||ssRoundDone;
@@ -591,6 +637,24 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const delta = (lastW != null && currentW != null) ? Math.round((currentW - lastW) * 100) / 100 : null;
   const lastRpe = rpeValue(last?.topSet?.rpe) ?? rpeValue(last?.effort);
 
+  // Rating a superset round: the round just done stands where the next set's
+  // card would, so the rating reads against what it rates.
+  const rating = isSS && !!ssRoundDone;
+  const roundSide = (side, ex) => {
+    const lt = getLoadType(ex);
+    // Kg as commitLog saves it: pure bodyweight its own added load, loaded
+    // bodyweight W when above 0, everything else (assist included) W.
+    const kg = acceptsOptionalWeight(lt) ? addedLoadFor(addedLoads, ex?.name)
+      : usesOptionalChrome(lt) ? (typeof getW(ex) === "number" && getW(ex) > 0 ? getW(ex) : null)
+      : getW(ex);
+    const reps = getR(ex);
+    return { side, name: ex?.name, figures: roundFigures(ex, kg, reps),
+      target: { exName: ex?.name, currentKg: kg, currentReps: reps, loadType: lt, timed: !!parseTimedReps(ex?.reps) } };
+  };
+  // During A, B is one line: what follows, at the figures its rating row
+  // will show.
+  const partnerFigures = isSS && partnerEx ? roundSide("B", partnerEx).figures : null;
+
   return (
     /* Three-zone column: identity (top) — numbers (upper-middle) — actions
        (pinned to the thumb, bottom). Height: .forge-fill — the shell owns
@@ -612,12 +676,17 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         </button>
       </div>
 
+      {rating ? (
+        <RoundRecap round={setNum} of={setsDue} label={block.label}
+          sides={[roundSide("A", resolvedExA), roundSide("B", resolvedExB)].filter((s) => s.name)}
+          onEdit={setEditTarget}/>
+      ) : <>
       <div style={{padding:"18px 20px 0"}}>
         {/* Kicker — the room's live state: set count + slot. Never a sentence. */}
         <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
           {blockDone
             ? <>All <span style={{fontFamily:T.measured}}>{setsDue}</span> {isSS?"rounds":"sets"} logged · {block.label}</>
-            : <>Set <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{setsDue}</span> · {block.label}{isSS?` ${phase}`:""}</>}
+            : <>{isSS?"Round":"Set"} <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{setsDue}</span> · {block.label}{isSS?` ${phase}`:""}</>}
         </div>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
           <div onClick={resolveVid(activeEx?.name, activeEx?.vid) ? ()=>setShowVid(true) : undefined}
@@ -814,6 +883,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           <div key={i} style={{flex:1,height:3,background:i<setNum-1?T.dayKey.strength:T.rule,transition:`background 300ms ${T.ease}`}}/>
         ))}
       </div>
+      </>}
 
       {/* The session ledger (§12.4) — the middle belongs to logged sets
           accruing as hairline rows, newest on top: 40 kg × 3 at 8.5, digits
@@ -830,7 +900,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             return { s, rpe, n: i + 1 };
           }).reverse().map(({ s, rpe, n }, idx) => (
             <div key={n} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 0",borderBottom:`1px solid ${T.ruleFaint}`,animation:idx===0?`hwSettle 480ms ${T.ease} both`:undefined}}>
-              <span style={{fontSize:13,color:T.ink3}}>Set <span style={{fontFamily:T.measured}}>{n}</span></span>
+              <span style={{fontSize:13,color:T.ink3}}>{isSS?"Round":"Set"} <span style={{fontFamily:T.measured}}>{n}</span></span>
               <span style={{display:"flex",alignItems:"center",gap:12}}>
                 <span style={{fontSize:13,color:T.ink}}>
                   {s.weight!=null && <><span style={{fontFamily:T.measured,fontSize:14}}>{s.weight}</span> kg <span style={{fontFamily:T.measured,fontSize:14}}>×</span> </>}
@@ -848,35 +918,16 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
 
       {/* Effort — the commit moment. Drag the track; the button warms. */}
       {awaitRpe&&<EffortPanel onCommit={onCommit}/>}
-      {ssRoundDone&&<EffortPanel onCommit={onCommit} label={`Round ${setNum} of ${block.sets} — how hard?`}/>}
+      {ssRoundDone&&<EffortPanel onCommit={onCommit} label="How hard was that round?"/>}
 
       {!blocking&&(
         <>
-          {isSS&&!fork&&phase==="A"&&!restActive&&(
-            <div style={{padding:"8px 20px 0",fontSize:13,color:T.ink3}}>
-              Straight into B — no rest between exercises
+          {/* The partner reads before the action it explains. Nothing during
+              B: the counter and the button already say it. */}
+          {isSS&&!fork&&phase==="A"&&partnerEx&&(
+            <div style={{margin:"14px 20px 0",fontSize:13,color:T.ink3}}>
+              Then {partnerEx.name} · <MonoNums>{partnerFigures}</MonoNums>, no rest
             </div>
-          )}
-          {isSS&&phase==="A"&&restActive&&(
-            <div style={{padding:"12px 20px 0"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <span style={{fontSize:13,color:T.ink2}}>Resting — <span style={{fontFamily:T.measured}}>{restStr}</span></span>
-                <button onClick={()=>{setRestActive(false);setRestRemain(block.rest);}} style={{...linkBtn,fontSize:12,padding:"4px 8px"}}>Skip</button>
-              </div>
-              <RestProgressLine active={restActive} remain={restRemain} total={block.rest} />
-            </div>
-          )}
-          {/* Superset partner reads BEFORE the action it explains. */}
-          {isSS&&!fork&&(
-            <Card style={{margin:"14px 20px 0",padding:"13px 16px"}}>
-              <div style={{fontSize:12,color:T.ink3,marginBottom:5,display:"flex",alignItems:"center",gap:5}}>
-                {phase==="A"?<>Immediately after <Glyph name="arrowRight" size={10}/></>:<>Just completed <Glyph name="check" size={10}/></>}
-              </div>
-              <div style={{fontSize:17,fontWeight:500,color:phase==="A"?T.ink:T.ink3,lineHeight:1.2}}>{partnerEx?.name}</div>
-              <div style={{fontSize:13,color:T.ink3,marginTop:3}}>
-                {partnerEx?.weight!==null&&getW(partnerEx)?<><span style={{fontFamily:T.measured}}>{getW(partnerEx)}</span> kg · </>:""}<span style={{fontFamily:T.measured}}>{getR(partnerEx)}</span> reps
-              </div>
-            </Card>
           )}
           {/* Rest ring + Log — the thumb zone. The ring breathes while
               resting (±3.5%, 5.4s — felt, not seen); tap it to start/skip. */}
@@ -943,7 +994,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                   display:"flex",alignItems:"center",justifyContent:"center",
                   fontFamily:T.measured,fontSize:13,color:restActive?T.ink:T.ink2,
                   transition:`border-color 300ms ${T.ease}, color 300ms ${T.ease}`}}>
-                {restActive?restStr:`${Math.round(block.rest/60)}:00`}
+                {restActive?restStr:clock(block.rest)}
               </button>
             )}
             {guard?(
