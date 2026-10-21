@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The client's app applies a trainer's change on the home pull
-// (lib/storage.js applyTrainerRows), re-checked against its own latest
+// (lib/trainer-sync.js applyTrainerRows), re-checked against its own latest
 // training, through the same stamped setters its own edits use. Spec §4, §11:
 // E5 (apply ≡ client edit), E6 (the engine carries on from it), E7 (no rows,
 // no change), the home-unmounted guard and ack-after-push.
@@ -8,9 +8,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  P, H, W, TL, BW, TS, getLocalProfile, applyTrainerRows, backgroundSync, enableAutoSync, disableAutoSync,
-  flushTrainerOutbox, pushNow, newDraftLog, logSet, finaliseDraft,
+  P, H, W, TL, BW, TS, getLocalProfile, backgroundSync, enableAutoSync, disableAutoSync,
+  pushNow, newDraftLog, logSet, finaliseDraft,
 } from "@/lib/storage";
+import { applyTrainerRows, flushTrainerOutbox } from "@/lib/trainer-sync";
 import { DeltaSync } from "@/lib/sync-delta";
 import { mergeMetaFields, ensureScheduleHistory, scheduleEntryOn } from "@/lib/sync-merge";
 import { validateOp, planDeviceSteps, RESET } from "@/lib/trainer-change";
@@ -734,7 +735,7 @@ describe("wiring", () => {
     }
   });
   it("the applier writes only through the stamped setters", () => {
-    const src = read("lib/storage.js");
+    const src = read("lib/trainer-sync.js");
     const body = src.slice(src.indexOf("export function applyTrainerRows"), src.indexOf("const _tlOutboxSize"));
     expect(body).not.toMatch(/saveWeightsRaw|saveRepsRaw|saveMainLiftsRaw|replaceHistory|LS\.remove|removeItem/);
     expect(body).toContain("P.saveWeights(");

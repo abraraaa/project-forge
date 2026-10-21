@@ -26,6 +26,13 @@ const serverError = (e, opts = {}) => apiError(e, { label: "sync", ...opts });
 // A miss re-reads and re-merges. Returns the merged fields, or null after
 // META_WRITE_TRIES misses with nothing written.
 const META_WRITE_TRIES = 3;
+/** @typedef {import("@/lib/storage").SyncPayload} SyncPayload  the payload the client pushes and pulls */
+/**
+ * @param {string} profile
+ * @param {() => Promise<{ meta: SyncPayload["meta"], revs: Record<string, number> }>} readBase
+ * @param {(base: SyncPayload["meta"]) => SyncPayload["meta"]} merge
+ * @returns {Promise<SyncPayload["meta"] | null>}
+ */
 async function writeMetaGuarded(profile, readBase, merge) {
   const stamp = mintRevStamp();
   for (let i = 0; i < META_WRITE_TRIES; i++) {
@@ -313,7 +320,7 @@ async function readLatestLegacy(blobs, kindRe) {
 
 // Trainer changes waiting for this profile's app, for the DB reads below:
 // { rows } when there are any, else null and the key is left out. Read only;
-// the app applies them through its own stamped edits (lib/storage.js
+// the app applies them through its own stamped edits (lib/trainer-sync.js
 // applyTrainerRows). Never fails the pull: on error the rows wait for the next.
 async function trainerRowsFor(profile) {
   try {
@@ -477,7 +484,7 @@ export async function GET(request) {
 }
 
 // PUT /api/sync
-// Body: { profile: string, data: { meta?: object, history?: array } }
+// Body: { profile: string, data: SyncPayload } (full) or { profile, delta: SyncPayload }.
 // Profile is case-insensitive. Display name should be passed inside meta.displayName.
 export async function PUT(request) {
   const limited = rateLimit(request, "sync-write", 120);
@@ -488,6 +495,7 @@ export async function PUT(request) {
   if (!parsed.ok) {
     return NextResponse.json({ error: parsed.reason }, { status: parsed.status });
   }
+  /** @type {{ profile: string, data?: SyncPayload, delta?: SyncPayload }} */
   const { profile, data } = parsed.body;
 
   const v = validateProfile(profile);
@@ -509,6 +517,7 @@ export async function PUT(request) {
     if (!hasDb()) {
       return NextResponse.json({ error: "Delta sync unavailable" }, { status: 503 });
     }
+    /** @type {SyncPayload} */
     const d = parsed.body.delta;
     const incoming = d?.meta && typeof d.meta === "object" && !Array.isArray(d.meta) ? d.meta : {};
     const records = Array.isArray(d?.history) ? d.history.filter((r) => r && typeof r.id === "string" && r.id.length < 64) : [];

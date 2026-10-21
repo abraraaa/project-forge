@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // ─────────────────────────────────────────────────────────────────────────────
 // A session a trainer ran with the client, on the client's device: what
-// arrives on the home pull (lib/storage.js applyTrainerRows, the session rows
+// arrives on the home pull (lib/trainer-sync.js applyTrainerRows, the session rows
 // apart), what Keep writes (keepTrainerSession through lib/session-commit.js),
 // what Discard writes, and the report (flushTrainerOutbox, then
 // POST /api/sync/trainer and its delivered list).
@@ -51,10 +51,12 @@ vi.mock("@/lib/auth-server", async (io) => ({
 
 import SessionHost from "../components/SessionHost.jsx";
 import {
-  P, H, TL, TS, BW, Days, SessionIntent, getLocalProfile, applyTrainerRows, flushTrainerOutbox,
-  keepTrainerSession, discardTrainerSession, holdTrainerSession, recordForKeep, feltKey, setSessionCommit,
+  P, H, TL, TS, BW, Days, SessionIntent, getLocalProfile, recordForKeep, feltKey,
   newDraftLog, logSet, finaliseDraft, planStartWeight, rpeToRir, enableAutoSync, disableAutoSync, backgroundSync,
 } from "../lib/storage.js";
+import {
+  applyTrainerRows, flushTrainerOutbox, keepTrainerSession, discardTrainerSession, holdTrainerSession, setSessionCommit,
+} from "../lib/trainer-sync.js";
 import { DeltaSync } from "../lib/sync-delta.js";
 import { commitSessionRecord } from "../lib/session-commit.js";
 import { planSessionSteps, isUndoable, changeStatus, AUTO_KEEP_MS, sessionTarget, sessionPreview } from "../lib/trainer-change.js";
@@ -586,8 +588,10 @@ function declarations(src) {
 
 describe("W-F: no undo after Keep", () => {
   it("nothing on the device takes a history record out or rewrites it by its change", () => {
+    // Storage and the trainer sync it hands the pull to, which holds Keep.
     const storage = readFileSync(join(ROOT, "lib/storage.js"), "utf8");
-    const decl = declarations(storage);
+    const sync = readFileSync(join(ROOT, "lib/trainer-sync.js"), "utf8");
+    const decl = { ...declarations(storage), ...declarations(sync) };
     const writesHistory = Object.entries(decl).filter(([, text]) => /\bH\.save\(|LS\.set\(`[^`]*:history`/.test(text.replace(/^\s*(\/\/|\*).*$/gm, "")));
     // History is written in two places only: the append (dedupe by id, never a removal) and THE merge's persist.
     expect(writesHistory.map(([n]) => n).sort()).toEqual(["H", "persistToLocal"]);
@@ -837,7 +841,7 @@ describe("W-C: Keep leaves the stores as the live finish does", { timeout: 30_00
 
 // The plan the device runs is the trainer-change module's own.
 it("the device's plan is planSessionSteps, the one plan", () => {
-  const storage = readFileSync(join(ROOT, "lib/storage.js"), "utf8");
-  expect(storage).toMatch(/planSessionSteps\(/);
+  const sync = readFileSync(join(ROOT, "lib/trainer-sync.js"), "utf8");
+  expect(sync).toMatch(/planSessionSteps\(/);
   expect(typeof planSessionSteps).toBe("function");
 });

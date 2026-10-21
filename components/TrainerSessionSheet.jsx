@@ -12,7 +12,7 @@
 // "Tuesday 6 Oct" (lib/trainer-change.js sessionDayWords), so a trainer and a
 // client on different dates never both read "today".
 //
-// A card is what trainerLocal.pendingSessions holds (lib/storage.js):
+// A card is what trainerLocal.pendingSessions holds (lib/trainer-sync.js):
 // planSessionSteps' card { id, record, drum, by, startMs, keepsAt } plus the
 // row's own fields.
 // keepsAt null: sharing stopped after it arrived, so nothing keeps it but
@@ -32,7 +32,7 @@ import { feltKey } from "@/lib/storage";
 
 /**
  * The cards to show, oldest first, from a trainerLocal value (TL.get): the
- * sessions the last pull left waiting (lib/storage.js keeps them with
+ * sessions the last pull left waiting (lib/trainer-sync.js keeps them with
  * keepsAt worked out), less any this device has decided since. Reads only.
  * @param {any} tl
  */

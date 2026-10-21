@@ -272,10 +272,10 @@ describe("commitSessionRecord callers push", () => {
 
   // Keep is handed the commit (setSessionCommit), so it has no literal
   // commitSessionRecord( call: its push is _deliverTrainer's, which pushes
-  // before it reports. storage.js's functions here are top level, so a body
+  // before it reports. trainer-sync.js's functions are top level, so a body
   // runs from its declaration to the next line that is just "}".
   it("Keep's injected commit: every _keepSession caller delivers, and delivery pushes", () => {
-    const file = "lib/storage.js";
+    const file = "lib/trainer-sync.js";
     const lines = readFileSync(resolve(root, file), "utf8").split("\n");
     const DECL = /^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(/;
     const bodyOf = (lineIdx) => {
