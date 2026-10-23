@@ -191,7 +191,14 @@ export default function SessionHost({ mode = null } = {}) {
   // Screen-reader channel for moments that are otherwise only visual (or a
   // haptic iOS ignores). Cleared first so a repeated message is re-announced.
   const [srMsg, setSrMsg] = useState("");
-  const announce = (msg) => { setSrMsg(""); setTimeout(() => setSrMsg(msg), 60); };
+  const announceTimerRef = useRef(null);
+  const announce = (msg) => {
+    setSrMsg("");
+    clearTimeout(announceTimerRef.current);
+    announceTimerRef.current = setTimeout(() => setSrMsg(msg), 60);
+  };
+  // The pending announcement must not land on an unmounted host.
+  useEffect(() => () => clearTimeout(announceTimerRef.current), []);
   const [sessionStartWeights, setSessionStartWeights] = useState({});
   const [showDeloadComplete, setShowDeloadComplete] = useState(false);
   const [returnGapDays, setReturnGapDays] = useState(null);

@@ -230,3 +230,15 @@ describe("a rep target left below its lift's base", () => {
     expect(P.getReps(WHO)).toEqual({ [BENCH]: 3 });
   });
 });
+
+describe("the screen-reader announcement timer", () => {
+  it("is held in a ref, replaced on each announce and cleared on unmount", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const src = readFileSync(resolve(process.cwd(), "components/SessionHost.jsx"), "utf8");
+    const announce = src.slice(src.indexOf("const announce = (msg) =>"), src.indexOf("announceTimerRef.current), []);") + 40);
+    expect(announce).toContain("clearTimeout(announceTimerRef.current);");
+    expect(announce).toContain("announceTimerRef.current = setTimeout(() => setSrMsg(msg), 60);");
+    expect(announce).toMatch(/useEffect\(\(\) => \(\) => clearTimeout\(announceTimerRef\.current\), \[\]\);/);
+  });
+});
