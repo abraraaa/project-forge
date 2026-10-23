@@ -708,19 +708,15 @@ export default function SessionHost({ mode = null } = {}) {
   const handleLog = () => {
     if (isSS) {
       if (phase === "A") {
-        if (block.type === "finisher") {
-          pushSetToDraft(resolveExFn(block.id, "A", block.exA), null);
-        }
         // Rest is between rounds; B follows A without one, so the clock stops
         // here rather than running out mid-B.
         setRestActive(false);
         setPhase("B"); return;
       }
+      // Superset or finisher, the round is rated once, after B; commitLog
+      // saves both sides with that rating.
       setPhase("A");
-      if (block.type === "superset") { setSsRoundDone(true); return; }
-      pushSetToDraft(resolveExFn(block.id, "B", block.exB), null);
-      setSetNum(p => p + 1);           // as commitLog: the fork, not an advance
-      startRest(block.rest);
+      setSsRoundDone(true);
       return;
     }
     setAwaitRpe(true);

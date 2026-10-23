@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 // ─────────────────────────────────────────────────────────────────────────────
 // Superset timing and rating through the real host and the real store: a
-// round rated with the round in front of you saves what the rows say, rest
-// runs between rounds and is never left running through B, rest carried in by
-// Next is capped at the arriving block's own, a log made mid-rest restarts it,
-// and the last round gets the final-set line a single block gets. Only the router and analytics are
+// round rated with the round in front of you saves what the rows say, a
+// finisher round is rated the same way, rest runs between rounds and is never
+// left running through B, rest carried in by Next is capped at the arriving
+// block's own, a log made mid-rest restarts it, and the last round gets the
+// final-set line a single block gets. Only the router and analytics are
 // stubbed; the clock is faked so rest can run out on cue.
 //
 // Text queries, not getByRole: see SessionScreen.surface.test.jsx.
@@ -72,6 +73,38 @@ describe("rating a round", () => {
     expect(saved[nameA].sets).toEqual([expect.objectContaining({ rpe: 8 })]);
     // Round 2 begins on A, with the counter in rounds.
     expect(kicker(/^Round 2 of 3 · Superset A$/)).toBeTruthy();
+  });
+});
+
+describe("rating a finisher round", () => {
+  it("asks after B with both lifts in front of you, saves the rating on both, then rests", () => {
+    start();
+    mainsDone();
+    tap(/^Next: /);
+    for (let r = 0; r < 3; r++) logRound();
+    tap(/^Next: /);
+    for (let r = 0; r < 3; r++) logRound();
+    tap(/^Next: /);
+    wait(60);   // the carried rest runs out; the finisher's own is what follows
+
+    // A into B asks nothing and saves nothing yet: one rating per round.
+    tap("Log A — into B");
+    expect(screen.queryByText("How hard was that round?")).toBeNull();
+    expect(D.load(WHO).draft.blocks.afin).toBeUndefined();
+
+    tap("Log B — round done");
+    expect(screen.getByText("How hard was that round?")).toBeTruthy();
+    expect(kicker(/^Round 1 of 4 · Finisher$/)).toBeTruthy();
+    const names = ["A", "B"].map((side) =>
+      screen.getByText(side, { selector: "span" }).closest("button").children[0].children[1].textContent);
+    expect(names.every(Boolean)).toBe(true);
+
+    tap(/Log at/);
+    const saved = D.load(WHO).draft.blocks.afin.exercises;
+    expect(Object.keys(saved).sort()).toEqual([...names].sort());
+    for (const n of names) expect(saved[n].sets).toEqual([expect.objectContaining({ rpe: 8, rir: 2 })]);
+    expect(kicker(/^Round 2 of 4 · Finisher A$/)).toBeTruthy();
+    expect(screen.getByLabelText("Resting, 1:00 left — tap to skip")).toBeTruthy();
   });
 });
 
@@ -146,6 +179,23 @@ describe("the last round gets the final-set line", () => {
     wait(5);   // let the main lift's line clear
     logRound();
     logRound();
+    wait(1);
+    expect(flashed()).toBeNull();
+    logRound();
+    wait(1);
+    expect(flashed()).toBeTruthy();
+  });
+
+  it("after rating a finisher's last round, and not before", () => {
+    start();
+    mainsDone();
+    tap(/^Next: /);
+    for (let r = 0; r < 3; r++) logRound();
+    tap(/^Next: /);
+    for (let r = 0; r < 3; r++) logRound();
+    tap(/^Next: /);
+    wait(5);   // let the superset's line clear
+    for (let r = 0; r < 3; r++) logRound();
     wait(1);
     expect(flashed()).toBeNull();
     logRound();

@@ -2,9 +2,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // A superset on the session screen. While a round is rated, the round stands
 // where the next set's card would: both sides as they will be saved, each
-// opening the drum. During A, B is one line above Log. One counter scheme,
-// Round n of N, on the kicker, the logged rows and the end of the block. The
-// rest ring sits with A, never B. The single-exercise rating is unchanged.
+// opening the drum; a finisher round the same. During A, B is one line above
+// Log. One counter scheme, Round n of N, on the kicker, the logged rows and
+// the end of the block. The rest ring sits with A, never B. The
+// single-exercise rating is unchanged.
 //
 // Text queries, not getByRole: see SessionScreen.surface.test.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,6 +105,17 @@ describe("rating a round, with the round in front of you", () => {
     const exB = { name: "Assisted Pull-Up", muscle: "Back", reps: 8, weight: 20, loadType: "assisted_bodyweight" };
     render(<SessionScreen {...rating({ block: { ...ss, exB }, resolvedExB: exB })} />);
     expect(flat(recapRow("B").textContent)).toBe("BAssisted Pull-Up−20 kg × 8");
+  });
+
+  it("a finisher round shows both its lifts the same way", () => {
+    const legRaise = { name: "Hanging Leg Raise", muscle: "Core", reps: 10, weight: null, loadType: "bodyweight" };
+    const calf     = { name: "Standing Calf Raise", muscle: "Calves", reps: 15, weight: 35, loadType: "machine" };
+    const fin      = { id: "afin", type: "finisher", label: "Finisher", sets: 4, rest: 60, exA: legRaise, exB: calf };
+    render(<SessionScreen {...rating({ block: fin, resolvedExA: legRaise, resolvedExB: calf })} />);
+    expect(byText("Round 1 of 4 · Finisher")).toBeTruthy();
+    expect(flat(recapRow("A").textContent)).toBe("AHanging Leg Raise10 reps");
+    expect(flat(recapRow("B").textContent)).toBe("BStanding Calf Raise35 kg × 15");
+    expect(screen.getByText("How hard was that round?")).toBeTruthy();
   });
 
   it("the single-exercise rating keeps its card and its label", () => {

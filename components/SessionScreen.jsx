@@ -226,7 +226,7 @@ export function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJum
                     <span style={{fontSize:12,fontWeight:500,color:T.ink2}}>{s.label}</span>
                   </span>
                   <span style={{fontSize:12,color:T.ink3}}>
-                    <span style={{fontFamily:T.measured}}>{pairs}/{total}</span> {b.type === "superset" ? "rounds" : "sets"}
+                    <span style={{fontFamily:T.measured}}>{pairs}/{total}</span> {b.type === "superset" || b.type === "finisher" ? "rounds" : "sets"}
                   </span>
                 </div>
                 <div style={{fontSize:12,color:T.ink3,marginBottom:2}}>
