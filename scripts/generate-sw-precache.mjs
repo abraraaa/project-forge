@@ -3,14 +3,15 @@
 // postbuild: emit public/sw-precache.js — the build-time precache manifest the
 // service worker imports. See docs/offline-shell.md.
 //
-// Source of truth: the PRERENDERED HTML of each shell route
-// (.next/server/app/<route>.html). Parsing those for /_next/static references
+// Source of truth: the PRERENDERED HTML of each shell route under
+// .next/server (htmlPathsFor). Parsing those for /_next/static references
 // is bundler-agnostic (this repo's build emits no app-build-manifest.json) and
 // exact by construction — the asset list is literally what the cached shell
 // HTML will request. Pure core (extractAssets/buildPrecache) is unit-tested;
 // the CLI tail wires it to .next/ and public/.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -20,6 +21,17 @@ export const SHELL_ROUTES = ["/", "/session", "/profile", "/profile/main-lifts",
 
 // "/" → index.html, "/session" → session.html, …
 export const htmlFileFor = (route) => (route === "/" ? "index.html" : `${route.slice(1)}.html`);
+
+// Where a shell route's prerendered HTML sits under .next/server: the plain
+// layout (app/<route>.html), then the one Next 16.3.8 writes when a build
+// adapter is configured, as Vercel's build does: each page keyed by the
+// sha256 of its app entry ("/session/page") under route-cache/APP_PAGE.
+export const htmlPathsFor = (route) => {
+  const entry = `${route === "/" ? "" : route}/page`;
+  const key = createHash("sha256").update(entry).digest("hex");
+  const page = route === "/" ? "/index" : route;
+  return [`app/${htmlFileFor(route)}`, `route-cache/APP_PAGE/${key}/$${page}.html`];
+};
 
 // Strict charset: stops at quotes/backslashes, so escaped-JSON duplicates
 // inside inlined RSC payloads don't produce phantom `foo.js\` entries.
@@ -57,9 +69,10 @@ if (invokedDirectly) {
   const root = process.cwd();
   const htmlByRoute = {};
   for (const route of SHELL_ROUTES) {
-    try {
-      htmlByRoute[route] = readFileSync(resolve(root, ".next/server/app", htmlFileFor(route)), "utf8");
-    } catch { /* left missing → reported below */ }
+    for (const rel of htmlPathsFor(route)) {
+      try { htmlByRoute[route] = readFileSync(resolve(root, ".next/server", rel), "utf8"); break; }
+      catch { /* not this layout; still missing after both → reported below */ }
+    }
   }
   const buildId = readFileSync(resolve(root, ".next/BUILD_ID"), "utf8").trim();
   const manifest = buildPrecache(htmlByRoute, buildId);
