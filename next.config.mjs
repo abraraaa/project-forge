@@ -13,6 +13,10 @@ const nextConfig = {
   // `next dev` would otherwise append its own agent-rules block to CLAUDE.md
   // on every start; that file is the collaboration contract, not Next's.
   agentRules: false,
+  // Nothing here uses next/image: the only images are blob: <img>s, PNGs and
+  // the next/og card, which has its own renderer. Unoptimized makes
+  // /_next/image a 404 instead of an open optimiser endpoint.
+  images: { unoptimized: true },
   // Font source for app/fonts/active.js: Google by default, the committed
   // local copies when scripts/build.mjs retries after a font fetch failure.
   turbopack: {

@@ -111,6 +111,17 @@ describe("build wrapper", () => {
     expect(isGoogleFontFetchFailure(output)).toBe(true);
   });
 
+  it("recognises the 16.4 wording of the stylesheet fetch failure", () => {
+    const output = [
+      "> Build error occurred",
+      "Error: Turbopack build failed with 3 errors:",
+      "[next]/internal/font/google/bodoni_moda_aff26625.module.css",
+      "Error: next/font: error:",
+      "Failed to download Bodoni Moda from Google Fonts.",
+    ].join("\n");
+    expect(isGoogleFontFetchFailure(output)).toBe(true);
+  });
+
   it("recognises a failed font file download from fonts.gstatic.com", () => {
     const output = [
       "[next]/internal/font/google/1f28a1525bf4a5c5-s.woff2",
