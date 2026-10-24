@@ -15,8 +15,9 @@
 //   8. Date-of-week math handles Sunday + Monday correctly.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { Days, W } from "../lib/storage.js";
+import { mergeDayEntries } from "../lib/sync-merge.js";
 
 describe("Days — write + read primitives", () => {
   it("set() upserts and auto-stamps updatedAt", () => {
@@ -85,6 +86,58 @@ describe("Days — write + read primitives", () => {
     expect(Days.replaceAll("alice", null)).toBe(null);
     expect(Days.replaceAll("alice", [])).toBe(null);
     expect(Days.replaceAll("alice", "string")).toBe(null);
+  });
+});
+
+describe("Days.set — per-field stamps", () => {
+  afterEach(() => vi.useRealTimers());
+  const at = (iso) => vi.useFakeTimers({ toFake: ["Date"], now: new Date(iso) });
+
+  it("stamps each field it writes; untouched fields keep the time they were written", () => {
+    at("2026-10-20T08:00:00.000Z");
+    Days.set("alice", "2026-10-20", { scheduledType: "zone2", completedType: "zone2" });
+    at("2026-10-20T12:00:00.000Z");
+    const e = Days.set("alice", "2026-10-20", { scheduledType: "zone2", marks: { bonus: true } });
+    expect(e.updatedAt).toBe("2026-10-20T12:00:00.000Z");
+    // Stamps equal to updatedAt are implied by it, so only the older one is stored.
+    expect(e.stamps).toEqual({ completedType: "2026-10-20T08:00:00.000Z" });
+    expect(Days.get("alice", "2026-10-20").stamps).toEqual(e.stamps);
+    // Writing completedType again: only scheduledType still predates updatedAt.
+    at("2026-10-20T13:00:00.000Z");
+    expect(Days.set("alice", "2026-10-20", { completedType: "zone2" }).stamps).toEqual({ scheduledType: "2026-10-20T12:00:00.000Z" });
+    // Writing both: every field is at updatedAt, so no stamps key.
+    at("2026-10-20T14:00:00.000Z");
+    expect(Days.set("alice", "2026-10-20", { scheduledType: "zone2", completedType: "zone2" })).not.toHaveProperty("stamps");
+  });
+
+  it("a write of every field at once keeps the plain shape", () => {
+    at("2026-10-20T08:00:00.000Z");
+    expect(Days.set("alice", "2026-10-21", { scheduledType: "strength", completedType: "strength", sessionId: "s1" })).toEqual({
+      date: "2026-10-21", scheduledType: "strength", completedType: "strength", sessionId: "s1", marks: {}, updatedAt: "2026-10-20T08:00:00.000Z",
+    });
+  });
+
+  it("an entry stored without stamps: its fields keep its updatedAt when another field is written", () => {
+    window.localStorage.setItem("forge:alice:days", JSON.stringify({
+      "2026-10-20": { date: "2026-10-20", scheduledType: "zone2", completedType: "zone2", sessionId: null, marks: {}, updatedAt: "2026-10-20T08:00:00.000Z" },
+    }));
+    at("2026-10-20T12:00:00.000Z");
+    const e = Days.set("alice", "2026-10-20", { marks: { bonus: true } });
+    expect(e.stamps).toEqual({ scheduledType: "2026-10-20T08:00:00.000Z", completedType: "2026-10-20T08:00:00.000Z" });
+  });
+
+  it("a stale copy's bonus write does not beat a newer completion from another device", () => {
+    const S = { date: "2026-10-20", scheduledType: "zone2", completedType: "zone2", sessionId: null, marks: {}, updatedAt: "2026-10-20T08:00:00.000Z" };
+    window.localStorage.setItem("forge:alice:days", JSON.stringify({ "2026-10-20": S }));
+    window.localStorage.setItem("forge:bob:days", JSON.stringify({ "2026-10-20": S }));
+    at("2026-10-20T10:00:00.000Z");
+    const A = Days.set("alice", "2026-10-20", { scheduledType: "zone2", completedType: "strength", sessionId: "sess-1" });
+    at("2026-10-20T12:00:00.000Z");
+    const B = Days.set("bob", "2026-10-20", { scheduledType: "zone2", marks: { bonus: true } });
+    for (const [x, y] of [[A, B], [B, A]]) {
+      const e = mergeDayEntries({ "2026-10-20": x }, { "2026-10-20": y })["2026-10-20"];
+      expect(e).toMatchObject({ completedType: "strength", sessionId: "sess-1", marks: { bonus: true } });
+    }
   });
 });
 

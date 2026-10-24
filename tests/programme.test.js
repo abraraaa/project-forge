@@ -23,7 +23,7 @@ import {
   findRecentDays,
   findUntickedRecent,
   rotateAccessories,
-  pushHistoryBlock,
+  pushHistoryBlock, recentNamesFor,
   computeRotationStimulusDelta,
   deriveStrengthDaySessions,
   sessionMetaForDate,
@@ -269,45 +269,57 @@ describe("rotation memory — 3-block exclusion", () => {
 });
 
 describe("pushHistoryBlock", () => {
+  // The memory is a stamped map; recentNamesFor reads it newest first.
+  const AT = "2026-10-20T10:00:00.000Z";
+  const read = (h) => Object.fromEntries(Object.entries(h).map(([k, v]) => [k, recentNamesFor(v)]));
+
   it("prepends the active config onto history, capped at ROTATION_MEMORY_BLOCKS", () => {
     const prev = { "ass1-A": ["DB Reverse Lunge", "Reverse Lunge"] };
     const active = { "ass1-A": { name: "Step-Up" } };
-    const next = pushHistoryBlock(prev, active);
-    expect(next["ass1-A"]).toEqual(["Step-Up", "DB Reverse Lunge", "Reverse Lunge"]);
+    const next = pushHistoryBlock(prev, active, AT);
+    expect(recentNamesFor(next["ass1-A"])).toEqual(["Step-Up", "DB Reverse Lunge", "Reverse Lunge"]);
+    expect(next["ass1-A"]["Step-Up"]).toBe(AT);
   });
 
   it("evicts the oldest entry when history hits the cap", () => {
     const prev = { "ass1-A": ["B", "C", "D"] };
     const active = { "ass1-A": { name: "A" } };
-    const next = pushHistoryBlock(prev, active);
-    expect(next["ass1-A"]).toHaveLength(3);
-    expect(next["ass1-A"]).toEqual(["A", "B", "C"]); // "D" evicted
+    const next = pushHistoryBlock(prev, active, AT);
+    expect(Object.keys(next["ass1-A"])).toHaveLength(3);
+    expect(recentNamesFor(next["ass1-A"])).toEqual(["A", "B", "C"]); // "D" evicted
   });
 
   it("dedupes — if the active pick already appears in history, it isn't duplicated", () => {
     const prev = { "ass1-A": ["A", "B"] };
     const active = { "ass1-A": { name: "A" } };
-    const next = pushHistoryBlock(prev, active);
-    expect(next["ass1-A"]).toEqual(["A", "B"]); // "A" stays at front, not duplicated
+    const next = pushHistoryBlock(prev, active, AT);
+    expect(recentNamesFor(next["ass1-A"])).toEqual(["A", "B"]); // "A" stays at front, not duplicated
   });
 
   it("accepts legacy single-string prev entries", () => {
     const prev = { "ass1-A": "Reverse Lunge" };
     const active = { "ass1-A": { name: "Step-Up" } };
-    const next = pushHistoryBlock(prev, active);
-    expect(next["ass1-A"]).toEqual(["Step-Up", "Reverse Lunge"]);
+    const next = pushHistoryBlock(prev, active, AT);
+    expect(recentNamesFor(next["ass1-A"])).toEqual(["Step-Up", "Reverse Lunge"]);
   });
 
   it("handles slots absent from prev history (first rotation)", () => {
     const active = { "ass1-A": { name: "Step-Up" }, "ass1-B": { name: "Cable Row" } };
-    const next = pushHistoryBlock({}, active);
-    expect(next).toEqual({ "ass1-A": ["Step-Up"], "ass1-B": ["Cable Row"] });
+    const next = pushHistoryBlock({}, active, AT);
+    expect(read(next)).toEqual({ "ass1-A": ["Step-Up"], "ass1-B": ["Cable Row"] });
   });
 
   it("skips slots with no name (defensive)", () => {
     const active = { "ass1-A": null, "ass1-B": { name: "Cable Row" } };
-    const next = pushHistoryBlock({}, active);
-    expect(next).toEqual({ "ass1-B": ["Cable Row"] });
+    const next = pushHistoryBlock({}, active, AT);
+    expect(read(next)).toEqual({ "ass1-B": ["Cable Row"] });
+  });
+
+  it("a stamped prev keeps its stamps; the new pick is newer even when the clock is behind", () => {
+    const prev = { "ass1-A": { B: "2026-10-20T11:00:00.000Z", C: "2026-10-19T09:00:00.000Z" } };
+    const next = pushHistoryBlock(prev, { "ass1-A": { name: "A" } }, AT);
+    expect(next["ass1-A"]).toEqual({ A: "2026-10-20T11:00:00.001Z", B: "2026-10-20T11:00:00.000Z", C: "2026-10-19T09:00:00.000Z" });
+    expect(recentNamesFor(next["ass1-A"])).toEqual(["A", "B", "C"]);
   });
 });
 
