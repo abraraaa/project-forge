@@ -599,7 +599,7 @@ export default function SessionHost({ mode = null } = {}) {
       setBwPromptedThisSession(true);
       setTimeout(() => setBwEditOpen(true), 280);
     }
-  }, [getW, block, isSS, phase, sessionSwaps, sessionWeights, sessionReps, workingWeights, prescribedReps, planWeights, planReps, addedLoads, muscleAnchors, resolveExFn, sinks, bodyweight, bwPromptedThisSession, reachArmed, coached]);
+  }, [getW, block, isSS, phase, sessionSwaps, sessionWeights, sessionReps, workingWeights, prescribedReps, planReps, addedLoads, muscleAnchors, resolveExFn, sinks, bodyweight, bwPromptedThisSession, reachArmed, coached]);
 
   // Final-set flash — one quiet line after rating the LAST set of an
   // exercise (lib/set-flash.js: no repeats this session, Easy falls back to
