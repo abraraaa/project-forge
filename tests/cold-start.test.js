@@ -270,3 +270,23 @@ describe("the engine's cold start lands on the implement's grid", () => {
     expect(TS.get("p").lifts["Incline DB Curl"].history.at(-1).decision).toBe("HOLD");
   });
 });
+
+// Assisted Pull-Up progresses by load at factor 0: band kg is nominal, so no
+// anchor sizes its assistance. It starts at what the card sets, else nothing.
+describe("an assisted lift never takes anchor-derived assistance", () => {
+  const back = { bestE1RM: 150, bestE1RMLift: "Barbell Row" };
+  const assisted = { name: "Assisted Pull-Up", weight: null, loadType: "assisted_bodyweight" };
+
+  it("coldStartFromAnchor is null for it (factor 0), not 0", () => {
+    expect(getLiftProfile("Assisted Pull-Up").progressesByLoad).toBe(true);
+    expect(coldStartFromAnchor("Assisted Pull-Up", back)).toBeNull();
+    // A factor-0 calf raise reads the same; a factor above 0 still translates.
+    expect(coldStartFromAnchor("Standing Calf Raise", { bestE1RM: 100 })).toBeNull();
+    expect(coldStartFromAnchor("Pull-Up", back)).toBeGreaterThan(0);
+  });
+
+  it("planStartWeight stays null without W, and reads W when the card set it", () => {
+    expect(planStartWeight(assisted, { working: {}, bodyweight: 80, anchors: { Back: back } })).toBeNull();
+    expect(planStartWeight(assisted, { working: { "Assisted Pull-Up": 20 }, bodyweight: 80, anchors: { Back: back } })).toBe(20);
+  });
+});

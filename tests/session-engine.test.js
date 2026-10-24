@@ -7,7 +7,7 @@
 // Class lock: neither component may ever grow a second engine copy.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -436,23 +436,88 @@ describe("a lift's first logged session progresses from what was lifted", () => 
   });
 
   // Assistance kg is help, not load to add to: an assisted first session is
-  // not seeded, so it keeps the cold start whichever way the lift's profile reads.
-  it("a first assisted pull-up keeps the cold start", () => {
-    // Assisted Pull-Up progresses by reps (no weight written); a pull-up
-    // logged assisted holds the 20 kg it started from.
-    for (const [name, ww] of [["Assisted Pull-Up", undefined], ["Pull-Up", 20]]) {
+  // not seeded, so it keeps the cold start and holds the assistance it used.
+  const assisted = (name, weight, reps, rir, id = "2026-10-11T10:00:00.000Z") => {
+    const rec = { ...firstRecord(name, "assisted_bodyweight", weight, reps, rir), id, date: id.slice(0, 10) };
+    for (const set of rec.blocks[0].exercises[0].sets) {
+      set.bodyweightUsed = 80;
+      set.effectiveLoad = 80 - weight;
+      set.est1rm = (80 - weight) * (1 + set.reps / 30);
+    }
+    return rec;
+  };
+
+  it("a first assisted pull-up keeps the cold start and holds 20 kg", () => {
+    for (const name of ["Assisted Pull-Up", "Pull-Up"]) {
       localStorage.clear();
-      const rec = firstRecord(name, "assisted_bodyweight", 20, [8, 8, 8], 3);
-      for (const set of rec.blocks[0].exercises[0].sets) {
-        set.bodyweightUsed = 80;
-        set.effectiveLoad = 60;
-        set.est1rm = 60 * (1 + 8 / 30);
-      }
-      const out = apply(rec, back);
-      expect(out.wwUpdates[name], name).toBe(ww);
+      const out = apply(assisted(name, 20, [8, 8, 8], 3), back);
+      expect(out.wwUpdates[name], name).toBe(20);
       const lift = TS.get("p").lifts[name];
       expect(lift.history.at(-1).decision, name).toBe("COLD_START");
       expect(lift.currentWeight, name).toBe(20);
+      // Factor 0: Assisted Pull-Up never writes the Back anchor from band kg.
+      if (name === "Assisted Pull-Up") expect(TS.get("p").muscleAnchors.Back).toEqual(back.Back);
+    }
+  });
+
+  it("the second assisted session takes a rung of help off: 20 to 18.75", () => {
+    apply(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3), back);
+    const out = apply(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3, "2026-10-13T10:00:00.000Z"), back);
+    expect(out.wwUpdates["Assisted Pull-Up"]).toBe(18.75);
+    expect(TS.get("p").lifts["Assisted Pull-Up"].currentWeight).toBe(20);
+    expect(TS.get("p").muscleAnchors.Back).toEqual(back.Back);
+  });
+
+  it("a deload session on an assisted lift leaves the 20 kg: the load type reaches the deload", () => {
+    TS.save("p", {
+      ...TS.get("p"),
+      lifts: { "Assisted Pull-Up": { currentWeight: 20, currentRepRange: { reps: 8, sets: 3, baseReps: 8 }, sessionsCount: 4, consecutiveHolds: 0, consecutiveAdds: 0, history: [] } },
+      mesocycle: { ...TS.get("p").mesocycle, currentPhase: "deload", activeDeload: { startedAt: "2026-10-12T12:00:00.000Z", plannedDays: 7, preDeloadWeights: { "Assisted Pull-Up": 20 } } },
+    });
+    H.append("p", assisted("Assisted Pull-Up", 20, [4, 4], 4, "2026-10-13T10:00:00.000Z"));
+    const out = applySessionToEngine("p", assisted("Assisted Pull-Up", 20, [4, 4], 4, "2026-10-13T10:00:00.000Z"));
+    expect(out.stillInDeload).toBe(true);
+    // Without the load type the upper_pull multiplier would cut help to 12.5.
+    expect(out.wwUpdates["Assisted Pull-Up"]).toBe(20);
+    expect(TS.get("p").lifts["Assisted Pull-Up"].history.at(-1).decision).toBe("DELOAD");
+  });
+
+  // A record with no load type at all reads the catalogue's (assisted), not
+  // the name's (belted), so the help still moves the right way.
+  const unlabelled = (rec) => {
+    const ex = rec.blocks[0].exercises[0];
+    delete ex.loadType;
+    for (const set of ex.sets) delete set.loadType;
+    return rec;
+  };
+
+  it("an unlabelled first assisted session holds 20 kg, not a belted 21.25", () => {
+    const out = apply(unlabelled(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3)), back);
+    expect(out.wwUpdates["Assisted Pull-Up"]).toBe(20);
+    expect(TS.get("p").lifts["Assisted Pull-Up"].history.at(-1).decision).toBe("COLD_START");
+  });
+
+  it("an unlabelled deload session on an assisted lift still leaves the 20 kg", () => {
+    TS.save("p", {
+      ...TS.get("p"),
+      lifts: { "Assisted Pull-Up": { currentWeight: 20, currentRepRange: { reps: 8, sets: 3, baseReps: 8 }, sessionsCount: 4, consecutiveHolds: 0, consecutiveAdds: 0, history: [] } },
+      mesocycle: { ...TS.get("p").mesocycle, currentPhase: "deload", activeDeload: { startedAt: "2026-10-12T12:00:00.000Z", plannedDays: 7, preDeloadWeights: { "Assisted Pull-Up": 20 } } },
+    });
+    const rec = unlabelled(assisted("Assisted Pull-Up", 20, [4, 4], 4, "2026-10-13T10:00:00.000Z"));
+    H.append("p", rec);
+    const out = applySessionToEngine("p", rec);
+    expect(out.stillInDeload).toBe(true);
+    expect(out.wwUpdates["Assisted Pull-Up"]).toBe(20);
+  });
+
+  it("an assisted session does not re-save the Back anchor it leaves alone", () => {
+    const spy = vi.spyOn(TS, "updateMuscleAnchor");
+    try {
+      apply(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3), back);
+      apply(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3, "2026-10-13T10:00:00.000Z"), back);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
     }
   });
 

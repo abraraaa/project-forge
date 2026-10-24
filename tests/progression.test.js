@@ -19,6 +19,8 @@ import {
   computeNextPrescription,
   updateLiftStateFromSession,
   reconcileLiftStateWithSession,
+  updateMuscleAnchorFromSession,
+  topSetWeight,
   isLatestSessionForLift,
   // Phase 3
   detectDeloadSignals,
@@ -38,7 +40,7 @@ import {
 import { startingWeightForLift, roundToHalfPlate, computeEffectiveLoad } from "../lib/storage.js";
 import { mondayOfWeekIso, addDaysIso } from "../lib/dates.js";
 import {
-  coldStartFromAnchor, sanitiseWorkingWeights, CATEGORY_COLD_START_MAX_KG,
+  coldStartFromAnchor, sanitiseWorkingWeights, CATEGORY_COLD_START_MAX_KG, getLiftProfile,
 } from "../lib/lift-translations.js";
 
 // ─── Test helpers ───────────────────────────────────────────────────────────
@@ -1605,18 +1607,28 @@ describe("assisted lifts progress by taking assistance away", () => {
     expect(r.weight).toBe(18.75);
   });
 
-  it("Assisted Pull-Up's profile progresses by reps, so its assistance does not move", () => {
-    const sets = [8, 8, 8].map((n) => assistedSet(20, n, 3));
-    const ex = { ...buildExercise({ name: "Assisted Pull-Up", muscle: "Back", sets, prescribed: { sets: 3, reps: 8, weight: 20 } }), loadType: ASSISTED };
-    const r = computeNextPrescription({
-      liftName: "Assisted Pull-Up",
-      history: [buildSession({ exercises: [ex] })],
-      liftState: { currentWeight: 20, consecutiveHolds: 0, consecutiveAdds: 0, stallSignal: null, sessionsCount: 3, history: [] },
-      context: { readiness: "normal", loadType: ASSISTED },
-    });
-    expect(r.weight).toBeNull();
-    expect(r.reps).toBe(9);
-    expect(r.rationale).toContain("bw_rep_progression");
+  // Was "progresses by reps, so its assistance does not move" before the
+  // profile flipped to upper_pull, progressesByLoad true, factor 0.
+  it("Assisted Pull-Up's profile progresses by assistance: 20 to 18.75 on a full session, 22.5 on a heavy miss", () => {
+    expect(getLiftProfile("Assisted Pull-Up")).toEqual({ primaryMuscle: "Back", category: "upper_pull", factor: 0, progressesByLoad: true });
+    const named = (reps, rir) => {
+      const sets = reps.map((n) => assistedSet(20, n, rir));
+      const ex = { ...buildExercise({ name: "Assisted Pull-Up", muscle: "Back", sets, prescribed: { sets: 3, reps: 8, weight: 20 } }), loadType: ASSISTED };
+      return computeNextPrescription({
+        liftName: "Assisted Pull-Up",
+        history: [buildSession({ exercises: [ex] })],
+        liftState: { currentWeight: 20, currentRepRange: { reps: 8, sets: 3, baseReps: 8 }, consecutiveHolds: 0, consecutiveAdds: 0, stallSignal: null, sessionsCount: 3, history: [] },
+        context: { readiness: "normal", loadType: ASSISTED },
+      });
+    };
+    const full = named([8, 8, 8], 3);
+    expect(full.decision).toBe("ADD");
+    expect(full.weight).toBe(18.75);
+    expect(full.reps).toBe(8);
+    expect(full.rationale).not.toContain("bw_rep_progression");
+    const miss = named([4, 4, 4], 0);
+    expect(miss.decision).toBe("DROP_10");
+    expect(miss.weight).toBe(22.5);
   });
 
   it("a heavy miss puts two rungs back: 20 to 22.5", () => {
@@ -1663,5 +1675,113 @@ describe("assisted lifts progress by taking assistance away", () => {
     const r = run({ assist: 10, loadType: "loaded_bodyweight" });
     expect(r.decision).toBe("ADD");
     expect(r.weight).toBe(11.25);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Assisted Pull-Up around the progression: top set, reconcile, deload,
+// recovery, anchor and stored state. Bodyweight 80, 20 kg of assistance.
+// ────────────────────────────────────────────────────────────────────────────
+describe("assisted lifts around the progression", () => {
+  const ASSISTED = "assisted_bodyweight";
+  const BODY = 80;
+  const set = (assist, reps = 8, rir = 3, extra = {}) => ({
+    weight: assist, reps, rir, loadType: ASSISTED, bodyweightUsed: BODY,
+    effectiveLoad: assist === null ? null : BODY - assist,
+    est1rm: assist === null ? null : (BODY - assist) * (1 + reps / 30), ...extra,
+  });
+  const ex = (sets, reps = 8) => ({ name: "Assisted Pull-Up", loadType: ASSISTED, sets, prescribed: { sets: sets.length, reps } });
+
+  it("the top set is the least assistance among earned sets; 0 counts; null only with no kg logged", () => {
+    expect(topSetWeight(ex([set(20), set(17.5), set(20)]), 99, ASSISTED)).toBe(17.5);
+    expect(topSetWeight(ex([set(5), set(0), set(5)]), 99, ASSISTED)).toBe(0);
+    // A reach to 15 kg that fell short is not earned; one that met 8 is.
+    expect(topSetWeight(ex([set(20), set(20), set(15, 5, 0, { reach: true })]), 99, ASSISTED)).toBe(20);
+    expect(topSetWeight(ex([set(20), set(20), set(15, 8, 1, { reach: true })]), 99, ASSISTED)).toBe(15);
+    expect(topSetWeight(ex([set(null), set(null)]), 99, ASSISTED)).toBeNull();
+    // A belted pull-up still reads the most added kg.
+    expect(topSetWeight({ sets: [{ weight: 10, reps: 8 }, { weight: 12.5, reps: 8 }], prescribed: { reps: 8 } }, 99, "loaded_bodyweight")).toBe(12.5);
+  });
+
+  it("reconcile takes the least assistance logged, 0 included; no kg logged leaves the state", () => {
+    const state = { currentWeight: 20 };
+    expect(reconcileLiftStateWithSession(state, ex([set(20), set(17.5), set(20)])).currentWeight).toBe(17.5);
+    expect(reconcileLiftStateWithSession(state, ex([set(2.5), set(0)])).currentWeight).toBe(0);
+    expect(reconcileLiftStateWithSession(state, ex([set(20), set(20)]))).toBe(state);
+    expect(reconcileLiftStateWithSession(state, ex([set(null), set(null)]))).toBe(state);
+  });
+
+  it("a deload holds the assistance and halves the reps on 2 sets", () => {
+    const rx = computeDeloadPrescription("Assisted Pull-Up", { currentWeight: 20, currentRepRange: { reps: 8, sets: 3 } }, { loadType: ASSISTED });
+    expect(rx.weight).toBe(20);
+    expect(rx.sets).toBe(2);
+    expect(rx.reps).toBe(4);
+    expect(rx.rationale).toEqual(["bw_deload_reduced_reps"]);
+    expect(rx.decision).toBe("DELOAD");
+  });
+
+  it("recovery session 1 holds the assistance; session 2 takes the standard path", () => {
+    const lift = { currentWeight: 20, preDeloadWeight: 20, inRecoveryUntil: 3, currentRepRange: { reps: 8, sets: 3, baseReps: 8 }, history: [] };
+    const r1 = computeRecoveryPrescription("Assisted Pull-Up", lift, [], { loadType: ASSISTED });
+    expect(r1.weight).toBe(20);
+    expect(r1.reps).toBe(8);
+    expect(r1.decision).toBe("RECOVERY");
+    expect(r1.rationale).toEqual(["recovery_session_1_assisted_hold"]);
+    const history = [buildSession({ exercises: [{ ...buildExercise({ name: "Assisted Pull-Up", muscle: "Back", sets: [set(20), set(20), set(20)], prescribed: { sets: 3, reps: 8 } }), loadType: ASSISTED }] })];
+    const r2 = computeRecoveryPrescription("Assisted Pull-Up", { ...lift, inRecoveryUntil: 2, sessionsCount: 4, consecutiveAdds: 0 }, history, { loadType: ASSISTED });
+    expect(r2.weight).toBe(18.75);
+    expect(r2.rationale).toContain("in_recovery_phase");
+  });
+
+  it("a factor-0 profile never writes the muscle anchor; a factor above 0 still does", () => {
+    const record = { date: "2026-10-20" };
+    const back = { bestE1RM: 150, bestE1RMLift: "Barbell Row", bestE1RMDate: "2026-10-01", recentTopSets: [] };
+    expect(updateMuscleAnchorFromSession(back, record, ex([set(20), set(20)]))).toBe(back);
+    expect(updateMuscleAnchorFromSession(null, record, ex([set(0, 12)]))).toBeNull();
+    // A calf raise is factor 0 too: the old `|| 1` wrote it at factor 1.
+    const calf = { name: "Standing Calf Raise", sets: [{ weight: 100, reps: 12, est1rm: 140 }] };
+    expect(updateMuscleAnchorFromSession(null, record, calf)).toBeNull();
+    const squat = { name: "Barbell Back Squat", sets: [{ weight: 100, reps: 5, est1rm: 116.7 }] };
+    expect(updateMuscleAnchorFromSession(null, record, squat).bestE1RM).toBe(116.7);
+  });
+
+  // A lift state stored while the profile progressed by reps: no kg, and a
+  // rep climb from 10 to 12 (bwClimb). Nothing is rewritten; the loaded path
+  // reads it as it is.
+  describe("a lift state from before the flip reads as it is", () => {
+    const stored = {
+      currentWeight: null, currentRepRange: { reps: 12, sets: 3, baseReps: 10, bwClimb: true },
+      consecutiveHolds: 0, consecutiveAdds: 0, stallSignal: null, sessionsCount: 6, history: [],
+    };
+    const next = (sets) => computeNextPrescription({
+      liftName: "Assisted Pull-Up",
+      history: [buildSession({ exercises: [{ ...buildExercise({ name: "Assisted Pull-Up", muscle: "Back", sets, prescribed: { sets: 3, reps: 12 } }), loadType: ASSISTED }] })],
+      liftState: stored,
+      context: { readiness: "normal", loadType: ASSISTED },
+    });
+
+    it("with 20 kg logged, a full session banks the climb: reps back to its base of 10, one rung off to 18.75", () => {
+      const r = next([set(20, 12), set(20, 12), set(20, 12)]);
+      expect(r.decision).toBe("ADD");
+      expect(r.weight).toBe(18.75);
+      expect(r.reps).toBe(10);
+      expect(r.rationale).toContain("rep_climb_banked");
+      expect(r.repRange).toEqual({ reps: 10, sets: 3, baseReps: 10, bwBase: 10 });
+    });
+
+    it("with no kg logged, a full session holds at 0 assistance and keeps the 12", () => {
+      const r = next([set(null, 12), set(null, 12), set(null, 12)]);
+      expect(r.decision).toBe("HOLD");
+      expect(r.decisionReason).toBe("assistance_at_zero");
+      expect(r.weight).toBe(0);
+      expect(r.reps).toBe(12);
+    });
+
+    it("with no kg logged, a heavy miss puts 2.5 kg of help back and the reps to 10", () => {
+      const r = next([set(null, 6, 0), set(null, 5, 0), set(null, 5, 0)]);
+      expect(r.decision).toBe("DROP_10");
+      expect(r.weight).toBe(2.5);
+      expect(r.reps).toBe(10);
+    });
   });
 });

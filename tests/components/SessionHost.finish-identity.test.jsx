@@ -14,7 +14,8 @@
 // Re-recorded for first-session seeding: a never-trained lift's first session
 // now holds or adds from its top set (HOLD, consecutiveHolds 1, the performed
 // rep range) instead of COLD_START, and the swapped-in Dumbbell Bench Press
-// keeps the drum's 28.
+// keeps the drum's 28. Re-recorded again when factor-0 lifts stopped writing
+// a muscle anchor: the Standing Calf Raise no longer writes Calves.
 //
 // Re-recorded for rated finishers: the finisher's sets carry the round's
 // rating (RPE and RIR) instead of null, Standing Calf Raise's lift history

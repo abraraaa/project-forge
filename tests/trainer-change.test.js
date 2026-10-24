@@ -207,8 +207,9 @@ describe("W1: no weight change where W is never read", () => {
   it("refuses timed holds and lifts that do not progress by load", () => {
     const timed = { programmeBlock: { config: { "afin-A": pool("afin-A", "L-Sit Hold") } } };
     expect(code(check({ kind: "weight", lift: "L-Sit Hold", kg: 5 }, timed))).toBe("bodyweight");
+    // Assisted Pull-Up progresses by assistance now: its weight is a change.
     const assisted = { programmeBlock: { config: { "bss1-B": pool("bss1-B", "Assisted Pull-Up") } } };
-    expect(code(check({ kind: "weight", lift: "Assisted Pull-Up", kg: 20 }, assisted))).toBe("not_by_load");
+    expect(check({ kind: "weight", lift: "Assisted Pull-Up", kg: 20 }, assisted)).toMatchObject({ ok: true, code: null });
     const toes = { programmeBlock: { config: { "afin-A": pool("afin-A", "Toes-to-Bar") } } };
     expect(code(check({ kind: "weight", lift: "Toes-to-Bar", kg: 5 }, toes))).toBe("not_by_load");
   });
@@ -1914,5 +1915,58 @@ describe("planSessionSteps", () => {
     const record = liveRecord();
     expect(planDeviceSteps([srow(record)], { meta: {}, history: [], todayIso: TODAY }))
       .toEqual({ weights: {}, reps: {}, mainLifts: {}, weeks: [], acks: [], reverts: [], applied: [] });
+  });
+});
+
+// ── Assisted: the kg is help, so the bounds mirror ─────────────────────────
+
+describe("an assisted lift's bounds mirror: less help is capped, more help is free", () => {
+  const AP = "Assisted Pull-Up";
+  const meta = { programmeBlock: { config: { "bss1-B": pool("bss1-B", AP) } } };
+  const at = (kg, date = ago(2)) => rec(date, { [AP]: { kg, reps: 8, loadType: "assisted_bodyweight" } });
+  const c = (hist, m = meta) => ctx(m, hist);
+
+  it("from 20 kg of help: two rungs less (17.5) to ADDED_LOAD_MAX_KG, no big-drop warning", () => {
+    const hist = [at(20)];
+    expect(boundsFor(AP, c(hist))).toEqual({ min: 17.5, max: ADDED_LOAD_MAX_KG, step: 1.25, warnBelow: null, blocked: null });
+    expect(check({ kind: "weight", lift: AP, kg: 17.5 }, meta, hist)).toMatchObject({ ok: true, warnings: [] });
+    expect(code(check({ kind: "weight", lift: AP, kg: 16.25 }, meta, hist))).toBe("per_change");
+    // More help is the easy way: free up to the drum's top for added load.
+    expect(check({ kind: "weight", lift: AP, kg: 40 }, meta, hist)).toMatchObject({ ok: true, warnings: [] });
+    expect(check({ kind: "weight", lift: AP, kg: ADDED_LOAD_MAX_KG }, meta, hist).ok).toBe(true);
+    expect(code(check({ kind: "weight", lift: AP, kg: ADDED_LOAD_MAX_KG + 1.25 }, meta, hist))).toBe("per_change");
+  });
+
+  it("per 7 days: 15% of a week-ago top set's help, always one rung", () => {
+    // 20 a week ago, 18.75 now: two rungs would be 16.25, the week holds it to 17.5.
+    const hist = [at(20, ago(9)), at(18.75)];
+    expect(boundsFor(AP, c(hist)).min).toBe(17.5);
+    expect(check({ kind: "weight", lift: AP, kg: 17.5 }, meta, hist).ok).toBe(true);
+    expect(code(check({ kind: "weight", lift: AP, kg: 16.25 }, meta, hist))).toBe("per_week");
+    // 5 kg of help: 15% is under a rung, so one rung (3.75) and no further.
+    const small = [at(5)];
+    expect(boundsFor(AP, c(small)).min).toBe(3.75);
+    expect(code(check({ kind: "weight", lift: AP, kg: 2.5 }, meta, small))).toBe("per_week");
+    // At one rung of help the least a change sets is that rung: 0 is out of range.
+    expect(boundsFor(AP, c([at(1.25)])).min).toBe(1.25);
+    expect(code(check({ kind: "weight", lift: AP, kg: 0 }, meta, [at(1.25)]))).toBe("range");
+  });
+
+  it("no history takes the change's cap, not 1.25 kg", () => {
+    expect(boundsFor(AP, c([]))).toEqual({ min: 1.25, max: ADDED_LOAD_MAX_KG, step: 1.25, warnBelow: null, blocked: null });
+    expect(check({ kind: "weight", lift: AP, kg: 20 }, meta).ok).toBe(true);
+    expect(code(check({ kind: "weight", lift: AP, kg: ADDED_LOAD_MAX_KG + 1.25 }, meta))).toBe("no_history");
+    // Last time at 0 help reads the same: any help is the easier way.
+    expect(boundsFor(AP, c([at(0)])).max).toBe(ADDED_LOAD_MAX_KG);
+  });
+
+  it("R4: less help with more reps is double progression; more help is not", () => {
+    const m = { ...meta, weights: { [AP]: 20 }, reps: { [AP]: 8 } };
+    const hist = [at(20)];
+    const cc = ctx(m, hist);
+    const basis = basisFor(cc, { lifts: [AP] });
+    const set = (kg) => validateChangeSet({ id: SET_ID, ops: [{ kind: "weight", lift: AP, kg }, { kind: "reps", lift: AP, reps: 10 }] }, { ...cc, basis });
+    expect(set(17.5).warnings.filter((w) => w.code === "double_progression")).toHaveLength(2);
+    expect(set(22.5).warnings.filter((w) => w.code === "double_progression")).toEqual([]);
   });
 });

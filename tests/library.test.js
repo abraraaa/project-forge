@@ -47,6 +47,16 @@ describe("library catalogue", () => {
     }
   });
 
+  it("an assisted lift says it progresses by taking assistance away; the rest keep their category's copy", () => {
+    const assisted = LIBRARY.find((e) => e.name === "Assisted Pull-Up");
+    expect(assisted.progressesByLoad).toBe(true);
+    expect(assisted.categoryLabel).toBe("Upper-body pull");
+    expect(assisted.progression).toMatch(/^Progresses by taking assistance away/);
+    const row = LIBRARY.find((e) => e.name === "Lat Pulldown");
+    expect(row.progression).toMatch(/^Progresses by load/);
+    expect(LIBRARY.filter((e) => /assistance away/.test(e.progression)).map((e) => e.name)).toEqual(["Assisted Pull-Up"]);
+  });
+
   it("secondary contributions are sorted heaviest-first with sane weights", () => {
     for (const e of LIBRARY) {
       for (let i = 0; i < e.secondary.length; i++) {
