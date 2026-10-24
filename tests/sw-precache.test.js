@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { buildPrecache, extractAssets, renderPrecacheModule, htmlFileFor, SHELL_ROUTES } from "../scripts/generate-sw-precache.mjs";
+import { buildPrecache, extractAssets, renderPrecacheModule, htmlFileFor, htmlPathsFor, SHELL_ROUTES } from "../scripts/generate-sw-precache.mjs";
 
 const html = (...assets) =>
   `<html><head>${assets.map((a) => `<script src="${a}"></script>`).join("")}</head></html>`;
@@ -151,5 +151,28 @@ describe("update checks bypass the HTTP cache", () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync(new URL("../components/ServiceWorkerRegistrar.jsx", import.meta.url), "utf8");
     expect(src).toContain('updateViaCache: "none"');
+  });
+});
+
+describe("htmlPathsFor", () => {
+  // The hashes are what a Next 16.3.8 build with an adapter configured wrote:
+  // sha256 of the app entries "/page" and "/profile/main-lifts/page".
+  it("names the plain layout first, then the adapter layout keyed by the app entry", () => {
+    expect(htmlPathsFor("/")).toEqual([
+      "app/index.html",
+      "route-cache/APP_PAGE/c6377dd9ce6a1c2cd100eb4344e843eb4639b9ed26f84643f77680e9eb454c4b/$/index.html",
+    ]);
+    expect(htmlPathsFor("/profile/main-lifts")).toEqual([
+      "app/profile/main-lifts.html",
+      "route-cache/APP_PAGE/b1ce4bbc300f02f864b523cb9faa8a121f05b5a863a0177cfd5cbc00b1483ee9/$/profile/main-lifts.html",
+    ]);
+  });
+
+  it("covers every shell route with a plain and an adapter path", () => {
+    for (const route of SHELL_ROUTES) {
+      const [plain, adapter] = htmlPathsFor(route);
+      expect(plain).toBe(`app/${htmlFileFor(route)}`);
+      expect(adapter).toMatch(/^route-cache\/APP_PAGE\/[0-9a-f]{64}\/\$\/.+\.html$/);
+    }
   });
 });
