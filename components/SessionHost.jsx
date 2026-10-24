@@ -65,6 +65,7 @@ import { isStrengthRecord } from "@/lib/day-state";
 import { T, DISPLAY } from "@/lib/tokens";
 import { haptic } from "@/lib/a11y";
 import { withNavTransition } from "@/lib/nav-transitions";
+import { savedKgFor } from "@/lib/session-kg";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Glyph from "@/components/Glyph";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
@@ -563,8 +564,7 @@ export default function SessionHost({ mode = null } = {}) {
     // A pure bodyweight set logs only the user's optional added load — null
     // when none, so a no-vest set is exactly what it always was. W is never
     // read for these lifts (the engine never prescribes one there).
-    const resolvedWeight = loadType === "bodyweight" ? addedLoadFor(addedLoads, ex.name)
-      : planStartWeight(ex, { working: planWeights, bodyweight, anchors: muscleAnchors });
+    const resolvedWeight = savedKgFor(ex, { addedLoads, planWeight: getW });
     // The prescription this set was measured against — W/R, never the drum —
     // so the engine judges what was done against what was asked.
     const prescribedWeight = loadType === "bodyweight" ? null

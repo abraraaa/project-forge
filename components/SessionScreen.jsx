@@ -22,6 +22,7 @@ import { Fade, MonoNums } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import { pressLiftHandlers } from "@/lib/press-lift";
+import { savedKgFor } from "@/lib/session-kg";
 import { todayLocalIso, daysBetween, mondayIndex } from "@/lib/dates";
 import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
@@ -642,11 +643,10 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const rating = isSS && !!ssRoundDone;
   const roundSide = (side, ex) => {
     const lt = getLoadType(ex);
-    // Kg as commitLog saves it: pure bodyweight its own added load, loaded
-    // bodyweight W when above 0, everything else (assist included) W.
-    const kg = acceptsOptionalWeight(lt) ? addedLoadFor(addedLoads, ex?.name)
-      : usesOptionalChrome(lt) ? (typeof getW(ex) === "number" && getW(ex) > 0 ? getW(ex) : null)
-      : getW(ex);
+    // The kg exactly as the set will be saved (savedKgFor, shared with the
+    // host); a bodyweight-family lift with none shows its reps alone.
+    const saved = savedKgFor(ex, { addedLoads, planWeight: getW });
+    const kg = isBodyweightMovement(lt) && !(typeof saved === "number" && saved > 0) ? null : saved;
     const reps = getR(ex);
     return { side, name: ex?.name, figures: roundFigures(ex, kg, reps),
       target: { exName: ex?.name, currentKg: kg, currentReps: reps, loadType: lt, timed: !!parseTimedReps(ex?.reps) } };
