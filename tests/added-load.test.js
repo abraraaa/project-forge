@@ -397,7 +397,10 @@ describe("SessionHost wiring", () => {
     const src = readFileSync(resolve(__dirname, "../components/SessionHost.jsx"), "utf8");
     const slice = src.slice(src.indexOf("const pushSetToDraft"), src.indexOf("logSet(draftLogRef.current"));
     // The pure-bodyweight arm ends at the added load: no fallback to W.
-    expect(slice).toMatch(/const resolvedWeight = loadType === "bodyweight" \? addedLoadFor\(addedLoads, ex\.name\)\s*\n\s*:/);
+    // The kg is savedKgFor (lib/session-kg.js), shared with the round recap.
+    expect(slice).toContain("const resolvedWeight = savedKgFor(ex, { addedLoads, planWeight: getW });");
+    const rule = readFileSync(resolve(__dirname, "../lib/session-kg.js"), "utf8");
+    expect(rule).toMatch(/=== "bodyweight" \? addedLoadFor\(addedLoads, ex\.name\) : planWeight\(ex\)/);
     // Reads and writes go through the host's adapter (lib/session-source.js).
     const adapter = readFileSync(resolve(__dirname, "../lib/session-source.js"), "utf8");
     expect(adapter).toContain("P.getAddedLoads(profile)");

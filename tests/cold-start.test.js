@@ -135,7 +135,7 @@ describe("one resolver: no plan surface computes its own start", () => {
   });
   it("the session host, the retro sheet and the MCP plan resolve through planStartWeight", () => {
     const count = (f) => (readFileSync(join(ROOT, f), "utf8").match(/\bplanStartWeight\s*\(/g) || []).length;
-    expect(count("components/SessionHost.jsx")).toBe(5); // getW, swap seed, reach, logged, prescribed
+    expect(count("components/SessionHost.jsx")).toBe(4); // getW, swap seed, reach, prescribed; the logged kg reads getW through savedKgFor
     expect(count("components/ForgeApp.jsx")).toBe(1);
     expect(count("lib/mcp-server.js")).toBe(0);       // planLoad calls planWeight (programme-resolve)
     expect(count("lib/programme-resolve.js")).toBe(2); // definition, planWeight
