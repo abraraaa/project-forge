@@ -205,11 +205,13 @@ describe("identity store", () => {
     expect(code.slice(0, code.indexOf("export async function dbCloseAccount"))).not.toMatch(/\bDELETE\b/);
     expect([...new Set([...code.matchAll(/UPDATE (\w+)/g)].map((m) => m[1]))].sort()).toEqual(["accounts", "credentials", "handles", "oauth_grants", "trainer_applications"]);
     // accounts: each write pinned by its whole scope: consent, the trainer upgrade on a live row,
-    // the approval (terms from a waiting application, on a live row), and the close.
+    // a Terms acceptance on a live row (the Terms only), the approval (terms from a waiting
+    // application, on a live row), and the close.
     expect([...code.matchAll(/UPDATE accounts SET ([\s\S]*?)\s+(WHERE [^`]*)`/g)].map((m) => [m[1].replace(/\s+/g, " ").trim(), m[2].replace(/\s+/g, " ").trim()])).toEqual([
       ["consent = ${consent == null ? null : JSON.stringify(consent)}::jsonb", "WHERE id = ${accountId} RETURNING id"],
       ["roles = CASE WHEN 'trainer' = ANY(roles) THEN roles ELSE array_append(roles, 'trainer') END, trainer_terms = ${JSON.stringify(rec)}::jsonb",
         "WHERE id = ${accountId} AND deleted_at IS NULL RETURNING id"],
+      ["trainer_terms = ${JSON.stringify(rec)}::jsonb", "WHERE id = ${accountId} AND deleted_at IS NULL RETURNING id"],
       ["roles = CASE WHEN 'trainer' = ANY(roles) THEN roles ELSE array_append(roles, 'trainer') END, trainer_terms = ta.terms FROM trainer_applications ta",
         "WHERE accounts.id = ${accountId} AND accounts.deleted_at IS NULL AND ta.account_id = accounts.id AND ta.status = 'applied' RETURNING accounts.id"],
       ["deleted_at = now(), consent = NULL", "WHERE id = ${accountId}"],
