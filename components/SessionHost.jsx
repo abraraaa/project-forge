@@ -65,6 +65,7 @@ import { isStrengthRecord } from "@/lib/day-state";
 import { T, DISPLAY } from "@/lib/tokens";
 import { haptic } from "@/lib/a11y";
 import { withNavTransition } from "@/lib/nav-transitions";
+import { savedKgFor } from "@/lib/session-kg";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Glyph from "@/components/Glyph";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
@@ -563,8 +564,7 @@ export default function SessionHost({ mode = null } = {}) {
     // A pure bodyweight set logs only the user's optional added load — null
     // when none, so a no-vest set is exactly what it always was. W is never
     // read for these lifts (the engine never prescribes one there).
-    const resolvedWeight = loadType === "bodyweight" ? addedLoadFor(addedLoads, ex.name)
-      : planStartWeight(ex, { working: planWeights, bodyweight, anchors: muscleAnchors });
+    const resolvedWeight = savedKgFor(ex, { addedLoads, planWeight: getW });
     // The prescription this set was measured against — W/R, never the drum —
     // so the engine judges what was done against what was asked.
     const prescribedWeight = loadType === "bodyweight" ? null
@@ -599,7 +599,7 @@ export default function SessionHost({ mode = null } = {}) {
       setBwPromptedThisSession(true);
       setTimeout(() => setBwEditOpen(true), 280);
     }
-  }, [block, isSS, phase, sessionSwaps, sessionWeights, sessionReps, workingWeights, prescribedReps, planWeights, planReps, addedLoads, muscleAnchors, resolveExFn, sinks, bodyweight, bwPromptedThisSession, reachArmed, coached]);
+  }, [getW, block, isSS, phase, sessionSwaps, sessionWeights, sessionReps, workingWeights, prescribedReps, planReps, addedLoads, muscleAnchors, resolveExFn, sinks, bodyweight, bwPromptedThisSession, reachArmed, coached]);
 
   // Final-set flash — one quiet line after rating the LAST set of an
   // exercise (lib/set-flash.js: no repeats this session, Easy falls back to
@@ -625,24 +625,32 @@ export default function SessionHost({ mode = null } = {}) {
     ];
   };
   const maybeFlash = (rpe) => {
-    if (isSS) return;
+    // A superset's rating covers both sides of the round, so every claim the
+    // line makes has to hold for both.
+    const lifts = (isSS ? [resolvedExA, resolvedExB] : [activeEx]).filter((ex) => ex?.name);
+    if (lifts.length === 0) return;
     // Measured against the prescription, not the template: the drum moves
     // today's plan, and a climbed target is still the target.
-    const shownReps = activeEx ? (prescribedReps[activeEx.name] ?? activeEx.reps) : null;
-    const timed  = parseTimedReps(activeEx?.reps);
-    const target = typeof shownReps === "number" ? shownReps
-      : timed ? timed.seconds : parseInt(shownReps, 10);
-    const done   = getR(activeEx);
+    const read = lifts.map((ex) => {
+      const shownReps = prescribedReps[ex.name] ?? ex.reps;
+      const timed  = parseTimedReps(ex.reps);
+      const target = typeof shownReps === "number" ? shownReps
+        : timed ? timed.seconds : parseInt(shownReps, 10);
+      return { ex, shownReps, timed, target, done: getR(ex) };
+    });
     // The last prescribed set came up short at full effort, every earlier one
     // on target: the engine reads that as a good day (final_set_miss).
-    if (setNum === block.sets && !timed && activeEx?.name) {
-      const prior = draftLogRef.current?.blocks?.[block.id]?.exercises?.[activeEx.name]?.sets || [];
+    if (setNum === block.sets) {
       const rir = rpeToRir(rpe);
-      const asLogged = { prescribed: { reps: shownReps, sets: block.sets }, sets: [...prior, { reps: done }] };
-      if (rir !== null && rir <= 1 && isFinalSetMiss(asLogged)) { showFlash(SESSION_COPY.finalSetMiss); return; }
+      const missed = rir !== null && rir <= 1 && read.some(({ ex, shownReps, timed, done }) => {
+        if (timed) return false;
+        const prior = draftLogRef.current?.blocks?.[block.id]?.exercises?.[ex.name]?.sets || [];
+        return isFinalSetMiss({ prescribed: { reps: shownReps, sets: block.sets }, sets: [...prior, { reps: done }] });
+      });
+      if (missed) { showFlash(SESSION_COPY.finalSetMiss); return; }
     }
-    if (setNum !== blockSets) return; // last set of a plain block only
-    const fullReps = !Number.isFinite(target) || (typeof done === "number" ? done >= target : true);
+    if (setNum !== blockSets) return; // the block's last set or round only
+    const fullReps = read.every(({ target, done }) => !Number.isFinite(target) || (typeof done === "number" ? done >= target : true));
     // Unambiguous-ADD certification for the consequence lines ("Next time,
     // heavier."): full reps + effort at/above this lift's ADD threshold +
     // no active deload + lift not in post-deload recovery. Same
@@ -653,22 +661,30 @@ export default function SessionHost({ mode = null } = {}) {
     let addLikely = false;
     try {
       // Coached: the engine's state is the client's, so heavier is never promised.
-      if (fullReps && !activeDeload && !coached && activeEx?.name) {
+      if (fullReps && !activeDeload && !coached) {
         const rir = rpeToRir(rpe);
-        const threshold = ADD_THRESHOLD_RIR[getLiftProfile(activeEx.name).category] ?? 2;
-        const inRecovery = source.inRecovery(activeEx.name);
-        addLikely = rir !== null && rir >= threshold && !inRecovery;
+        addLikely = rir !== null && lifts.every((ex) =>
+          rir >= (ADD_THRESHOLD_RIR[getLiftProfile(ex.name).category] ?? 2) && !source.inRecovery(ex.name));
       }
     } catch { /* certification is best-effort — silence beats a wrong promise */ }
     const line = pickFlashLine(rpe, {
       fullReps,
-      barLoaded: getLoadType(activeEx) !== "bodyweight",
-      pullMovement: isPullMovement(activeEx?.name, EXERCISE_ANATOMY[activeEx?.name]?.primary ?? null),
+      barLoaded: lifts.every((ex) => getLoadType(ex) !== "bodyweight"),
+      pullMovement: lifts.every((ex) => isPullMovement(ex.name, EXERCISE_ANATOMY[ex.name]?.primary ?? null)),
       used: usedFlashRef.current,
       addLikely,
     });
     if (!line) return;
     showFlash(line);
+  };
+
+  // Rest from now, whether or not rest is already running. The deadline is
+  // set here as well: a restart leaves restActive true, so the effect that
+  // anchors it would not run and the old deadline would win the next tick.
+  const startRest = (seconds) => {
+    restEndsAtRef.current = restDeadline(seconds);
+    setRestRemain(seconds);
+    setRestActive(true);
   };
 
   const commitLog = (rpe) => {
@@ -684,8 +700,7 @@ export default function SessionHost({ mode = null } = {}) {
     // Start the rest timer directly — no trigger-effect indirection needed
     // now these are plain event handlers (the old restTrigger state existed
     // to re-fire an effect between same-duration sets).
-    setRestRemain(block.rest);
-    setRestActive(true);
+    startRest(block.rest);
     setSsRoundDone(false);
     setAwaitRpe(false);
   };
@@ -693,17 +708,15 @@ export default function SessionHost({ mode = null } = {}) {
   const handleLog = () => {
     if (isSS) {
       if (phase === "A") {
-        if (block.type === "finisher") {
-          pushSetToDraft(resolveExFn(block.id, "A", block.exA), null);
-        }
+        // Rest is between rounds; B follows A without one, so the clock stops
+        // here rather than running out mid-B.
+        setRestActive(false);
         setPhase("B"); return;
       }
+      // Superset or finisher, the round is rated once, after B; commitLog
+      // saves both sides with that rating.
       setPhase("A");
-      if (block.type === "superset") { setSsRoundDone(true); return; }
-      pushSetToDraft(resolveExFn(block.id, "B", block.exB), null);
-      setSetNum(p => p + 1);           // as commitLog: the fork, not an advance
-      setRestRemain(block.rest);
-      setRestActive(true);
+      setSsRoundDone(true);
       return;
     }
     setAwaitRpe(true);
@@ -716,6 +729,13 @@ export default function SessionHost({ mode = null } = {}) {
     setBlockIdx(target);
     setSetNum(loggedOnBlock(draftLogRef.current, activeSession.blocks[target].id) + 1);
     setPhase("A");
+    // Rest carried over from the last block runs no longer than this one's
+    // own. The deadline moves with it, or the next tick would undo the cap.
+    const cap = activeSession.blocks[target].rest;
+    if (restActive && Number.isFinite(cap) && restRemaining(restEndsAtRef.current) > cap) {
+      restEndsAtRef.current = restDeadline(cap);
+      setRestRemain(cap);
+    }
   };
 
   const handleJumpToBlock = (targetIdx) => {

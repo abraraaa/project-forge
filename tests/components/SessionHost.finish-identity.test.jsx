@@ -16,6 +16,11 @@
 // rep range) instead of COLD_START, and the swapped-in Dumbbell Bench Press
 // keeps the drum's 28.
 //
+// Re-recorded for rated finishers: the finisher's sets carry the round's
+// rating (RPE and RIR) instead of null, Standing Calf Raise's lift history
+// reads that RIR where it read no_rir_signal, and the four extra ratings move
+// the session's clock on three minutes.
+//
 // Text queries, not getByRole: see SessionScreen.surface.test.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
