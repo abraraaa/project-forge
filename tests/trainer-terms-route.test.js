@@ -45,6 +45,13 @@ vi.mock("@neondatabase/serverless", () => ({
       const live = db.credentials.some((c) => c.id === cred && c.account_id === a.id && c.rp_id === "heatwayve.app");
       return [{ roles: a.roles, plan: a.plan, trainer_terms: a.trainer_terms, deleted_at: a.deleted_at, cred_live: live }];
     }
+    if (/^\s*UPDATE accounts SET trainer_terms = \?::jsonb\s+WHERE id = \? AND deleted_at IS NULL RETURNING id$/.test(q)) {
+      const [terms, acct] = v;
+      const a = db.accounts.get(acct);
+      if (!a || a.deleted_at) return [];
+      a.trainer_terms = JSON.parse(terms);
+      return [{ id: acct }];
+    }
     if (/^\s*UPDATE accounts SET roles = CASE WHEN 'trainer' = ANY\(roles\) THEN roles ELSE array_append\(roles, 'trainer'\) END/.test(q)) {
       const [terms, acct] = v;
       const a = db.accounts.get(acct);
@@ -57,6 +64,11 @@ vi.mock("@neondatabase/serverless", () => ({
   },
 }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(() => null), rateLimitShared: vi.fn(async () => null) }));
+// The real store, with the Terms write spy-able so one test can answer "no database".
+vi.mock("@/lib/identity-store", async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, dbAcceptTrainerTerms: vi.fn(real.dbAcceptTrainerTerms) };
+});
 // TRAINER_LIVE as shipped unless a test closes it.
 const switchLive = vi.hoisted(() => ({ value: true }));
 vi.mock("@/lib/trainer-terms", async (importOriginal) => {
@@ -68,6 +80,7 @@ const { POST } = await import("@/app/api/trainer/terms/route");
 const { TRAINER_COOKIE, trainerGate } = await import("@/lib/trainer-session");
 const { TRAINER_TERMS_VERSION } = await import("@/lib/trainer-terms");
 const { rateLimit, rateLimitShared } = await import("@/lib/rate-limit");
+const { dbAcceptTrainerTerms } = await import("@/lib/identity-store");
 
 const OLDER = { version: "draft-2026-10-05b", at: "2026-10-06T00:00:00.000Z", adult: true };
 const account = (id, sk, trainer_terms) => ({
@@ -215,6 +228,15 @@ describe("POST /api/trainer/terms", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
   });
 
+  it("no database is an outage, not a sign-out: 500, nothing written, no requiresAuth", async () => {
+    vi.mocked(dbAcceptTrainerTerms).mockResolvedValueOnce(null);
+    const res = await accept(session(T));
+    expect(res.status).toBe(500);
+    expect((await res.json()).requiresAuth).toBeUndefined();
+    expect(db.accounts.get(T).trainer_terms).toEqual(OLDER);
+    expect(writes().filter((c) => /UPDATE accounts/.test(c.q))).toHaveLength(0);
+  });
+
   it("limits: 5 a minute in memory, 10 shared, as the upgrade", async () => {
     await accept(null);
     expect(vi.mocked(rateLimit).mock.calls[0].slice(1)).toEqual(["trainer-terms", 5]);
@@ -223,7 +245,8 @@ describe("POST /api/trainer/terms", () => {
 
   it("source: the write is the upgrade's own acceptance call; no delete", () => {
     const src = readFileSync(resolve(__dirname, "../app/api/trainer/terms/route.js"), "utf8");
-    expect(src).toContain("dbGrantTrainerRole(g.identity.accountId, { version, at: new Date().toISOString(), adult: true })");
+    expect(src).toContain("dbAcceptTrainerTerms(g.identity.accountId, { version, at: new Date().toISOString(), adult: true })");
+    expect(src).not.toContain("dbGrantTrainerRole");
     expect(src).not.toMatch(/\bDELETE\b|\bDROP\b|\bdel\(|removeItem|freshCeremony|authToken/);
   });
 });

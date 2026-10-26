@@ -1,6 +1,6 @@
 import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { trainerOpenFor } from "@/lib/auth-server";
-import { dbGrantTrainerRole } from "@/lib/identity-store";
+import { dbAcceptTrainerTerms } from "@/lib/identity-store";
 import { acceptedTrainerTermsVersion, TRAINER_TERMS_VERSION } from "@/lib/trainer-terms";
 import { trainerGate, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
@@ -31,10 +31,12 @@ export async function POST(request) {
     if (version !== TRAINER_TERMS_VERSION) return slid(g, json({ error: "Accept the Trainer Terms to continue." }, 400));
 
     // Write: UPDATE accounts.trainer_terms in place on the caller's own row
-    // (version, at, adult). The gate already holds the trainer role, so roles
-    // stay as they are.
-    const granted = await dbGrantTrainerRole(g.identity.accountId, { version, at: new Date().toISOString(), adult: true });
-    if (!granted) return json({ error: "Sign in to see your clients", requiresAuth: true }, 401);
+    // (version, at, adult); roles are not written. No database is an outage,
+    // not a sign-out: the notice keeps its own error line. A row that is gone
+    // is a sign-out.
+    const accepted = await dbAcceptTrainerTerms(g.identity.accountId, { version, at: new Date().toISOString(), adult: true });
+    if (accepted === null) return slid(g, noStore(serverError(new Error("terms write unavailable"), { label: LABEL })));
+    if (!accepted) return json({ error: "Sign in to see your clients", requiresAuth: true }, 401);
     return slid(g, json({ ok: true, termsChanged: null }));
   } catch (e) {
     return noStore(serverError(e, { label: LABEL }));
