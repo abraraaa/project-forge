@@ -42,7 +42,8 @@ describe("Trainer Terms page", () => {
     expect(termsDate(TRAINER_TERMS_SINCE)).toBe("21 October 2026");
     const text = document.body.textContent;
     expect(text).toContain("Log a session with a client only when you trained them.");
-    expect(text).toContain("we'll tell you on your client list");
+    expect(text).toContain("These terms can change. When they do, the date at the top of this page moves, and the new terms apply from that date.");
+    expect(text).not.toMatch(/tell you on your client list|accept the new version/);
   });
 
   it("is never indexed", () => {

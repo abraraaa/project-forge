@@ -9,9 +9,8 @@
 //     reuses that ceremony (one Face ID) with 18+ and the current Trainer
 //     Terms (everyone else applies: tests/components/TrainerApply.test.jsx);
 //   - 403 needsTerms (never accepted) is the Terms gate; 503 says not open yet;
-//   - an older Terms version is a notice on the roster, never a gate:
-//     Continue records the current version on the session cookie
-//     (POST /api/trainer/terms), with no Face ID and no upgrade call;
+//   - a trainer on an older Terms version is simply live: the roster, with
+//     no notice, nothing to tap and no upgrade call;
 //   - roster rows render every signal variant;
 //   - the invite sheet shows the code, polls, flips to "is in" and reloads
 //     the roster; cancel and share link; the QR of the share link shows
@@ -23,7 +22,7 @@
 //     sign out posts what it should;
 //   - a final invite status (used, cancelled) stops polling for good;
 //   - an invite reply after the sheet closed, or behind a newer issue, is
-//     dropped; a terms change while a client opens leaves no pane behind;
+//     dropped; a 403 needsTerms while a client opens leaves no pane behind;
 //   - the upgrade panel names the trainer by the server's name once known;
 //   - your own training is the roster's pinned first row; it opens with
 //     ref "me" and a self history entry, in a pane titled You;
@@ -46,7 +45,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { projectForTrainer } from "../../lib/trainer-plan.js";
 import { todayLocalIso, addDaysIso } from "../../lib/dates.js";
-import { TRAINER_TERMS_VERSION, TRAINER_TERMS_SINCE } from "../../lib/trainer-terms.js";
+import { TRAINER_TERMS_VERSION } from "../../lib/trainer-terms.js";
 import { encodeQr, qrToSvgPath } from "../../lib/qr.js";
 
 const { server, auth, panes, nav } = vi.hoisted(() => ({
@@ -719,7 +718,7 @@ describe("TrainerView: the invite sheet", () => {
   });
 });
 
-describe("TrainerView: the terms change under an open session", () => {
+describe("TrainerView: needsTerms under an open session", () => {
   it("a 403 needsTerms on a client leaves no half-open pane: after agreeing, the roster comes back clean", async () => {
     signedIn();
     server.routes["POST /api/trainer/client"] = { status: 403, body: { needsTerms: true } };
@@ -1123,118 +1122,21 @@ describe("TrainerView: one way back at each level", () => {
   });
 });
 
-describe("TrainerView: the Trainer Terms changed", () => {
-  const CHANGED = { version: TRAINER_TERMS_VERSION, since: TRAINER_TERMS_SINCE };
-  const NOTICE = "The Trainer Terms changed on 21 October 2026. Continuing means you accept them.";
-  // A server holding one trainer's accepted version: the roster carries
-  // termsChanged until the terms route records the current one.
-  const store = { accepted: "draft-2026-10-05b", cookie: true };
-  const older = () => {
-    server.routes["POST /api/trainer/clients"] = () => (!store.cookie ? { status: 401, body: {} } : {
-      status: 200,
-      body: { me: { name: "Coach Kim" }, clients: SIGNALS, ...(store.accepted === TRAINER_TERMS_VERSION ? {} : { termsChanged: CHANGED }) },
-    });
-    server.routes["POST /api/trainer/session"] = () => {
-      store.cookie = true;
-      return { status: 200, body: { ok: true, name: "Coach Kim", ...(store.accepted === TRAINER_TERMS_VERSION ? {} : { termsChanged: CHANGED }) } };
-    };
-    server.routes["POST /api/trainer/terms"] = (b) => (!store.cookie ? { status: 401, body: {} }
-      : (store.accepted = b.version, { status: 200, body: { ok: true, termsChanged: null } }));
-    server.routes["POST /api/trainer/upgrade"] = (b) => { store.accepted = b.terms.version; return { status: 200, body: { ok: true, name: "Coach Kim" } }; };
-  };
-  const notice = () => document.querySelector("[data-terms-notice]");
-  beforeEach(() => { store.accepted = "draft-2026-10-05b"; store.cookie = true; });
-
-  it("an older-version trainer signs in and sees the roster, with the notice at its top", async () => {
-    store.cookie = false;
-    older();
+describe("TrainerView: a trainer on an older Terms version", () => {
+  it("signs in and sees the roster, with no notice and nothing to tap", async () => {
+    // The routes answer an older-version trainer exactly as a current one.
+    let session = false;
+    server.routes["POST /api/trainer/clients"] = () => (session
+      ? { status: 200, body: { me: { name: "Coach Kim" }, clients: SIGNALS } } : { status: 401, body: {} });
+    server.routes["POST /api/trainer/session"] = () => { session = true; return { status: 200, body: { ok: true, name: "Coach Kim" } }; };
     const { container } = await mount();
     typeName("coachkim");
     fireEvent.click(screen.getByText("Sign in with Face ID"));
     await flush();
     expect(screen.getByText("Add a client")).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "The Trainer Terms" })).toBeNull();
-    expect(notice().textContent).toContain(NOTICE);
-    expect(container.querySelector(".forge-wide-roster").firstElementChild).toBe(notice());
-    const read = within(notice()).getByRole("link", { name: "Read them" });
-    expect(read.getAttribute("href")).toBe("/trainer/terms");
     expect(screen.getByText("Alex")).toBeTruthy();
-    expect(posts("/api/trainer/upgrade")).toHaveLength(0);
-  });
-
-  it("returning on the cookie: the roster carries termsChanged and the notice shows, with no sign-in", async () => {
-    older();
-    await mount();
-    expect(notice().textContent).toContain(NOTICE);
-    expect(posts("/api/trainer/session")).toHaveLength(0);
-    const { authenticatePasskey } = await import("@/lib/webauthn");
-    expect(authenticatePasskey).not.toHaveBeenCalled();
-  });
-
-  it("Continue makes one terms call at the current version and no Face ID; the notice is gone, on the next load and after a remount", async () => {
-    older();
-    await mount();
-    fireEvent.click(within(notice()).getByRole("button", { name: "Continue" }));
-    await flush();
-    const { authenticatePasskey } = await import("@/lib/webauthn");
-    expect(authenticatePasskey).not.toHaveBeenCalled();
-    expect(posts("/api/trainer/terms").map((c) => c.body)).toEqual([{ version: TRAINER_TERMS_VERSION }]);
-    expect(posts("/api/trainer/upgrade")).toHaveLength(0);
-    expect(store.accepted).toBe(TRAINER_TERMS_VERSION);
-    expect(notice()).toBeNull();
-    expect(posts("/api/trainer/clients")).toHaveLength(2);
-    expect(screen.getByText("Add a client")).toBeTruthy();
-    cleanup();
-    await mount();
-    expect(screen.getByText("Add a client")).toBeTruthy();
-    expect(notice()).toBeNull();
-    expect(posts("/api/trainer/terms")).toHaveLength(1);
-    expect(posts("/api/trainer/upgrade")).toHaveLength(0);
-    expect(authenticatePasskey).not.toHaveBeenCalled();
-  });
-
-  it("a current-version trainer sees no notice", async () => {
-    store.accepted = TRAINER_TERMS_VERSION;
-    older();
-    await mount();
-    expect(screen.getByText("Add a client")).toBeTruthy();
-    expect(notice()).toBeNull();
-    expect(screen.queryByText(/Trainer Terms changed/)).toBeNull();
-  });
-
-  it("a failed Continue keeps the notice and says so in its own words, never the server's", async () => {
-    older();
-    server.routes["POST /api/trainer/terms"] = { status: 500, body: { error: "SENTINEL-terms-failure" } };
-    await mount();
-    fireEvent.click(within(notice()).getByRole("button", { name: "Continue" }));
-    await flush();
-    expect(posts("/api/trainer/terms")).toHaveLength(1);
-    expect(notice().textContent).toContain(NOTICE);
-    expect(within(notice()).getByRole("status").textContent).toBe("Couldn't do that just now. Try again.");
-    expect(document.body.textContent).not.toContain("SENTINEL");
-    expect(screen.getByText("Add a client")).toBeTruthy();
-  });
-
-  it("a 401 on Continue (the cookie lapsed) returns to sign-in", async () => {
-    older();
-    await mount();
-    store.cookie = false;
-    fireEvent.click(within(notice()).getByRole("button", { name: "Continue" }));
-    await flush();
-    expect(posts("/api/trainer/terms")).toHaveLength(1);
-    expect(screen.getByText("Sign in with Face ID")).toBeTruthy();
-    expect(notice()).toBeNull();
-    expect(store.accepted).toBe("draft-2026-10-05b");
-  });
-
-  it("a 403 needsTerms on Continue goes to the Terms gate", async () => {
-    older();
-    server.routes["POST /api/trainer/terms"] = { status: 403, body: { needsTerms: true } };
-    await mount();
-    fireEvent.click(within(notice()).getByRole("button", { name: "Continue" }));
-    await flush();
-    expect(screen.getByRole("heading", { name: "The Trainer Terms" })).toBeTruthy();
-    expect(notice()).toBeNull();
-    expect(posts("/api/trainer/upgrade")).toHaveLength(0);
+    expect(container.querySelector(".forge-wide-roster").firstElementChild.textContent).toBe("For trainers");
+    expect(screen.queryByText(/Trainer Terms/)).toBeNull();
+    expect(server.calls.map((c) => c.url).filter((u) => /terms|upgrade/.test(u))).toEqual([]);
   });
 });

@@ -101,7 +101,7 @@ const { POST: sessionPOST } = await import("@/app/api/trainer/session/route");
 const { POST: upgradePOST } = await import("@/app/api/trainer/upgrade/route");
 const { POST: endPOST } = await import("@/app/api/trainer/session/end/route");
 const ts = await import("@/lib/trainer-session");
-const { TRAINER_TERMS_VERSION, TRAINER_TERMS_SINCE } = await import("@/lib/trainer-terms");
+const { TRAINER_TERMS_VERSION } = await import("@/lib/trainer-terms");
 const { rateLimit, rateLimitShared } = await import("@/lib/rate-limit");
 const { freshCeremony, trainerGate, TRAINER_COOKIE } = ts;
 
@@ -283,17 +283,18 @@ describe("POST /api/trainer/session", () => {
     expect(writes()).toEqual([]);
   });
 
-  it("an older Terms version signs in, told of the change; its record is not touched", async () => {
+  it("an older Terms version signs in with exactly a current one's reply; its record is not touched", async () => {
     const older = { ...CURRENT, version: "older" };
     db.accounts.get(T).trainer_terms = older;
     const res = await signIn(mint(T, { cred: "cT" }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, name: "Tia", termsChanged: { version: TRAINER_TERMS_VERSION, since: TRAINER_TERMS_SINCE } });
+    expect(await res.json()).toStrictEqual({ ok: true, name: "Tia" });
     // The usual two writes, and none to accounts.
     expect(writes().map((c) => c.q.trim().split(/\s+/).slice(0, 3).join(" "))).toEqual(["INSERT INTO auth_tokens", "UPDATE auth_tokens SET"]);
     expect(db.accounts.get(T).trainer_terms).toEqual(older);
     const g = await trainerGate(gateReq(withCookie(res.cookies.get(TRAINER_COOKIE).value)));
-    expect(g).toMatchObject({ identity: { accountId: T }, termsChanged: { version: TRAINER_TERMS_VERSION, since: TRAINER_TERMS_SINCE } });
+    expect(Object.keys(g).sort()).toEqual(["account", "authAt", "identity", "refresh"]);
+    expect(g).toMatchObject({ identity: { accountId: T } });
   });
 
   it("live: a trainer other than the admin signs in and reaches the trainer gate", async () => {
@@ -410,17 +411,16 @@ describe("POST /api/trainer/upgrade", () => {
     expect(db.accounts.get(L).roles).toEqual(["lifter"]);
   });
 
-  it("live: a trainer other than the admin re-accepts changed terms", async () => {
+  it("live: a trainer other than the admin on an older version who calls upgrade is stamped with the current version", async () => {
     process.env.ADMIN_ACCOUNT_ID = T;
     db.accounts.get(N).trainer_terms = { ...CURRENT, version: "older" };
     const res = await post(upgradePOST, "/api/trainer/upgrade", { authToken: mint(N, { cred: "cN" }), profile: "nia", terms: { version: TRAINER_TERMS_VERSION }, adult: true });
     expect(res.status).toBe(200);
     expect(db.accounts.get(N)).toMatchObject({ roles: ["lifter", "trainer"], trainer_terms: { version: TRAINER_TERMS_VERSION, adult: true } });
-    // The change is no longer reported.
-    expect(await trainerGate(gateReq(withCookie(res.cookies.get(TRAINER_COOKIE).value)))).toMatchObject({ termsChanged: null });
+    expect(await trainerGate(gateReq(withCookie(res.cookies.get(TRAINER_COOKIE).value)))).toMatchObject({ identity: { accountId: N } });
   });
 
-  it("with the switch closed, a trainer other than the admin may not re-accept: 503, nothing written", async () => {
+  it("with the switch closed, a trainer other than the admin on an older version may not call upgrade: 503, nothing written", async () => {
     switchLive.value = false;
     process.env.ADMIN_ACCOUNT_ID = T;
     db.accounts.get(N).trainer_terms = { ...CURRENT, version: "older" };
@@ -430,7 +430,7 @@ describe("POST /api/trainer/upgrade", () => {
     expect(writes()).toEqual([]);
   });
 
-  it("the admin, already a trainer, re-accepts changed terms: the terms overwritten, the role kept once", async () => {
+  it("the admin, already a trainer on an older version, who calls upgrade is stamped with the current version, the role kept once", async () => {
     process.env.ADMIN_ACCOUNT_ID = T;
     db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" };
     const res = await post(upgradePOST, "/api/trainer/upgrade", { authToken: mint(T, { cred: "cT" }), profile: "tia", terms: { version: TRAINER_TERMS_VERSION }, adult: true });
@@ -501,14 +501,16 @@ describe("trainerGate", () => {
     expect(writes()).toEqual([]);
   });
 
-  it("an older Terms version passes, with the change; the current one carries none", async () => {
+  it("an older Terms version passes with the same shape as the current one, nothing written", async () => {
     const t = session(T);
+    const current = await trainerGate(gateReq(withCookie(t)));
     db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" };
     const g = await trainerGate(gateReq(withCookie(t)));
     expect("fail" in g).toBe(false);
-    expect(g).toMatchObject({ identity: { accountId: T }, termsChanged: { version: TRAINER_TERMS_VERSION, since: TRAINER_TERMS_SINCE } });
-    db.accounts.get(T).trainer_terms = CURRENT;
-    expect(await trainerGate(gateReq(withCookie(t)))).toMatchObject({ identity: { accountId: T }, termsChanged: null });
+    expect(Object.keys(g).sort()).toEqual(Object.keys(current).sort());
+    expect(Object.keys(g).sort()).toEqual(["account", "authAt", "identity", "refresh"]);
+    expect(g).toMatchObject({ identity: { accountId: T } });
+    expect(writes()).toEqual([]);
   });
 
   it("refuses once the passkey that signed it in is gone from the index or not native", async () => {
@@ -690,8 +692,7 @@ describe("SQL and source pins", () => {
   it("every trainer route runs in lhr1, is dynamic, and never returns e.message", () => {
     const routes = walk("app/api/trainer").filter((f) => f.endsWith("route.js"));
     expect(routes.sort()).toEqual(["app/api/trainer/apply/route.js", "app/api/trainer/change/route.js", "app/api/trainer/client/route.js",
-      "app/api/trainer/clients/route.js", "app/api/trainer/export/route.js", "app/api/trainer/invite/route.js", "app/api/trainer/session/end/route.js", "app/api/trainer/session/route.js", "app/api/trainer/terms/route.js",
-      "app/api/trainer/upgrade/route.js"]);
+      "app/api/trainer/clients/route.js", "app/api/trainer/export/route.js", "app/api/trainer/invite/route.js", "app/api/trainer/session/end/route.js", "app/api/trainer/session/route.js", "app/api/trainer/upgrade/route.js"]);
     for (const f of routes) {
       const s = read(f);
       expect(s, f).toContain('export const preferredRegion = "lhr1";');

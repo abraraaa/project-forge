@@ -38,9 +38,7 @@ async function roster(me, refs, rawToday, now = Date.now()) {
 }
 
 // POST /api/trainer/clients
-//   { today }        -> { me: { name }, clients: [{ ref, name, since, lastLooked, signal }], termsChanged? }, by name.
-//                       termsChanged { version, since }: the trainer accepted an older Terms
-//                       version (trainerGate); the roster shows the notice from it.
+//   { today }        -> { me: { name }, clients: [{ ref, name, since, lastLooked, signal }] }, by name.
 //                       signal is the roster line (rosterSignal). It is read only after a
 //                       roster look is logged on every listed grant; if that log can't be
 //                       written, every signal is null and the list is names and dates only.
@@ -82,8 +80,7 @@ export async function POST(request) {
     const clients = grants
       .map(({ ref, name, since, lastLooked }) => ({ ref, name, since, lastLooked, signal: signals?.get(ref) ?? null }))
       .sort(byName);
-    const termsChanged = g.termsChanged ? { termsChanged: g.termsChanged } : {};
-    return slid(g, json({ me: { name: publicName(await dbPrimaryHandle(me)) }, clients, ...termsChanged }));
+    return slid(g, json({ me: { name: publicName(await dbPrimaryHandle(me)) }, clients }));
   } catch (e) {
     return noStore(serverError(e, { label: LABEL }));
   }

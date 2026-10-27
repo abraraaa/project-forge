@@ -1,6 +1,7 @@
 // app/trainer/terms/page.jsx — the Trainer Terms. Server-rendered, plain, like
 // /privacy. Changing the words means bumping TRAINER_TERMS_VERSION and
-// TRAINER_TERMS_SINCE in lib/trainer-terms.js, so trainers are told.
+// TRAINER_TERMS_SINCE in lib/trainer-terms.js. The new text applies to every
+// trainer from that date; only new trainers accept it.
 import Link from "next/link";
 import { T, DISPLAY } from "@/lib/tokens";
 import { TRAINER_TERMS_SINCE, termsDate } from "@/lib/trainer-terms";
@@ -8,7 +9,7 @@ import Glyph from "@/components/Glyph";
 
 const KICKER = "For trainers";
 const CONTACT = "ab@heatwayve.app";
-// When the current version took effect, as the roster's notice says it.
+// When the current version took effect: the "Updated" line.
 const SINCE = termsDate(TRAINER_TERMS_SINCE);
 
 export const metadata = {
@@ -65,7 +66,7 @@ const SECTIONS = [
   },
   {
     h: "Changes",
-    p: ["If these terms change, we'll tell you on your client list. Carrying on after that means you accept the new version."],
+    p: ["These terms can change. When they do, the date at the top of this page moves, and the new terms apply from that date."],
   },
   {
     h: "Law",

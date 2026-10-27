@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   TRAINER_LIVE, APPLICATIONS_OPEN, TRAINER_TERMS_VERSION, TRAINER_TERMS_SINCE, KNOWN_TRAINER_TERMS_VERSIONS, TRAINER_TERMS_COPY,
-  acceptedTrainerTermsVersion, isCurrentTrainerTerms, hasTrainerTerms, trainerTermsChange, termsDate,
+  acceptedTrainerTermsVersion, isCurrentTrainerTerms, hasTrainerTerms, termsDate,
   SHARE_CONSENT_VERSION, SHARE_COPY, acceptedShareConsentVersion, TRAINER_SCOPE,
 } from "../lib/trainer-terms.js";
 import { trainerOpenFor, shareOpenFor, applyOpenFor } from "../lib/auth-server.js";
@@ -83,11 +83,12 @@ describe("trainer terms", () => {
     }
   });
 
-  it("the Terms page carries the session line, says a change is told, not gated, and shows the date", () => {
+  it("the Terms page carries the session line, says a change applies from its date, and shows the date", () => {
     const page = readFileSync(new URL("../app/trainer/terms/page.jsx", import.meta.url), "utf8");
     expect(page).toContain("Log a session with a client only when you trained them.");
-    expect(page).toContain("we'll tell you on your client list. Carrying on after that means you accept the new version.");
+    expect(page).toContain("These terms can change. When they do, the date at the top of this page moves, and the new terms apply from that date.");
     expect(page).not.toContain("before you see your clients' training again");
+    expect(page).not.toMatch(/tell you on your client list|accept the new version/);
     expect(page).toContain("termsDate(TRAINER_TERMS_SINCE)");
   });
 
@@ -101,15 +102,7 @@ describe("trainer terms", () => {
     }
   });
 
-  it("trainerTermsChange: the current version and its date for an older acceptance, else null", () => {
-    expect(trainerTermsChange({ version: "draft-2026-10-05b", at: "x", adult: true }))
-      .toEqual({ version: TRAINER_TERMS_VERSION, since: TRAINER_TERMS_SINCE });
-    for (const none of [CURRENT_REC, null, undefined, {}, { version: "older" }, { version: "older", adult: false }]) {
-      expect(trainerTermsChange(none)).toBeNull();
-    }
-  });
-
-  it("a bump is one constant: no other source names the version, and the old one becomes a change", () => {
+  it("a bump is one constant: no other source names the version", () => {
     const files = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
       e.isDirectory() ? files(join(dir, e.name)) : /\.(js|jsx)$/.test(e.name) ? [join(dir, e.name)] : []);
     const root = fileURLToPath(new URL("..", import.meta.url));

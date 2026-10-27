@@ -142,7 +142,7 @@ vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(() => null), rateLimitShar
 
 const { POST: clientsPOST } = await import("@/app/api/trainer/clients/route");
 const { TRAINER_COOKIE } = await import("@/lib/trainer-session");
-const { TRAINER_TERMS_VERSION, TRAINER_TERMS_SINCE } = await import("@/lib/trainer-terms");
+const { TRAINER_TERMS_VERSION } = await import("@/lib/trainer-terms");
 const { dbRosterSignals } = await import("@/lib/trainer-store");
 
 const CURRENT = { version: TRAINER_TERMS_VERSION, at: "2026-10-01T00:00:00.000Z", adult: true };
@@ -585,15 +585,16 @@ describe("POST /api/trainer/clients: the roster", () => {
     }
   });
 
-  it("an older Terms version: the same roster, plus exactly termsChanged { version, since }", async () => {
+  it("an older Terms version: the same roster as a current one, with exactly its keys", async () => {
+    const current = await (await list(session(T, "cT"), { today: TODAY })).json();
     db.accounts.get(T).trainer_terms = { ...CURRENT, version: "draft-2026-10-05b" };
     const res = await list(session(T, "cT"), { today: TODAY });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(Object.keys(body).sort()).toEqual(["clients", "me", "termsChanged"]);
-    expect(body.termsChanged).toEqual({ version: TRAINER_TERMS_VERSION, since: TRAINER_TERMS_SINCE });
+    expect(Object.keys(body).sort()).toEqual(Object.keys(current).sort());
+    expect(Object.keys(body).sort()).toEqual(["clients", "me"]);
     expect(body.clients.map((c) => c.ref)).toEqual(["hwg_abe", "hwg_cara"]);
-    // The notice is read, never written: the account row is untouched.
+    // Nothing is written to the account row.
     expect(writes().filter((c) => /\baccounts\b/.test(c.q))).toEqual([]);
   });
 });
