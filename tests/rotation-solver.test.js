@@ -18,7 +18,7 @@
 import { describe, it, expect } from "vitest";
 import { solveRotation, volumeObjective, FOCUS_VOLUME_PROFILES, STRONG_PRESS_ONLY_SLOTS, poolFor } from "../lib/rotation-solver.js";
 import { getAnatomy } from "../lib/exercise-anatomy.js";
-import { EXERCISE_POOLS, FOCUS_OPTIONS, pushHistoryBlock } from "../lib/programme.js";
+import { EXERCISE_POOLS, FOCUS_OPTIONS, pushHistoryBlock, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS } from "../lib/programme.js";
 import { VOLUME_TARGETS } from "../lib/volume-audit.js";
 
 // mulberry32 — tiny seeded PRNG, good enough for sampling tests.
@@ -62,15 +62,18 @@ describe("band contract — rotations stay inside every landmark band", () => {
     });
   }
 
-  it("memory yields to the band: Sculpt seed 5000, fourth chained rotation", () => {
+  it("memory yields to the band: Sculpt seed 5022, fourth chained rotation", () => {
     // A seed family where the remembered week breaks a band. Remove the
     // relaxed second solve and this goes red; the loop above cannot tell.
-    // Re-picked when the pools change (2026-10-11: was Forged seed 5010).
-    const rng = seeded(5000);
+    // Re-picked when the pools change (was Forged seed 5010, then Sculpt
+    // seed 5000 until Day A's re-pair). The relaxed solve is now the fallback
+    // behind the complete repair, run only when no single-slot change mends
+    // the remembered week; the repair is off here to pin the relaxed solve.
+    const rng = seeded(5022);
     let history = {}, config = null, r;
     for (let block = 0; block < 4; block++) {
       if (config) history = pushHistoryBlock(history, config);
-      r = solveRotation({ history, focus: "Sculpt", rng });
+      r = solveRotation({ history, focus: "Sculpt", rng, completeRepair: false });
       config = r.config;
       if (block < 3) expect(r.report.memoryRelaxed).toBe(false);
     }
@@ -84,6 +87,32 @@ describe("band contract — rotations stay inside every landmark band", () => {
     expect(FOCUS_VOLUME_PROFILES.Strong.floorExempt.has("Biceps")).toBe(true);
     expect(FOCUS_VOLUME_PROFILES.Strong.floorExempt.has("Triceps")).toBe(true);
   });
+});
+
+describe("every single main-lift swap, every focus: the solver's week is in band", () => {
+  // A swap moves the week's baseline; the solver solves against it. A handful
+  // of seeds per cell; tests/rotation-band-sweep.test.js sweeps the cell that
+  // broke (Strong, Power Clean to Push Press) wide.
+  const SWAP_SEEDS = 5;
+  const swaps = Object.entries(MAIN_LIFT_FUNCTIONAL_EQUIVALENTS)
+    .flatMap(([main, alts]) => alts.map((alt) => ({ [main]: alt })));
+  for (const focus of FOCUS_OPTIONS) {
+    it(`${focus}: ${swaps.length} swaps x ${SWAP_SEEDS} seeds, no muscle out of band, no day over budget`, () => {
+      const exempt = FOCUS_VOLUME_PROFILES[focus].floorExempt;
+      const bad = [];
+      for (const mainLifts of swaps) {
+        for (let i = 0; i < SWAP_SEEDS; i++) {
+          const { report } = solveRotation({ focus, mainLifts, rng: seeded(7000 + i) });
+          for (const [m, t] of Object.entries(VOLUME_TARGETS)) {
+            const v = report.volume[m] || 0;
+            if ((v < t.mev && !exempt.has(m)) || v > t.mrv) bad.push(`${JSON.stringify(mainLifts)} seed ${7000 + i}: ${m} ${v}`);
+          }
+          if (report.overBudget.length) bad.push(`${JSON.stringify(mainLifts)} seed ${7000 + i}: over budget ${report.overBudget}`);
+        }
+      }
+      expect(bad).toEqual([]);
+    });
+  }
 });
 
 describe("Strong Triceps holds MEV across rotations", () => {

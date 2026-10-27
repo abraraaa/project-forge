@@ -22,6 +22,10 @@
 // reads that RIR where it read no_rir_signal, and the four extra ratings move
 // the session's clock on three minutes.
 //
+// Re-recorded for Day A's pairing: Landmine Press is logged in ass1 (fromPool
+// ass1-B) and Chest-Supported DB Row in ass2 (fromPool ass2-B), each taking
+// the ratings the script taps at its new place; the same lifts and loads.
+//
 // Text queries, not getByRole: see SessionScreen.surface.test.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 

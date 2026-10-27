@@ -3,7 +3,8 @@
 // two primary mains (squat, bench) and a lunge-type accessory in ass1-A, so
 // a loaded hip-thrust-family pick in ass2-A makes it the heaviest day of the
 // week. The budget steers that family to C (css1-A offers it too) without
-// touching the random search, pools, bands or near-tie rule.
+// touching the random search, pools, bands or near-tie rule. Strong drops
+// ass1, so its A holds no lunge and the family may sit there within budget.
 
 import { describe, it, expect, beforeAll } from "vitest";
 import {
@@ -112,7 +113,7 @@ describe("dayBudget and sessionCnsLoad", () => {
     const mainsOnly = { ...A, blocks: A.blocks.filter((b) => b.type === "main") };
     expect(sessionCnsLoad(mainsOnly)).toBeCloseTo(SESSION_CNS_CAP - dayBudget(A), 9);
     expect(sessionCnsLoad(A)).toBeGreaterThan(sessionCnsLoad(mainsOnly));
-    // Strong drops ass2: the hip extension and landmine press leave A's load.
+    // Strong drops ass1: the lunge and landmine press leave A's load.
     expect(sessionCnsLoad(A, {}, { focus: "Strong" })).toBeLessThan(sessionCnsLoad(A));
     // Pure: the inputs are not touched.
     const snapshot = JSON.stringify(A);
@@ -159,20 +160,39 @@ describe(`solver: ${SEEDS} seeds per focus`, () => {
     }
   }, 120_000);
 
+  // Under Strong ass1 is dropped: A trains no lunge, so the lunge-plus-family
+  // breach cannot arise there and the family on A is inside the budget.
+  const LUNGE_ON_A = FOCUS_OPTIONS.filter((f) => f !== "Strong");
+
   for (const focus of FOCUS_OPTIONS) {
     it(`${focus}: A never holds a split-squat-type and a hip-thrust-family accessory with the squat`, () => {
       const both = runs[focus].filter(({ config }) =>
-        SPLIT_SQUAT_TYPE.test(config["ass1-A"].name) && HIP_THRUST_FAMILY.has(config["ass2-A"]?.name));
+        SPLIT_SQUAT_TYPE.test(config["ass1-A"]?.name ?? "") && HIP_THRUST_FAMILY.has(config["ass2-A"]?.name));
       expect(both.length).toBe(0);
     });
+  }
 
+  for (const focus of LUNGE_ON_A) {
     it(`${focus}: the hip-thrust family lands on C at least as often as on A`, () => {
       const onA = runs[focus].filter(({ config }) => HIP_THRUST_FAMILY.has(config["ass2-A"]?.name)).length;
       const onC = runs[focus].filter(({ config }) => HIP_THRUST_FAMILY.has(config["css1-A"].name)).length;
       expect(onC).toBeGreaterThanOrEqual(onA);
       expect(onC).toBeGreaterThan(0);
     });
+  }
 
+  // Strong's A is squat, bench, hip extension slot + row, finisher: the family
+  // there sits beside no lunge, and every such A is inside its budget.
+  it("Strong: the hip-thrust family on A comes with no lunge and inside A's budget", () => {
+    const withFamily = runs.Strong.filter(({ config }) => HIP_THRUST_FAMILY.has(config["ass2-A"]?.name));
+    expect(withFamily.length).toBeGreaterThan(0);
+    for (const { config } of withFamily) {
+      expect(config["ass1-A"]).toBeUndefined();
+      expect(sessionCnsLoad(A, config, { focus: "Strong" })).toBeLessThanOrEqual(SESSION_CNS_CAP);
+    }
+  });
+
+  for (const focus of FOCUS_OPTIONS) {
     it(`${focus}: every solve in band and inside every day's budget`, () => {
       for (const { report } of runs[focus]) {
         expect(report.outOfBand).toEqual([]);
@@ -183,7 +203,9 @@ describe(`solver: ${SEEDS} seeds per focus`, () => {
 
   it("Strong still solves without its dropped blocks", () => {
     for (const { config } of runs.Strong) {
-      for (const key of ["ass2-A", "ass2-B", "bss2-A", "bss2-B", "css3-A", "css3-B"]) expect(config[key]).toBeUndefined();
+      // Day A's dropped superset is the lunge + landmine (ass1); the row stays.
+      for (const key of ["ass1-A", "ass1-B", "bss2-A", "bss2-B", "css3-A", "css3-B"]) expect(config[key]).toBeUndefined();
+      expect(config["ass2-B"]).toBeDefined();
     }
   });
 
@@ -196,7 +218,9 @@ describe(`solver: ${SEEDS} seeds per focus`, () => {
           if (config) history = pushHistoryBlock(history, config);
           const r = solveRotation({ history, focus, rng });
           config = r.config;
-          expect(HIP_THRUST_FAMILY.has(config["ass2-A"]?.name), `${focus} ${60000 + i}/${block + 1}`).toBe(false);
+          // Strong's A holds no lunge (above), so the family is not kept off it.
+          if (focus === "Strong") expect(config["ass1-A"], `${focus} ${60000 + i}/${block + 1}`).toBeUndefined();
+          else expect(HIP_THRUST_FAMILY.has(config["ass2-A"]?.name), `${focus} ${60000 + i}/${block + 1}`).toBe(false);
           expect(r.report.overBudget).toEqual([]);
         }
       }
@@ -239,15 +263,15 @@ describe("a squat variant as A's main", () => {
 
 describe("equivalence: within budget the solver is the volume solver", () => {
   // The budget only redraws a pick that would breach, so a week the volume
-  // solver fills without ever breaching is drawn identically. Repair off
-  // and memory kept, so the returned week is that fill.
+  // solver fills without ever breaching is drawn identically. Both repairs
+  // off and memory kept, so the returned week is that fill.
   it("Forged and Sculpt: every week the budget-off fill keeps within budget is byte-identical", () => {
     for (const focus of ["Forged", "Sculpt"]) {
       let compared = 0;
       for (let i = 0; i < SEEDS; i++) {
-        const off = solveRotation({ focus, rng: seeded(20000 + i), cnsBudget: false, repairPasses: 0 });
+        const off = solveRotation({ focus, rng: seeded(20000 + i), cnsBudget: false, repairPasses: 0, completeRepair: false });
         if (off.report.overBudget.length || off.report.outOfBand.length || off.report.memoryRelaxed) continue;
-        const on = solveRotation({ focus, rng: seeded(20000 + i), repairPasses: 0 });
+        const on = solveRotation({ focus, rng: seeded(20000 + i), repairPasses: 0, completeRepair: false });
         expect(JSON.stringify(on.config), `${focus} ${20000 + i}`).toBe(JSON.stringify(off.config));
         compared++;
       }

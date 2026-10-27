@@ -399,7 +399,11 @@ describe("resolvedProgramme behind describeProgramme (E8)", () => {
   // The fixtures read the live pools, swaps and lift profiles, so a library
   // change re-captures them. Re-captured 2026-10-13 for library data only
   // (the Single-Leg RDL profile dropped); the tool code was unchanged.
-  const BEFORE = { undefined: "3f925fd861ae05a9", Forged: "caaf5429aa924140", Strong: "bc32d462591c1166", Sculpt: "c5904895b0c4f52e" };
+  // Re-captured for Day A's pairing (lunge + landmine press, hip extension +
+  // row): the two B pools changed places; the tool code was unchanged. Strong
+  // re-captured for the same re-pair and its Day A drop moving to the lunge +
+  // landmine superset (ass1), so Strong's Day A keeps the hip extension + row.
+  const BEFORE = { undefined: "b3300b1ccaf5a650", Forged: "10847b3fb2ae6e97", Strong: "8148cb665c65a12e", Sculpt: "22d29f87e6b4c284" };
   const fixtures = e8Fixtures();
   const texts = fixtures.map((f) => [runTool("programme", {}, f, now).text, runTool("current_loads", {}, f, now).text]);
 

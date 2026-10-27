@@ -1456,6 +1456,22 @@ describe("the plan: what a coached session is composed from", () => {
     expect(verdicts(p, fromLifts)).toContain("stale");
   });
 
+  it("Day A picks stored before the re-pair land in the slot whose pool holds them, as the app reads them", () => {
+    // The B pools changed places (lunge + landmine press, hip extension + row);
+    // a stored config still has the row under ass1-B and the press under ass2-B.
+    const meta = coachMeta("Forged");
+    const pick = (slot, name) => ({ ...EXERCISE_POOLS[slot].pool.find((e) => e.name === name) });
+    meta.programmeBlock.config = {
+      "ass1-A": pick("ass1-A", "DB Split Squat"), "ass1-B": pick("ass2-B", "Incline DB Row"),
+      "ass2-A": pick("ass2-A", "Barbell Glute Bridge"), "ass2-B": pick("ass1-B", "Landmine Press"),
+    };
+    const plan = projectPlan({ meta, history: [] }, { todayIso: TODAY });
+    expect(Object.fromEntries(Object.entries(plan.programme.config).map(([k, v]) => [k, v.name]))).toEqual({
+      "ass1-A": "DB Split Squat", "ass1-B": "Landmine Press", "ass2-A": "Barbell Glute Bridge", "ass2-B": "Incline DB Row",
+    });
+    expect(serverSays(ipadRecord(plan, 0), meta)).toBe("ok");
+  });
+
   it("only programme data leaves: a pool slot holding a lift of its pool, plain values; the block's other fields never", () => {
     const meta = coachMeta("CANARY-focus");
     const [slot, pick] = Object.entries(PICKS)[0];

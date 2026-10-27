@@ -56,7 +56,7 @@ import FocusPickerSheet from "@/components/FocusPickerSheet";
 import HomeScreen from "@/components/HomeScreen";
 import TrainerSessionSheet, { sessionCardsFrom } from "@/components/TrainerSessionSheet";
 import { consentClaim } from "@/lib/consent";
-import { activateProfileCore, saveFocusCore, saveMainLiftCore, takePendingRotationSummary, takePendingFirstRun } from "@/lib/profile-actions";
+import { activateProfileCore, saveFocusCore, saveMainLiftCore, resetProgrammeCore, takePendingRotationSummary, takePendingFirstRun } from "@/lib/profile-actions";
 
 
 // getLoadType / weightStepForLoadType / parseTimedReps / WEIGHT_CAPTIONS now
@@ -1060,12 +1060,13 @@ export default function ForgeApp(){
   };
   const handleRotationCancel = () => setRotationPreview(null);
 
-  // Reset rotation drift to SESSIONS defaults (preserves block number/start).
+  // Reset rotation drift to SESSIONS defaults (preserves block number/start),
+  // re-planned when the defaults break a band under the chosen main lifts.
   // Used by the "Reset accessories" link on home for users who've over-rotated.
   const handleResetProgramme = () => {
-    const next = PB.reset();
+    if (!activeProfile) return;
+    const { next } = resetProgrammeCore(activeProfile);
     setProgrammeBlock(next);
-    pushNow(activeProfile);
   };
 
   const beginSession = () => {

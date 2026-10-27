@@ -882,7 +882,7 @@ export function warningText(code) {
     case "off_programme_reps": return "Outside the programme's usual reps for this lift.";
     case "below_rep_band": return `Under ${EFFECTIVE_REP_BAND.min} reps: heavier work than the programme's band.`;
     case "double_progression": return "Raises weight and reps together.";
-    case "band": return "Some muscles would sit outside their weekly range with this main lift.";
+    case "band": return "This lift would take some muscles outside their weekly range, so their accessories get rebalanced when it lands.";
     case "under_mev": return "Some muscles would sit under minimum.";
     case "over_mrv": return "Some muscles would sit over their maximum.";
     default: return null;

@@ -276,7 +276,7 @@ describe("computeWeeklyVolume / auditVolume — focus parameter", () => {
   it("Strong reduces total accessory volume — Biceps drops under MEV, Triceps holds the floor", () => {
     const baseAudit   = auditVolume(SESSIONS, { focus: "Forged" });
     const strongAudit = auditVolume(SESSIONS, { focus: "Strong" });
-    // Glutes drop (Hip Thrust gone via ass2)
+    // Glutes drop (the lunge goes with ass1, the Bulgarian with bss2)
     expect(strongAudit.perMuscle.Glutes.sets).toBeLessThan(baseAudit.perMuscle.Glutes.sets);
     // Biceps + Triceps drop substantially (css3 = DB Curl + Skullcrusher dropped)
     expect(strongAudit.perMuscle.Biceps.sets).toBeLessThan(baseAudit.perMuscle.Biceps.sets);

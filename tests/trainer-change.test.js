@@ -1345,8 +1345,9 @@ describe("coached session: validateSessionSet, S1-S14", () => {
       const meta = { ...S_META, userFocus };
       for (const idx of [0, 1, 2]) expect(vs(liveRecord(meta, idx), { meta }), `${userFocus} ${idx}`).toBe("ok");
     }
-    // Strong logs its accessories' range ("6-8") when no target was set.
-    expect(exOf(liveRecord({ ...S_META, userFocus: "Strong" }, 0), "DB Reverse Lunge").sets[0].reps).toBe("6-8");
+    // Strong logs its accessories' range ("6-8") when no target was set. The
+    // row: Strong drops Day A's lunge superset and keeps the hip extension + row.
+    expect(exOf(liveRecord({ ...S_META, userFocus: "Strong" }, 0), "Chest-Supported DB Row").sets[0].reps).toBe("6-8");
     expect(vs(liveRecord(S_META, 0, { readiness: "cooked", reason: "sore" }))).toBe("ok");
     // No W on a cooked day: the main lift prescribes its deloaded template.
     const noW = { ...S_META, weights: {} };
