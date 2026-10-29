@@ -667,7 +667,7 @@ describe("dbOpenChangesFor (delivery to the client's app)", () => {
       clientClosed: () => { db.accounts.get(A).deleted_at = "2026-10-01"; },
       passkeyGone: () => { db.credentials = []; },
       trainerClosed: () => { db.accounts.get(T).deleted_at = "2026-10-01"; },
-      trainerOldTerms: () => { db.accounts.get(T).trainer_terms = { ...TERMS, version: "old" }; },
+      trainerNoTerms: () => { db.accounts.get(T).trainer_terms = null; },
       notATrainer: () => { db.accounts.get(T).roles = ["lifter"]; },
       otherAuthor: () => { db.changes[0].author_account_id = N; },
     };
@@ -681,6 +681,12 @@ describe("dbOpenChangesFor (delivery to the client's app)", () => {
       arrange();
       expect(await dbOpenChangesFor("sk-a"), name).toEqual([]);
     }
+  });
+
+  it("a trainer on an older Terms version still has their changes delivered", async () => {
+    db.accounts.get(T).trainer_terms = { ...TERMS, version: "draft-2026-10-05b" };
+    db.changes = [row(`${S1}.0`, { created_at: NOW - 2 * DAY })];
+    expect(await dbOpenChangesFor("sk-a")).toHaveLength(1);
   });
 
   it("an undone change that landed is delivered to be put back in any grant state, once; never a week, a cleared, a proposed or an AI row", async () => {
@@ -1005,7 +1011,7 @@ describe("coached sessions", () => {
     expect(live.map((r) => r.authorId)).toEqual([T, T]);
     expect(change.sessionStatus(live[0], { editsLive: live[0].editsLive })).toMatchObject({ status: "seen", keepsAt: Date.parse(AT) + change.AUTO_KEEP_MS });
     for (const stop of [() => { db.grants[0].revoked_at = NOW - 10; }, () => { db.grants[0].edits_off_at = NOW - 10; },
-      () => { db.accounts.get(T).trainer_terms = { ...TERMS, version: "old" }; }]) {
+      () => { db.accounts.get(T).trainer_terms = null; }]) {
       db.grants = [{ ...GRANT }];
       db.accounts.get(T).trainer_terms = TERMS;
       stop();

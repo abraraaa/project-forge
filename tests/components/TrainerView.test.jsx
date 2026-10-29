@@ -8,7 +8,9 @@
 //   - 403 notTrainer for the admin shows the upgrade panel, and the upgrade
 //     reuses that ceremony (one Face ID) with 18+ and the current Trainer
 //     Terms (everyone else applies: tests/components/TrainerApply.test.jsx);
-//   - 403 needsTerms asks to agree again; 503 says not open yet;
+//   - 403 needsTerms (never accepted) is the Terms gate; 503 says not open yet;
+//   - a trainer on an older Terms version is simply live: the roster, with
+//     no notice, nothing to tap and no upgrade call;
 //   - roster rows render every signal variant;
 //   - the invite sheet shows the code, polls, flips to "is in" and reloads
 //     the roster; cancel and share link; the QR of the share link shows
@@ -20,7 +22,7 @@
 //     sign out posts what it should;
 //   - a final invite status (used, cancelled) stops polling for good;
 //   - an invite reply after the sheet closed, or behind a newer issue, is
-//     dropped; a terms change while a client opens leaves no pane behind;
+//     dropped; a 403 needsTerms while a client opens leaves no pane behind;
 //   - the upgrade panel names the trainer by the server's name once known;
 //   - your own training is the roster's pinned first row; it opens with
 //     ref "me" and a self history entry, in a pane titled You;
@@ -224,13 +226,13 @@ describe("TrainerView: signing in", () => {
     expect(screen.getByRole("status").textContent).toBe("Not open yet.");
   });
 
-  it("403 needsTerms on load asks for the name and a fresh Face ID", async () => {
+  it("403 needsTerms on load (never accepted) is the Terms gate: the name and a fresh Face ID", async () => {
     let agreed = false;
     server.routes["POST /api/trainer/clients"] = () => (agreed
       ? { status: 200, body: { me: { name: "coachkim" }, clients: [] } } : { status: 403, body: { needsTerms: true } });
     server.routes["POST /api/trainer/upgrade"] = () => { agreed = true; return { status: 200, body: { ok: true } }; };
     await mount();
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("The Trainer Terms changed");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("The Trainer Terms");
     typeName("coachkim");
     fireEvent.click(screen.getByText("Agree with Face ID"));
     await flush();
@@ -716,7 +718,7 @@ describe("TrainerView: the invite sheet", () => {
   });
 });
 
-describe("TrainerView: the terms change under an open session", () => {
+describe("TrainerView: needsTerms under an open session", () => {
   it("a 403 needsTerms on a client leaves no half-open pane: after agreeing, the roster comes back clean", async () => {
     signedIn();
     server.routes["POST /api/trainer/client"] = { status: 403, body: { needsTerms: true } };
@@ -724,7 +726,7 @@ describe("TrainerView: the terms change under an open session", () => {
     const { container } = await mount();
     fireEvent.click(screen.getByText("Alex"));
     await flush();
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("The Trainer Terms changed");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("The Trainer Terms");
     expect(window.history.state?.view).not.toBe("client");
     typeName("coachkim");
     fireEvent.click(screen.getByText("Agree with Face ID"));
@@ -1048,7 +1050,7 @@ describe("TrainerView: one way back at each level", () => {
     cleanup();
     server.routes["POST /api/trainer/clients"] = { status: 403, body: { needsTerms: true } };
     const again = await mount();
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("The Trainer Terms changed");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("The Trainer Terms");
     expect(again.container.querySelector(".forge-wide-solo").firstElementChild).toBe(screen.getByRole("button", { name: "Profile" }));
   });
 
@@ -1117,5 +1119,24 @@ describe("TrainerView: one way back at each level", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
     }
     expect(posts("/api/trainer/session/end")).toHaveLength(0);
+  });
+});
+
+describe("TrainerView: a trainer on an older Terms version", () => {
+  it("signs in and sees the roster, with no notice and nothing to tap", async () => {
+    // The routes answer an older-version trainer exactly as a current one.
+    let session = false;
+    server.routes["POST /api/trainer/clients"] = () => (session
+      ? { status: 200, body: { me: { name: "Coach Kim" }, clients: SIGNALS } } : { status: 401, body: {} });
+    server.routes["POST /api/trainer/session"] = () => { session = true; return { status: 200, body: { ok: true, name: "Coach Kim" } }; };
+    const { container } = await mount();
+    typeName("coachkim");
+    fireEvent.click(screen.getByText("Sign in with Face ID"));
+    await flush();
+    expect(screen.getByText("Add a client")).toBeTruthy();
+    expect(screen.getByText("Alex")).toBeTruthy();
+    expect(container.querySelector(".forge-wide-roster").firstElementChild.textContent).toBe("For trainers");
+    expect(screen.queryByText(/Trainer Terms/)).toBeNull();
+    expect(server.calls.map((c) => c.url).filter((u) => /terms|upgrade/.test(u))).toEqual([]);
   });
 });

@@ -584,6 +584,19 @@ describe("POST /api/trainer/clients: the roster", () => {
       ]);
     }
   });
+
+  it("an older Terms version: the same roster as a current one, with exactly its keys", async () => {
+    const current = await (await list(session(T, "cT"), { today: TODAY })).json();
+    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "draft-2026-10-05b" };
+    const res = await list(session(T, "cT"), { today: TODAY });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Object.keys(body).sort()).toEqual(Object.keys(current).sort());
+    expect(Object.keys(body).sort()).toEqual(["clients", "me"]);
+    expect(body.clients.map((c) => c.ref)).toEqual(["hwg_abe", "hwg_cara"]);
+    // Nothing is written to the account row.
+    expect(writes().filter((c) => /\baccounts\b/.test(c.q))).toEqual([]);
+  });
 });
 
 describe("SQL pins", () => {

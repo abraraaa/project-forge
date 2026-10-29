@@ -386,6 +386,11 @@ describe("gates, in order", () => {
     expect(grantReads()).toEqual([]);
   });
 
+  it("an older Trainer Terms version still sends", async () => {
+    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "draft-2026-10-05b" };
+    expect((await post(tia, body())).status).toBe(200);
+  });
+
   it("authAt 25 h old gets 403", async () => {
     const stale = session(T, "cT", { ageMs: 60_000, authAgeMs: 25 * HOUR });
     const res = await post(stale, body());

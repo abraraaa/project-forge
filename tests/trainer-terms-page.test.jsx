@@ -12,6 +12,7 @@ const read = (p) => readFileSync(resolve(root, p), "utf8");
 vi.mock("next/link", () => ({ default: ({ href, children, ...p }) => <a href={href} {...p}>{children}</a> }));
 
 import TrainerTermsPage, { metadata } from "../app/trainer/terms/page.jsx";
+import { TRAINER_TERMS_SINCE, termsDate } from "../lib/trainer-terms.js";
 
 afterEach(cleanup);
 
@@ -33,6 +34,16 @@ describe("Trainer Terms page", () => {
     expect(text).toContain("Your client can stop sharing at any time, and your access ends straight away.");
     expect(text).toContain("We may pause or end your trainer access if you misuse");
     expect(text).toContain("the law of England and Wales");
+  });
+
+  it("shows the date the current version took effect, and the session line", () => {
+    render(<TrainerTermsPage />);
+    expect(document.querySelector("[data-terms-since]").textContent).toBe(`Updated ${termsDate(TRAINER_TERMS_SINCE)}`);
+    expect(termsDate(TRAINER_TERMS_SINCE)).toBe("21 October 2026");
+    const text = document.body.textContent;
+    expect(text).toContain("Log a session with a client only when you trained them.");
+    expect(text).toContain("These terms can change. When they do, the date at the top of this page moves, and the new terms apply from that date.");
+    expect(text).not.toMatch(/tell you on your client list|accept the new version/);
   });
 
   it("is never indexed", () => {

@@ -5,7 +5,7 @@ import { dbPrimaryHandle } from "@/lib/identity-store";
 import { dbTrainerApplication } from "@/lib/trainer-store";
 import { applicationView } from "@/lib/trainer-apply";
 import { entitled } from "@/lib/entitlements";
-import { isCurrentTrainerTerms } from "@/lib/trainer-terms";
+import { hasTrainerTerms } from "@/lib/trainer-terms";
 import { publicName } from "@/lib/trainer-view";
 import { freshCeremony, mintTrainerSession, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
@@ -15,7 +15,8 @@ export const preferredRegion = "lhr1";
 export const dynamic = "force-dynamic";
 
 // POST /api/trainer/session  { authToken, profile } -> { ok, name } + the trainer cookie;
-//   403 { notTrainer, name, admin, application } or { needsTerms, name } (name: the live primary handle).
+//   403 { notTrainer, name, admin, application } or { needsTerms, name } (Terms never
+//   accepted; name: the live primary handle). Any Terms version accepted signs in.
 // authToken is a quiet sign-in's ceremony token. It is expired once exchanged,
 // and only then: a 403 leaves it usable for the upgrade or an application, still inside its 5 minutes.
 export async function POST(request) {
@@ -34,7 +35,7 @@ export async function POST(request) {
       return json({ notTrainer: true, name, admin: isAdminIdentity(c.identity), application: applicationView(app, Date.now()) }, 403);
     }
     if (!trainerOpenFor(c.identity)) return json({ error: "Not open yet." }, 503);
-    if (!isCurrentTrainerTerms(c.account.trainerTerms)) return json({ needsTerms: true, name: await nameNow() }, 403);
+    if (!hasTrainerTerms(c.account.trainerTerms)) return json({ needsTerms: true, name: await nameNow() }, 403);
 
     // Writes: INSERT auth_tokens (the session), then UPDATE auth_tokens.expires on the ceremony token.
     const session = await mintTrainerSession(c.identity, c);

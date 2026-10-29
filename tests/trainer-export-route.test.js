@@ -218,6 +218,11 @@ describe("POST /api/trainer/export", () => {
     for (const r of sent) expect(r.url).not.toContain("hwg_");
   });
 
+  it("an older Trainer Terms version still downloads", async () => {
+    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "draft-2026-10-05b" };
+    expect((await post(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).status).toBe(200);
+  });
+
   it("answers the client's CSV as an attachment, never cached, with a UTF-8 BOM first", async () => {
     const res = await post(session(T, "cT"), { ref: "hwg_cara", today: TODAY });
     expect(res.status).toBe(200);
@@ -298,9 +303,10 @@ describe("POST /api/trainer/export", () => {
     expect(dataReads()).toEqual([]);
   });
 
-  it("not entitled: a lifter's trainer-scoped session is refused (401, as the client route), stale Terms 403; nothing looked up", async () => {
+  it("not entitled: a lifter's trainer-scoped session is refused (401, as the client route), no Terms accepted 403; nothing looked up", async () => {
     const lifter = await post(session(L, "cL"), { ref: "hwg_cara" });
     expect(lifter.status).toBe(401);
+    db.accounts.get(N).trainer_terms = null;
     const stale = await post(session(N, "cN"), { ref: "hwg_cara" });
     expect(stale.status).toBe(403);
     expect(await stale.json()).toEqual({ needsTerms: true });
