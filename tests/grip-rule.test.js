@@ -9,7 +9,7 @@ import {
   gripRuleBreaches, gripAllows, assertGripRule, rotateAccessories,
   readRotationConfig, pruneStaleRotationConfig, applyRotationToSession,
   applyFocusToSession, rotationDiff, FOCUS_OPTIONS, pushHistoryBlock, recentNamesFor,
-  STRONG_DROP_BLOCK_IDS,
+  STRONG_DROP_BLOCK_IDS, readRotationHistory,
 } from "../lib/programme.js";
 import { solveRotation, poolFor } from "../lib/rotation-solver.js";
 
@@ -228,6 +228,73 @@ describe("stored Day A picks read in place (no write)", () => {
   it("the rotation summary reports each pick under the slot it was trained in", () => {
     const next = { ...OWNER, "ass1-B": pick("ass1-B", "Landmine Press"), "ass2-B": pick("ass2-B", "Incline DB Row") };
     expect(rotationDiff(OWNER, next)).toEqual([]);
+  });
+});
+
+describe("Day A memory stored before the re-pair reads in place (no write)", () => {
+  // Three blocks remembered under the old keys: rows in ass1-B, landmine
+  // presses in ass2-B.
+  const at = (month) => `2026-${month}-20T08:00:00.000Z`;
+  const OLD = Object.freeze({
+    "ass1-A": { "DB Split Squat": at("10") },
+    "ass1-B": { "Chest-Supported DB Row": at("10"), "Seal Row": at("09"), "Incline DB Row": at("08") },
+    "ass2-B": { "Landmine Press": at("10"), "Single-Arm Landmine Press": at("09"), "Incline Landmine Press": at("08") },
+  });
+  // The same memory under the slots as they are now.
+  const NOW = Object.freeze({ ...OLD, "ass1-B": OLD["ass2-B"], "ass2-B": OLD["ass1-B"] });
+  const PRESSED = ["Landmine Press", "Single-Arm Landmine Press", "Incline Landmine Press"];
+  const ROWED = ["Chest-Supported DB Row", "Seal Row", "Incline DB Row"];
+
+  it("each B slot reads the names its pool holds, from both keys", () => {
+    const read = readRotationHistory(OLD);
+    expect(recentNamesFor(read["ass1-B"])).toEqual(PRESSED);
+    expect(recentNamesFor(read["ass2-B"])).toEqual(ROWED);
+    expect(read["ass1-A"]).toBe(OLD["ass1-A"]);
+  });
+
+  it("the solver excludes the same names in both slots as it does for the memory filed under them", () => {
+    for (const focus of FOCUS_OPTIONS) {
+      for (let i = 0; i < 6; i++) {
+        const old = solveRotation({ history: OLD, focus, rng: seeded(100 + i) });
+        const now = solveRotation({ history: NOW, focus, rng: seeded(100 + i) });
+        expect(old.config, `${focus} ${100 + i}`).toEqual(now.config);
+        expect(PRESSED, `${focus} ${100 + i}`).not.toContain(old.config["ass1-B"]?.name);
+        expect(ROWED, `${focus} ${100 + i}`).not.toContain(old.config["ass2-B"]?.name);
+      }
+    }
+  });
+
+  it("after the first rotation since, each slot remembers its own pool's newest picks", () => {
+    // The block just trained held the old-key picks; pushHistoryBlock files
+    // them under their slots and keeps two of each old entry beside them.
+    const trained = { "ass1-B": pick("ass2-B", "Incline DB Row"), "ass2-B": pick("ass1-B", "Landmine Press") };
+    const history = pushHistoryBlock(OLD, trained, "2026-10-28T08:00:00.000Z");
+    expect(recentNamesFor(history["ass1-B"])).toEqual(["Landmine Press", "Chest-Supported DB Row", "Seal Row"]);
+    const read = readRotationHistory(history);
+    expect(recentNamesFor(read["ass1-B"])).toEqual(["Landmine Press", "Single-Arm Landmine Press"]);
+    expect(recentNamesFor(read["ass2-B"])).toEqual(["Incline DB Row", "Chest-Supported DB Row", "Seal Row"]);
+  });
+
+  it("a memory with nothing to move is returned as is", () => {
+    expect(readRotationHistory(NOW)).toBe(NOW);
+    const fresh = pushHistoryBlock({}, { "ass1-B": pick("ass1-B", "Landmine Press"), "ass2-B": pick("ass2-B", "Seal Row") });
+    expect(readRotationHistory(fresh)).toBe(fresh);
+    const empty = {};
+    expect(readRotationHistory(empty)).toBe(empty);
+  });
+
+  it("the older shapes move the same way, in their stored order", () => {
+    const read = readRotationHistory({ "ass1-B": ["Seal Row", "TRX Row"], "ass2-B": "Kneeling Landmine Press" });
+    expect(recentNamesFor(read["ass1-B"])).toEqual(["Kneeling Landmine Press"]);
+    expect(recentNamesFor(read["ass2-B"])).toEqual(["Seal Row", "TRX Row"]);
+  });
+
+  it("read only: neither the read nor a solve rewrites the stored memory", () => {
+    const stored = structuredClone(OLD);
+    const before = JSON.stringify(stored);
+    readRotationHistory(stored);
+    solveRotation({ history: stored, rng: seeded(1) });
+    expect(JSON.stringify(stored)).toBe(before);
   });
 });
 
