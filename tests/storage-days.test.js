@@ -17,7 +17,7 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { Days, W } from "../lib/storage.js";
-import { mergeDayEntries } from "../lib/sync-merge.js";
+import { mergeDayEntries, dayFieldStamps } from "../lib/sync-merge.js";
 
 describe("Days — write + read primitives", () => {
   it("set() upserts and auto-stamps updatedAt", () => {
@@ -333,5 +333,71 @@ describe("Days — lazy projection from legacy stores", () => {
     expect(all["2026-06-15"].completedType).toBe("strength");
     // Bonus mark survives the repair (spread preserves it).
     expect(all["2026-06-15"].marks.bonus).toBe(true);
+  });
+});
+
+// The launch-time fold and repair stamp what they write the way Days.set does:
+// a field they write reads at now, a field they leave keeps its stamp.
+describe("Days fold and repair — per-field stamps", () => {
+  afterEach(() => vi.useRealTimers());
+  const NOW = "2026-06-20T09:00:00.000Z";
+  // Another device's copy, every field written between the stored stamps and now.
+  const remote = (fields) => ({ date: "2026-06-15", sessionId: null, marks: {}, ...fields, updatedAt: "2026-06-18T00:00:00.000Z" });
+  const mergedBothWays = (local, other) => [
+    mergeDayEntries({ "2026-06-15": local }, { "2026-06-15": other })["2026-06-15"],
+    mergeDayEntries({ "2026-06-15": other }, { "2026-06-15": local })["2026-06-15"],
+  ];
+
+  it("a legacy fold stamps the strength completion now; an untouched field keeps its earlier stamp", () => {
+    window.localStorage.setItem("forge:alice:days", JSON.stringify({
+      "2026-06-15": {
+        date: "2026-06-15", scheduledType: "strength", completedType: "cardio", sessionId: null, note: "kept",
+        marks: {}, stamps: { completedType: "2026-06-15T08:00:00.000Z" }, updatedAt: "2026-06-15T12:00:00.000Z",
+      },
+    }));
+    window.localStorage.setItem("forge:alice:history", JSON.stringify([
+      { id: "2026-06-15T10:00:00.000Z", date: "2026-06-15", session: "strength-a", blocks: [] },
+    ]));
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date(NOW) });
+    Days._foldLegacy("alice");
+    const e = JSON.parse(window.localStorage.getItem("forge:alice:days"))["2026-06-15"];
+    expect(e).toMatchObject({ completedType: "strength", sessionId: "2026-06-15T10:00:00.000Z", updatedAt: NOW });
+    expect(dayFieldStamps(e)).toEqual({ scheduledType: NOW, completedType: NOW, sessionId: NOW, note: "2026-06-15T12:00:00.000Z" });
+    for (const m of mergedBothWays(e, remote({ scheduledType: "strength", completedType: "cardio", note: "edited" }))) {
+      expect(m).toMatchObject({ completedType: "strength", sessionId: "2026-06-15T10:00:00.000Z", note: "edited" });
+    }
+  });
+
+  it("a repair stamps the fields it fills now; an untouched field keeps its earlier stamp", () => {
+    window.localStorage.setItem("forge:alice:days", JSON.stringify({
+      "2026-06-15": {
+        date: "2026-06-15", scheduledType: null, completedType: null, sessionId: null, note: "kept",
+        marks: { bonus: true }, stamps: { completedType: "2026-06-15T08:00:00.000Z" }, updatedAt: "2026-06-15T10:00:00.000Z",
+      },
+    }));
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date(NOW) });
+    Days._maybeRepair("alice");
+    const e = JSON.parse(window.localStorage.getItem("forge:alice:days"))["2026-06-15"];
+    // 2026-06-15 is a Monday: the default week says strength.
+    expect(e).toMatchObject({ scheduledType: "strength", completedType: "strength", marks: { bonus: true }, updatedAt: NOW });
+    expect(dayFieldStamps(e)).toEqual({ scheduledType: NOW, completedType: NOW, note: "2026-06-15T10:00:00.000Z" });
+    for (const m of mergedBothWays(e, remote({ scheduledType: "cardio", completedType: "cardio", note: "edited" }))) {
+      expect(m).toMatchObject({ scheduledType: "strength", completedType: "strength", note: "edited" });
+    }
+  });
+
+  it("a bonus mark on an entry with no updatedAt leaves its fields reading at epoch, not now", () => {
+    window.localStorage.setItem("forge:alice:days", JSON.stringify({
+      "2026-06-15": { date: "2026-06-15", scheduledType: "cardio", completedType: "cardio", sessionId: null, marks: {} },
+    }));
+    window.localStorage.setItem("forge:alice:bonusDone:2026-06-15", JSON.stringify({ 0: true }));
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date(NOW) });
+    Days._foldLegacy("alice");
+    const e = JSON.parse(window.localStorage.getItem("forge:alice:days"))["2026-06-15"];
+    expect(e).toMatchObject({ completedType: "cardio", marks: { bonus: true }, updatedAt: NOW });
+    expect(dayFieldStamps(e)).toEqual({ scheduledType: "1970-01-01T00:00:00.000Z", completedType: "1970-01-01T00:00:00.000Z" });
+    for (const m of mergedBothWays(e, remote({ scheduledType: "strength", completedType: "strength" }))) {
+      expect(m).toMatchObject({ scheduledType: "strength", completedType: "strength", marks: { bonus: true } });
+    }
   });
 });
