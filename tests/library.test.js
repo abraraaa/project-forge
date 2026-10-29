@@ -57,6 +57,10 @@ describe("library catalogue", () => {
     expect(LIBRARY.filter((e) => /assistance away/.test(e.progression)).map((e) => e.name)).toEqual(["Assisted Pull-Up"]);
   });
 
+  it("Tricep Dips is an upper-body push", () => {
+    expect(getExercise("tricep-dips").categoryLabel).toBe("Upper-body push");
+  });
+
   it("secondary contributions are sorted heaviest-first with sane weights", () => {
     for (const e of LIBRARY) {
       for (let i = 0; i < e.secondary.length; i++) {

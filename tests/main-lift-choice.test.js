@@ -36,6 +36,13 @@ describe("the equivalents table is intact", () => {
   it("offers the programme's own lift first", () => {
     for (const b of mainBlocks) expect(mainLiftOptions(b.ex.name)[0]).toBe(b.ex.name);
   });
+
+  it("an inherited key is an unknown lift: no options", () => {
+    expect(mainLiftOptions("Leg Extension")).toEqual([]);
+    for (const key of ["toString", "__proto__", "constructor", "hasOwnProperty"]) {
+      expect(mainLiftOptions(key), key).toEqual([]);
+    }
+  });
 });
 
 describe("the heavy_low_rep floor", () => {

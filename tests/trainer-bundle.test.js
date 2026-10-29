@@ -135,9 +135,7 @@ describe("the app shell stays off the exercise catalogue", () => {
 });
 
 describe("repsForSession", () => {
-  it("the resolver's copy answers as the session engine's", () => {
-    const shapes = [5, "5", "8/leg", "20s", "45s", "", null, undefined, "AMRAP", "10-12"];
-    const reps = [6, 9, 0, -1, 2.5, null, undefined, "6", NaN, Infinity];
-    for (const s of shapes) for (const r of reps) expect(repsForSession(r, s), `${r} ${s}`).toEqual(engineReps(r, s));
+  it("the session engine's is the resolver's", () => {
+    expect(engineReps).toBe(repsForSession);
   });
 });
