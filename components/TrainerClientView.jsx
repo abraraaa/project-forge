@@ -804,6 +804,31 @@ export function noHistoryText(cap) {
 }
 
 /**
+ * The pace presets for a lift's weight, as [label, kg] pairs, all inside the
+ * bounds: Hold (the last top set), Step (their app's next), Jump and Ease.
+ * Loaded: Jump is the top of the range, Ease the engine's 5% drop. Assisted
+ * (the kg is help): Jump is two rungs less help, Ease one rung more.
+ * Empty without bounds or a last top set.
+ * @param {{ anchorKg: number | null, w: number | null, bounds: { min: number, max: number } | null, lt: string | null | undefined }} opts
+ * @returns {Array<[string, number]>}
+ */
+export function pacePresets({ anchorKg, w, bounds, lt }) {
+  if (!bounds || anchorKg == null) return [];
+  const clamp = (v) => Math.min(bounds.max, Math.max(bounds.min, v));
+  /** @type {Array<[string, number]>} */
+  const out = [["Hold", clamp(anchorKg)]];
+  if (w != null) out.push(["Step", clamp(w)]);
+  if (lt === "assisted_bodyweight") {
+    out.push(["Jump", clamp(nextRung(nextRung(anchorKg, lt, -1), lt, -1))]);
+    out.push(["Ease", clamp(nextRung(anchorKg, lt, +1))]);
+  } else {
+    if (bounds.max != null) out.push(["Jump", bounds.max]);
+    out.push(["Ease", clamp(snapToImplement(anchorKg * 0.95, lt))]);
+  }
+  return out;
+}
+
+/**
  * What the trainer can do here, by the view's edits status (view.edits): on
  * (the plan came), off (the client turned changes off), fresh (shared before
  * changes existed: a fresh approval is needed), unavailable (changes are on,
@@ -857,7 +882,7 @@ export function warningText(code) {
     case "off_programme_reps": return "Outside the programme's usual reps for this lift.";
     case "below_rep_band": return `Under ${EFFECTIVE_REP_BAND.min} reps: heavier work than the programme's band.`;
     case "double_progression": return "Raises weight and reps together.";
-    case "band": return "Some muscles would sit outside their weekly range with this main lift.";
+    case "band": return "This lift would take some muscles outside their weekly range, so their accessories get rebalanced when it lands.";
     case "under_mev": return "Some muscles would sit under minimum.";
     case "over_mrv": return "Some muscles would sit over their maximum.";
     default: return null;
@@ -1273,19 +1298,12 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
   const switching = !!main && choice !== main.choice;
   const weighable = !!b && !blocked;
 
-  // Pace presets (§5): the last top set, the engine's next, the top of the
-  // range, and the engine's 5% drop.
-  const presets = [];
-  if (weighable && anchorKg != null) {
-    presets.push(["Hold", clampKg(anchorKg)]);
-    if (lift.w != null) presets.push(["Step", clampKg(lift.w)]);
-    if (b.max != null) presets.push(["Jump", b.max]);
-    presets.push(["Ease", clampKg(snapToImplement(anchorKg * 0.95, lt))]);
-  }
+  // Pace presets (§5): Hold, Step, Jump and Ease (pacePresets).
+  const presets = weighable ? pacePresets({ anchorKg, w: lift.w, bounds: b, lt }) : [];
   // One caption for the two presets whose names don't say what they are.
   const presetNote = [
     presets.some(([l]) => l === "Step") && "Step is their app's next weight.",
-    presets.some(([l]) => l === "Jump") && "Jump is the most this change allows.",
+    presets.some(([l]) => l === "Jump") && (lt === "assisted_bodyweight" ? "Jump is the least help this change allows." : "Jump is the most this change allows."),
   ].filter(Boolean).join(" ");
 
   const weightLabel = lt === "assisted_bodyweight" ? "Assistance" : isBodyweightMovement(lt) ? "Added weight" : lt === "per_db" ? "Weight, each dumbbell" : "Weight";

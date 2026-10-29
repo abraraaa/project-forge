@@ -18,7 +18,8 @@ import {
   validateChangeSet, boundsFor, liftBasis, rowFromDb, weekBasis, anchorLogged, SETS_PER_WEEK, SESSIONS_PER_WEEK,
   validateSessionSet, sessionStatus, AUTO_KEEP_MS,
 } from "@/lib/trainer-change";
-import { nextRung, CATEGORY_COLD_START_MAX_KG, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights } from "@/lib/lift-translations";
+import { nextRung, CATEGORY_COLD_START_MAX_KG, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
+import { pacePresets } from "@/components/TrainerClientView";
 import { resolvedProgramme, planStartWeight, validMainLifts, repTargets } from "@/lib/programme-resolve";
 import {
   SESSIONS, EXERCISE_POOLS, FOCUS_OPTIONS, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS,
@@ -1192,6 +1193,43 @@ describe("the plan: bounds are the route's (E4)", () => {
   });
 });
 
+describe("the plan: an assisted lift (the kg is help)", () => {
+  const AP = "Assisted Pull-Up";
+  const ASSISTED = "assisted_bodyweight";
+  const withAssisted = () => {
+    const data = planData();
+    data.meta.programmeBlock = { number: 1, config: { "bss1-B": EXERCISE_POOLS["bss1-B"].pool.find((p) => p.name === AP) } };
+    data.meta.weights[AP] = 18.75;
+    const sets = [1, 2, 3].map(() => ({ weight: 20, reps: 8, rpe: 7, rir: 3, loadType: ASSISTED, bodyweightUsed: 80, effectiveLoad: 60 }));
+    data.history.push(rec(ago(2), "07:00:00", [{ name: AP, muscle: "Lats", loadType: ASSISTED, sets }]));
+    return data;
+  };
+
+  it("offers two rungs less help to ADDED_LOAD_MAX_KG, and the route accepts both ends", () => {
+    const data = withAssisted();
+    const plan = projectPlan(data, { todayIso: TODAY });
+    const l = plan.lifts.find((x) => x.name === AP);
+    expect(l.anchor.kg).toBe(20);
+    expect(l.bounds).toEqual({ min: 17.5, max: ADDED_LOAD_MAX_KG, step: 1.25, warnBelow: null });
+    const ctx = ctxFrom(data, plan);
+    expect(sendWeight(ctx, AP, 17.5).ok).toBe(true);
+    expect(sendWeight(ctx, AP, ADDED_LOAD_MAX_KG).ok).toBe(true);
+    expect(sendWeight(ctx, AP, 16.25).refusals[0].code).toBe("per_change");
+  });
+
+  it("presets: Jump is two rungs less help, Ease one rung more, Hold and Step as for any lift", () => {
+    const plan = projectPlan(withAssisted(), { todayIso: TODAY });
+    const l = plan.lifts.find((x) => x.name === AP);
+    expect(pacePresets({ anchorKg: l.anchor.kg, w: l.w, bounds: l.bounds, lt: l.loadType }))
+      .toEqual([["Hold", 20], ["Step", 18.75], ["Jump", 17.5], ["Ease", 21.25]]);
+    // A loaded lift keeps its presets: Jump the top of the range, Ease 5% off.
+    const sq = plan.lifts.find((x) => x.name === SQUAT);
+    expect(pacePresets({ anchorKg: sq.anchor.kg, w: sq.w, bounds: sq.bounds, lt: sq.loadType }))
+      .toEqual([["Hold", 100], ["Step", 102.5], ["Jump", 108.75], ["Ease", 95]]);
+    expect(pacePresets({ anchorKg: null, w: 18.75, bounds: l.bounds, lt: ASSISTED })).toEqual([]);
+  });
+});
+
 describe("the plan: deload, recovery, main lifts, budget", () => {
   it("a deload blocks every load with its end date, the route's own; reps-only lifts stay open", () => {
     const data = planData();
@@ -1416,6 +1454,22 @@ describe("the plan: what a coached session is composed from", () => {
     // lifts[].reps reads a Strong range ("6-8") as its first count: composing from it is stale.
     const fromLifts = Object.fromEntries(plan.lifts.map((l) => [l.name, l.reps]));
     expect(verdicts(p, fromLifts)).toContain("stale");
+  });
+
+  it("Day A picks stored before the re-pair land in the slot whose pool holds them, as the app reads them", () => {
+    // The B pools changed places (lunge + landmine press, hip extension + row);
+    // a stored config still has the row under ass1-B and the press under ass2-B.
+    const meta = coachMeta("Forged");
+    const pick = (slot, name) => ({ ...EXERCISE_POOLS[slot].pool.find((e) => e.name === name) });
+    meta.programmeBlock.config = {
+      "ass1-A": pick("ass1-A", "DB Split Squat"), "ass1-B": pick("ass2-B", "Incline DB Row"),
+      "ass2-A": pick("ass2-A", "Barbell Glute Bridge"), "ass2-B": pick("ass1-B", "Landmine Press"),
+    };
+    const plan = projectPlan({ meta, history: [] }, { todayIso: TODAY });
+    expect(Object.fromEntries(Object.entries(plan.programme.config).map(([k, v]) => [k, v.name]))).toEqual({
+      "ass1-A": "DB Split Squat", "ass1-B": "Landmine Press", "ass2-A": "Barbell Glute Bridge", "ass2-B": "Incline DB Row",
+    });
+    expect(serverSays(ipadRecord(plan, 0), meta)).toBe("ok");
   });
 
   it("only programme data leaves: a pool slot holding a lift of its pool, plain values; the block's other fields never", () => {

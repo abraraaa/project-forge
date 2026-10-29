@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import {
   SESSIONS, EXERCISE_POOLS, SWAP_DB, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS, RETIRED_EXERCISES, RETIRED_LOAD_TYPES,
-  applyRotationToSession, dedupeRotationConfig, pushHistoryBlock,
+  applyRotationToSession, dedupeRotationConfig, pushHistoryBlock, recentNamesFor,
 } from "../lib/programme.js";
 import { solveRotation, bandViolations } from "../lib/rotation-solver.js";
 import { getLiftProfile, inferLoadType, __test__ } from "../lib/lift-translations.js";
@@ -112,7 +112,7 @@ describe("a stored rotation config naming a retired lift", () => {
 
     it(`${name}: the next solve re-picks from the live pools, deterministically per seed`, () => {
       const history = pushHistoryBlock({}, staleFor(name));
-      for (const key of Object.keys(EXERCISE_POOLS)) expect(history[key], key).toEqual([name]);
+      for (const key of Object.keys(EXERCISE_POOLS)) expect(recentNamesFor(history[key]), key).toEqual([name]);
       for (const focus of ["Forged", "Strong", "Sculpt"]) {
         for (let seed = 1; seed <= 5; seed++) {
           const a = solveRotation({ history, focus, rng: seeded(seed) });

@@ -2,9 +2,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // THE merge's contract (lib/sync-merge.js), locking the sync-audit fixes:
 //   S2 — stamps beat direction: a stamped newer local survives a stale
-//        remote pull (the "trained offline, app forgot my weights" bug),
-//        while fully-unstamped data keeps the legacy remote-wins-ties
-//        behaviour byte-for-byte.
+//        remote pull (the "trained offline, app forgot my weights" bug).
+//        Equal stamps (unstamped data included) tie by content, never by
+//        direction (tests/sync-merge-order.test.js holds the order property).
 //   S3 — server direction: merging an INCOMING partial payload into the
 //        existing blob never deletes existing fields — the blob is always
 //        a superset. (The server-side backstop for the S1 class.)
@@ -34,11 +34,11 @@ describe("S2 — stamps beat direction", () => {
     expect(m.weights).toEqual({ Squat: 102.5, Bench: 62.5 });
   });
 
-  it("fully-unstamped data keeps legacy remote-wins-ties behaviour", () => {
+  it("fully-unstamped data: union of keys, ties by content in either direction", () => {
     const local = { weights: { Squat: 102.5, Row: 70 } };
     const remote = { weights: { Squat: 100 } };
-    const m = mergeMeta(local, remote);
-    expect(m.weights).toEqual({ Squat: 100, Row: 70 }); // === {...local, ...remote}
+    expect(mergeMeta(local, remote).weights).toEqual({ Squat: 102.5, Row: 70 }); // "102.5" > "100"
+    expect(mergeMeta(remote, local).weights).toEqual({ Squat: 102.5, Row: 70 });
   });
 
   it("a stamped newer local focus survives an unstamped/stale remote", () => {
@@ -47,9 +47,9 @@ describe("S2 — stamps beat direction", () => {
       { userFocus: "Forged", userFocusUpdatedAt: T1 },
     );
     expect(m1.userFocus).toBe("Sculpt");
-    // Unstamped remote still wins the tie (legacy).
-    const m2 = mergeMeta({ userFocus: "Sculpt" }, { userFocus: "Forged" });
-    expect(m2.userFocus).toBe("Forged");
+    // Unstamped on both sides: a tie, broken by content in either direction.
+    expect(mergeMeta({ userFocus: "Sculpt" }, { userFocus: "Forged" }).userFocus).toBe("Sculpt");
+    expect(mergeMeta({ userFocus: "Forged" }, { userFocus: "Sculpt" }).userFocus).toBe("Sculpt");
   });
 
   it("trainingState: both rich → newer stamp wins; rich beats empty", () => {
@@ -95,7 +95,7 @@ describe("S3 — server direction: incoming partial payloads never delete", () =
   });
 });
 
-describe("mergeProgrammeBlock — the same-block race unions memory", () => {
+describe("mergeProgrammeBlock — the same-block race merges memory without loss", () => {
   it("higher block number still wins wholesale", () => {
     const older = { number: 3, config: { a: { name: "X" } }, history: { a: ["X"] } };
     const newer = { number: 4, config: { a: { name: "Y" } }, history: { a: ["Y"] } };
@@ -103,22 +103,24 @@ describe("mergeProgrammeBlock — the same-block race unions memory", () => {
     expect(mergeProgrammeBlock(newer, older).number).toBe(4);
   });
 
-  it("equal numbers: newer updatedAt's config wins, exclusion history unions", () => {
+  it("equal numbers: newer updatedAt's config wins, exclusion history merges per name", () => {
     const l = { number: 3, updatedAt: T2, config: { a: { name: "Y" } },
       history: { "s1": ["Y", "X"], "s2": ["P"] } };
     const r = { number: 3, updatedAt: T1, config: { a: { name: "Z" } },
       history: { "s1": ["Z"], "s3": ["Q"] } };
     const m = mergeProgrammeBlock(l, r);
     expect(m.config.a.name).toBe("Y");          // newer stamp wins the config
-    expect(m.history.s1).toEqual(["Y", "X", "Z"]); // union, winner order first, capped 3
-    expect(m.history.s2).toEqual(["P"]);        // loser-only slots survive
-    expect(m.history.s3).toEqual(["Q"]);
+    // Arrays read as names stamped at their block's updatedAt.
+    expect(m.history.s1).toEqual({ Y: T2, X: T2, Z: T1 });
+    expect(m.history.s2).toEqual({ P: T2 });    // loser-only slots survive
+    expect(m.history.s3).toEqual({ Q: T1 });
+    expect(mergeProgrammeBlock(r, l)).toEqual(m);
   });
 
-  it("legacy single-string history entries normalise to arrays", () => {
+  it("legacy single-string history entries read as one name", () => {
     const l = { number: 2, updatedAt: T2, history: { s1: "OldPick" } };
     const r = { number: 2, updatedAt: T1, history: { s1: ["NewPick"] } };
-    expect(mergeProgrammeBlock(l, r).history.s1).toEqual(["OldPick", "NewPick"]);
+    expect(mergeProgrammeBlock(l, r).history.s1).toEqual({ OldPick: T2, NewPick: T1 });
   });
 });
 

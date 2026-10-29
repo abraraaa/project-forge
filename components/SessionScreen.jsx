@@ -766,7 +766,12 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               )}
               {delta != null && delta !== 0 && (
                 <div style={{fontSize:13,color:T.ink3,marginTop:weightCaption?4:9}}>
-                  <span style={{fontFamily:T.measured,color:T.heat[3]}}>{delta>0?"+":""}{delta}</span> on last time
+                  {loadType === "assisted_bodyweight" ? (
+                    /* The kg is help: less of it is progress. */
+                    <><span style={{fontFamily:T.measured,color:T.heat[3]}}>{Math.abs(delta)}</span> kg {delta<0?"less":"more"} help than last time</>
+                  ) : (
+                    <><span style={{fontFamily:T.measured,color:T.heat[3]}}>{delta>0?"+":""}{delta}</span> on last time</>
+                  )}
                 </div>
               )}
             </>

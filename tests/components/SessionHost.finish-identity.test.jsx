@@ -14,12 +14,17 @@
 // Re-recorded for first-session seeding: a never-trained lift's first session
 // now holds or adds from its top set (HOLD, consecutiveHolds 1, the performed
 // rep range) instead of COLD_START, and the swapped-in Dumbbell Bench Press
-// keeps the drum's 28.
+// keeps the drum's 28. Re-recorded again when factor-0 lifts stopped writing
+// a muscle anchor: the Standing Calf Raise no longer writes Calves.
 //
 // Re-recorded for rated finishers: the finisher's sets carry the round's
 // rating (RPE and RIR) instead of null, Standing Calf Raise's lift history
 // reads that RIR where it read no_rir_signal, and the four extra ratings move
 // the session's clock on three minutes.
+//
+// Re-recorded for Day A's pairing: Landmine Press is logged in ass1 (fromPool
+// ass1-B) and Chest-Supported DB Row in ass2 (fromPool ass2-B), each taking
+// the ratings the script taps at its new place; the same lifts and loads.
 //
 // Text queries, not getByRole: see SessionScreen.surface.test.jsx.
 // ─────────────────────────────────────────────────────────────────────────────

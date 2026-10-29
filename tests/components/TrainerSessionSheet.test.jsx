@@ -5,8 +5,8 @@
 // asks before it discards. W-G: with the sheet open past keepsAt nothing is
 // kept, and closing it asks for the pull that keeps it. Auto-keep happens
 // only on a pull that lands (sharing as it is now), never from the card held
-// here. lib/storage.js's keep, discard, hold and pull are mocked here
-// (tests/trainer-session-apply covers the store's side).
+// here. lib/trainer-sync.js's keep, discard and hold, and lib/storage.js's
+// pull, are mocked here (tests/trainer-session-apply covers the store's side).
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act, within } from "@testing-library/react";
 
@@ -23,20 +23,24 @@ vi.mock("@/lib/webauthn", () => ({
 // The network edges, and the session decisions: keep and discard take the
 // card off the list as the store does, and report what they were asked.
 // Keep is async, like the store's (it loads the commit path first).
-vi.mock("@/lib/storage", async (io) => {
+vi.mock("@/lib/storage", async (io) => ({
+  ...(await io()),
+  backgroundSync: vi.fn(async () => {}),
+  enableAutoSync: vi.fn(),
+  disableAutoSync: vi.fn(),
+  pushNow: vi.fn(async () => ({ ok: true })),
+  flushPendingPushes: vi.fn(async () => {}),
+  ensurePersistentStorage: vi.fn(async () => {}),
+}));
+vi.mock("@/lib/trainer-sync", async (io) => {
   const real = await io();
+  const { TL } = await import("@/lib/storage");
   const decide = (profile, id) => {
-    const tl = real.TL.get(profile);
-    real.TL.save(profile, { ...tl, pendingSessions: (tl.pendingSessions ?? []).filter((c) => c.id !== id) });
+    const tl = TL.get(profile);
+    TL.save(profile, { ...tl, pendingSessions: (tl.pendingSessions ?? []).filter((c) => c.id !== id) });
   };
   return {
     ...real,
-    backgroundSync: vi.fn(async () => {}),
-    enableAutoSync: vi.fn(),
-    disableAutoSync: vi.fn(),
-    pushNow: vi.fn(async () => ({ ok: true })),
-    flushPendingPushes: vi.fn(async () => {}),
-    ensurePersistentStorage: vi.fn(async () => {}),
     keepTrainerSession: vi.fn(async (profile, id, { auto = false } = {}) => {
       await new Promise((r) => setTimeout(r, 0));
       decide(profile, id);
@@ -64,10 +68,11 @@ vi.mock("@/components/HomeScreen", () => ({
 const { default: TrainerSessionSheet, TrainerSessionCard, sessionTitle, keepsAtWords, sessionCardsFrom } = await import("@/components/TrainerSessionSheet");
 const { default: ForgeApp } = await import("@/components/ForgeApp");
 // What ForgeApp handed Keep at load, read before any test clears the mocks.
-const handedIn = (await import("@/lib/storage")).setSessionCommit.mock.calls.map((c) => c[0]);
+const handedIn = (await import("@/lib/trainer-sync")).setSessionCommit.mock.calls.map((c) => c[0]);
 const { commitSessionRecord } = await import("@/lib/session-commit");
 const { default: HomeScreenReal } = await vi.importActual("@/components/HomeScreen");
-const { P, TL, backgroundSync, keepTrainerSession, discardTrainerSession, holdTrainerSession } = await import("@/lib/storage");
+const { P, TL, backgroundSync } = await import("@/lib/storage");
+const { keepTrainerSession, discardTrainerSession, holdTrainerSession } = await import("@/lib/trainer-sync");
 const { AUTO_KEEP_MS } = await import("@/lib/trainer-change");
 const { todayLocalIso, addDaysIso } = await import("@/lib/dates");
 const { WEEK } = await import("@/lib/programme");

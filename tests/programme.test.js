@@ -23,7 +23,7 @@ import {
   findRecentDays,
   findUntickedRecent,
   rotateAccessories,
-  pushHistoryBlock,
+  pushHistoryBlock, recentNamesFor,
   computeRotationStimulusDelta,
   deriveStrengthDaySessions,
   sessionMetaForDate,
@@ -269,45 +269,57 @@ describe("rotation memory — 3-block exclusion", () => {
 });
 
 describe("pushHistoryBlock", () => {
+  // The memory is a stamped map; recentNamesFor reads it newest first.
+  const AT = "2026-10-20T10:00:00.000Z";
+  const read = (h) => Object.fromEntries(Object.entries(h).map(([k, v]) => [k, recentNamesFor(v)]));
+
   it("prepends the active config onto history, capped at ROTATION_MEMORY_BLOCKS", () => {
     const prev = { "ass1-A": ["DB Reverse Lunge", "Reverse Lunge"] };
     const active = { "ass1-A": { name: "Step-Up" } };
-    const next = pushHistoryBlock(prev, active);
-    expect(next["ass1-A"]).toEqual(["Step-Up", "DB Reverse Lunge", "Reverse Lunge"]);
+    const next = pushHistoryBlock(prev, active, AT);
+    expect(recentNamesFor(next["ass1-A"])).toEqual(["Step-Up", "DB Reverse Lunge", "Reverse Lunge"]);
+    expect(next["ass1-A"]["Step-Up"]).toBe(AT);
   });
 
   it("evicts the oldest entry when history hits the cap", () => {
     const prev = { "ass1-A": ["B", "C", "D"] };
     const active = { "ass1-A": { name: "A" } };
-    const next = pushHistoryBlock(prev, active);
-    expect(next["ass1-A"]).toHaveLength(3);
-    expect(next["ass1-A"]).toEqual(["A", "B", "C"]); // "D" evicted
+    const next = pushHistoryBlock(prev, active, AT);
+    expect(Object.keys(next["ass1-A"])).toHaveLength(3);
+    expect(recentNamesFor(next["ass1-A"])).toEqual(["A", "B", "C"]); // "D" evicted
   });
 
   it("dedupes — if the active pick already appears in history, it isn't duplicated", () => {
     const prev = { "ass1-A": ["A", "B"] };
     const active = { "ass1-A": { name: "A" } };
-    const next = pushHistoryBlock(prev, active);
-    expect(next["ass1-A"]).toEqual(["A", "B"]); // "A" stays at front, not duplicated
+    const next = pushHistoryBlock(prev, active, AT);
+    expect(recentNamesFor(next["ass1-A"])).toEqual(["A", "B"]); // "A" stays at front, not duplicated
   });
 
   it("accepts legacy single-string prev entries", () => {
     const prev = { "ass1-A": "Reverse Lunge" };
     const active = { "ass1-A": { name: "Step-Up" } };
-    const next = pushHistoryBlock(prev, active);
-    expect(next["ass1-A"]).toEqual(["Step-Up", "Reverse Lunge"]);
+    const next = pushHistoryBlock(prev, active, AT);
+    expect(recentNamesFor(next["ass1-A"])).toEqual(["Step-Up", "Reverse Lunge"]);
   });
 
   it("handles slots absent from prev history (first rotation)", () => {
     const active = { "ass1-A": { name: "Step-Up" }, "ass1-B": { name: "Cable Row" } };
-    const next = pushHistoryBlock({}, active);
-    expect(next).toEqual({ "ass1-A": ["Step-Up"], "ass1-B": ["Cable Row"] });
+    const next = pushHistoryBlock({}, active, AT);
+    expect(read(next)).toEqual({ "ass1-A": ["Step-Up"], "ass1-B": ["Cable Row"] });
   });
 
   it("skips slots with no name (defensive)", () => {
     const active = { "ass1-A": null, "ass1-B": { name: "Cable Row" } };
-    const next = pushHistoryBlock({}, active);
-    expect(next).toEqual({ "ass1-B": ["Cable Row"] });
+    const next = pushHistoryBlock({}, active, AT);
+    expect(read(next)).toEqual({ "ass1-B": ["Cable Row"] });
+  });
+
+  it("a stamped prev keeps its stamps; the new pick is newer even when the clock is behind", () => {
+    const prev = { "ass1-A": { B: "2026-10-20T11:00:00.000Z", C: "2026-10-19T09:00:00.000Z" } };
+    const next = pushHistoryBlock(prev, { "ass1-A": { name: "A" } }, AT);
+    expect(next["ass1-A"]).toEqual({ A: "2026-10-20T11:00:00.001Z", B: "2026-10-20T11:00:00.000Z", C: "2026-10-19T09:00:00.000Z" });
+    expect(recentNamesFor(next["ass1-A"])).toEqual(["A", "B", "C"]);
   });
 });
 
@@ -788,11 +800,13 @@ describe("applyFocusToSession", () => {
   });
 
   describe("Strong", () => {
-    it("drops ass2 on Day A; keeps a1 / a2 / ass1 / afin", () => {
+    // Strong drops Day A's lunge + landmine superset and keeps the hip
+    // extension + row (STRONG_DROP_BLOCK_IDS).
+    it("drops ass1 on Day A; keeps a1 / a2 / ass2 / afin", () => {
       const out = applyFocusToSession(SESSIONS[0], "Strong");
       const ids = out.blocks.map(b => b.id);
-      expect(ids).toEqual(["a1", "a2", "ass1", "afin"]);
-      expect(ids).not.toContain("ass2");
+      expect(ids).toEqual(["a1", "a2", "ass2", "afin"]);
+      expect(ids).not.toContain("ass1");
     });
 
     it("drops bss2 on Day B; keeps b1 / b2 / bss1 / bfin", () => {
@@ -812,7 +826,8 @@ describe("applyFocusToSession", () => {
     it("shifts surviving accessory reps to '6-8'; mains + finishers untouched", () => {
       const out = applyFocusToSession(SESSIONS[0], "Strong");
       const main = out.blocks.find(b => b.id === "a1");
-      const ssvg = out.blocks.find(b => b.id === "ass1");
+      // ass2 is Day A's surviving superset under Strong.
+      const ssvg = out.blocks.find(b => b.id === "ass2");
       const fin  = out.blocks.find(b => b.id === "afin");
       // Mains unchanged (reps:5 stays)
       expect(main.ex.reps).toBe(SESSIONS[0].blocks.find(b => b.id === "a1").ex.reps);
@@ -826,11 +841,19 @@ describe("applyFocusToSession", () => {
     });
 
     it("RAISES accessory load to match 6-8 reps (no more junk light sets)", () => {
-      const before = SESSIONS[0].blocks.find(b => b.id === "ass1");
+      // Day A's surviving superset is ass2 under Strong; its hip extension is
+      // bodyweight, so the both-sides-heavier check moves to Day C's css1
+      // (DB Walking Lunge + Cable Lateral Raise, both loaded).
+      const cBefore = SESSIONS[2].blocks.find(b => b.id === "css1");
+      const cSs     = applyFocusToSession(SESSIONS[2], "Strong").blocks.find(b => b.id === "css1");
+      expect(cSs.exA.weight).toBeGreaterThan(cBefore.exA.weight);
+      expect(cSs.exB.weight).toBeGreaterThan(cBefore.exB.weight);
+      const before = SESSIONS[0].blocks.find(b => b.id === "ass2");
       const out    = applyFocusToSession(SESSIONS[0], "Strong");
-      const ssvg   = out.blocks.find(b => b.id === "ass1");
-      // Both accessory sides are heavier than their higher-rep seed weight.
-      expect(ssvg.exA.weight).toBeGreaterThan(before.exA.weight);
+      const ssvg   = out.blocks.find(b => b.id === "ass2");
+      // A bodyweight side keeps no load; the loaded side is heavier.
+      expect(before.exA.weight).toBeNull();
+      expect(ssvg.exA.weight).toBeNull();
       expect(ssvg.exB.weight).toBeGreaterThan(before.exB.weight);
       // Value lock (Epley-constant e1RM, rounded to 1.25kg): the Chest-Supported
       // DB Row seed is 22kg @ 10 reps → 23.75kg @ 6-8.
@@ -880,14 +903,16 @@ describe("applyFocusToSession", () => {
     });
 
     it("shifts reps on aligned sides only — not on the non-aligned side of a mixed superset", () => {
-      // ass1: Reverse Lunge (Quads primary — NOT aligned) + Chest-Supported DB Row
-      //       (Back primary — NOT aligned). Neither aligned → no bump, no reps change.
+      // ass1: Reverse Lunge (Quads primary — NOT aligned) + Landmine Press
+      //       (Chest primary — aligned), Day A's lunge + press pairing. Only
+      //       the press takes 12-15. The set is withheld by the Glutes ceiling
+      //       (tests/sculpt-ceiling.test.js), so sets hold.
       const out = applyFocusToSession(SESSIONS[0], "Sculpt", defaultConfig);
       const ass1Before = SESSIONS[0].blocks.find(b => b.id === "ass1");
       const ass1After  = out.blocks.find(b => b.id === "ass1");
       expect(ass1After.sets).toBe(ass1Before.sets);
       expect(ass1After.exA.reps).toBe(ass1Before.exA.reps);
-      expect(ass1After.exB.reps).toBe(ass1Before.exB.reps);
+      expect(ass1After.exB.reps).toBe("12-15");
     });
 
     it("aligned sides take '12-15' rep range; non-aligned untouched", () => {
@@ -924,8 +949,10 @@ describe("applyFocusToSessions (programme-level wrapper)", () => {
   it("maps applyFocusToSession across every session in the array", () => {
     const out = applyFocusToSessions(SESSIONS, "Strong");
     expect(out).toHaveLength(SESSIONS.length);
-    // Day A / B / C all drop their respective superset
-    expect(out[0].blocks.map(b => b.id)).not.toContain("ass2");
+    // Day A / B / C all drop their respective superset (Day A's is the
+    // lunge + landmine, ass1)
+    expect(out[0].blocks.map(b => b.id)).not.toContain("ass1");
+    expect(out[0].blocks.map(b => b.id)).toContain("ass2");
     expect(out[1].blocks.map(b => b.id)).not.toContain("bss2");
     expect(out[2].blocks.map(b => b.id)).not.toContain("css3");
   });
@@ -949,16 +976,17 @@ describe("applyRotationToSession", () => {
   });
 
   it("substitutes the exB of a superset slot from config", () => {
-    // Day A ass2: { exA: Barbell Hip Thrust, exB: Landmine Press }
+    // Day A ass2: { exA: 45-Degree Hip Extension, exB: Chest-Supported DB Row }
     // Simulate rotation picking Single-Leg Hip Thrust for ass2-A and
-    // Single-Arm Landmine Press for ass2-B — both real pool members.
-    const slhT  = { name: "Single-Leg Hip Thrust",    reps: 10, weight: 45, muscle: "Glutes"      };
-    const salmp = { name: "Single-Arm Landmine Press", reps: 10, weight: 22, muscle: "Upper chest" };
-    const config = { "ass2-A": slhT, "ass2-B": salmp };
+    // Seal Row for ass2-B — both real pool members (ass2-B is the row slot
+    // since Day A's re-pair).
+    const slhT = { name: "Single-Leg Hip Thrust", reps: 10, weight: 45, muscle: "Glutes"     };
+    const seal = { name: "Seal Row",              reps: 10, weight: 18, muscle: "Upper back" };
+    const config = { "ass2-A": slhT, "ass2-B": seal };
     const out = applyRotationToSession(SESSIONS[0], config);
     const ass2 = out.blocks.find((b) => b.id === "ass2");
     expect(ass2.exA.name).toBe("Single-Leg Hip Thrust");
-    expect(ass2.exB.name).toBe("Single-Arm Landmine Press");
+    expect(ass2.exB.name).toBe("Seal Row");
     // Other slots untouched
     const ass1 = out.blocks.find((b) => b.id === "ass1");
     expect(ass1.exA.name).toBe(SESSIONS[0].blocks.find(b=>b.id==="ass1").exA.name);

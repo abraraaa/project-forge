@@ -139,14 +139,31 @@ describe("home day card — rows read the live prescription", () => {
     expect(rowFor("Barbell Back Squat")).toBe("3 × 5 at 140 kg");
   });
 
+  // Day A pairs the lunge with the landmine press and the hip extension with
+  // the row.
   it("a pure bodyweight lift prints no weight, even beside a loaded partner", () => {
-    render(home({ workingWeights: { "Landmine Press": 30 } }));
-    expect(rowFor("45-Degree Hip Extension ↔ Landmine Press")).toBe("3 × 15");
+    render(home({ workingWeights: { "Chest-Supported DB Row": 22 } }));
+    expect(rowFor("45-Degree Hip Extension ↔ Chest-Supported DB Row")).toBe("3 × 15");
   });
 
   it("a per-dumbbell row prints its per-side target and the dumbbell weight", () => {
     render(home({ workingWeights: { "DB Reverse Lunge": 18 } }));
-    expect(rowFor("DB Reverse Lunge ↔ Chest-Supported DB Row")).toBe("3 × 8/leg at 18 kg");
+    expect(rowFor("DB Reverse Lunge ↔ Landmine Press")).toBe("3 × 8/leg at 18 kg");
+  });
+
+  it("Day A picks stored before the re-pair read in the slot whose pool holds them", () => {
+    const pick = (slot, name) => EXERCISE_POOLS[slot].pool.find((ex) => ex.name === name);
+    // Stored as the old pools had them: a row in ass1-B, a landmine press in ass2-B.
+    const config = {
+      "ass1-A": pick("ass1-A", "DB Split Squat"),
+      "ass1-B": pick("ass2-B", "Incline DB Row"),
+      "ass2-A": pick("ass2-A", "Barbell Glute Bridge"),
+      "ass2-B": pick("ass1-B", "Landmine Press"),
+    };
+    render(home({ programmeBlock: { config } }));
+    expect(screen.getByText("DB Split Squat ↔ Landmine Press")).toBeTruthy();
+    expect(screen.getByText("Barbell Glute Bridge ↔ Incline DB Row")).toBeTruthy();
+    expect(screen.queryByText("DB Split Squat ↔ Incline DB Row")).toBeNull();
   });
 
   it("a timed hold prints seconds and no weight", () => {

@@ -75,6 +75,7 @@ const DB = "lib/db.js";
 const NET = "lib/net.js";
 const RESOLVE = "lib/programme-resolve.js";
 const CHANGE = "lib/trainer-change.js";
+const SYNC = "lib/trainer-sync.js";
 
 describe("the walker", () => {
   it("reads the static imports it is meant to", () => {
@@ -83,6 +84,7 @@ describe("the walker", () => {
     expect(edges("components/SessionHost.jsx")).toContain(STORAGE);
     expect(edges(STORAGE)).toContain(RESOLVE);
     expect(edges(MCP)).toContain(RESOLVE);
+    expect(edges(SYNC)).toContain(STORAGE);
   });
 });
 
@@ -108,8 +110,8 @@ describe("the shared modules import nothing server-side", () => {
   }
 });
 
-describe("no import cycle through storage, the validator, the resolver and the MCP server", () => {
-  const CORE = [STORAGE, CHANGE, RESOLVE, MCP];
+describe("no import cycle through storage, the trainer sync, the validator, the resolver and the MCP server", () => {
+  const CORE = [STORAGE, SYNC, CHANGE, RESOLVE, MCP];
   for (const f of CORE) {
     it(`${f} does not reach itself`, () => {
       const back = edges(f).filter((to) => reach(to).has(f));

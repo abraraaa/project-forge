@@ -46,7 +46,9 @@ describe("the ceiling on the default config", () => {
     const a = applyFocusToSession(SESSIONS[0], "Sculpt", defaultConfig);
     const ass2 = a.blocks.find((b) => b.id === "ass2");
     expect(ass2.exA.reps).toBe("12-15");
-    expect(ass2.exB.reps).toBe("12-15");
+    // Day A pairs the hip extension with the row (Upper back, not aligned),
+    // which keeps its template reps.
+    expect(ass2.exB.reps).toBe(SESSIONS[0].blocks.find((b) => b.id === "ass2").exB.reps);
   });
 
   it("still raises glutes above the Forged baseline — the ceiling trims, it does not cancel", () => {
@@ -56,8 +58,11 @@ describe("the ceiling on the default config", () => {
 });
 
 describe("the ceiling covers the partner side of a superset", () => {
-  // mulberry32, as in tests/rotation-solver.test.js — seed 226 lands ass2 on
-  // Single-Leg RDL (aligned via Incline Landmine Press on the other side).
+  // mulberry32, as in tests/rotation-solver.test.js — seed 1 lands css1 on
+  // Cable Lateral Raise (aligned, Side Delts) beside Curtsy Lunge, which
+  // feeds the Glutes the raise does not. (The old case, Single-Leg RDL beside
+  // a landmine press, went when Day A was re-paired: rotation no longer puts
+  // the RDL's dumbbells beside the row.)
   function mulberry(seed) {
     let a = seed >>> 0;
     return () => {
@@ -68,12 +73,13 @@ describe("the ceiling covers the partner side of a superset", () => {
     };
   }
 
-  it("a bump that would carry Hamstrings over MRV is withheld", () => {
-    const { config } = solveRotation({ focus: "Sculpt", rng: mulberry(226), history: {} });
-    expect(config["ass2-A"].name).toBe("Single-Leg RDL");
-    // Anchor changed after the solve, as the main-lifts page does.
-    const mainLifts = { "Hex Bar Deadlift": "Romanian Deadlift" };
-    expect(sculptBumpBlockIds(config, mainLifts).has("ass2")).toBe(false);
+  it("a bump that would carry the partner's Glutes over MRV is withheld", () => {
+    const { config } = solveRotation({ focus: "Sculpt", rng: mulberry(1), history: {} });
+    expect(config["css1-B"].name).toBe("Cable Lateral Raise");
+    expect(config["css1-A"].name).toBe("Curtsy Lunge");
+    // Default anchors: the lunge's Glutes alone hold the raise's set back.
+    const mainLifts = {};
+    expect(sculptBumpBlockIds(config, mainLifts).has("css1")).toBe(false);
     const v = sculptWeek(config, mainLifts);
     for (const [m, t] of Object.entries(VOLUME_TARGETS)) {
       const forged = computeWeeklyVolume(

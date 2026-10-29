@@ -47,12 +47,20 @@ describe("engine exports pinned (no behaviour change)", () => {
     }
   });
   it("the deload prescription still lands where the multiplier says, for every loaded catalogue lift", () => {
-    for (const [name] of catalogue()) {
+    let assisted = 0;
+    for (const [name, lt] of catalogue()) {
       const profile = getLiftProfile(name);
       if (!profile.progressesByLoad) continue;
-      const rx = computeDeloadPrescription(name, { currentWeight: 100, currentRepRange: { reps: 5, sets: 3 } });
+      const rx = computeDeloadPrescription(name, { currentWeight: 100, currentRepRange: { reps: 5, sets: 3 } }, { loadType: lt });
+      // An assisted lift holds its assistance and cuts volume instead.
+      if (lt === "assisted_bodyweight") {
+        assisted++;
+        expect(rx, name).toMatchObject({ weight: 100, sets: 2, rationale: ["bw_deload_reduced_reps"] });
+        continue;
+      }
       expect(rx.rationale).toEqual([`deload_${profile.category}_${Math.round(deloadIntensityFor(profile.category) * 100)}pct`]);
     }
+    expect(assisted).toBeGreaterThan(0);
   });
   it("normaliseWeek still fills a missing label from TYPE_LABEL", () => {
     expect(normaliseWeek([{ type: "zone2" }, { type: "rest" }, { type: "strength" }, { type: "cardio" }, { type: "hiit" }, { type: "rest" }, { type: "rest" }])

@@ -17,8 +17,9 @@ import {
   enableAutoSync, disableAutoSync, pushNow, weeksSince, dateOfWeekdayIdxInCurrentWeek,
   newDraftLog, logSet, finaliseDraft, D, TS,
   planStartWeight,
-  TL, keepTrainerSession, discardTrainerSession, holdTrainerSession, setSessionCommit,
+  TL,
 } from "@/lib/storage";
+import { keepTrainerSession, discardTrainerSession, holdTrainerSession, setSessionCommit } from "@/lib/trainer-sync";
 import { commitSessionRecord } from "@/lib/session-commit";
 import { makeDayContext, resolveRange, sessionsFrom, owedDays, trainingRhythm, beginSessionIdx } from "@/lib/day-state";
 import { useTodayIso } from "@/lib/use-today-iso";
@@ -55,7 +56,7 @@ import FocusPickerSheet from "@/components/FocusPickerSheet";
 import HomeScreen from "@/components/HomeScreen";
 import TrainerSessionSheet, { sessionCardsFrom } from "@/components/TrainerSessionSheet";
 import { consentClaim } from "@/lib/consent";
-import { activateProfileCore, saveFocusCore, saveMainLiftCore, takePendingRotationSummary, takePendingFirstRun } from "@/lib/profile-actions";
+import { activateProfileCore, saveFocusCore, saveMainLiftCore, resetProgrammeCore, takePendingRotationSummary, takePendingFirstRun } from "@/lib/profile-actions";
 
 
 // getLoadType / weightStepForLoadType / parseTimedReps / WEIGHT_CAPTIONS now
@@ -387,7 +388,7 @@ export default function ForgeApp(){
   }, [absenceNudge, activeProfile]);
 
   // Sessions a trainer ran with them, waiting on this device for Keep or Not
-  // mine (lib/storage.js lists them in trainerLocal on each home pull). One
+  // mine (lib/trainer-sync.js lists them in trainerLocal on each home pull). One
   // sheet at a time; felt edits are held per session so a closed sheet keeps
   // them. The mirror is the hydrate effect's onSyncUpdate, so a keep reaches
   // React the way a pull does.
@@ -415,7 +416,7 @@ export default function ForgeApp(){
     const sessions = tl?.sessions && typeof tl.sessions === "object" ? tl.sessions : {};
     TL.save(activeProfile, { ...tl, sessions: { ...sessions, [id]: { ...(sessions[id] || {}), felt } } });
   };
-  // Keep and discard write through lib/storage.js (history, the day, the
+  // Keep and discard write through lib/trainer-sync.js (history, the day, the
   // engine, W/R, then the push and the report); this re-reads what landed.
   const settleTrainerSessions = (run) => {
     const profile = activeProfile;
@@ -447,7 +448,7 @@ export default function ForgeApp(){
     settleTrainerSessions((profile) => discardTrainerSession(profile, id));
   };
   // Due sessions only ever keep through a pull that lands: it carries sharing
-  // as it is now, and its own step keeps what is still due (lib/storage.js
+  // as it is now, and its own step keeps what is still due (lib/trainer-sync.js
   // _trainerOnPull, which honours the open sheet). Auto-keep runs only while
   // sharing is live, so a pull that does not land keeps nothing; a manual
   // Keep still works offline. Each session is tried once per mount: one the
@@ -628,7 +629,7 @@ export default function ForgeApp(){
     // BLOCKING sync — await blob round-trip before unblocking the UI. On
     // error, still unblock (we'll show whatever's in localStorage — a
     // recoverable error state, not a frozen UI). Home applies any trainer
-    // changes the pull carries (lib/storage.js applyTrainerRows).
+    // changes the pull carries (lib/trainer-sync.js applyTrainerRows).
     backgroundSync(activeProfile, { onUpdate: onSyncUpdate, applyTrainer: true })
       .then(() => {
         if (cancelled) return;
@@ -1059,12 +1060,13 @@ export default function ForgeApp(){
   };
   const handleRotationCancel = () => setRotationPreview(null);
 
-  // Reset rotation drift to SESSIONS defaults (preserves block number/start).
+  // Reset rotation drift to SESSIONS defaults (preserves block number/start),
+  // re-planned when the defaults break a band under the chosen main lifts.
   // Used by the "Reset accessories" link on home for users who've over-rotated.
   const handleResetProgramme = () => {
-    const next = PB.reset();
+    if (!activeProfile) return;
+    const { next } = resetProgrammeCore(activeProfile);
     setProgrammeBlock(next);
-    pushNow(activeProfile);
   };
 
   const beginSession = () => {
