@@ -333,6 +333,16 @@ describe("loaded rep climb reaches the session", () => {
     expect(lift().nextPrescribed).toBe(167.5);
   });
 
+  it("a cooked day mid-climb keeps the climbed target and its base", () => {
+    seed({ consecutiveHolds: 3, stallSignal: "stall" });
+    expect(apply(squat(162.5, 5, 1)).wrUpdates[SQUAT]).toBe(6);
+    expect(apply(squat(162.5, 6, 2, "cooked")).wrUpdates).toEqual({});
+    expect(lift().currentRepRange).toMatchObject({ reps: 6, baseReps: 5 });
+    expect(lastSessionNote(lift())).toMatchObject({ kind: "rep_climb", reps: 6, base: 5 });
+    expect(apply(squat(162.5, 6, 1)).wrUpdates[SQUAT]).toBe(7);
+    expect(lift().currentRepRange).toMatchObject({ reps: 7, baseReps: 5 });
+  });
+
   it("three grinders then a grinder holds 162.5 x 5 and builds the stall", () => {
     seed();
     for (let i = 0; i < 4; i++) {
@@ -386,6 +396,27 @@ describe("a lift's first logged session progresses from what was lifted", () => 
     expect(lift.nextPrescribed).toBe(26);
     expect(lift.history.at(-1).decision).toBe("HOLD");
   });
+
+  it("a second cooked session, still with no counted one, holds 26 kg, never the anchor's 62.5", () => {
+    const back = { Back: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" } };
+    const cooked = (id) => ({ ...firstRecord("Face-Away Cable Row", "cable", 26, [10, 10, 10, 10], 1), id, date: id.slice(0, 10), readiness: "cooked" });
+    expect(apply(cooked("2026-10-11T10:00:00.000Z"), back).wwUpdates["Face-Away Cable Row"]).toBe(26);
+    expect(TS.get("p").lifts["Face-Away Cable Row"].currentRepRange).toMatchObject({ reps: 10, sets: 4 });
+    const out = apply(cooked("2026-10-13T10:00:00.000Z"), back);
+    expect(out.wwUpdates["Face-Away Cable Row"]).toBe(26);
+    const lift = TS.get("p").lifts["Face-Away Cable Row"];
+    expect(lift.history.at(-1).decision).toBe("HOLD");
+    expect(lift.sessionsCount).toBe(2);
+  });
+
+  for (const kg of [20, 30]) {
+    it(`a later cooked session, still with no counted one, takes its own top set: 26 then ${kg} holds ${kg}`, () => {
+      const back = { Back: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" } };
+      const cooked = (id, weight) => ({ ...firstRecord("Face-Away Cable Row", "cable", weight, [10, 10, 10, 10], 1), id, date: id.slice(0, 10), readiness: "cooked" });
+      expect(apply(cooked("2026-10-11T10:00:00.000Z", 26), back).wwUpdates["Face-Away Cable Row"]).toBe(26);
+      expect(apply(cooked("2026-10-13T10:00:00.000Z", kg), back).wwUpdates["Face-Away Cable Row"]).toBe(kg);
+    });
+  }
 
   it("a 6 kg Lu raise adds a kilo, never the anchor's 16", () => {
     const shoulders = { Shoulders: { bestE1RM: 210, bestE1RMLift: "Overhead Press" } };
@@ -537,4 +568,172 @@ describe("a lift's first logged session progresses from what was lifted", () => 
     expect(out.wwUpdates["Pull-Up"]).toBe(10);
     expect(TS.get("p").lifts["Pull-Up"].history.at(-1).decision).toBe("HOLD");
   });
+
+  // As their first sessions do, a lift moving by reps or by assistance keeps
+  // the cold start while its sessions are all cooked: no lifted load to hold.
+  it("a pure bodyweight lift whose sessions are all cooked never gets a W, vest or not", () => {
+    const cooked = (weight, id) => ({ ...firstRecord("Push-Up", "bodyweight", weight, [12, 12, 12], 1), id, date: id.slice(0, 10), readiness: "cooked" });
+    expect(apply(cooked(null, "2026-10-11T10:00:00.000Z"), back).wwUpdates).not.toHaveProperty("Push-Up");
+    expect(apply(cooked(10, "2026-10-13T10:00:00.000Z"), back).wwUpdates).not.toHaveProperty("Push-Up");
+  });
+
+  it("an assisted lift whose sessions are all cooked keeps the cold start", () => {
+    apply({ ...assisted("Assisted Pull-Up", 20, [8, 8, 8], 1), readiness: "cooked" }, back);
+    const out = apply({ ...assisted("Assisted Pull-Up", 15, [8, 8, 8], 1, "2026-10-13T10:00:00.000Z"), readiness: "cooked" }, back);
+    expect(out.wwUpdates["Assisted Pull-Up"]).toBe(15);
+    expect(TS.get("p").lifts["Assisted Pull-Up"].history.at(-1).decision).toBe("COLD_START");
+  });
+});
+
+// A cooked session never moves an earned working weight: the next W is the
+// one in force that day, whatever the session lifted.
+describe("a cooked session never moves an earned weight", () => {
+  beforeEach(() => localStorage.clear());
+  const SQUAT = "Barbell Back Squat";
+  const set = (weight, reps, rir) => ({ weight, reps, rir, loadType: "barbell", effectiveLoad: weight, est1rm: weight * (1 + reps / 30) });
+  const atKg = (weight, rir) => [0, 1, 2].map(() => set(weight, 5, rir));
+  // As the session records it: prescribed is W, whatever the drum was set to.
+  const squat = (id, sets, prescribedKg, readiness = "normal") => ({
+    v: 2, id, date: id.slice(0, 10), readiness, session: "strength-a",
+    blocks: [{ id: "a1", type: "main", exercises: [{
+      name: SQUAT, muscle: "Quadriceps", loadType: "barbell",
+      prescribed: { sets: 3, reps: 5, weight: prescribedKg },
+      sets,
+    }] }],
+  });
+  const apply = (rec) => { H.append("p", rec); return applySessionToEngine("p", rec); };
+  const earnAdd = () => {
+    TS.save("p", { lifts: { [SQUAT]: {
+      currentWeight: 100, sessionsCount: 8, consecutiveAdds: 0, consecutiveHolds: 0, consecutiveLightMisses: 0,
+      stallSignal: null, history: [], currentRepRange: { reps: 5, sets: 3, baseReps: 5 },
+    } } });
+    return apply(squat("2026-10-20T10:00:00.000Z", atKg(100, 3), 100));
+  };
+  const cookedAfterAdd = (sets) => apply(squat("2026-10-27T10:00:00.000Z", sets, 102.5, "cooked"));
+
+  it("an add earned before a cooked session survives it", () => {
+    expect(earnAdd().wwUpdates[SQUAT]).toBe(102.5);
+    expect(cookedAfterAdd(atKg(102.5, 2)).wwUpdates[SQUAT]).toBe(102.5);
+    expect(TS.get("p").lifts[SQUAT].history.at(-1).decision).toBe("HOLD");
+  });
+
+  it("a cooked session dialled down leaves W", () => {
+    expect(earnAdd().wwUpdates[SQUAT]).toBe(102.5);
+    expect(cookedAfterAdd(atKg(97.5, 2)).wwUpdates[SQUAT]).toBe(102.5);
+  });
+
+  it("a failed heavier single on a cooked day leaves W", () => {
+    expect(earnAdd().wwUpdates[SQUAT]).toBe(102.5);
+    expect(cookedAfterAdd([set(107.5, 1, 0), set(95, 5, 2), set(95, 5, 2)]).wwUpdates[SQUAT]).toBe(102.5);
+  });
+
+  it("an assisted cooked session with more help leaves the help in force", () => {
+    const LIFT = "Assisted Pull-Up";
+    const help = (kg, reps, rir) => ({ weight: kg, reps, rir, loadType: "assisted_bodyweight", bodyweightUsed: 80, effectiveLoad: 80 - kg, est1rm: (80 - kg) * (1 + reps / 30) });
+    const pullUp = (id, sets, prescribedKg, readiness = "normal") => ({
+      v: 2, id, date: id.slice(0, 10), readiness, session: "strength-b",
+      blocks: [{ id: "b1", type: "main", exercises: [{ name: LIFT, loadType: "assisted_bodyweight", prescribed: { sets: 3, reps: 6, weight: prescribedKg }, sets }] }],
+    });
+    TS.save("p", { lifts: { [LIFT]: {
+      currentWeight: 20, sessionsCount: 8, consecutiveAdds: 0, consecutiveHolds: 0, consecutiveLightMisses: 0,
+      stallSignal: null, history: [], currentRepRange: { reps: 6, sets: 3, baseReps: 6 },
+    } } });
+    expect(apply(pullUp("2026-10-20T10:00:00.000Z", [help(20, 6, 3), help(20, 6, 3), help(20, 6, 3)], 20)).wwUpdates[LIFT]).toBe(18.75);
+    const cooked = pullUp("2026-10-27T10:00:00.000Z", [help(25, 6, 2), help(25, 6, 2), help(25, 6, 2)], 18.75, "cooked");
+    expect(apply(cooked).wwUpdates[LIFT]).toBe(18.75);
+  });
+
+  // A Pull-Up logs the added kg on every set; effectiveLoad carries bodyweight.
+  const PULL_UP = "Pull-Up";
+  const belt = (kg, rir) => ({ weight: kg, reps: 8, rir, loadType: "loaded_bodyweight", bodyweightUsed: 80, effectiveLoad: 80 + kg, est1rm: (80 + kg) * (1 + 8 / 30) });
+  const pullUp = (id, kg, rir, prescribedKg, readiness = "normal") => ({
+    v: 2, id, date: id.slice(0, 10), readiness, session: "strength-b",
+    blocks: [{ id: "bss1", type: "superset", exercises: [{ name: PULL_UP, loadType: "loaded_bodyweight", prescribed: { sets: 3, reps: 8, weight: prescribedKg }, sets: [0, 1, 2].map(() => belt(kg, rir)) }] }],
+  });
+  const seedPullUp = (currentWeight) => TS.save("p", { lifts: { [PULL_UP]: {
+    currentWeight, sessionsCount: 8, consecutiveAdds: 0, consecutiveHolds: 0, consecutiveLightMisses: 0,
+    stallSignal: null, history: [], currentRepRange: { reps: 8, sets: 3, baseReps: 8 },
+  } } });
+
+  it("a belted Pull-Up keeps its added kg through an unbelted cooked day", () => {
+    seedPullUp(10);
+    expect(apply(pullUp("2026-10-20T10:00:00.000Z", 10, 3, 10)).wwUpdates[PULL_UP]).toBe(11.25);
+    expect(apply(pullUp("2026-10-27T10:00:00.000Z", 0, 2, 11.25, "cooked")).wwUpdates[PULL_UP]).toBe(11.25);
+  });
+
+  // An unbelted counted session prescribes 0 kg; 5 kg was set outside the
+  // engine since, so the cooked record carries 5 as its prescription.
+  it("a W set after an unbelted counted session survives a cooked day, belted or not", () => {
+    for (const kg of [5, 0]) {
+      localStorage.clear();
+      seedPullUp(0);
+      expect(apply(pullUp("2026-10-20T10:00:00.000Z", 0, 2, 0)).wwUpdates[PULL_UP]).toBe(0);
+      expect(apply(pullUp("2026-10-27T10:00:00.000Z", kg, 2, 5, "cooked")).wwUpdates[PULL_UP], `${kg} kg`).toBe(5);
+    }
+  });
+
+  it("a backfilled counted record older than the lift's newest session still writes W", () => {
+    expect(earnAdd().wwUpdates[SQUAT]).toBe(102.5);
+    expect(apply(squat("2026-10-13T10:00:00.000Z", atKg(95, 2), 100)).wwUpdates[SQUAT]).toBe(102.5);
+  });
+
+  it("a backfilled cooked record older than the lift's newest session writes no W", () => {
+    expect(earnAdd().wwUpdates[SQUAT]).toBe(102.5);
+    const before = TS.get("p").lifts[SQUAT];
+    // Backfilled after the add, so it records today's W.
+    const out = apply(squat("2026-10-13T10:00:00.000Z", atKg(95, 2), 102.5, "cooked"));
+    expect(out.wwUpdates).not.toHaveProperty(SQUAT);
+    expect(TS.get("p").lifts[SQUAT]).toEqual(before);
+  });
+});
+
+// A cooked day holds the rep target on the rep paths too: nothing written to
+// the target, no add counted, the climb as it stands. The next counted session
+// carries on as if the cooked day had not happened.
+describe("a cooked day holds the rep target on the rep paths", () => {
+  beforeEach(() => localStorage.clear());
+  const apply = (p, rec) => { H.append(p, rec); return applySessionToEngine(p, rec); };
+  const kept = (s) => ({
+    consecutiveAdds: s.consecutiveAdds, consecutiveHolds: s.consecutiveHolds, stallSignal: s.stallSignal,
+    currentRepRange: s.currentRepRange, nextPrescribed: s.nextPrescribed,
+  });
+  const lifts = [
+    ["Push-Up", { weight: null, loadType: "bodyweight" }],
+    // A belted lift with no belt on: its unloaded branch.
+    ["Pull-Up", { weight: 0, loadType: "loaded_bodyweight", bodyweightUsed: 80, effectiveLoad: 80 }],
+  ];
+  for (const [name, load] of lifts) {
+    // Live-shaped: every set logs the target the session showed.
+    const rec = (day, reps, readiness = "normal") => ({
+      v: 2, id: `2026-10-${day}T10:00:00.000Z`, date: `2026-10-${day}`, readiness, session: "strength-b",
+      blocks: [{ id: "bss1", type: "superset", exercises: [{ name, loadType: load.loadType, sets: [0, 1, 2].map(() => ({ ...load, reps, rir: 3 })) }] }],
+    });
+    // Inside an unloaded climb from 9.
+    const seed = (p) => TS.save(p, { lifts: { [name]: {
+      currentWeight: load.weight, sessionsCount: 5, consecutiveAdds: 1, consecutiveHolds: 0, consecutiveLightMisses: 0,
+      stallSignal: null, history: [], currentRepRange: { reps: 10, sets: 3, baseReps: 9, bwClimb: true },
+    } } });
+    const lift = (p) => TS.get(p).lifts[name];
+
+    it(`${name}: a cooked day writes no target and moves no counter`, () => {
+      seed("p");
+      expect(apply("p", rec(20, 10)).wrUpdates[name]).toBe(11);
+      const before = kept(lift("p"));
+      expect(apply("p", rec(23, 11, "cooked")).wrUpdates).not.toHaveProperty(name);
+      expect(kept(lift("p"))).toEqual(before);
+      expect(lift("p").history.at(-1).decision).toBe("HOLD");
+    });
+
+    it(`${name}: the next counted session carries on as if the cooked day had not happened`, () => {
+      for (const p of ["a", "b"]) {
+        seed(p);
+        apply(p, rec(20, 10));
+      }
+      apply("b", rec(23, 11, "cooked"));
+      const a = apply("a", rec(27, 11));
+      expect(a.wrUpdates[name]).toBe(12);
+      expect(apply("b", rec(27, 11))).toEqual(a);
+      expect(kept(lift("b"))).toEqual(kept(lift("a")));
+    });
+  }
 });
