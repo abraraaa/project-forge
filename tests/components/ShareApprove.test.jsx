@@ -93,6 +93,27 @@ describe("ShareApprove: the code, limits", () => {
   });
 });
 
+describe("ShareApprove: the code, the server's words never show", () => {
+  it.each([
+    ["a server failure", [500, { error: "Internal error: SENTINEL" }], "Couldn't do that just now. Try again."],
+    ["an outage", [503, { error: "Unavailable: SENTINEL" }], "Couldn't do that just now. Try again."],
+    ["any other refusal", [400, { error: "Bad request: SENTINEL" }], MISS[1].error],
+  ])("a typed code's peek on %s says a house line", async (_, reply, copy) => {
+    server.peek = reply;
+    render(<ShareApprove name="sam" />);
+    await type(CODE);
+    expect(screen.getByText(copy)).toBeTruthy();
+    expect(document.body.textContent).not.toContain("SENTINEL");
+  });
+
+  it("a link's code peeks the same way", async () => {
+    server.peek = [500, { error: "Internal error: SENTINEL" }];
+    await act(async () => { render(<ShareApprove name="sam" code={CODE} />); });
+    expect(screen.getByRole("status").textContent).toBe("Couldn't do that just now. Try again.");
+    expect(document.body.textContent).not.toContain("SENTINEL");
+  });
+});
+
 describe("ShareApprove: approval", () => {
   async function toApprove(props = {}) {
     server.peek = HIT;
@@ -199,12 +220,15 @@ describe("ShareApprove: approval", () => {
     [[409, { needsNativePasskey: true }], "This needs a passkey for heatwayve.app first."],
     [[400, { stale: true, error: "This page is out of date. Reload and try again." }], "This page is out of date. Reload and try again."],
     [[401, { error: "Face ID didn't go through. Try again.", requiresAuth: true }], "Face ID didn't go through. Try again."],
-    [[500, { error: "Internal error: SENTINEL" }], "Something changed. Try again."],
+    [[409, { error: "Conflict: SENTINEL" }], "Something changed. Try again."],
+    [[500, { error: "Internal error: SENTINEL" }], "Couldn't do that just now. Try again."],
+    [[503, { error: "Sharing is unavailable right now. SENTINEL" }], "Couldn't do that just now. Try again."],
   ])("says why an approval failed (%j)", async (reply, copy) => {
     await toApprove();
     server.approve = [reply];
     await tap("Share with Jo");
     expect(screen.getByRole("status").textContent).toBe(copy);
+    expect(document.body.textContent).not.toContain("SENTINEL");
     expect(screen.getByText("Share with Jo")).toBeTruthy();
   });
 

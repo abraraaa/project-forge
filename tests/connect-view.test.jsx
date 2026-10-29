@@ -30,3 +30,36 @@ describe("connect page", () => {
     expect(await screen.findByText("Type your Heatwayve name first.")).toBeTruthy();
   });
 });
+
+describe("connect page: the server's words never show", () => {
+  const reply = (status) => ({ status, ok: false, json: async () => ({ error: "Raw server words: SENTINEL" }) });
+
+  it.each([
+    [400, "Something went wrong. Try again."],
+    [401, "Face ID didn't go through. Try again."],
+    [429, "Too many tries. Wait a minute and try again."],
+    [500, "Couldn't do that just now. Try again."],
+    [503, "Couldn't do that just now. Try again."],
+  ])("a %i after Face ID says a house line", async (status, copy) => {
+    const { authenticatePasskey } = await import("@/lib/webauthn");
+    const { fetchWithTimeout } = await import("@/lib/net");
+    const { default: ConnectView } = await import("../components/ConnectView.jsx");
+    authenticatePasskey.mockResolvedValueOnce({ authToken: "t" });
+    fetchWithTimeout.mockResolvedValueOnce(reply(status));
+    render(<ConnectView clientName="Notes" host="example.com" params={{}} />);
+    fireEvent.change(screen.getByLabelText("Your Heatwayve name"), { target: { value: "sam" } });
+    fireEvent.click(screen.getByText("Let it in"));
+    expect(await screen.findByText(copy)).toBeTruthy();
+    expect(document.body.textContent).not.toContain("SENTINEL");
+  });
+
+  it("Not now says a house line too", async () => {
+    const { fetchWithTimeout } = await import("@/lib/net");
+    const { default: ConnectView } = await import("../components/ConnectView.jsx");
+    fetchWithTimeout.mockResolvedValueOnce(reply(400));
+    render(<ConnectView clientName="Notes" host="example.com" params={{}} />);
+    fireEvent.click(screen.getByText("Not now"));
+    expect(await screen.findByText("Something went wrong. Try again.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("SENTINEL");
+  });
+});

@@ -57,6 +57,18 @@ describe("Profile passkey setup card", () => {
     await screen.findByText("Passkey enabled");
     expect(screen.queryByRole("button", { name: TAP })).toBeNull();
   });
+
+  it.each([
+    ["an unsupported browser", "WebAuthn not supported", "This browser can't use passkeys."],
+    ["any other failure", "Failed to verify registration: SENTINEL", "Couldn't set up. Try again."],
+  ])("a setup that throws on %s says a house line", async (_, message, copy) => {
+    registerPasskey.mockRejectedValueOnce(new Error(message));
+    profile();
+    fireEvent.click(await screen.findByRole("button", { name: "Set up" }));
+    expect(await screen.findByText(copy)).toBeTruthy();
+    expect(document.body.textContent).not.toContain("SENTINEL");
+    expect(document.body.textContent).not.toContain("WebAuthn");
+  });
 });
 
 describe("quiet consent tap for existing holders", () => {

@@ -39,7 +39,11 @@ export default function ConnectView({ clientName, host, params }) {
     });
     const body = await res.json().catch(() => ({}));
     if (body.redirect) { window.location.assign(body.redirect); return true; }
-    setError(body.error || "Something went wrong. Try again.");
+    // House lines only: the server's own words never reach the screen.
+    setError(res.status === 401 ? "Face ID didn't go through. Try again."
+      : res.status === 429 ? "Too many tries. Wait a minute and try again."
+      : res.status >= 500 ? "Couldn't do that just now. Try again."
+      : "Something went wrong. Try again.");
     return false;
   };
 

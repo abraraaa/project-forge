@@ -34,6 +34,7 @@ export const APPROVE_COPY = Object.freeze({
   slowDown: "Too many tries. Wait a minute and try again.",
   stale: "This page is out of date. Reload and try again.",
   offline: "Couldn't reach Heatwayve. Try again.",
+  unavailable: "Couldn't do that just now. Try again.",
   changed: "Something changed. Try again.",
   notNow: "Not now",
   done: "Done",
@@ -64,7 +65,8 @@ async function peekCode(c) {
     const body = await res.json().catch(() => ({}));
     if (res.ok && typeof body?.trainer?.name === "string") return { name: body.trainer.name };
     if (res.status === 429) return { error: APPROVE_COPY.slowDown };
-    return { error: res.status === 404 ? APPROVE_COPY.miss : body?.error || APPROVE_COPY.miss };
+    // House lines only: the server's own words never reach the screen.
+    return { error: res.status >= 500 ? APPROVE_COPY.unavailable : APPROVE_COPY.miss };
   } catch {
     return { error: APPROVE_COPY.offline };
   }
@@ -205,6 +207,7 @@ export default function ShareApprove({ name, code = null, title, lead = null, le
       : body?.self ? APPROVE_COPY.self
       : body?.needsNativePasskey ? APPROVE_COPY.native
       : body?.stale ? APPROVE_COPY.stale
+      : res.status >= 500 ? APPROVE_COPY.unavailable
       : APPROVE_COPY.changed,
     );
   };

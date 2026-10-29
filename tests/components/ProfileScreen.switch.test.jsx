@@ -22,7 +22,7 @@ vi.mock("@/lib/storage", async (io) => ({
 vi.mock("next/link", () => ({ default: ({ href, children, ...p }) => <a href={href} {...p}>{children}</a> }));
 
 const { default: ProfileScreen } = await import("@/components/ProfileScreen");
-const { passkeyStatus } = await import("@/lib/webauthn");
+const { passkeyStatus, authenticatePasskey } = await import("@/lib/webauthn");
 const { blobDelete, checkProfileExists } = await import("@/lib/storage");
 
 const before = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -245,6 +245,53 @@ describe("Profile: Delete this profile", () => {
     const sheet = screen.getByRole("dialog", { name: "Delete sam?" });
     expect(within(sheet).getByText(/nothing ever synced/)).toBeTruthy();
     expect(within(sheet).queryByText("Full wipe · cloud & device")).toBeNull();
+  });
+
+  it("a failed full wipe says a house line, never the server's words, and keeps the profile", async () => {
+    seed();
+    blobDelete.mockResolvedValueOnce({ ok: false, error: "Internal error: SENTINEL", requiresAuth: false });
+    render(<ProfileScreen {...props({ existing: ["sam", "alex"] })} />);
+    await settle();
+    fireEvent.click(row()); fireEvent.click(row());
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Full wipe · cloud & device")); });
+    expect(within(screen.getByRole("dialog", { name: "Delete sam?" })).getByText("Couldn't reach the cloud. Try again?")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("SENTINEL");
+    expect(localStorage.getItem("forge:sam:weights")).toBe("{}");
+    expect(window.location.reload).not.toHaveBeenCalled();
+  });
+
+  it("a full wipe held until a passkey is set up says so in a house line", async () => {
+    seed();
+    // The check failed, so the sheet keeps the full wipe; the server then
+    // answers that this profile has no passkey.
+    passkeyStatus.mockResolvedValueOnce(null);
+    blobDelete.mockResolvedValueOnce({ ok: false, error: "Server words: SENTINEL", requiresAuth: false, requiresPasskeySetup: true });
+    render(<ProfileScreen {...props({ existing: ["sam", "alex"] })} />);
+    await waitFor(() => expect(passkeyStatus).toHaveBeenCalledWith("sam"));
+    await act(async () => {});
+    fireEvent.click(row()); fireEvent.click(row());
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Full wipe · cloud & device")); });
+    expect(within(screen.getByRole("dialog", { name: "Delete sam?" })).getByText("Set up a passkey before deleting this profile.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("SENTINEL");
+    expect(localStorage.getItem("forge:sam:weights")).toBe("{}");
+    expect(window.location.reload).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["an unsupported browser", "WebAuthn not supported", "This browser can't use passkeys."],
+    ["any other failure", "Authentication failed: SENTINEL", "Face ID didn't go through. Try again."],
+  ])("the wipe's sign-in, throwing on %s, says a house line", async (_, message, copy) => {
+    blobDelete.mockResolvedValueOnce({ ok: false, error: "Passkey authentication required", requiresAuth: true });
+    authenticatePasskey.mockRejectedValueOnce(new Error(message));
+    render(<ProfileScreen {...props({ existing: ["sam", "alex"] })} />);
+    await settle();
+    fireEvent.click(row()); fireEvent.click(row());
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Full wipe · cloud & device")); });
+    const verify = () => screen.getByRole("dialog", { name: "Verify it's you" });
+    await act(async () => { fireEvent.click(within(verify()).getByText("Authenticate")); });
+    expect(within(verify()).getByText(copy)).toBeTruthy();
+    expect(document.body.textContent).not.toContain("SENTINEL");
+    expect(document.body.textContent).not.toContain("WebAuthn");
   });
 });
 

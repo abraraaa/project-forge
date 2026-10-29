@@ -22,7 +22,7 @@ describe("trainer terms", () => {
     expect(TRAINER_LIVE).toBe(true);
     expect(APPLICATIONS_OPEN).toBe(true);
     expect(TRAINER_TERMS_VERSION).toBe("draft-2026-10-21");
-    expect(TRAINER_TERMS_SINCE).toBe("2026-10-21");
+    expect(TRAINER_TERMS_SINCE).toBe("2026-10-29");
     expect(KNOWN_TRAINER_TERMS_VERSIONS).toEqual([TRAINER_TERMS_VERSION]);
     expect(TRAINER_SCOPE).toBe("trainer:read");
   });

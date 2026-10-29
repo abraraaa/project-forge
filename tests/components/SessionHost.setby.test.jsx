@@ -7,9 +7,16 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: () => {}, push: () => {} }) }));
 vi.mock("@vercel/analytics", () => ({ track: () => {} }));
+// The real judgement, watched: which day each line is judged on.
+vi.mock("../../lib/trainer-change.js", async (io) => {
+  const actual = await io();
+  return { ...actual, changeStatus: vi.fn(actual.changeStatus) };
+});
 
 import SessionHost, { setByLine } from "../../components/SessionHost.jsx";
 import { P, TL, SessionIntent } from "../../lib/storage.js";
+import { changeStatus } from "../../lib/trainer-change.js";
+import { todayLocalIso } from "../../lib/dates.js";
 
 afterEach(() => { cleanup(); localStorage.clear(); });
 
@@ -38,11 +45,19 @@ describe("Set by {name} on the session card", () => {
     expect(localStorage.getItem(TL.key(WHO))).toBe(marksBefore);
     expect(P.getWeights(WHO)[SQUAT]).toBe(105);
     expect(P.getReps(WHO)[SQUAT]).toBe(6);
+    // Judged on the host's day (useTodayIso), handed in rather than read during render.
+    expect(changeStatus.mock.calls.at(-1)[1].todayIso).toBe(todayLocalIso());
   });
 });
 
 describe("setByLine", () => {
-  const state = (over = {}) => ({ weights: { [SQUAT]: 105 }, reps: { [SQUAT]: 6 }, history: [], ...over });
+  const state = (over = {}) => ({ weights: { [SQUAT]: 105 }, reps: { [SQUAT]: 6 }, history: [], todayIso: "2026-10-06", ...over });
+
+  it("judges on the day its caller hands it, never the clock", () => {
+    changeStatus.mockClear();
+    expect(setByLine(mark("weight", 105), SQUAT, state({ todayIso: "2020-01-01" }))).toBe("Weight set by Sam");
+    expect(changeStatus.mock.calls.map(([, s]) => s.todayIso)).toEqual(["2020-01-01"]);
+  });
 
   it("names the kind when only one number is the trainer's", () => {
     expect(setByLine(mark("weight", 105), SQUAT, state())).toBe("Weight set by Sam");

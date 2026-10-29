@@ -60,6 +60,7 @@ import { unfinishedBlocks, nextUnfinishedIdx, loggedOnBlock, leadExerciseName } 
 import { pickFlashLine, isPullMovement } from "@/lib/set-flash";
 import { EXERCISE_ANATOMY } from "@/lib/exercise-anatomy";
 import { todayLocalIso, daysBetween, addDaysIso } from "@/lib/dates";
+import { useTodayIso } from "@/lib/use-today-iso";
 import { fetchWithTimeout } from "@/lib/net";
 import { isStrengthRecord } from "@/lib/day-state";
 import { T, DISPLAY } from "@/lib/tokens";
@@ -81,13 +82,13 @@ const SESSION_KEYS = ["strength-a", "strength-b", "strength-c"];
  * landed (the same "in force" the client's change list shows). Read-only.
  * @param {Record<string, { id: string, after: any, by: string | null, at: string }> | undefined} mark  trainerLocal marks for the lift
  * @param {string} lift
- * @param {{ weights: Record<string, any>, reps: Record<string, any>, history: any[] }} state
+ * @param {{ weights: Record<string, any>, reps: Record<string, any>, history: any[], todayIso: string }} state
+ *   todayIso: the caller's local day (useTodayIso); no clock is read here, so a render stays pure
  * @returns {string | null}
  */
-export function setByLine(mark, lift, { weights, reps, history }) {
+export function setByLine(mark, lift, { weights, reps, history, todayIso }) {
   if (!mark || typeof mark !== "object") return null;
   const meta = { weights, reps };
-  const todayIso = todayLocalIso();
   /** @param {"weight" | "reps"} kind */
   const holder = (kind) => {
     const m = mark[kind];
@@ -145,6 +146,8 @@ export default function SessionHost({ mode = null } = {}) {
   // Who set each lift's number, as the session opened (device-local marks a
   // trainer's change leaves when it lands). Display only.
   const [trainerMarks] = useState(() => source.trainerMarks());
+  // The day those marks are judged on, as state: it moves at midnight.
+  const todayIso = useTodayIso();
   // Muscle anchors as the session opened: the cold-start rung of every plan
   // weight (planStartWeight). Only finalise moves them.
   const [muscleAnchors] = useState(() => source.muscleAnchors());
@@ -526,7 +529,7 @@ export default function SessionHost({ mode = null } = {}) {
     : null;
   // A quieter line under it when a trainer set today's number.
   const setBy = activeEx?.name
-    ? setByLine(trainerMarks[activeEx.name], activeEx.name, { weights: workingWeights, reps: workingReps, history })
+    ? setByLine(trainerMarks[activeEx.name], activeEx.name, { weights: workingWeights, reps: workingReps, history, todayIso })
     : null;
   const cardLine = !setBy ? coachLine : (
     <>

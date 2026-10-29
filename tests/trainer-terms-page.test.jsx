@@ -39,7 +39,7 @@ describe("Trainer Terms page", () => {
   it("shows the date the current version took effect, and the session line", () => {
     render(<TrainerTermsPage />);
     expect(document.querySelector("[data-terms-since]").textContent).toBe(`Updated ${termsDate(TRAINER_TERMS_SINCE)}`);
-    expect(termsDate(TRAINER_TERMS_SINCE)).toBe("21 October 2026");
+    expect(termsDate(TRAINER_TERMS_SINCE)).toBe("29 October 2026");
     const text = document.body.textContent;
     expect(text).toContain("Log a session with a client only when you trained them.");
     expect(text).toContain("These terms can change. When they do, the date at the top of this page moves, and the new terms apply from that date.");

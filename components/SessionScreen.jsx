@@ -23,7 +23,8 @@ import Glyph from "@/components/Glyph";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import { pressLiftHandlers } from "@/lib/press-lift";
 import { savedKgFor } from "@/lib/session-kg";
-import { todayLocalIso, daysBetween, mondayIndex } from "@/lib/dates";
+import { daysBetween, mondayIndex } from "@/lib/dates";
+import { useTodayIso } from "@/lib/use-today-iso";
 import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
 import { WEEK, SWAP_DB } from "@/lib/programme";
@@ -267,10 +268,12 @@ function loggedKgFor(top, optionalWeight) {
 function RecentHistorySheet({ exerciseName, recent, optionalWeight, onCancel }) {
   const { containerRef, onKeyDown } = useModalA11y(onCancel);
   const titleId = "recent-history-title";
+  // As state, so a sheet left open past midnight counts from the new day.
+  const todayIso = useTodayIso();
 
   const fmt = (dateStr) => {
     if (!dateStr) return "";
-    const diff = daysBetween(dateStr, todayLocalIso());
+    const diff = daysBetween(dateStr, todayIso);
     if (diff === null) return dateStr;
     if (diff <= 0) return "today";
     if (diff === 1) return "yesterday";
