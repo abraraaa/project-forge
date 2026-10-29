@@ -38,7 +38,13 @@
 //     words, Withdraw only while it hasn't reached their phone; the week's
 //     count of 7; Run a session hands the parent the letter picked (the next
 //     in their rotation by default) and nothing else, and is off at the cap;
-//   - a session or ledger row a trainer logged reads Coached.
+//   - a session or ledger row a trainer logged reads Coached;
+//   - the house buttons: no press visual inside a bottom sheet, a press on
+//     the page's chips, letters and Withdraw, a chip on raised on the
+//     surface; commits 56, quiet buttons 46 in ink whatever their state,
+//     an off one dimmed to 0.6 as a busy commit is; warnings in ink2 but
+//     under minimum, in steel on its flag and in the review; an assisted
+//     lift's limits in kg of help.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -49,7 +55,9 @@ import { dirname, resolve } from "node:path";
 import TrainerClientView, {
   setsLine, rhythmCellText, refusalText, noHistoryText, leadLine, warningText, sessionStatusText, sessionRunLine, trainerStatusText,
 } from "../../components/TrainerClientView.jsx";
+import Glyph from "../../components/Glyph.jsx";
 import { projectForTrainer } from "../../lib/trainer-plan.js";
+import { EXERCISE_POOLS } from "../../lib/programme.js";
 import { addDaysIso, todayLocalIso } from "../../lib/dates.js";
 import { auditHistoryVolume } from "../../lib/volume-audit.js";
 import {
@@ -1562,5 +1570,229 @@ describe("TrainerClientView: every sheet closes from its foot control, Escape an
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(route.mock.calls.every(([b]) => b.dryRun === true)).toBe(true);
     expect(document.querySelector('[data-plan-lift="Barbell Back Squat"]').textContent).toContain("new 105, not sent");
+  });
+});
+
+// ── The house buttons ───────────────────────────────────────────────────────
+
+/** The controls in `el` with a press visual: a sheet's take none (app/globals.css). */
+const pressIn = (el) => [...el.querySelectorAll(".forge-press, .forge-tint, .forge-lift")].map((b) => b.textContent);
+/** The open dialog, which is a bottom sheet. */
+const sheetEl = () => {
+  const d = dialog();
+  expect(d.classList.contains("forge-sheet-ground")).toBe(true);
+  return d;
+};
+/** Height, size, weight and ink: what tells the house buttons apart. */
+const size = (b) => [b.style.height, b.style.fontSize, b.style.fontWeight, b.style.color];
+const QUIET = ["46px", "14px", "500", "var(--ink)"];
+const COMMIT = ["56px", "17px", "500", "var(--commit-ink)"];
+/** A glyph's markup, to find it in a control. */
+function glyphHtml(props) {
+  const { container, unmount } = render(<Glyph {...props}/>);
+  const html = container.innerHTML;
+  unmount();
+  return html;
+}
+
+describe("TrainerClientView: the house buttons", () => {
+  it("no control inside a trainer bottom sheet carries a press class", async () => {
+    render(<TrainerClientView client={client} view={view()} onRemove={vi.fn(async () => true)}/>);
+    fireEvent.click(screen.getByText("Stop seeing Sam's training"));
+    expect(within(sheetEl()).getByRole("button", { name: "Stop" })).toBeTruthy();
+    expect(pressIn(sheetEl())).toEqual([]);
+    cleanup();
+
+    // The lift sheet with its main-lift options and pace chips, then the review in each phase.
+    for (const [phase, route, action] of [
+      ["ready", fakeRoute(), "Send to Sam"],
+      ["stale", fakeRoute(planData({ weights: { "Barbell Back Squat": 103.75 } })), "Refresh"],
+      ["face", vi.fn(async () => ({ status: 403, body: { needsFaceId: true } })), "Confirm it's you"],
+      ["error", vi.fn(async () => ({ status: 500, body: {} })), "Check again"],
+    ]) {
+      render(<TrainerClientView client={client} view={planView()} onChange={route}/>);
+      openLift("Barbell Back Squat");
+      expect(within(sheetEl()).getAllByRole("radio").length, phase).toBeGreaterThan(1);
+      expect(within(within(sheetEl()).getByRole("group", { name: "Pace" })).getAllByRole("button"), phase).toHaveLength(4);
+      expect(pressIn(sheetEl()), phase).toEqual([]);
+      tap("More weight"); tap("Add to changes");
+      await review();
+      expect(within(sheetEl()).getByRole("button", { name: action }), phase).toBeTruthy();
+      expect(pressIn(sheetEl()), phase).toEqual([]);
+      cleanup();
+    }
+
+    const v = planView();
+    v.plan.lifts.find((l) => l.name === "Hex Bar Deadlift").bounds.max = null;
+    render(<TrainerClientView client={client} view={v} onChange={fakeRoute()}/>);
+    openLift("Hex Bar Deadlift");
+    const input = within(sheetEl()).getByLabelText("Weight in kg");
+    fireEvent.change(input, { target: { value: "300" } });
+    fireEvent.blur(input);
+    tap("Add to changes");
+    await review();
+    expect(within(sheetEl()).getByRole("button", { name: "Leave those out" })).toBeTruthy();
+    expect(pressIn(sheetEl())).toEqual([]);
+  });
+
+  it("the page's chips, session letters and Withdraw press; a chip on is raised on the surface, a chip off is a hairline", () => {
+    const at = Date.now();
+    const v = planView(planData(), { rows: [ranRow("w.00", "A", today, at)] });
+    const ch = (id, target) => ({ id, set: "s1", kind: "weight", target, before: 60, after: 62.5, from: null, status: "waiting", reason: null, date: null, at, warnings: [] });
+    v.plan.changes = [...v.plan.changes, ch("s1.0", "Barbell Back Squat"), ch("s1.1", "Barbell Bench Press")];
+    render(<TrainerClientView client={client} view={v} onChange={fakeRoute()} onRunSession={vi.fn()}/>);
+    const PRESS = "forge-press forge-tint";
+    const changes = /** @type {HTMLElement} */ (document.querySelector('[data-section="changes"]'));
+    const all = within(changes).getByRole("button", { name: "Withdraw all" });
+    const withdraws = [all, ...within(changes).getAllByRole("button", { name: "Withdraw" }), within(ranBox()).getByRole("button", { name: "Withdraw" })];
+    expect(withdraws.map((b) => b.className)).toEqual([PRESS, PRESS, PRESS, PRESS]);
+    expect([all.style.minHeight, all.style.borderRadius, all.style.fontSize, all.style.fontWeight, all.style.color]).toEqual(["36px", "8px", "13px", "400", "var(--ink-2)"]);
+    const letters = within(ranBox()).getAllByRole("radio");
+    expect(letters.map((r) => r.className)).toEqual([PRESS, PRESS, PRESS]);
+    const [top, every] = within(within(ledgerEl()).getByRole("group", { name: `${SQUAT} ledger sets` })).getAllByRole("button");
+    expect([top.className, every.className]).toEqual([PRESS, PRESS]);
+
+    const chip = (b) => [b.style.background, b.style.boxShadow, b.style.fontWeight, b.style.color, b.style.minHeight, b.style.borderRadius];
+    expect(chip(top)).toEqual(["var(--surface)", "var(--elev)", "500", "var(--ink)", "36px", "8px"]);
+    expect(top.style.borderColor).toBe("transparent");
+    expect(chip(every)).toEqual(["transparent", "none", "400", "var(--ink-2)", "36px", "8px"]);
+    const picked = letters.filter((r) => r.getAttribute("aria-checked") === "true");
+    expect(picked.map(chip)).toEqual([chip(top)]);
+  });
+
+  it("commits are 56 at 17/500; quiet buttons 46 at 14/500 in ink, Run and Continue whatever their state", async () => {
+    render(<TrainerClientView client={client} view={planView(planData(), { sessions: { used: SESSIONS_PER_WEEK, freeAt: null } })}
+      onChange={fakeRoute()} onRunSession={vi.fn()} onRemove={vi.fn(async () => true)}/>);
+    const run = screen.getByRole("button", { name: "Run a session with Sam" });
+    expect(run.disabled).toBe(true);
+    expect(size(run)).toEqual(QUIET);
+    expect(size(screen.getByRole("button", { name: "Stop seeing Sam's training" }))).toEqual(QUIET);
+    fireEvent.click(screen.getByText("Stop seeing Sam's training"));
+    expect(size(within(sheetEl()).getByRole("button", { name: "Stop" }))).toEqual(COMMIT);
+    tap("Keep");
+    openLift("Barbell Back Squat");
+    expect(size(within(sheetEl()).getByRole("button", { name: "Add to changes" }))).toEqual(QUIET);
+    const cancel = within(sheetEl()).getByRole("button", { name: "Cancel" });
+    expect([cancel.style.fontSize, cancel.style.color]).toEqual(["13px", "var(--ink-3)"]);
+    tap("More weight"); tap("Add to changes");
+    expect(size(within(/** @type {HTMLElement} */ (document.querySelector("[data-tray]"))).getByRole("button", { name: /Review/ }))).toEqual(QUIET);
+    await review();
+    expect(size(within(sheetEl()).getByRole("button", { name: "Send to Sam" }))).toEqual(COMMIT);
+    cleanup();
+    render(<TrainerClientView client={client} view={planView()} onRunSession={vi.fn()} unsent={{ letter: "B", date: today, sets: 2 }}/>);
+    expect(size(screen.getByRole("button", { name: "Continue" }))).toEqual(QUIET);
+    cleanup();
+    render(<TrainerClientView client={client} view={view()}/>);
+    expect(size(within(/** @type {HTMLElement} */ (document.querySelector('[data-section="sessions"]'))).getByRole("button", { name: "Show earlier sessions" }))).toEqual(QUIET);
+    const earlier = screen.getByRole("button", { name: "Earlier weeks" });
+    expect([earlier.style.fontSize, earlier.style.color]).toEqual(["13px", "var(--ink-3)"]);
+  });
+
+  it("an off quiet button keeps its ink and dims to 0.6, as a busy commit does: Run at the cap, Review with nothing drafted or no sends left", () => {
+    const tray = () => /** @type {HTMLButtonElement} */ (document.querySelector("[data-tray] button"));
+    const run = () => /** @type {HTMLButtonElement} */ (screen.getByRole("button", { name: "Run a session with Sam" }));
+    const look = (b) => [b.disabled, b.style.color, b.style.opacity];
+    const draft = () => { openLift("Barbell Back Squat"); tap("More weight"); tap("Add to changes"); };
+    render(<TrainerClientView client={client} view={planView(planData(), { sessions: { used: SESSIONS_PER_WEEK, freeAt: null } })}
+      onChange={fakeRoute()} onRunSession={vi.fn()}/>);
+    expect(look(run())).toEqual([true, "var(--ink)", "0.6"]);
+    expect(tray().textContent).toBe("No changes yet");
+    expect(look(tray())).toEqual([true, "var(--ink)", "0.6"]);
+    draft();
+    expect(look(tray())).toEqual([false, "var(--ink)", "1"]);
+    cleanup();
+    render(<TrainerClientView client={client} view={planView(planData(), { used: 10 })} onChange={fakeRoute()} onRunSession={vi.fn()}/>);
+    expect(look(run())).toEqual([false, "var(--ink)", "1"]);
+    draft();
+    expect(tray().textContent).toBe("1 change · Review");
+    expect(look(tray())).toEqual([true, "var(--ink)", "0.6"]);
+  });
+
+  it("validator warnings read in ink2; under minimum keeps the steel, on its flag and in the review", async () => {
+    const v = planView();
+    v.plan.changes = [{ id: "s1.1", set: "s1", kind: "reps", target: "Barbell Bench Press", before: 5, after: 8, from: null, status: "in_force", reason: null, date: null, at: Date.now(), warnings: ["off_programme_reps"] }];
+    // The validator never raises under_mev today (K4 comes with S2), so this route adds one.
+    const base = fakeRoute();
+    const route = vi.fn(async (body) => {
+      const r = await base(body);
+      for (const op of r.body.preview?.ops || []) op.warnings.push("under_mev");
+      return r;
+    });
+    render(<TrainerClientView client={client} view={v} onChange={route}/>);
+    expect(screen.getByText("Outside the programme's usual reps for this lift.").style.color).toBe("var(--ink-2)");
+    expect(/** @type {HTMLElement} */ (document.querySelector('[data-section="under"] span')).style.color).toBe("var(--under)");
+    openLift("Barbell Back Squat");
+    const input = within(dialog()).getByLabelText("Weight in kg");
+    fireEvent.change(input, { target: { value: "65" } });
+    fireEvent.blur(input);
+    expect(within(dialog()).getByText("More than 15% under their last top set.").style.color).toBe("var(--ink-2)");
+    // The review is where it's read before the send.
+    tap("Add to changes");
+    await review();
+    expect(within(dialog()).getByText("More than 15% under their last top set.").style.color).toBe("var(--ink-2)");
+    expect(within(dialog()).getByText("Some muscles would sit under minimum.").style.color).toBe("var(--under)");
+  });
+
+  it("plan rows are house rows: the arrow at the right, Main lift as a Tag", () => {
+    render(<TrainerClientView client={client} view={planView()}/>);
+    const row = /** @type {HTMLElement} */ (document.querySelector('[data-plan-lift="Barbell Back Squat"]'));
+    expect(row.textContent).toBe("Barbell Back SquatMain liftlast 100 × 5 · next 102.5 × 5");
+    expect(row.lastElementChild?.outerHTML).toBe(glyphHtml({ name: "arrowRight", size: 13, color: "var(--ink-3)" }));
+    const tag = within(row).getByText("Main lift");
+    const mark = /** @type {HTMLElement} */ (tag.firstElementChild);
+    expect(mark.getAttribute("aria-hidden")).toBe("true");
+    expect([mark.style.width, mark.style.height]).toEqual(["16px", "4px"]);
+    expect([tag.style.fontSize, tag.style.fontWeight]).toEqual(["12px", "500"]);
+  });
+
+  it("Download CSV is a house link: 13 px in ink3 with the arrow, never underlined", () => {
+    render(<TrainerClientView client={client} view={view()} clientRef="hwg_abc" onExport={vi.fn(async () => null)}/>);
+    const btn = screen.getByRole("button", { name: "Download CSV" });
+    expect([btn.style.fontSize, btn.style.color, btn.style.textDecoration]).toEqual(["13px", "var(--ink-3)", ""]);
+    expect(btn.lastElementChild?.outerHTML).toBe(glyphHtml({ name: "arrowRight", size: 11 }));
+  });
+
+  it("an assisted lift's limits say kg of help, in its sheet and its refusals; a loaded lift keeps its words", async () => {
+    const AP = "Assisted Pull-Up";
+    const data = planData({
+      weights: { "Barbell Back Squat": 102.5, [AP]: 18.75 },
+      programmeBlock: { number: 1, config: { "bss1-B": EXERCISE_POOLS["bss1-B"].pool.find((p) => p.name === AP) } },
+    });
+    const sets = [1, 2, 3].map(() => ({ weight: 20, reps: 8, rpe: 7, rir: 3, loadType: "assisted_bodyweight", bodyweightUsed: 80, effectiveLoad: 60 }));
+    data.history.push({ v: 2, id: `${ago(2)}T09:00:00.000Z`, date: ago(2), readiness: "normal", session: "strength B", scheduledLetter: "B",
+      blocks: [{ id: "acc", type: "accessory", exercises: [{ name: AP, muscle: "Lats", loadType: "assisted_bodyweight", sets }] }] });
+    data.history.sort((a, b) => a.date.localeCompare(b.date));
+    const v = planView(data);
+    const bounds = v.plan.lifts.find((l) => l.name === AP).bounds;
+    expect(bounds).toMatchObject({ min: 17.5, max: 100 });
+    // Less help is the harder way: the step limits name the least help.
+    expect(refusalText("per_change", { bounds, assisted: true })).toBe("Not below 17.5 kg of help in one change from their last top set.");
+    expect(refusalText("per_week", { bounds, assisted: true })).toBe("Not below 17.5 kg of help this week.");
+    expect(refusalText("per_week", { assisted: true })).toBe("Up to 15% less help a week than their top set of a week ago, or one step when that set can't be shown here.");
+    expect(refusalText("per_change", { assisted: true })).toBe("Too big a step from their last top set.");
+    expect(refusalText("no_history", { bounds: { max: 100 }, assisted: true })).toBe("Not lifted yet. Up to 100 kg of help for a first weight.");
+    expect(noHistoryText(0, true)).toBe("Not lifted yet. Their app sets the first weight.");
+    // Loaded: today's words.
+    expect(refusalText("per_change", { bounds: { min: 65, max: 110 } })).toBe("Up to 110 kg in one change from their last top set.");
+    expect(refusalText("per_week", { bounds: { min: 65, max: 110 } })).toBe("Up to 110 kg this week.");
+    expect(noHistoryText(100)).toBe("Not lifted yet. Up to 100 kg for a first weight.");
+
+    // The route refuses the step: the review names it in kg of help.
+    const route = vi.fn(async () => ({ status: 422, body: { refusals: [{ i: 0, code: "per_change" }], error: SERVER_WORDS } }));
+    render(<TrainerClientView client={client} view={v} onChange={route}/>);
+    openLift(AP);
+    expect(dialog().textContent).toContain("Up to 100 kg of help: last top set 20 kg");
+    expect(dialog().textContent).toContain("Not below 17.5 kg of help");
+    tap("Less assistance");
+    tap("Add to changes");
+    await review();
+    expect(route.mock.calls[0][0].set.ops).toEqual([{ kind: "weight", lift: AP, kg: 17.5, from: null }]);
+    expect(dialog().querySelector('[data-op="0"] [data-refused]')?.textContent).toBe("Not below 17.5 kg of help in one change from their last top set.");
+    expect(document.body.textContent).not.toContain(SERVER_WORDS);
+    cleanup();
+    render(<TrainerClientView client={client} view={v}/>);
+    openLift("Barbell Back Squat");
+    expect(dialog().textContent).toContain("Up to 110 kg: last top set 100 kg");
+    expect(dialog().textContent).not.toContain("of help");
   });
 });

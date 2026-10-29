@@ -28,6 +28,7 @@ import { withNavTransition } from "@/lib/nav-transitions";
 import { pressLiftHandlers } from "@/lib/press-lift";
 import { useInlineModalA11y } from "@/lib/a11y";
 import Glyph from "@/components/Glyph";
+import { BTN } from "@/components/ui";
 import { authenticatePasskey } from "@/lib/webauthn";
 import { fetchWithTimeout } from "@/lib/net";
 import { todayLocalIso } from "@/lib/dates";
@@ -145,34 +146,20 @@ function clockTime(ms) {
 }
 
 /** @type {import("react").CSSProperties} */
-const commitBtn = {
-  width: "100%", height: 52, background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer",
-  fontFamily: T.text, fontSize: 15, fontWeight: 500, color: T.commitInk, boxShadow: T.elevStrong,
-};
-/** @type {import("react").CSSProperties} */
-const quietBtn = {
-  height: 44, padding: "0 16px", background: "none", border: `1px solid ${T.rule}`, borderRadius: T.r,
-  cursor: "pointer", fontFamily: T.text, fontSize: 14, color: T.ink2,
-};
-/** @type {import("react").CSSProperties} */
-const linkBtn = {
-  background: "none", border: "none", padding: "8px 0", cursor: "pointer",
-  fontFamily: T.text, fontSize: 13, color: T.ink2,
-};
-/** The house back row, as Profile's "← Home". @type {import("react").CSSProperties} */
-const backRow = {
-  background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2,
-  marginBottom: 32, display: "inline-flex", alignItems: "center", gap: 5,
-};
-/** @type {import("react").CSSProperties} */
 const kickerStyle = { fontSize: 13, color: T.ink3, marginBottom: 8 };
 /** @type {import("react").CSSProperties} */
 const h1Style = { ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" };
-/** A roster row's button. @param {boolean} current @returns {import("react").CSSProperties} */
-const rowStyle = (current) => ({
-  display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 8px", background: current ? T.press : "none",
-  border: "none", borderRadius: T.rSm, cursor: "pointer", textAlign: "left", fontFamily: T.text, color: T.ink,
-});
+/** A roster row's button: a hairline row. --press is the press itself, never a resting fill. @type {import("react").CSSProperties} */
+const rowStyle = {
+  position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 8px", background: "none",
+  border: "none", cursor: "pointer", textAlign: "left", fontFamily: T.text, color: T.ink,
+};
+/**
+ * The open row's mark, at its left edge. Under 640 the roster hides while a
+ * client is open, so it only ever shows on the wide layout.
+ * @type {import("react").CSSProperties}
+ */
+const openMark = { position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: T.ink };
 /** @type {import("react").CSSProperties} */
 const rowTitle = { display: "block", fontSize: 15, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 /** @type {import("react").CSSProperties} */
@@ -550,8 +537,9 @@ export default function TrainerView() {
     else if (steps === 2) window.history.go(-2);
     else router.back();
   }, "nav-back");
+  // The house back row, as Profile's "← Home": the text link, its label in ink2.
   const profileRow = (style) => (
-    <button type="button" onClick={toProfile} style={style}>
+    <button type="button" onClick={toProfile} style={{ ...BTN.text, color: T.ink2, ...style }}>
       <Glyph name="arrowLeft" size={12} color={T.ink3}/> Profile
     </button>
   );
@@ -581,14 +569,14 @@ export default function TrainerView() {
     return (
       <div {...root}>
         <div className="forge-wide-solo">
-          {profileRow(backRow)}
+          {profileRow({ marginBottom: 32 })}
           {phase === "loading" && <div role="status" style={{ fontSize: 13, color: T.ink3 }}>One moment</div>}
           {phase === "error" && (
             <>
               <div style={kickerStyle}>For trainers</div>
               <h1 style={h1Style}>Your clients</h1>
               <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6 }}>Couldn't load your clients just now.</p>
-              <button type="button" onClick={() => { setPhase("loading"); loadRoster(); }} style={{ ...quietBtn, width: "100%", marginTop: 12 }}>Try again</button>
+              <button type="button" onClick={() => { setPhase("loading"); loadRoster(); }} className="forge-press forge-tint" style={{ ...BTN.quiet, width: "100%", marginTop: 12 }}>Try again</button>
             </>
           )}
           {phase === "signedOut" && (
@@ -598,7 +586,7 @@ export default function TrainerView() {
               <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: "0 0 32px" }}>Sign in to see training your clients share with you.</p>
               <NameField inputRef={nameRef} disabled={busy}/>
               <button type="button" onClick={signIn} aria-disabled={busy} className="forge-press forge-lift" {...pressLiftHandlers}
-                style={{ ...commitBtn, opacity: busy ? 0.6 : 1 }}>
+                style={{ ...BTN.commit, opacity: busy ? 0.6 : 1 }}>
                 {busy ? "One moment" : "Sign in with Face ID"}
               </button>
             </>
@@ -630,18 +618,19 @@ export default function TrainerView() {
   return (
     <div {...root} data-view={open ? "client" : "roster"}>
       {/* Above both columns; under 640 the open client's own row stands in. The shell's gap spaces it. */}
-      <div className="forge-wide-back">{profileRow({ ...backRow, marginBottom: 0 })}</div>
+      <div className="forge-wide-back">{profileRow()}</div>
       <div className="forge-wide-roster">
         <div style={kickerStyle}>For trainers</div>
         <h1 style={h1Style}>Your clients</h1>
         <button type="button" onClick={issue} className="forge-press forge-tint"
-          style={{ ...quietBtn, width: "100%", marginTop: 14, marginBottom: 20 }}>
+          style={{ ...BTN.quiet, width: "100%", marginTop: 14, marginBottom: 20 }}>
           Add a client
         </button>
         {/* Your own training, pinned first; a hairline sets it apart from clients. */}
         <div data-self-row="" style={{ borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}` }}>
           <button type="button" onClick={openSelf} aria-current={selfOpen ? "true" : undefined}
-            className="forge-press forge-tint" style={rowStyle(selfOpen)}>
+            className="forge-press forge-tint" style={rowStyle}>
+            {selfOpen && <span aria-hidden="true" style={openMark}/>}
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={rowTitle}>Your training</span>
               <span style={rowLine}>As you&apos;d share it, read only</span>
@@ -661,7 +650,8 @@ export default function TrainerView() {
               return (
                 <li key={c.ref} style={{ borderBottom: `1px solid ${T.ruleFaint}` }}>
                   <button type="button" onClick={() => openClient(i)} aria-current={current ? "true" : undefined}
-                    className="forge-press forge-tint" style={rowStyle(current)}>
+                    className="forge-press forge-tint" style={rowStyle}>
+                    {current && <span aria-hidden="true" style={openMark}/>}
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={rowTitle}>{c.name || "Your client"}</span>
                       <span className="forge-wide-signal" title={line} style={rowLine}>
@@ -679,7 +669,7 @@ export default function TrainerView() {
         )}
         <div style={{ marginTop: 28, fontSize: 12, color: T.ink3 }}>
           {me && <div style={{ marginBottom: 4 }}>Signed in as {me}</div>}
-          <button type="button" onClick={() => setSignOutOpen(true)} style={linkBtn}>Sign out</button>
+          <button type="button" onClick={() => setSignOutOpen(true)} style={{ ...BTN.text, padding: "8px 0" }}>Sign out</button>
         </div>
         {signOutOpen && <SignOutSheet onPick={(everywhere) => { setSignOutOpen(false); signOut(everywhere); }} onClose={() => setSignOutOpen(false)}/>}
       </div>
@@ -688,7 +678,7 @@ export default function TrainerView() {
         {open && (
           // The tier class sits on the wrapper: the button's inline display would beat it.
           <div className="forge-wide-n-only">
-            <button type="button" onClick={closeClient} style={backRow}>
+            <button type="button" onClick={closeClient} style={{ ...BTN.text, color: T.ink2, marginBottom: 32 }}>
               <Glyph name="arrowLeft" size={12} color={T.ink3}/> Clients
             </button>
           </div>
@@ -704,7 +694,7 @@ export default function TrainerView() {
             <p style={{ fontSize: 15, color: T.ink, margin: "0 0 14px" }}>
               {shown.state === "missing" ? "Not shared with you now." : "Couldn't open that just now."}
             </p>
-            <button type="button" onClick={() => { closeClient(); loadRoster(); }} style={quietBtn}>Back to clients</button>
+            <button type="button" onClick={() => { closeClient(); loadRoster(); }} className="forge-press forge-tint" style={BTN.quiet}>Back to clients</button>
           </div>
         )}
         {shown?.state === "ready" && (
@@ -770,7 +760,7 @@ function TermsCommit({ label, busy, onCommit }) {
         ))}
       </ul>
       <button type="button" onClick={onCommit} aria-disabled={busy} aria-describedby="hw-trainer-terms"
-        className="forge-press forge-lift" {...pressLiftHandlers} style={{ ...commitBtn, opacity: busy ? 0.6 : 1 }}>
+        className="forge-press forge-lift" {...pressLiftHandlers} style={{ ...BTN.commit, opacity: busy ? 0.6 : 1 }}>
         {busy ? "One moment" : label}
       </button>
       <p id="hw-trainer-terms" style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "10px 0 0" }}>
@@ -853,10 +843,10 @@ function SignOutSheet({ onPick, onClose }) {
         <div id="trainer-signout-title" style={{ fontSize: 18, fontWeight: 500, lineHeight: 1.3, marginBottom: 6 }}>Sign out</div>
         <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "0 0 18px" }}>Everywhere ends this trainer sign-in on every device. Your training app stays signed in.</p>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button type="button" onClick={() => onPick(false)} style={quietBtn}>This device</button>
-          <button type="button" onClick={() => onPick(true)} style={quietBtn}>Everywhere</button>
+          <button type="button" onClick={() => onPick(false)} style={BTN.quiet}>This device</button>
+          <button type="button" onClick={() => onPick(true)} style={BTN.quiet}>Everywhere</button>
         </div>
-        <button type="button" onClick={onClose} style={{ ...linkBtn, marginTop: 18, display: "block", margin: "18px auto 0" }}>Cancel</button>
+        <button type="button" onClick={onClose} style={{ ...BTN.text, padding: "8px 0", display: "block", margin: "18px auto 0" }}>Cancel</button>
       </div>
     </div>
   );
@@ -962,7 +952,7 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
                 : { order: 3, fontSize: 14, color: T.ink, margin: "14px 0 18px", minHeight: 20 }}>
               {statusText}
             </div>
-            <div data-code="" style={{ fontFamily: T.measured, fontSize: 22, letterSpacing: "0.06em", color: final ? T.ink3 : T.ink, margin: "0 0 14px", opacity: final ? 0.3 : 1 }}>
+            <div data-code="" style={{ fontFamily: T.measured, fontSize: 22, color: final ? T.ink3 : T.ink, margin: "0 0 14px", opacity: final ? 0.3 : 1 }}>
               {formatCode(code)}
             </div>
             {!final && (
@@ -976,19 +966,18 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
             <div style={{ order: 4, display: "flex", gap: 10, flexWrap: "wrap", marginTop: final ? 18 : 0 }}>
               {state === "pending" && (
                 <>
-                  <button type="button" onClick={onShare} style={quietBtn}>{shared === "copied" ? "Copied" : "Share link"}</button>
-                  <button type="button" onClick={onCancel} style={quietBtn}>Cancel code</button>
+                  <button type="button" onClick={onShare} style={BTN.quiet}>{shared === "copied" ? "Copied" : "Share link"}</button>
+                  <button type="button" onClick={onCancel} style={BTN.quiet}>Cancel code</button>
                 </>
               )}
               {state !== "pending" && (
-                <button type="button" onClick={onIssue} style={quietBtn}>New code</button>
+                <button type="button" onClick={onIssue} style={BTN.quiet}>New code</button>
               )}
             </div>
             {shared === "fail" && <div style={{ order: 5, fontSize: 12, color: T.ink2, marginTop: 8 }}>Couldn't reach the clipboard. Read the code out instead.</div>}
           </div>
         )}
-        <button type="button" onClick={onClose}
-          style={{ width: "100%", padding: "12px", marginTop: 14, background: "none", border: "none", cursor: "pointer", fontSize: 13, color: T.ink3, fontFamily: T.text }}>
+        <button type="button" onClick={onClose} style={{ ...BTN.text, width: "100%", justifyContent: "center", padding: 12, marginTop: 14 }}>
           Done
         </button>
       </div>

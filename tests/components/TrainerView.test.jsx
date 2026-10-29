@@ -35,7 +35,10 @@
 //     your own pane gets no change wiring, even when its view has a plan;
 //   - running a session with a client: the trainer's name goes to the coach
 //     page in memory, and /trainer/coach opens with the ref and the letter
-//     in the fragment only, never a query; nothing is posted on the way.
+//     in the fragment only, never a query; nothing is posted on the way;
+//   - the house buttons: roster rows are hairlines, the open one marked by
+//     a 3 px ink bar, never a fill; the page's quiet buttons press (Add a
+//     client, Try again, Back to clients); its sheets carry no press visuals.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
@@ -86,6 +89,11 @@ const flush = () => act(async () => { for (let i = 0; i < 6; i++) await Promise.
 
 const posts = (url) => server.calls.filter((c) => c.url === url && c.method === "POST");
 const gets = (url) => server.calls.filter((c) => c.url === url && c.method === "GET");
+/** The controls in `el` with a press visual: a sheet's take none (app/globals.css). */
+const pressIn = (el) => [...el.querySelectorAll(".forge-press, .forge-tint, .forge-lift")].map((b) => b.textContent);
+/** Height, size, weight and ink: what tells the house buttons apart. */
+const size = (b) => [b.style.height, b.style.fontSize, b.style.fontWeight, b.style.color];
+const QUIET = ["46px", "14px", "500", "var(--ink)"];
 
 const SIGNALS = [
   { ref: "hwg_a", name: "Alex", since: Date.UTC(2026, 8, 1), lastLooked: null,
@@ -323,6 +331,63 @@ describe("TrainerView: the roster", () => {
     expect(src).not.toMatch(/position:\s*["']?(?:sticky|fixed)/);
     expect(src).not.toMatch(/maxWidth/);
     expect(src).not.toMatch(/lib\/storage|getActive\(|localStorage|sessionStorage|indexedDB|dangerouslySetInnerHTML/);
+  });
+
+  it("rows are hairlines with no radius and no resting fill; the open one carries aria-current and a 3 px ink mark", async () => {
+    signedIn();
+    await mount();
+    const row = (name) => screen.getByText(name, { selector: "span" }).closest("button");
+    const mark = (btn) => [...btn.children].find((c) => c.style.width === "3px") ?? null;
+    for (const name of ["Your training", "Alex", "Bea"]) {
+      const btn = row(name);
+      expect(btn.style.borderRadius, name).toBe("");
+      expect(btn.style.background, name).toBe("none");
+      expect(btn.className, name).toBe("forge-press forge-tint");
+      expect(btn.getAttribute("aria-current"), name).toBeNull();
+      expect(mark(btn), name).toBeNull();
+    }
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    const alex = row("Alex");
+    expect(alex.getAttribute("aria-current")).toBe("true");
+    // Open is a mark, not a fill: --press is the press itself.
+    expect(alex.style.background).toBe("none");
+    expect(alex.style.position).toBe("relative");
+    const bar = mark(alex);
+    expect(bar.getAttribute("aria-hidden")).toBe("true");
+    expect([bar.style.position, bar.style.background]).toEqual(["absolute", "var(--ink)"]);
+    expect([bar.style.left, bar.style.top, bar.style.bottom].map(parseFloat)).toEqual([0, 0, 0]);
+    expect(mark(row("Bea"))).toBeNull();
+    expect(mark(row("Your training"))).toBeNull();
+  });
+
+  it("its buttons are the house set: commits 56 at 17/500, quiet 46 at 14/500 in ink, links 13 in ink3", async () => {
+    server.routes["POST /api/trainer/clients"] = { status: 401, body: {} };
+    await mount();
+    const signIn = screen.getByRole("button", { name: "Sign in with Face ID" });
+    expect(size(signIn)).toEqual(["56px", "17px", "500", "var(--commit-ink)"]);
+    expect(signIn.className).toBe("forge-press forge-lift");
+    cleanup();
+    signedIn();
+    await mount();
+    expect(size(screen.getByRole("button", { name: "Add a client" }))).toEqual(QUIET);
+    const out = screen.getByRole("button", { name: "Sign out" });
+    expect([out.style.fontSize, out.style.color, out.style.textDecoration]).toEqual(["13px", "var(--ink-3)", ""]);
+  });
+
+  it("the page's quiet buttons press as Add a client does: Try again and Back to clients too", async () => {
+    const PRESS = "forge-press forge-tint";
+    await mount(); // no roster route: it can't load
+    const again = screen.getByRole("button", { name: "Try again" });
+    expect([again.className, ...size(again)]).toEqual([PRESS, ...QUIET]);
+    cleanup();
+    signedIn([{ ...SIGNALS[0], ref: "hwg_gone" }]);
+    await mount();
+    expect(screen.getByRole("button", { name: "Add a client" }).className).toBe(PRESS);
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    const back = screen.getByRole("button", { name: "Back to clients" });
+    expect([back.className, ...size(back)]).toEqual([PRESS, ...QUIET]);
   });
 });
 
@@ -657,6 +722,34 @@ describe("TrainerView: the invite sheet", () => {
       expect(plate.style[side] === "" || parseFloat(plate.style[side]) >= 0, side).toBe(true);
     }
     expect(plate.style.width).toBe("185px");
+  });
+
+  it("no control in its sheets carries a press class; their buttons are the house quiet button, and the code has no letter-spacing", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(issuedAt);
+    signedIn();
+    inviteRoutes();
+    await mount();
+    await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
+    await flush();
+    const invite = screen.getByRole("dialog", { name: "Show them this" });
+    expect(invite.classList.contains("forge-sheet-ground")).toBe(true);
+    for (const name of ["Share link", "Cancel code"]) expect(size(within(invite).getByRole("button", { name })), name).toEqual(QUIET);
+    expect(pressIn(invite)).toEqual([]);
+    const code = invite.querySelector("[data-code]");
+    expect(code.style.letterSpacing).toBe("");
+    expect(code.style.fontFamily).toContain("--font-spline");
+    await act(async () => { fireEvent.click(within(invite).getByText("Cancel code")); });
+    await flush();
+    expect(size(within(invite).getByRole("button", { name: "New code" }))).toEqual(QUIET);
+    expect(pressIn(invite)).toEqual([]);
+    fireEvent.click(within(invite).getByRole("button", { name: "Done" }));
+
+    fireEvent.click(screen.getByText("Sign out"));
+    const out = screen.getByRole("dialog", { name: "Sign out" });
+    expect(out.classList.contains("forge-sheet-ground")).toBe(true);
+    for (const name of ["This device", "Everywhere"]) expect(size(within(out).getByRole("button", { name })), name).toEqual(QUIET);
+    expect(pressIn(out)).toEqual([]);
   });
 
   it("once the code is cancelled, used or run out, the status leads in ink and the dead code fades", async () => {

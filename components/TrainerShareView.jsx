@@ -434,7 +434,7 @@ export default function TrainerShareView() {
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 14, color: T.ink, overflowWrap: "anywhere" }}>{what}</div>
                         <div style={{ ...small, marginTop: 2 }}>{changeStatusText(c, share)}</div>
-                        {warn && <div style={{ ...small, color: T.under, marginTop: 2 }}>{warn}</div>}
+                        {warn && <div style={{ ...small, marginTop: 2 }}>{warn}</div>}
                       </div>
                       {canUndo(c) && (
                         <button type="button" onClick={() => onUndo(c.id, [c])} aria-disabled={!!undoing} aria-label={`Undo ${what}`} className="forge-press"

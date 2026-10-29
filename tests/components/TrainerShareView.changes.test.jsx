@@ -96,6 +96,12 @@ describe("the list", () => {
     expect(document.body.textContent).not.toContain("nonsense");
   });
 
+  it("a warning reads in ink2, never the under-minimum steel", async () => {
+    server.status = status({ changes: [change({ warnings: ["big_drop"], before: 120, after: 100, target: "Barbell Deadlift" })] });
+    await renderView();
+    expect(screen.getByText("A big drop from your last top set.").style.color).toBe("var(--ink-2)");
+  });
+
   it("with changes on, the live line says what they see and can change; off, that they can't", async () => {
     server.status = status();
     await renderView();

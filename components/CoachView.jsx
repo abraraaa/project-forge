@@ -134,7 +134,7 @@ export default function CoachView() {
                     <div style={{fontSize:12,color:T.ink3}}>{c.lastRead ? `Read ${ago(c.lastRead)}` : "Not used yet"}</div>
                   </div>
                   <button type="button" onClick={() => onDisconnect(c.id)} disabled={busyId === c.id} className="forge-press forge-tint"
-                    style={{flexShrink:0,height:36,padding:"0 12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,color:T.ink2}}>
+                    style={{flexShrink:0,height:36,padding:"0 12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.rSm,cursor:"pointer",fontFamily:T.text,fontSize:13,color:T.ink2}}>
                     {busyId === c.id ? "…" : "Disconnect"}
                   </button>
                 </div>
