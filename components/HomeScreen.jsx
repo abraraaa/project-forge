@@ -29,6 +29,7 @@ import { planStartWeight, isWorkingWeight } from "@/lib/programme-resolve";
 import { getLoadType, parseTimedReps, usesOptionalChrome } from "@/lib/lift-translations";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
 import { fetchWithTimeout } from "@/lib/net";
+import { resetConfigFor } from "@/lib/profile-actions";
 
 // Human-readable "X ago" — tuned for < 12h windows (draft expiry cutoff).
 function formatAgo(ms) {
@@ -70,6 +71,12 @@ function rowPlan(ex, { reps, weights, bodyweight, anchors }) {
 // re-focus on every render).
 const focusOnMount = (el) => { el?.focus(); };
 
+// Two rotation configs hold the same pick in every slot.
+function samePicks(a, b) {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k]?.name === b[k]?.name);
+}
+
 // Notices poll floor: at most one GET per minute, however often the app
 // comes back to the foreground.
 const NOTICE_FLOOR_MS = 60_000;
@@ -102,7 +109,18 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // claimed from a surface that shows the ConsentLine.
   const [pnChipOpen, setPnChipOpen] = useState(false);
   const pnShowCard = pnStage === "card" || (pnStage === "chip" && pnChipOpen);
-  const hasRotationDrift = Object.keys(programmeBlock?.config || {}).length > 0;
+  // The link offers a reset only when one would change the week. A reset
+  // re-plans the template when it breaks a band under the chosen main lifts
+  // (Strong with Romanian Deadlift), seeded, so a block already holding that
+  // re-plan is where a reset lands, not drift.
+  const rotationConfig = programmeBlock?.config || {};
+  const blockNumber = programmeBlock?.number;
+  const rotated = Object.keys(rotationConfig).length > 0;
+  const resetConfig = useMemo(
+    () => (rotated ? resetConfigFor({ number: blockNumber, focus: userFocus, mainLifts }) : null),
+    [rotated, blockNumber, userFocus, mainLifts],
+  );
+  const hasRotationDrift = rotated && !samePicks(rotationConfig, resetConfig);
   const handleResetTap = () => {
     if (!resetArmed) {
       setResetArmed(true);

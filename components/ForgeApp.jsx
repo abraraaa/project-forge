@@ -916,7 +916,9 @@ export default function ForgeApp(){
     });
   }, [activeProfile]);
 
-  // After rotation summary acknowledged, hand off to the session route.
+  // After rotation summary acknowledged, hand off to the session route. A
+  // reset's summary closes instead: the reset was made on home, not on the
+  // way into a session, so it stays there.
   // Declared ABOVE the early returns, deliberately: the no-active-profile
   // return below references this in its JSX — declared in its old spot
   // (after the returns) it sat in the temporal dead zone for that path and
@@ -924,8 +926,9 @@ export default function ForgeApp(){
   // signed out (typecheck widening found it, #63). startSessionRoute is
   // resolved at call time, so the body may reference later declarations.
   const handleRotationContinue = () => {
+    const reset = rotationSummary?.reason === "reset";
     setRotationSummary(null);
-    startSessionRoute();
+    if (!reset) startSessionRoute();
   };
 
   // Onboarding — first-time intro, shown before ProfileScreen
@@ -1061,12 +1064,14 @@ export default function ForgeApp(){
   const handleRotationCancel = () => setRotationPreview(null);
 
   // Reset rotation drift to SESSIONS defaults (preserves block number/start),
-  // re-planned when the defaults break a band under the chosen main lifts.
+  // re-planned when the defaults break a band under the chosen main lifts;
+  // that re-plan's summary shows in the rotation summary sheet.
   // Used by the "Reset accessories" link on home for users who've over-rotated.
   const handleResetProgramme = () => {
     if (!activeProfile) return;
-    const { next } = resetProgrammeCore(activeProfile);
+    const { next, summary } = resetProgrammeCore(activeProfile);
     setProgrammeBlock(next);
+    if (summary) setRotationSummary(summary);
   };
 
   const beginSession = () => {
@@ -1715,15 +1720,17 @@ function RotationSummaryModal({summary,onContinue}){
   return (
     <div onKeyDown={onKeyDown} className="forge-scrim forge-scrim-deep" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        {/* Three causes, one sheet: a new block, a focus change, or a
-            main-lift swap that pushed a muscle out of band. Mid-block
-            re-plans keep the block number and must not claim a new one. */}
+        {/* Four causes, one sheet: a new block, a focus change, a main-lift
+            swap that pushed a muscle out of band, or a reset whose template
+            did. Mid-block re-plans keep the block number and must not claim
+            a new one. */}
         <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
           {summary.reason ? "Block" : "New block"} · <span style={{fontFamily:T.measured}}>{summary.blockNumber}</span>
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:30,color:T.ink,marginBottom:8}}>
           {summary.reason === "main_lift" ? "Rebalanced for your lift"
             : summary.reason === "focus" ? `Retuned for ${summary.focus || "your focus"}`
+            : summary.reason === "reset" ? "Reset and rebalanced"
             : "Your programme has rotated"}
         </div>
         <p style={{fontSize:13,color:T.ink2,marginBottom:topDeltas.length?14:18,lineHeight:1.6}}>
@@ -1731,6 +1738,8 @@ function RotationSummaryModal({summary,onContinue}){
             ? `${count} ${count===1?"accessory":"accessories"} swapped so every muscle stays in its range with your new main lift.`
             : summary.reason === "focus"
             ? `${count} ${count===1?"accessory":"accessories"} swapped to match your focus. Main lifts stay the same.`
+            : summary.reason === "reset"
+            ? `${count} ${count===1?"accessory":"accessories"} swapped from the defaults so every muscle stays in its range with your main lifts.`
             : `${count} ${count===1?"accessory":"accessories"} swapped to keep the stimulus fresh. Main lifts stay the same — progressive overload continues.`}
         </p>
         {solvedLine && (
@@ -1757,7 +1766,7 @@ function RotationSummaryModal({summary,onContinue}){
           ))}
         </div>
         <button onClick={onContinue} style={{width:"100%",height:54,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
-          Continue to readiness <Glyph name="arrowRight" size={13}/>
+          {summary.reason === "reset" ? "Done" : <>Continue to readiness <Glyph name="arrowRight" size={13}/></>}
         </button>
       </div>
     </div>

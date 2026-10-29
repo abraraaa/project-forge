@@ -1,7 +1,9 @@
-// What the trainer pane and the session host can reach by static import. The
-// pane ships to the browser, so the server modules (storage, the MCP server,
-// the database) must stay out of its graph, and the validator, the shared
-// programme resolver, storage and the MCP server must not import in a circle.
+// What the trainer pane, the session host and the app shell can reach by
+// static import. The pane ships to the browser, so the server modules
+// (storage, the MCP server, the database) must stay out of its graph; the
+// shell stays off the exercise catalogue, which builds itself when it loads;
+// and the validator, the shared programme resolver, storage and the MCP
+// server must not import in a circle.
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -116,6 +118,18 @@ describe("no import cycle through storage, the trainer sync, the validator, the 
     it(`${f} does not reach itself`, () => {
       const back = edges(f).filter((to) => reach(to).has(f));
       expect(back.map((to) => `${f} -> ${/** @type {string[]} */ (reach(to).get(f)).join(" -> ")}`)).toEqual([]);
+    });
+  }
+});
+
+describe("the app shell stays off the exercise catalogue", () => {
+  // The re-plans read only the library's revision date, from its own module.
+  it("the profile actions take the revision date from its own module", () => {
+    expect(edges("lib/profile-actions.js")).toContain("lib/library-revised.js");
+  });
+  for (const f of ["components/ForgeApp.jsx", "lib/profile-actions.js"]) {
+    it(`${f} does not reach lib/library.js`, () => {
+      expect(leaks(f, ["lib/library.js"])).toEqual([]);
     });
   }
 });
