@@ -241,7 +241,7 @@ describe("GET /api/sync/trainer: status", () => {
     expect(sharing.lookCount).toBe(0);
   });
 
-  it("paused, not ended: the approving passkey gone, the trainer's terms stale, or the trainer role gone", async () => {
+  it("paused, not ended: the approving passkey gone, the trainer's Terms never accepted, or the trainer role gone", async () => {
     db.grants = [trainerGrant("hwg_t1", A, T)];
     expect((await status()).sharing.live).toBe(true);
 
@@ -250,7 +250,11 @@ describe("GET /api/sync/trainer: status", () => {
     expect([s.sharing.live, s.sharing.ref, s.ended]).toEqual([false, "hwg_t1", null]);
 
     db.credentials = db.credentials.map((c) => (c.account_id === A ? { ...c, rp_id: "heatwayve.app" } : c));
+    // An older Terms version is still live; none at all is not.
     db.accounts.get(T).trainer_terms = { version: "draft-2020-01", at: "2020-01-01T00:00:00.000Z", adult: true };
+    s = await status();
+    expect(s.sharing.live).toBe(true);
+    db.accounts.get(T).trainer_terms = null;
     s = await status();
     expect(s.sharing.live).toBe(false);
 

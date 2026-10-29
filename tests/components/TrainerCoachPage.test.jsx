@@ -139,7 +139,7 @@ describe("the page", () => {
     [{ client: { name: "Sam" }, view: { edits: "off", sessions: [] } }, 200, "Changes are off for Sam. Ask them to turn changes on in Profile."],
     [{ client: { name: "Sam" }, view: { edits: "fresh", sessions: [] } }, 200, "Ask Sam for a fresh code to run a session with them."],
     [{}, 401, "Sign in on your trainer page first."],
-    [{ needsTerms: true }, 403, "Agree to the updated Trainer Terms on your trainer page first."],
+    [{ needsTerms: true }, 403, "Agree to the Trainer Terms on your trainer page first."],
     [{}, 503, "Couldn't open that just now."],
   ])("answers in its own words: %#", async (body, status, words) => {
     stub({ "/api/trainer/client": [status, body] });

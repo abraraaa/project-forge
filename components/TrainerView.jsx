@@ -5,8 +5,9 @@
 // /trainer: the trainer's dashboard. Signed out it asks for a Heatwayve name
 // and a quiet Face ID (no lifter cookies are left on this device). Someone
 // who isn't a trainer applies here; the admin sets up directly, and a trainer
-// accepts changed Trainer Terms here. Signed in it lists the clients who
-// share with them under the trainer's own training (the "You" row), opens one
+// who never accepted the Trainer Terms does so here; a Terms change shows
+// nothing, as any version accepted stays live. Signed in it lists the clients
+// who share with them under the trainer's own training (the "You" row), opens one
 // at a time in the pane, and shows an invite code. For a client who has the
 // trainer's changes on, the pane sends plan changes through
 // /api/trainer/change; a send needs a Face ID within the day, so the pane can
@@ -180,7 +181,7 @@ const rowLine = { display: "block", fontSize: 12, color: T.ink3, marginTop: 3, l
 export default function TrainerView() {
   const router = useRouter();
   // loading · signedOut · apply (not a trainer yet) · upgrade (the admin, not a
-  // trainer yet) · terms (terms changed) · error · roster
+  // trainer yet) · terms (never accepted the Trainer Terms) · error · roster
   const [phase, setPhase] = useState("loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -223,8 +224,8 @@ export default function TrainerView() {
     ceremony.current = null; paneSeq.current += 1; inviteSeq.current += 1; entryRef.current = null;
   };
 
-  // The terms changed under an open session: no client stays half-open, so
-  // the roster comes back clean once they agree again.
+  // A session with no Terms accepted: no client stays half-open, so the
+  // roster comes back clean once they agree.
   const toTerms = () => {
     paneSeq.current += 1; entryRef.current = null;
     setOpen(null); setPane(null);
@@ -358,7 +359,7 @@ export default function TrainerView() {
     ceremony.current = null;
     setBusy(false);
     if (r.status === 200) { await loadRoster(); return; }
-    // Setting up directly is the admin's (and a trainer re-agreeing); anyone else applies.
+    // Setting up directly is the admin's (and a trainer who never accepted); anyone else applies.
     if (r.status === 403 && r.body.apply) { setPhase("apply"); return; }
     if (r.status === 409 && r.body.needsNativePasskey) { setLegacy(true); return; }
     if (r.status === 503) { setNotOpen(true); return; }
@@ -825,12 +826,12 @@ function ApplyPanel({ who, askName, nameRef, busy, result, about, link, onAbout,
   );
 }
 
-// The admin setting up directly, or a trainer whose Trainer Terms changed.
+// The admin setting up directly, or a trainer who never accepted the Trainer Terms.
 function UpgradePanel({ terms, who, askName, nameRef, busy, onAgree }) {
   return (
     <>
       <div style={kickerStyle}>For trainers</div>
-      <h1 style={h1Style}>{terms ? "The Trainer Terms changed" : "Coach on Heatwayve"}</h1>
+      <h1 style={h1Style}>{terms ? "The Trainer Terms" : "Coach on Heatwayve"}</h1>
       <Pitch who={who}/>
       {askName && <NameField inputRef={nameRef} disabled={busy}/>}
       <TermsCommit label={terms ? "Agree with Face ID" : "Set me up as a trainer"} busy={busy} onCommit={onAgree}/>

@@ -1338,7 +1338,7 @@ export function CoachedSessionPage() {
       } else if (r.status === 401) {
         setState({ text: "Sign in on your trainer page first." });
       } else if (r.status === 403 && b.needsTerms) {
-        setState({ text: "Agree to the updated Trainer Terms on your trainer page first." });
+        setState({ text: "Agree to the Trainer Terms on your trainer page first." });
       } else if (r.status === 0) {
         setState({ text: "You're offline. Open it again when you're back." });
       } else {

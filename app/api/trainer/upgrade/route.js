@@ -15,8 +15,9 @@ export const dynamic = "force-dynamic";
 // POST /api/trainer/upgrade  { authToken, profile, terms: { version }, adult: true }
 //   -> { ok, name } + the trainer cookie.
 // A fresh heatwayve.app Face ID, 18+ and the current Trainer Terms. Two
-// callers only: a trainer re-accepting changed terms, and the admin's own
-// self-grant. Everyone else applies (/api/trainer/apply): 403 { apply }.
+// callers only: a trainer who never accepted the Terms, and the admin's own
+// self-grant. A Terms bump never sends a trainer back here: any version
+// accepted stays live. Everyone else applies (/api/trainer/apply): 403 { apply }.
 // Free; plan is never written.
 export async function POST(request) {
   const limited = rateLimit(request, "trainer-upgrade", 5) || await rateLimitShared(request, "trainer-upgrade", 10);

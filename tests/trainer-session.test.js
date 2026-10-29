@@ -266,17 +266,35 @@ describe("POST /api/trainer/session", () => {
     expect((await freshCeremony({ authToken, profile: "leo" })).identity.accountId).toBe(L);
   });
 
-  it("stale Trainer Terms give 403 needsTerms with the name, nothing written", async () => {
-    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" };
+  it("no Trainer Terms ever accepted: 403 needsTerms with the name, nothing written", async () => {
+    db.accounts.get(T).trainer_terms = null;
     const res = await signIn(mint(T, { cred: "cT" }));
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ needsTerms: true, name: "Tia" });
+    expect(res.headers.get("set-cookie")).toBeNull();
     expect(writes()).toEqual([]);
   });
 
-  it("terms without the 18+ attestation are stale too", async () => {
+  it("terms without the 18+ attestation are not accepted", async () => {
     db.accounts.get(T).trainer_terms = { version: TRAINER_TERMS_VERSION, at: CURRENT.at };
     expect((await signIn(mint(T, { cred: "cT" }))).status).toBe(403);
+    db.accounts.get(T).trainer_terms = { version: "older", at: CURRENT.at };
+    expect((await signIn(mint(T, { cred: "cT" }))).status).toBe(403);
+    expect(writes()).toEqual([]);
+  });
+
+  it("an older Terms version signs in with exactly a current one's reply; its record is not touched", async () => {
+    const older = { ...CURRENT, version: "older" };
+    db.accounts.get(T).trainer_terms = older;
+    const res = await signIn(mint(T, { cred: "cT" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toStrictEqual({ ok: true, name: "Tia" });
+    // The usual two writes, and none to accounts.
+    expect(writes().map((c) => c.q.trim().split(/\s+/).slice(0, 3).join(" "))).toEqual(["INSERT INTO auth_tokens", "UPDATE auth_tokens SET"]);
+    expect(db.accounts.get(T).trainer_terms).toEqual(older);
+    const g = await trainerGate(gateReq(withCookie(res.cookies.get(TRAINER_COOKIE).value)));
+    expect(Object.keys(g).sort()).toEqual(["account", "authAt", "identity", "refresh"]);
+    expect(g).toMatchObject({ identity: { accountId: T } });
   });
 
   it("live: a trainer other than the admin signs in and reaches the trainer gate", async () => {
@@ -366,6 +384,7 @@ describe("POST /api/trainer/upgrade", () => {
 
   const refused = {
     "an unknown terms version": { terms: { version: "draft-2020-01" } },
+    "the previous terms version": { terms: { version: "draft-2026-10-05b" } },
     "no terms": { terms: undefined },
     "a bare version string": { terms: TRAINER_TERMS_VERSION },
     "adult false": { adult: false },
@@ -392,15 +411,16 @@ describe("POST /api/trainer/upgrade", () => {
     expect(db.accounts.get(L).roles).toEqual(["lifter"]);
   });
 
-  it("live: a trainer other than the admin re-accepts changed terms", async () => {
+  it("live: a trainer other than the admin on an older version who calls upgrade is stamped with the current version", async () => {
     process.env.ADMIN_ACCOUNT_ID = T;
     db.accounts.get(N).trainer_terms = { ...CURRENT, version: "older" };
     const res = await post(upgradePOST, "/api/trainer/upgrade", { authToken: mint(N, { cred: "cN" }), profile: "nia", terms: { version: TRAINER_TERMS_VERSION }, adult: true });
     expect(res.status).toBe(200);
     expect(db.accounts.get(N)).toMatchObject({ roles: ["lifter", "trainer"], trainer_terms: { version: TRAINER_TERMS_VERSION, adult: true } });
+    expect(await trainerGate(gateReq(withCookie(res.cookies.get(TRAINER_COOKIE).value)))).toMatchObject({ identity: { accountId: N } });
   });
 
-  it("with the switch closed, a trainer other than the admin may not re-accept: 503, nothing written", async () => {
+  it("with the switch closed, a trainer other than the admin on an older version may not call upgrade: 503, nothing written", async () => {
     switchLive.value = false;
     process.env.ADMIN_ACCOUNT_ID = T;
     db.accounts.get(N).trainer_terms = { ...CURRENT, version: "older" };
@@ -410,7 +430,7 @@ describe("POST /api/trainer/upgrade", () => {
     expect(writes()).toEqual([]);
   });
 
-  it("the admin, already a trainer, re-accepts changed terms: the terms overwritten, the role kept once", async () => {
+  it("the admin, already a trainer on an older version, who calls upgrade is stamped with the current version, the role kept once", async () => {
     process.env.ADMIN_ACCOUNT_ID = T;
     db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" };
     const res = await post(upgradePOST, "/api/trainer/upgrade", { authToken: mint(T, { cred: "cT" }), profile: "tia", terms: { version: TRAINER_TERMS_VERSION }, adult: true });
@@ -472,11 +492,25 @@ describe("trainerGate", () => {
     expect((await trainerGate(gateReq(withCookie(session(T))))).fail.status).toBe(401);
   });
 
-  it("stale terms are 403 needsTerms", async () => {
-    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" };
-    const g = await trainerGate(gateReq(withCookie(session(T))));
+  it("no Terms accepted is 403 needsTerms, nothing written", async () => {
+    const t = session(T);
+    db.accounts.get(T).trainer_terms = null;
+    const g = await trainerGate(gateReq(withCookie(t)));
     expect(g.fail.status).toBe(403);
     expect(await g.fail.json()).toEqual({ needsTerms: true });
+    expect(writes()).toEqual([]);
+  });
+
+  it("an older Terms version passes with the same shape as the current one, nothing written", async () => {
+    const t = session(T);
+    const current = await trainerGate(gateReq(withCookie(t)));
+    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "older" };
+    const g = await trainerGate(gateReq(withCookie(t)));
+    expect("fail" in g).toBe(false);
+    expect(Object.keys(g).sort()).toEqual(Object.keys(current).sort());
+    expect(Object.keys(g).sort()).toEqual(["account", "authAt", "identity", "refresh"]);
+    expect(g).toMatchObject({ identity: { accountId: T } });
+    expect(writes()).toEqual([]);
   });
 
   it("refuses once the passkey that signed it in is gone from the index or not native", async () => {
