@@ -1692,13 +1692,14 @@ describe("assisted lifts around the progression", () => {
   });
   const ex = (sets, reps = 8) => ({ name: "Assisted Pull-Up", loadType: ASSISTED, sets, prescribed: { sets: sets.length, reps } });
 
-  it("the top set is the least assistance among earned sets; 0 counts; null only with no kg logged", () => {
+  it("the top set is the least assistance among earned sets; 0 counts; the stored assistance when no earned set logged a kg", () => {
     expect(topSetWeight(ex([set(20), set(17.5), set(20)]), 99, ASSISTED)).toBe(17.5);
     expect(topSetWeight(ex([set(5), set(0), set(5)]), 99, ASSISTED)).toBe(0);
     // A reach to 15 kg that fell short is not earned; one that met 8 is.
     expect(topSetWeight(ex([set(20), set(20), set(15, 5, 0, { reach: true })]), 99, ASSISTED)).toBe(20);
     expect(topSetWeight(ex([set(20), set(20), set(15, 8, 1, { reach: true })]), 99, ASSISTED)).toBe(15);
-    expect(topSetWeight(ex([set(null), set(null)]), 99, ASSISTED)).toBeNull();
+    expect(topSetWeight(ex([set(null), set(null)]), 99, ASSISTED)).toBe(99);
+    expect(topSetWeight(ex([set(null), set(null)]), null, ASSISTED)).toBeNull();
     // A belted pull-up still reads the most added kg.
     expect(topSetWeight({ sets: [{ weight: 10, reps: 8 }, { weight: 12.5, reps: 8 }], prescribed: { reps: 8 } }, 99, "loaded_bodyweight")).toBe(12.5);
   });
@@ -1783,5 +1784,54 @@ describe("assisted lifts around the progression", () => {
       expect(r.weight).toBe(2.5);
       expect(r.reps).toBe(10);
     });
+  });
+
+  // No earned set logged a kg: the stored assistance is the basis, not 0.
+  describe("a session with no earned assistance reads the stored 20 kg", () => {
+    const stored = {
+      currentWeight: 20, currentRepRange: { reps: 8, sets: 3, baseReps: 8 },
+      consecutiveHolds: 0, consecutiveAdds: 0, stallSignal: null, sessionsCount: 6, history: [],
+    };
+    const next = (sets) => computeNextPrescription({
+      liftName: "Assisted Pull-Up",
+      history: [buildSession({ exercises: [{ ...buildExercise({ name: "Assisted Pull-Up", muscle: "Back", sets, prescribed: { sets: 3, reps: 8 } }), loadType: ASSISTED }] })],
+      liftState: stored,
+      context: { readiness: "normal", loadType: ASSISTED },
+    });
+
+    it("a heavy miss whose only kg is on an unearned reach puts two rungs back: 22.5", () => {
+      const r = next([set(null, 4, 0), set(null, 4, 0), set(15, 4, 0, { reach: true })]);
+      expect(r.decision).toBe("DROP_10");
+      expect(r.weight).toBe(22.5);
+    });
+
+    it("a session of only unearned reach sets holds the stored 20, not 0", () => {
+      const r = next([set(15, 5, 0, { reach: true }), set(15, 5, 0, { reach: true }), set(15, 4, 0, { reach: true })]);
+      expect(r.decision).toBe("HOLD");
+      expect(r.weight).toBe(20);
+    });
+
+    it("a session that logged 0 still reads 0: a full session holds at 0", () => {
+      const r = next([set(0), set(0), set(0)]);
+      expect(r.decisionReason).toBe("assistance_at_zero");
+      expect(r.weight).toBe(0);
+    });
+  });
+});
+
+describe("reconcile on an assisted lift honours the reach contract", () => {
+  const ASSISTED = "assisted_bodyweight";
+  const set = (weight, reps, extra = {}) => ({ weight, reps, rir: 2, loadType: ASSISTED, ...extra });
+  const ex = (sets) => ({ name: "Pull-Up", loadType: ASSISTED, sets, prescribed: { sets: 3, reps: 8, weight: 20 } });
+  const state = { currentWeight: 20, consecutiveHolds: 0, consecutiveAdds: 0, history: [] };
+
+  it("an unearned reach set with less help does not move the working assistance", () => {
+    const out = reconcileLiftStateWithSession(state, ex([set(20, 8), set(20, 8), set(15, 5, { reach: true })]));
+    expect(out.currentWeight).toBe(20);
+  });
+
+  it("a reach set that met the target with less help does", () => {
+    const out = reconcileLiftStateWithSession(state, ex([set(20, 8), set(20, 8), set(15, 8, { reach: true })]));
+    expect(out.currentWeight).toBe(15);
   });
 });

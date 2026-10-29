@@ -20,6 +20,12 @@ describe("recentForExercise on an assisted lift", () => {
     expect(recentForExercise(history, "Assisted Pull-Up", 1)[0].topSet.weight).toBe(0);
   });
 
+  it("reads the assisted type from the sets when the exercise has none", () => {
+    const r = rec("2026-10-20", "Assisted Pull-Up", undefined, [[20, 8, 8], [17.5, 8, 9], [20, 8, 8]]);
+    for (const set of r.blocks[0].exercises[0].sets) Object.assign(set, { loadType: "assisted_bodyweight" });
+    expect(recentForExercise([r], "Assisted Pull-Up", 1)[0].topSet.weight).toBe(17.5);
+  });
+
   it("a loaded lift still takes the heaviest set", () => {
     const history = [rec("2026-10-20", "Barbell Back Squat", "external", [[100, 5, 8], [105, 5, 9], [100, 5, 8]])];
     expect(recentForExercise(history, "Barbell Back Squat", 1)[0].topSet.weight).toBe(105);

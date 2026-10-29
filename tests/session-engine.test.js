@@ -510,6 +510,17 @@ describe("a lift's first logged session progresses from what was lifted", () => 
     expect(out.wwUpdates["Assisted Pull-Up"]).toBe(20);
   });
 
+  it("an unlabelled assisted session on a known lift takes a rung of help off: 20 to 18.75", () => {
+    TS.save("p", {
+      ...TS.get("p"),
+      lifts: { "Assisted Pull-Up": { currentWeight: 20, currentRepRange: { reps: 8, sets: 3, baseReps: 8 }, sessionsCount: 4, consecutiveHolds: 0, consecutiveAdds: 0, history: [] } },
+    });
+    const rec = unlabelled(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3, "2026-10-13T10:00:00.000Z"));
+    H.append("p", rec);
+    const out = applySessionToEngine("p", rec);
+    expect(out.wwUpdates["Assisted Pull-Up"]).toBe(18.75);
+  });
+
   it("an assisted session does not re-save the Back anchor it leaves alone", () => {
     const spy = vi.spyOn(TS, "updateMuscleAnchor");
     try {
