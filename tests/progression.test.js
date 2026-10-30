@@ -417,6 +417,287 @@ describe("computeNextPrescription — cooked override", () => {
     });
     expect(result.decision).toBe("HOLD"); // cooked wins — no drop
   });
+
+  // A cooked session never moves an earned working weight: the next W is the
+  // one in force that day, whatever was lifted. The last counted session's top
+  // set predates the add that session earned.
+  const earnedAdd = buildSession({
+    id: "2026-10-20T10:00:00.000Z", date: "2026-10-20",
+    exercises: [buildExercise({
+      sets: [buildSet({ weight: 100, rir: 3 }), buildSet({ weight: 100, rir: 3 }), buildSet({ weight: 100, rir: 3 })],
+      prescribed: { sets: 3, reps: 5, weight: 100 },
+    })],
+  });
+  // Lifted 100, earned 102.5.
+  const afterAdd = { currentWeight: 100, nextPrescribed: 102.5, currentRepRange: { reps: 5, sets: 3, baseReps: 5 }, sessionsCount: 5, consecutiveHolds: 0, consecutiveAdds: 1, stallSignal: null, history: [] };
+  const atKg = (weight) => [buildSet({ weight, rir: 2 }), buildSet({ weight, rir: 2 }), buildSet({ weight, rir: 2 })];
+  // As the session records it: prescribed is W, whatever the drum was set to.
+  const cooked = (sets, prescribed = { sets: 3, reps: 5, weight: 102.5 }) => buildSession({
+    id: "2026-10-27T10:00:00.000Z", date: "2026-10-27", readiness: "cooked",
+    exercises: [buildExercise({ sets, prescribed })],
+  });
+  // As the finalise does: the session being applied is reconciled in first.
+  const reconciled = (session, state = afterAdd) => reconcileLiftStateWithSession(state, session.blocks[0].exercises[0]);
+  const nextAfterCooked = (session, state = afterAdd) => computeNextPrescription({
+    liftName: "Barbell Back Squat",
+    history: [earnedAdd, session],
+    liftState: reconciled(session, state),
+    muscleAnchor: null,
+    context: { readiness: "cooked" },
+  });
+
+  it("a cooked session after an earned add keeps the new weight", () => {
+    const result = nextAfterCooked(cooked(atKg(102.5)));
+    expect(result.decision).toBe("HOLD");
+    expect(result.weight).toBe(102.5);
+    expect(result.decisionReason).toBe("readiness_cooked");
+    expect(result.rationale).toContain("decision_reason=readiness_cooked");
+  });
+
+  it("a cooked session dialled down leaves the weight in force", () => {
+    for (const kg of [97.5, 87.5]) {
+      expect(nextAfterCooked(cooked(atKg(kg))), `${kg} kg`).toMatchObject({ decision: "HOLD", weight: 102.5, decisionReason: "readiness_cooked" });
+    }
+  });
+
+  it("a heavier or failed set on a cooked day never raises the weight", () => {
+    const failedSingle = [buildSet({ weight: 107.5, reps: 1, rir: 0 }), buildSet({ weight: 95, rir: 2 }), buildSet({ weight: 95, rir: 2 })];
+    expect(nextAfterCooked(cooked(failedSingle))).toMatchObject({ decision: "HOLD", weight: 102.5, decisionReason: "readiness_cooked" });
+  });
+
+  it("the cooked record's prescription is the weight in force: a trainer's W holds", () => {
+    // W moved to 105 outside the engine, whose last prescription was 102.5.
+    expect(nextAfterCooked(cooked(atKg(100), { sets: 3, reps: 5, weight: 105 }))).toMatchObject({ decision: "HOLD", weight: 105 });
+  });
+
+  it("a cooked record without a prescribed weight leaves the engine's last prescription", () => {
+    expect(nextAfterCooked(cooked(atKg(97.5), { sets: 3, reps: 5 }))).toMatchObject({ decision: "HOLD", weight: 102.5 });
+  });
+
+  it("with no prescription on the record or the state, the last counted top set holds", () => {
+    const result = nextAfterCooked(cooked(atKg(97.5), { sets: 3, reps: 5 }), { ...afterAdd, nextPrescribed: undefined });
+    expect(result).toMatchObject({ decision: "HOLD", weight: 100 });
+  });
+
+  it("when the newest record is counted, its prescription gives way to the add it earned", () => {
+    const result = computeNextPrescription({
+      liftName: "Barbell Back Squat",
+      history: [earnedAdd],
+      liftState: afterAdd,
+      muscleAnchor: null,
+      context: { readiness: "cooked" },
+    });
+    expect(result).toMatchObject({ decision: "HOLD", weight: 102.5 });
+  });
+
+  it("an assisted cooked session leaves the help in force, with more help or less", () => {
+    const LIFT = "Assisted Pull-Up";
+    const help = (kg, reps, rir) => ({ ...buildSet({ weight: kg, reps, rir, effectiveLoad: 80 - kg }), loadType: "assisted_bodyweight" });
+    const earned = buildSession({
+      id: "2026-10-20T10:00:00.000Z", date: "2026-10-20",
+      exercises: [buildExercise({ name: LIFT, sets: [help(20, 6, 3), help(20, 6, 3), help(20, 6, 3)], prescribed: { sets: 3, reps: 6, weight: 20 } })],
+    });
+    const state = { ...afterAdd, currentWeight: 20, nextPrescribed: 18.75, currentRepRange: { reps: 6, sets: 3, baseReps: 6 } };
+    // 18.75 kg of help in force after the add: a day at 25 kg, and one with a failed set at 15.
+    for (const sets of [[help(25, 6, 2), help(25, 6, 2), help(25, 6, 2)], [help(15, 2, 0), help(18.75, 6, 2), help(18.75, 6, 2)]]) {
+      const session = buildSession({
+        id: "2026-10-27T10:00:00.000Z", date: "2026-10-27", readiness: "cooked",
+        exercises: [buildExercise({ name: LIFT, sets, prescribed: { sets: 3, reps: 6, weight: 18.75 } })],
+      });
+      const result = computeNextPrescription({
+        liftName: LIFT,
+        history: [earned, session],
+        liftState: reconcileLiftStateWithSession(state, session.blocks[0].exercises[0]),
+        muscleAnchor: null,
+        context: { readiness: "cooked", loadType: "assisted_bodyweight" },
+      });
+      expect(result, `${sets[0].weight} kg`).toMatchObject({ decision: "HOLD", weight: 18.75, decisionReason: "readiness_cooked" });
+    }
+  });
+
+  it("a belted lift keeps its added kg through an unbelted cooked day", () => {
+    const LIFT = "Pull-Up";
+    const belt = (kg, rir) => ({ ...buildSet({ weight: kg, reps: 8, rir, effectiveLoad: 80 + kg }), loadType: "loaded_bodyweight" });
+    const earned = buildSession({
+      id: "2026-10-20T10:00:00.000Z", date: "2026-10-20",
+      exercises: [buildExercise({ name: LIFT, sets: [belt(10, 3), belt(10, 3), belt(10, 3)], prescribed: { sets: 3, reps: 8, weight: 10 } })],
+    });
+    const session = buildSession({
+      id: "2026-10-27T10:00:00.000Z", date: "2026-10-27", readiness: "cooked",
+      exercises: [buildExercise({ name: LIFT, sets: [belt(0, 2), belt(0, 2), belt(0, 2)], prescribed: { sets: 3, reps: 8, weight: 11.25 } })],
+    });
+    const state = { ...afterAdd, currentWeight: 10, nextPrescribed: 11.25, currentRepRange: { reps: 8, sets: 3, baseReps: 8 } };
+    const result = computeNextPrescription({
+      liftName: LIFT,
+      history: [earned, session],
+      liftState: reconcileLiftStateWithSession(state, session.blocks[0].exercises[0]),
+      muscleAnchor: null,
+      context: { readiness: "cooked", loadType: "loaded_bodyweight" },
+    });
+    expect(result).toMatchObject({ decision: "HOLD", weight: 11.25, decisionReason: "readiness_cooked" });
+  });
+
+  // No counted session means no working weight yet: what was lifted stands,
+  // as a first session's does.
+  it("a lift whose sessions are all cooked holds what it lifted, never the anchor", () => {
+    const LIFT = "Face-Away Cable Row";
+    const row = (id) => buildSession({
+      id, date: id.slice(0, 10), readiness: "cooked",
+      exercises: [buildExercise({ name: LIFT, muscle: "Back", sets: [0, 1, 2].map(() => ({ ...buildSet({ weight: 26, reps: 10, rir: 1 }), loadType: "cable" })) })],
+    });
+    const first = row("2026-10-11T10:00:00.000Z");
+    const second = row("2026-10-13T10:00:00.000Z");
+    const state = { currentWeight: 26, nextPrescribed: 26, sessionsCount: 1, consecutiveHolds: 0, stallSignal: null, history: [], currentRepRange: { reps: 10, sets: 3, baseReps: 10 } };
+    const result = computeNextPrescription({
+      liftName: LIFT,
+      history: [first, second],
+      liftState: reconcileLiftStateWithSession(state, second.blocks[0].exercises[0]),
+      muscleAnchor: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" },
+      context: { readiness: "cooked", loadType: "cable" },
+    });
+    expect(result).toMatchObject({ decision: "HOLD", weight: 26, decisionReason: "readiness_cooked" });
+    expect(result.rationale).toEqual(["last_session_cooked", "decision_reason=readiness_cooked"]);
+  });
+
+  // Not the 26 the first one held, below it or above: with no counted session
+  // there is no W to keep.
+  for (const kg of [20, 30]) {
+    it(`a later cooked session, still with no counted one, takes its own top set: 26 then ${kg} holds ${kg}`, () => {
+      const LIFT = "Face-Away Cable Row";
+      const row = (id, weight) => buildSession({
+        id, date: id.slice(0, 10), readiness: "cooked",
+        exercises: [buildExercise({ name: LIFT, muscle: "Back", sets: [0, 1, 2].map(() => ({ ...buildSet({ weight, reps: 10, rir: 1 }), loadType: "cable" })) })],
+      });
+      const first = row("2026-10-11T10:00:00.000Z", 26);
+      const second = row("2026-10-13T10:00:00.000Z", kg);
+      // As the first cooked session left it.
+      const state = { currentWeight: 26, nextPrescribed: 26, sessionsCount: 1, consecutiveHolds: 0, stallSignal: null, history: [], currentRepRange: { reps: 10, sets: 3, baseReps: 10 } };
+      const result = computeNextPrescription({
+        liftName: LIFT,
+        history: [first, second],
+        liftState: reconcileLiftStateWithSession(state, second.blocks[0].exercises[0]),
+        muscleAnchor: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" },
+        context: { readiness: "cooked", loadType: "cable" },
+      });
+      expect(result).toMatchObject({ decision: "HOLD", weight: kg, decisionReason: "readiness_cooked" });
+    });
+  }
+
+  it("recovery sessions 2-3 take the standard path, cooked hold included", () => {
+    const session = cooked(atKg(97.5));
+    const result = computeRecoveryPrescription("Barbell Back Squat", { ...reconciled(session), inRecoveryUntil: 2 }, [earnedAdd, session], { readiness: "cooked" });
+    expect(result).toMatchObject({ decision: "HOLD", weight: 102.5, mesocyclePhase: "recovery" });
+  });
+});
+
+// A cooked day holds reps on every path too (README: a cooked rating forces a
+// hold outright): the target in force stays, the climb and the run of adds
+// wait, and the next counted session carries on as if it had not happened.
+describe("a cooked day holds reps on every path", () => {
+  // As the finalise does: reconcile the session in, prescribe, update.
+  const fold = (liftName, records, state, context = {}) => records.reduce(({ liftState }, rec, i) => {
+    const ex = rec.blocks[0].exercises[0];
+    const reconciled = reconcileLiftStateWithSession(liftState, ex);
+    const prescription = computeNextPrescription({
+      liftName, history: records.slice(0, i + 1), liftState: reconciled, muscleAnchor: null,
+      context: { ...context, readiness: rec.readiness },
+    });
+    return { prescription, liftState: updateLiftStateFromSession(reconciled, rec, ex, prescription) };
+  }, { prescription: null, liftState: state });
+  const kept = (s) => ({
+    consecutiveAdds: s.consecutiveAdds, consecutiveHolds: s.consecutiveHolds, consecutiveLightMisses: s.consecutiveLightMisses,
+    stallSignal: s.stallSignal, currentRepRange: s.currentRepRange, nextPrescribed: s.nextPrescribed,
+  });
+  const moves = (p) => ({
+    weight: p.weight, reps: p.reps, decision: p.decision, decisionReason: p.decisionReason,
+    repRangeChanged: p.repRangeChanged, repRange: p.repRange,
+  });
+  const on = (day, readiness, exercise) => buildSession({ id: `2026-10-${day}T10:00:00.000Z`, date: `2026-10-${day}`, readiness, exercises: [exercise] });
+
+  const repLifts = [
+    ["Push-Up", { weight: null, loadType: "bodyweight" }, { pureBodyweight: true, loadType: "bodyweight" }],
+    // A belted lift with no belt on: its unloaded branch.
+    ["Pull-Up", { weight: 0, loadType: "loaded_bodyweight", effectiveLoad: 80 }, { loadType: "loaded_bodyweight" }],
+  ];
+  for (const [name, load, context] of repLifts) {
+    const at = (day, readiness, reps) => on(day, readiness, buildExercise({ name, sets: [0, 1, 2].map(() => ({ ...load, reps, rir: 3 })) }));
+    // Inside an unloaded climb from 9: 10 met with 3 in reserve climbs to 11.
+    const start = {
+      currentWeight: load.weight, sessionsCount: 5, consecutiveAdds: 1, consecutiveHolds: 0, consecutiveLightMisses: 0,
+      stallSignal: null, history: [], currentRepRange: { reps: 10, sets: 3, baseReps: 9, bwClimb: true },
+    };
+    const counted = at(20, "normal", 10);
+    const cookedDay = at(23, "cooked", 11);
+    const next = at(27, "normal", 11);
+
+    it(`${name}: a cooked day holds the target in force and moves no counter`, () => {
+      const before = fold(name, [counted], start, context);
+      const after = fold(name, [counted, cookedDay], start, context);
+      expect(after.prescription).toMatchObject({ reps: 11, decision: "HOLD", decisionReason: "readiness_cooked", repRangeChanged: false });
+      expect(after.prescription.rationale).toContain("decision_reason=readiness_cooked");
+      expect(kept(after.liftState)).toEqual(kept(before.liftState));
+    });
+
+    it(`${name}: a cooked day holds the range in force, not a replay of the counted step`, () => {
+      // Seeded apart from that step (10 met easily gives 11), so the reps can
+      // only come from the range in force.
+      const { liftState } = fold(name, [counted], start, context);
+      const inForce = { ...liftState, currentRepRange: { ...liftState.currentRepRange, reps: 8, baseReps: 8 } };
+      const result = computeNextPrescription({
+        liftName: name, history: [counted, cookedDay],
+        liftState: reconcileLiftStateWithSession(inForce, cookedDay.blocks[0].exercises[0]),
+        muscleAnchor: null, context: { ...context, readiness: "cooked" },
+      });
+      expect(result).toMatchObject({ reps: 8, decision: "HOLD", decisionReason: "readiness_cooked", repRangeChanged: false });
+      expect(result.repRange).toBeUndefined();
+    });
+
+    it(`${name}: the next counted session carries on as if the cooked day had not happened`, () => {
+      const without = fold(name, [counted, next], start, context);
+      const withCooked = fold(name, [counted, cookedDay, next], start, context);
+      expect(without.prescription).toMatchObject({ reps: 12, decision: "ADD" });
+      expect(moves(withCooked.prescription)).toEqual(moves(without.prescription));
+      expect(kept(withCooked.liftState)).toEqual(kept(without.liftState));
+    });
+  }
+
+  const SQUAT = "Barbell Back Squat";
+  const squat = (day, readiness, kg, reps, rir) => on(day, readiness, buildExercise({
+    sets: [0, 1, 2].map(() => buildSet({ weight: kg, reps, rir })), prescribed: { sets: 3, reps, weight: kg },
+  }));
+  const loaded = {
+    currentWeight: 100, nextPrescribed: 100, sessionsCount: 9, consecutiveAdds: 0, consecutiveHolds: 0, consecutiveLightMisses: 0,
+    stallSignal: null, history: [], currentRepRange: { reps: 5, sets: 3, baseReps: 5 },
+  };
+
+  it("a loaded lift: a cooked day mid-climb keeps the climbed target", () => {
+    // Stalled: 5 met at RPE 9 climbs the target to 6.
+    const start = { ...loaded, consecutiveHolds: 3, stallSignal: "stall" };
+    const climbed = squat(20, "normal", 100, 5, 1);
+    const cookedDay = squat(23, "cooked", 100, 6, 2);
+    const next = squat(27, "normal", 100, 6, 1);
+    const before = fold(SQUAT, [climbed], start);
+    expect(before.liftState.currentRepRange).toMatchObject({ reps: 6, baseReps: 5 });
+    const after = fold(SQUAT, [climbed, cookedDay], start);
+    expect(after.prescription).toMatchObject({ reps: 6, decision: "HOLD", decisionReason: "readiness_cooked" });
+    expect(kept(after.liftState)).toEqual(kept(before.liftState));
+    const without = fold(SQUAT, [climbed, next], start);
+    const withCooked = fold(SQUAT, [climbed, cookedDay, next], start);
+    expect(moves(withCooked.prescription)).toEqual(moves(without.prescription));
+    expect(kept(withCooked.liftState)).toEqual(kept(without.liftState));
+  });
+
+  it("a loaded lift: a cooked day inside a run of adds keeps the double rung", () => {
+    // The third add in a row; the fourth, at RIR 4, earns two rungs.
+    const start = { ...loaded, consecutiveAdds: 2 };
+    const third = squat(20, "normal", 100, 5, 4);
+    const fourth = squat(27, "normal", 102.5, 5, 4);
+    const without = fold(SQUAT, [third, fourth], start);
+    const withCooked = fold(SQUAT, [third, squat(23, "cooked", 102.5, 5, 4), fourth], start);
+    expect(without.prescription.rationale).toContain("climbing_double_rung");
+    expect(moves(withCooked.prescription)).toEqual(moves(without.prescription));
+    expect(kept(withCooked.liftState)).toEqual(kept(without.liftState));
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -155,8 +155,9 @@ describe("update checks bypass the HTTP cache", () => {
 });
 
 describe("htmlPathsFor", () => {
-  // The hashes are what a Next 16.3.8 build with an adapter configured wrote:
-  // sha256 of the app entries "/page" and "/profile/main-lifts/page".
+  // The hashes are what Next 16.3.8 and later (re-verified on 16.4.2) write
+  // with an adapter configured: sha256 of the app entries "/page" and
+  // "/profile/main-lifts/page".
   it("names the plain layout first, then the adapter layout keyed by the app entry", () => {
     expect(htmlPathsFor("/")).toEqual([
       "app/index.html",

@@ -37,7 +37,7 @@ import ConsentLine from "@/components/ConsentLine";
 import { consentClaim, isCurrentConsent, CONSENT_COPY, CONSENT_VERSION, EXISTING_HOLDER_CONSENT_TAP } from "@/lib/consent";
 import { APPLY_ROW_COPY, applyRowSub, decisionUnseen } from "@/lib/trainer-apply-copy";
 import { fetchWithTimeout } from "@/lib/net";
-import { todayLocalIso } from "@/lib/dates";
+import { useTodayIso } from "@/lib/use-today-iso";
 import { newFor } from "@/lib/trainer-news";
 
 // Mirrors the server rule (validateProfile in app/api/sync/route.js): path
@@ -253,7 +253,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           setNeedsPasskeyAuth(n);
           return;
         }
-        setWipeError(result.error || "Couldn't reach the cloud. Try again?");
+        // House lines: the server's or the network's own words never reach
+        // the screen. A profile with no passkey must set one up first.
+        setWipeError(result.requiresPasskeySetup ? "Set up a passkey before deleting this profile."
+          : "Couldn't reach the cloud. Try again?");
         return;
       }
     }
@@ -298,7 +301,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         setPasskeyError("Authentication cancelled or failed");
       }
     } catch (e) {
-      setPasskeyError(e.message || "Passkey authentication failed");
+      setPasskeyError(e?.message === "WebAuthn not supported" ? "This browser can't use passkeys." : "Face ID didn't go through. Try again.");
     }
     setPasskeyBusy(false);
   };
@@ -326,7 +329,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         setPasskeyError("Setup cancelled");
       }
     } catch (e) {
-      setPasskeyError(e.message || "Passkey setup failed");
+      setPasskeyError(e?.message === "WebAuthn not supported" ? "This browser can't use passkeys." : "Couldn't set up. Try again.");
     }
     setPasskeyBusy(false);
   };
@@ -427,8 +430,10 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const consentKnown = current ? profileConsent[current] : undefined;
   const trainerRow = trainerRowFor(trainerShare, noticeDots);
   // What's new on the trainer side this week, if anything. A waiting signal
-  // from clients outranks it: the row says that instead, and no "New".
-  const trainerNews = noticeDots?.clients === true ? null : (newFor(todayLocalIso())[0] ?? null);
+  // from clients outranks it: the row says that instead, and no "New". Today
+  // is state, so a Profile left open past midnight judges the new day.
+  const todayIso = useTodayIso();
+  const trainerNews = noticeDots?.clients === true ? null : (newFor(todayIso)[0] ?? null);
   const askConsent = EXISTING_HOLDER_CONSENT_TAP && !!current && webAuthnSupported && profileHasPasskey[current] === true
     && !upgrade?.needed && consentKnown !== undefined && !isCurrentConsent(consentKnown);
   // The other names on this device, for "Not you?": names only.

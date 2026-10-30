@@ -6,7 +6,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { P, PB, F, LS, getLocalProfile } from "../lib/storage.js";
 import { solveRotation, bandViolations, FOCUS_VOLUME_PROFILES } from "../lib/rotation-solver.js";
-import { saveMainLiftCore, saveFocusCore, resetProgrammeCore } from "../lib/profile-actions.js";
+import { saveMainLiftCore, saveFocusCore, resetProgrammeCore, replanSeed, replanBlock, resetConfigFor } from "../lib/profile-actions.js";
+import { ROTATION_REVISED } from "../lib/programme.js";
 import { applyTrainerRows } from "../lib/trainer-sync.js";
 import { validateOp } from "../lib/trainer-change.js";
 import { computeWeeklyVolume, VOLUME_TARGETS } from "../lib/volume-audit.js";
@@ -113,11 +114,11 @@ describe("Strong, Romanian Deadlift, template accessories: every entry point lan
     expect(outOfBand(saved.config, P.getMainLifts("sam"))).toEqual([]);
   });
 
-  it("resetting accessories to defaults with the lift chosen re-plans, same block", () => {
+  it("resetting accessories to defaults with the lift chosen re-plans, same block, and reports it", () => {
     const { config: rotated } = solveRotation({ history: {}, focus: "Strong", mainLifts: { [HINGE]: RDL }, rng: mulberry(7) });
     PB.save({ number: 4, startDate: "2026-10-05", config: rotated, history: { x: { y: "2026-10-05" } } });
     P.setMainLift("sam", HINGE, RDL);
-    const { next } = resetProgrammeCore("sam");
+    const { next, summary } = resetProgrammeCore("sam");
     const saved = PB.get();
     expect(next).toEqual(saved);
     expect(saved.number).toBe(4);
@@ -125,14 +126,30 @@ describe("Strong, Romanian Deadlift, template accessories: every entry point lan
     expect(saved.history).toEqual({});
     expect(Object.keys(saved.config).length).toBeGreaterThan(0);
     expect(outOfBand(saved.config, P.getMainLifts("sam"))).toEqual([]);
+    expect(summary?.reason).toBe("reset");
+    expect(summary?.blockNumber).toBe(4);
+    expect(summary?.report.outOfBand).toEqual([]);
+    expect(summary?.changes.length).toBeGreaterThan(0);
   });
 
-  it("resetting accessories in band lands on the plain template", () => {
+  it("resetting accessories in band lands on the plain template, with nothing to report", () => {
     const { config: rotated } = solveRotation({ history: {}, focus: "Strong", mainLifts: {}, rng: mulberry(7) });
     PB.save({ number: 4, startDate: "2026-10-05", config: rotated, history: {} });
-    const { next } = resetProgrammeCore("sam");
+    const { next, summary } = resetProgrammeCore("sam");
     expect(next.config).toEqual({});
     expect(next.number).toBe(4);
+    expect(summary).toBeNull();
+  });
+
+  it("a reset that re-plans lands on the template's seeded re-plan, the same week every time", () => {
+    const { config: rotated } = solveRotation({ history: {}, focus: "Strong", mainLifts: { [HINGE]: RDL }, rng: mulberry(7) });
+    PB.save({ number: 4, startDate: "2026-10-05", config: rotated, history: {} });
+    P.setMainLift("sam", HINGE, RDL);
+    const first = resetProgrammeCore("sam");
+    expect(first.next.config).toEqual(resetConfigFor({ number: 4, focus: "Strong", mainLifts: P.getMainLifts("sam") }));
+    const again = resetProgrammeCore("sam");
+    expect(again.next.config).toEqual(first.next.config);
+    expect(again.summary.changes).toEqual(first.summary.changes);
   });
 
   it("a focus change with the lift already chosen solves against it", () => {
@@ -141,5 +158,78 @@ describe("Strong, Romanian Deadlift, template accessories: every entry point lan
     const { next, summary } = saveFocusCore("sam", "Strong");
     expect(summary.report.outOfBand).toEqual([]);
     expect(outOfBand(next.config, P.getMainLifts("sam"))).toEqual([]);
+  });
+});
+
+// Two devices making one change solve one week: a re-plan is seeded (the
+// block, the main lifts, the focus and the library revision), so the merge
+// never has two in-band weeks to choose from.
+describe("a re-plan is seeded: one change, one week", () => {
+  const HINGE = "Hex Bar Deadlift";
+  const RDL = "Romanian Deadlift";
+  /** A device holding the synced state: Strong, template accessories, block 2. */
+  const device = () => {
+    localStorage.clear(); P.add("sam"); P.setActive("sam"); F.save("sam", "Strong");
+    PB.save({ number: 2, startDate: "2026-10-19", config: {}, history: {} });
+  };
+  const trainerRow = (letter) => {
+    const local = getLocalProfile("sam");
+    const { change: c } = validateOp({ kind: "mainLift", canonical: HINGE, choice: RDL },
+      { meta: local.meta, history: local.history, todayIso: todayLocalIso(), phase: "apply" });
+    const set = "hws_" + letter.repeat(26);
+    return { id: `${set}.0`, set, kind: c.kind, target: c.target, from: c.from, before: c.before, after: c.after,
+      basis: c.basis, at: 1_000, appliedAt: null, undone: false, by: "Alex" };
+  };
+  /** The week a device lands on after applying one trainer change. */
+  const applied = (letter) => {
+    device();
+    expect(applyTrainerRows("sam", { rows: [trainerRow(letter)] })?.wrote).toBe(true);
+    return PB.get().config;
+  };
+
+  it("the key: the block number, the main lifts in any order, the focus and the rotation revision", () => {
+    const lifts = { [HINGE]: RDL, "Barbell Back Squat": "Front Squat" };
+    const key = replanSeed({ number: 2, mainLifts: lifts, focus: "Strong" });
+    expect(replanSeed({ number: 2, mainLifts: { "Barbell Back Squat": "Front Squat", [HINGE]: RDL }, focus: "Strong" })).toBe(key);
+    // A lift set back to its default is stored as itself and changes nothing.
+    expect(replanSeed({ number: 2, mainLifts: { ...lifts, "Barbell Bench Press": "Barbell Bench Press" }, focus: "Strong" })).toBe(key);
+    expect(key).toContain(ROTATION_REVISED);
+    expect(replanSeed({ number: 3, mainLifts: lifts, focus: "Strong" })).not.toBe(key);
+    expect(replanSeed({ number: 2, mainLifts: { [HINGE]: RDL }, focus: "Strong" })).not.toBe(key);
+    expect(replanSeed({ number: 2, mainLifts: lifts, focus: "Forged" })).not.toBe(key);
+  });
+
+  it("the same key gives the same picks on two calls", () => {
+    const block = { number: 2, focus: "Strong", mainLifts: { [HINGE]: RDL } };
+    const a = replanBlock(block);
+    expect(Object.keys(a.config).length).toBeGreaterThan(0);
+    expect(replanBlock(block).config).toEqual(a.config);
+  });
+
+  it("a reset's week is solved once per key, however often home asks", () => {
+    const block = { number: 2, focus: "Strong", mainLifts: { [HINGE]: RDL } };
+    const week = resetConfigFor(block);
+    expect(Object.keys(week).length).toBeGreaterThan(0);
+    expect(resetConfigFor({ ...block, mainLifts: { [HINGE]: RDL, "Barbell Back Squat": "Barbell Back Squat" } })).toBe(week);
+    expect(resetConfigFor({ ...block, mainLifts: {} })).toEqual({});
+    expect(resetConfigFor({ ...block, number: 3 })).toEqual(replanBlock({ ...block, number: 3 }).config);
+    expect(resetConfigFor(block)).toEqual(week);
+  });
+
+  it("two devices making the user's own change land the same week", () => {
+    device();
+    expect(saveMainLiftCore("sam", HINGE, RDL).summary?.reason).toBe("main_lift");
+    const first = PB.get().config;
+    device();
+    saveMainLiftCore("sam", HINGE, RDL);
+    expect(PB.get().config).toEqual(first);
+  });
+
+  it("a trainer's change lands the week a reset lands, on every device and whatever its id", () => {
+    const first = applied("a");
+    expect(Object.keys(first).length).toBeGreaterThan(0);
+    expect(applied("a")).toEqual(first);
+    expect(applied("b")).toEqual(first);
+    expect(first).toEqual(resetConfigFor({ number: 2, focus: "Strong", mainLifts: P.getMainLifts("sam") }));
   });
 });

@@ -25,7 +25,7 @@
 
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { useState } from "react";
-import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, within, act } from "@testing-library/react";
 import { SessionScreen } from "../../components/SessionScreen.jsx";
 
 afterEach(cleanup);
@@ -508,12 +508,48 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
     expect(text).toContain("+2 on last time");
   });
 
+  // On an assisted lift the kg is help: less of it is progress.
+  const assisted = { name: "Assisted Pull-Up", muscle: "Lats", reps: 10, weight: 20, loadType: "assisted_bodyweight" };
+  const assistedRec = (kg) => [{ id: "2026-09-20T10:00:00.000Z", date: "2026-09-20", blocks: [{ type: "main", exercises: [
+    { name: "Assisted Pull-Up", loadType: "assisted_bodyweight", sets: [
+      { weight: kg, reps: 10, rpe: 8, loadType: "assisted_bodyweight" }] }] }] }];
+
+  it.each([
+    [21.25, "1.25 kg less help than last time"],
+    [18.75, "1.25 kg more help than last time"],
+  ])("an assisted lift's delta reads as help (%s kg last time, 20 today)", (lastKg, line) => {
+    render(<SessionScreen {...props({ block: mainBlock(assisted), getW: () => 20, history: assistedRec(lastKg) })} />);
+    const text = flat(document.body.textContent);
+    expect(text).toContain(line);
+    expect(text).not.toContain("on last time");
+  });
+
   it("a travel session reads its own kind", () => {
     render(<WithVest {...props({ block: mainBlock(bss), getW: () => 18, history: [gymRec, travelRec], travel: true })} />);
     const text = flat(document.body.textContent);
     expect(text).not.toContain("16 × 8");
     fireEvent.click(screen.getByLabelText(/Recent history for/));
     expect(flat(screen.getByRole("dialog").textContent)).not.toContain("@ 16 kg");
+  });
+});
+
+// ─── The history sheet's days ────────────────────────────────────────────────
+describe("the history sheet counts from today as the day turns", () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("a sheet left open past midnight moves today's session to yesterday", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 27, 23, 59));
+    const history = [{ id: "2026-09-27T10:00:00.000Z", date: "2026-09-27", blocks: [{ exercises: [
+      { name: squat.name, sets: [{ weight: 100, reps: 5, rpe: 8 }] }] }] }];
+    render(<SessionScreen {...props({ history })} />);
+    fireEvent.click(screen.getByLabelText(/Recent history for/));
+    const sheet = () => flat(screen.getByRole("dialog").textContent);
+    expect(sheet()).toContain("today");
+    vi.setSystemTime(new Date(2026, 8, 28, 0, 1));
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    expect(sheet()).toContain("yesterday");
+    expect(sheet()).not.toMatch(/\btoday\b/);
   });
 });
 

@@ -21,6 +21,7 @@ import { Fragment, useEffect, useEffectEvent, useMemo, useRef, useState } from "
 import { T, DISPLAY } from "@/lib/tokens";
 import { useInlineModalA11y } from "@/lib/a11y";
 import Glyph from "@/components/Glyph";
+import { BTN, Tag } from "@/components/ui";
 import { InkSpark, LineChart } from "@/components/LiftCharts";
 import { mainLiftTrend, readinessBreakdown } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
@@ -139,11 +140,6 @@ function bestOf(points) {
 const kicker = { fontSize: 13, color: T.ink3, paddingBottom: 8, borderBottom: `1px solid ${T.rule}`, marginBottom: 12 };
 /** @type {import("react").CSSProperties} */
 const section = { marginTop: 32 };
-/** @type {import("react").CSSProperties} */
-const quietBtn = {
-  background: "none", border: `1px solid ${T.rule}`, borderRadius: T.r, cursor: "pointer",
-  fontFamily: T.text, fontSize: 14, color: T.ink2, height: 44, padding: "0 16px",
-};
 
 /**
  * @param {{
@@ -262,8 +258,8 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
       {exportRef && onExport && (
         <div data-export="" style={{ marginTop: 4 }}>
           <button type="button" onClick={onDownload} aria-disabled={exporting}
-            style={{ display: "inline-block", padding: "12px 0", lineHeight: "20px", background: "none", border: "none", cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2, textDecoration: "underline", textUnderlineOffset: 3 }}>
-            Download CSV
+            style={{ ...BTN.text, padding: "12px 0", lineHeight: "20px" }}>
+            Download CSV <Glyph name="arrowRight" size={11}/>
           </button>
           <div role="status" aria-live="polite" style={statusLine}>{exportFailed ? EXPORT_FAILED : ""}</div>
         </div>
@@ -290,7 +286,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
             {/* The tier classes sit on wrappers: an inline display would beat them. */}
             <div className="forge-wide-n-only">
               <button type="button" aria-expanded={earlier} onClick={() => setEarlier((v) => !v)}
-                style={{ background: "none", border: "none", padding: "10px 0 0", cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                style={{ ...BTN.text, padding: "10px 0 0" }}>
                 {earlier ? "Fewer weeks" : "Earlier weeks"}
                 <Glyph name={earlier ? "chevronUp" : "chevronDown"} size={11} color={T.ink3}/>
               </button>
@@ -358,7 +354,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
             {newestFirst.slice(0, shown).map((s) => <SessionRow key={s.id} session={s}/>)}
             {newestFirst.length > shown && (
               <button type="button" onClick={() => setShown((n) => n + PAGE)} className="forge-press forge-tint" aria-label="Show earlier sessions"
-                style={{ ...quietBtn, width: "100%", marginTop: 12 }}>
+                style={{ ...BTN.quiet, width: "100%", marginTop: 12 }}>
                 Show earlier
               </button>
             )}
@@ -372,7 +368,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
           <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 12px" }}>
             {edits === "on" || edits === "unavailable" ? "" : "Read only. "}{sentenceName} can stop sharing any time.
           </p>
-          <button type="button" onClick={() => setConfirming(true)} className="forge-press forge-tint" style={quietBtn}>
+          <button type="button" onClick={() => setConfirming(true)} className="forge-press forge-tint" style={BTN.quiet}>
             {name ? `Stop seeing ${name}'s training` : "Stop seeing their training"}
           </button>
         </div>
@@ -390,14 +386,13 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
               They'll see you ended it. To see it again, they'd approve a new code.
             </p>
             <button type="button" onClick={onStop} aria-disabled={removing}
-              style={{ width: "100%", height: 52, background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer", fontFamily: T.text, fontSize: 15, fontWeight: 500, color: T.commitInk, boxShadow: T.elevStrong, opacity: removing ? 0.6 : 1 }}>
+              style={{ ...BTN.commit, opacity: removing ? 0.6 : 1 }}>
               {removing ? "One moment" : "Stop"}
             </button>
             <div role="status" aria-live="polite" style={{ fontSize: 12, color: T.ink2, marginTop: 8, minHeight: 16, textAlign: "center" }}>
               {stopFailed ? "Couldn't stop that just now. Try again." : ""}
             </div>
-            <button type="button" onClick={closeConfirm}
-              style={{ width: "100%", padding: "12px", marginTop: 4, background: "none", border: "none", cursor: "pointer", fontSize: 13, color: T.ink3, fontFamily: T.text }}>
+            <button type="button" onClick={closeConfirm} style={{ ...BTN.text, width: "100%", justifyContent: "center", padding: 12, marginTop: 4 }}>
               Keep
             </button>
           </div>
@@ -575,8 +570,8 @@ function LiftLedger({ lift, rows, from }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
         <div style={{ flex: 1, fontSize: 13, color: T.ink3 }}>Ledger</div>
         <div role="group" aria-label={`${lift} ledger sets`} style={{ display: "flex", gap: 6 }}>
-          <button type="button" aria-pressed={mode === "top"} aria-label={`Top sets for ${lift}`} onClick={() => pick("top")} style={chip(mode === "top")}>Top sets</button>
-          <button type="button" aria-pressed={mode === "all"} aria-label={`All sets for ${lift}`} onClick={() => pick("all")} style={chip(mode === "all")}>All sets</button>
+          <button type="button" aria-pressed={mode === "top"} aria-label={`Top sets for ${lift}`} onClick={() => pick("top")} className="forge-press forge-tint" style={BTN.chip(mode === "top")}>Top sets</button>
+          <button type="button" aria-pressed={mode === "all"} aria-label={`All sets for ${lift}`} onClick={() => pick("all")} className="forge-press forge-tint" style={BTN.chip(mode === "all")}>All sets</button>
         </div>
       </div>
       {!recent && (
@@ -685,7 +680,7 @@ function LiftLedger({ lift, rows, from }) {
 
       {rows.length > shown && (
         <button type="button" onClick={() => setShown((n) => n + LEDGER_PAGE)} className="forge-press forge-tint" aria-label={`Show earlier ${lift} sessions`}
-          style={{ ...quietBtn, width: "100%", marginTop: 10 }}>
+          style={{ ...BTN.quiet, width: "100%", marginTop: 10 }}>
           Show earlier
         </button>
       )}
@@ -793,13 +788,14 @@ export function liftLine(lift) {
  * number (bounds.max: the larger of the category's cold-start cap and the
  * template). A cap of 0 means nothing is taken. With no cap known (an older
  * view), the route's check at review decides. The sheet and a refusal say
- * the same.
+ * the same. An assisted lift's kg is help.
  * @param {number | null | undefined} cap
+ * @param {boolean} [assisted]
  */
-export function noHistoryText(cap) {
+export function noHistoryText(cap, assisted = false) {
   if (cap != null && cap <= 0) return "Not lifted yet. Their app sets the first weight.";
   return cap != null
-    ? `Not lifted yet. Up to ${cap} kg for a first weight.`
+    ? `Not lifted yet. Up to ${cap} kg${assisted ? " of help" : ""} for a first weight.`
     : "Not lifted yet. Review checks a first weight.";
 }
 
@@ -846,8 +842,12 @@ export function leadLine(edits, name) {
   }
 }
 
-/** Why the validator refused a change, in the pane's words. Never the server's text. */
-export function refusalText(code, { lift = null, until = null, bounds = null } = {}) {
+/**
+ * Why the validator refused a change, in the pane's words. Never the server's
+ * text. An assisted lift's kg is help: less help is the harder way, so its
+ * step limits are the least help (bounds.min), not the most.
+ */
+export function refusalText(code, { lift = null, until = null, bounds = null, assisted = false } = {}) {
   const who = lift || "That lift";
   switch (code) {
     case "not_in_programme": return `${who} isn't in their programme now.`;
@@ -859,12 +859,20 @@ export function refusalText(code, { lift = null, until = null, bounds = null } =
     case "off_grid": return "Pick a weight on their kit's steps.";
     case "deload": return until ? `After their deload ends, about ${isoDayMonth(until)}.` : "After their deload ends.";
     case "recovery": return `After their next ${lift || "session"} session.`;
-    case "per_change": return bounds?.max != null ? `Up to ${bounds.max} kg in one change from their last top set.` : "Too big a step from their last top set.";
-    case "per_week": return bounds?.max != null
-      ? `Up to ${bounds.max} kg this week.`
-      : `Up to ${Math.round(WEEK_JUMP_FRACTION * 100)}% a week over their top set of a week ago, or one step when that set can't be shown here.`;
+    case "per_change":
+      if (assisted) return bounds?.min != null ? `Not below ${bounds.min} kg of help in one change from their last top set.` : "Too big a step from their last top set.";
+      return bounds?.max != null ? `Up to ${bounds.max} kg in one change from their last top set.` : "Too big a step from their last top set.";
+    case "per_week":
+      if (assisted) {
+        return bounds?.min != null
+          ? `Not below ${bounds.min} kg of help this week.`
+          : `Up to ${Math.round(WEEK_JUMP_FRACTION * 100)}% less help a week than their top set of a week ago, or one step when that set can't be shown here.`;
+      }
+      return bounds?.max != null
+        ? `Up to ${bounds.max} kg this week.`
+        : `Up to ${Math.round(WEEK_JUMP_FRACTION * 100)}% a week over their top set of a week ago, or one step when that set can't be shown here.`;
     case "floor": return bounds?.min != null ? `Not below ${bounds.min} kg, their deload weight.` : "Not below their deload weight.";
-    case "no_history": return noHistoryText(bounds?.max);
+    case "no_history": return noHistoryText(bounds?.max, assisted);
     case "timed_range": return `${TIMED_SECONDS.min} to ${TIMED_SECONDS.max} seconds, in steps of ${TIMED_SECONDS.step}.`;
     case "reps_range": return `${REP_LIMITS.min} to ${REP_LIMITS.max} reps.`;
     case "not_main":
@@ -1037,34 +1045,9 @@ const sheetStyle = {
   animation: `slideUp 260ms ${T.ease}`, maxHeight: "90vh", overflowY: "auto", outline: "none",
 };
 /** @type {import("react").CSSProperties} */
-const commitStyle = {
-  width: "100%", height: 52, background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer",
-  fontFamily: T.text, fontSize: 15, fontWeight: 500, color: T.commitInk, boxShadow: T.elevStrong,
-};
-/** Full-width, outlined: every sheet action but Send. @type {import("react").CSSProperties} */
-const outlineStyle = {
-  width: "100%", height: 52, background: "none", border: `1px solid ${T.rule}`, borderRadius: T.r, cursor: "pointer",
-  fontFamily: T.text, fontSize: 15, fontWeight: 500, color: T.ink,
-};
-/** @type {import("react").CSSProperties} */
-const textBtn = {
-  width: "100%", padding: "12px", marginTop: 4, background: "none", border: "none", cursor: "pointer",
-  fontSize: 13, color: T.ink3, fontFamily: T.text,
-};
-/** @type {import("react").CSSProperties} */
-const smallBtn = {
-  background: "none", border: `1px solid ${T.rule}`, borderRadius: T.rSm, cursor: "pointer",
-  fontFamily: T.text, fontSize: 13, color: T.ink2, minHeight: 36, padding: "0 12px", flexShrink: 0,
-};
-/** @type {import("react").CSSProperties} */
 const subKicker = { fontSize: 12, color: T.ink3, margin: "16px 0 4px" };
 /** @type {import("react").CSSProperties} */
 const statusLine = { fontSize: 13, color: T.ink2, lineHeight: 1.5, minHeight: 0 };
-/** A chip: a pace preset, a main-lift option. @param {boolean} on @returns {import("react").CSSProperties} */
-const chip = (on) => ({
-  minHeight: 36, padding: "0 12px", borderRadius: T.rSm, cursor: "pointer", fontFamily: T.text, fontSize: 13,
-  border: `1px solid ${on ? T.ink : T.rule}`, background: on ? T.press : "none", color: on ? T.ink : T.ink2,
-});
 
 /**
  * The plan section and its sheets. Every request goes through onChange
@@ -1174,11 +1157,11 @@ function PlanSection({ plan, name, sessions, todayIso, unsent = null, onChange, 
 
       <div data-tray="" style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <button type="button" onClick={() => { setStatus(""); setReviewing(true); }} disabled={count === 0 || outOfSends}
-          className="forge-press forge-tint" style={{ ...quietBtn, color: count && !outOfSends ? T.ink : T.ink3, cursor: count && !outOfSends ? "pointer" : "default" }}>
+          className="forge-press forge-tint" style={{ ...BTN.quiet, opacity: count && !outOfSends ? 1 : 0.6, cursor: count && !outOfSends ? "pointer" : "default" }}>
           {count ? <Nums text={`${count} change${count === 1 ? "" : "s"} · Review`}/> : "No changes yet"}
         </button>
         {count > 0 && (
-          <button type="button" onClick={() => { setDrafts(EMPTY_DRAFTS); setStatus("Cleared"); }} style={{ ...linkText }}>
+          <button type="button" onClick={() => { setDrafts(EMPTY_DRAFTS); setStatus("Cleared"); }} style={{ ...BTN.text, padding: "8px 0" }}>
             Clear
           </button>
         )}
@@ -1205,9 +1188,6 @@ function PlanSection({ plan, name, sessions, todayIso, unsent = null, onChange, 
   );
 }
 
-/** @type {import("react").CSSProperties} */
-const linkText = { background: "none", border: "none", padding: "8px 0", cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2 };
-
 function PlanRow({ lift, main, drafts, onOpen }) {
   const timed = isTimed(lift.name);
   const dw = Object.hasOwn(drafts.w, lift.name) ? drafts.w[lift.name] : null;
@@ -1218,15 +1198,19 @@ function PlanRow({ lift, main, drafts, onOpen }) {
     : null;
   return (
     <button type="button" onClick={onOpen} className="forge-press forge-tint" data-plan-lift={lift.name}
-      style={{ display: "block", width: "100%", padding: "10px 0", background: "none", border: "none", borderTop: `1px solid ${T.ruleFaint}`, cursor: "pointer", textAlign: "left", fontFamily: T.text, color: T.ink }}>
-      <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span style={{ flex: 1, minWidth: 0, fontSize: 15, overflowWrap: "anywhere" }}>{lift.name}</span>
-        {main && <span style={{ fontSize: 12, color: T.ink3, flexShrink: 0 }}>Main lift</span>}
+      style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 0", background: "none", border: "none", borderTop: `1px solid ${T.ruleFaint}`, cursor: "pointer", textAlign: "left", fontFamily: T.text, color: T.ink }}>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        {/* Centred, not on the baseline: the Tag's mark has no baseline of its own. */}
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 15, overflowWrap: "anywhere" }}>{lift.name}</span>
+          {main && <Tag color={T.ink3} style={{ flexShrink: 0 }}>Main lift</Tag>}
+        </span>
+        <span style={{ display: "block", fontSize: 13, color: T.ink2, lineHeight: 1.5, marginTop: 2 }}>
+          <Nums text={liftLine(lift)}/>
+          {draft && <span style={{ color: T.ink }}> · <Nums text={draft}/></span>}
+        </span>
       </span>
-      <span style={{ display: "block", fontSize: 13, color: T.ink2, lineHeight: 1.5, marginTop: 2 }}>
-        <Nums text={liftLine(lift)}/>
-        {draft && <span style={{ color: T.ink }}> · <Nums text={draft}/></span>}
-      </span>
+      <Glyph name="arrowRight" size={13} color={T.ink3}/>
     </button>
   );
 }
@@ -1306,7 +1290,10 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
     presets.some(([l]) => l === "Jump") && (lt === "assisted_bodyweight" ? "Jump is the least help this change allows." : "Jump is the most this change allows."),
   ].filter(Boolean).join(" ");
 
-  const weightLabel = lt === "assisted_bodyweight" ? "Assistance" : isBodyweightMovement(lt) ? "Added weight" : lt === "per_db" ? "Weight, each dumbbell" : "Weight";
+  // An assisted lift's kg is help, so its limits say so.
+  const assisted = lt === "assisted_bodyweight";
+  const help = assisted ? " of help" : "";
+  const weightLabel = assisted ? "Assistance" : isBodyweightMovement(lt) ? "Added weight" : lt === "per_db" ? "Weight, each dumbbell" : "Weight";
   const blockedText = !blocked ? null
     : blocked.code === "deload" ? (blocked.until ? `After their deload ends, about ${isoDayMonth(blocked.until)}` : "After their deload ends")
     : blocked.code === "recovery" ? `After their next ${lift.name} session`
@@ -1314,8 +1301,8 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
     : noHistoryText(0);
   const noWeight = timed ? "A timed hold, so seconds only." : lt === "bodyweight" ? "Bodyweight, so reps only." : "Reps only for this one.";
   const range = !b ? null
-    : anchorKg != null ? `Up to ${b.max} kg: last top set ${anchorKg} kg`
-    : noHistoryText(b.max);
+    : anchorKg != null ? `Up to ${b.max} kg${help}: last top set ${anchorKg} kg`
+    : noHistoryText(b.max, assisted);
 
   const save = () => onSave({
     kg: weighable && !switching && kgTouched ? kg : null,
@@ -1335,7 +1322,7 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
             <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>Main lift</div>
             <div role="radiogroup" aria-label="Main lift" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {main.options.map((o) => (
-                <button key={o} type="button" role="radio" aria-checked={choice === o} onClick={() => setChoice(o)} style={chip(choice === o)}>{o}</button>
+                <button key={o} type="button" role="radio" aria-checked={choice === o} onClick={() => setChoice(o)} style={BTN.chip(choice === o)}>{o}</button>
               ))}
             </div>
             {switching && (
@@ -1358,7 +1345,7 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
                     {presets.length > 0 && (
                       <div role="group" aria-label="Pace" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
                         {presets.map(([label, v]) => (
-                          <button key={label} type="button" aria-pressed={kg === v} onClick={() => setBoth(v)} style={chip(kg === v)}>
+                          <button key={label} type="button" aria-pressed={kg === v} onClick={() => setBoth(v)} style={BTN.chip(kg === v)}>
                             {label} <span style={{ fontFamily: T.measured }}>{v}</span><span> kg</span>
                           </button>
                         ))}
@@ -1373,11 +1360,11 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
                     </Stepper>
                     <div style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 8 }}>
                       <div><Nums text={range}/></div>
-                      <div><Nums text={`Not below ${minKg} kg`}/></div>
+                      <div><Nums text={`Not below ${minKg} kg${help}`}/></div>
                       {presetNote && <div>{presetNote}</div>}
                     </div>
                     {b.warnBelow != null && kg != null && kg < b.warnBelow && (
-                      <div style={{ fontSize: 13, color: T.under, marginTop: 6 }}>{warningText("big_drop")}</div>
+                      <div style={{ fontSize: 13, color: T.ink2, marginTop: 6 }}>{warningText("big_drop")}</div>
                     )}
                   </>
                 )}
@@ -1395,8 +1382,8 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
           </>
         )}
 
-        <button type="button" onClick={save} className="forge-press forge-tint" style={outlineStyle}>Add to changes</button>
-        <button type="button" onClick={onClose} style={textBtn}>Cancel</button>
+        <button type="button" onClick={save} style={{ ...BTN.quiet, width: "100%" }}>Add to changes</button>
+        <button type="button" onClick={onClose} style={{ ...BTN.text, width: "100%", justifyContent: "center", padding: 12, marginTop: 4 }}>Cancel</button>
       </div>
     </div>
   );
@@ -1502,12 +1489,13 @@ function ReviewSheet({ name, ops, basis, lifts, mains, budget, onChange, onFaceI
             return (
               <li key={`${op.kind}:${op.target}`} data-op={i} style={{ padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>
                 <div style={{ fontSize: 14, color: T.ink }}><Nums text={previewLine(op, timedOf(op.target))}/></div>
-                {(op.warnings || []).map((w) => warningText(w)).filter(Boolean).map((t) => (
-                  <div key={t} style={{ fontSize: 13, color: T.under, marginTop: 2 }}>{t}</div>
+                {/* Under minimum is volume data, in the steel of its flag; every other warning is a note. */}
+                {(op.warnings || []).filter((w) => warningText(w)).map((w) => (
+                  <div key={w} style={{ fontSize: 13, color: w === "under_mev" ? T.under : T.ink2, marginTop: 2 }}>{warningText(w)}</div>
                 ))}
                 {refused && (
                   <div data-refused="" style={{ fontSize: 13, color: T.ink2, marginTop: 2 }}>
-                    <Nums text={refusalText(refused.code, { lift: op.target, until: refused.until ?? null, bounds: lift?.bounds ?? null })}/>
+                    <Nums text={refusalText(refused.code, { lift: op.target, until: refused.until ?? null, bounds: lift?.bounds ?? null, assisted: lift?.loadType === "assisted_bodyweight" })}/>
                   </div>
                 )}
               </li>
@@ -1521,19 +1509,19 @@ function ReviewSheet({ name, ops, basis, lifts, mains, budget, onChange, onFaceI
           {note && (phase === "ready" || phase === "error" || phase === "face") ? note : phase === "budget" ? <Nums text={phaseText}/> : phaseText}
         </div>
 
-        {phase === "face" && <button type="button" onClick={confirmIt} style={commitStyle}>Confirm it's you</button>}
-        {phase === "stale" && <button type="button" onClick={onRefresh} className="forge-press forge-tint" style={outlineStyle}>Refresh</button>}
+        {phase === "face" && <button type="button" onClick={confirmIt} style={BTN.commit}>Confirm it's you</button>}
+        {phase === "stale" && <button type="button" onClick={onRefresh} style={{ ...BTN.quiet, width: "100%" }}>Refresh</button>}
         {phase === "refused" && !setLevel && (
-          <button type="button" onClick={() => onDrop([...refusedAt.keys()])} className="forge-press forge-tint" style={outlineStyle}>Leave those out</button>
+          <button type="button" onClick={() => onDrop([...refusedAt.keys()])} style={{ ...BTN.quiet, width: "100%" }}>Leave those out</button>
         )}
-        {phase === "error" && <button type="button" onClick={check} className="forge-press forge-tint" style={outlineStyle}>Check again</button>}
+        {phase === "error" && <button type="button" onClick={check} style={{ ...BTN.quiet, width: "100%" }}>Check again</button>}
         {(phase === "ready" || phase === "sending" || phase === "checking") && (
           <button type="button" onClick={send} aria-disabled={phase !== "ready"} data-send=""
-            style={{ ...commitStyle, opacity: phase === "ready" ? 1 : 0.6, cursor: phase === "ready" ? "pointer" : "default" }}>
+            style={{ ...BTN.commit, opacity: phase === "ready" ? 1 : 0.6, cursor: phase === "ready" ? "pointer" : "default" }}>
             {phase === "sending" ? "One moment" : name ? `Send to ${name}` : "Send"}
           </button>
         )}
-        <button type="button" onClick={close} style={textBtn}>Keep editing</button>
+        <button type="button" onClick={close} style={{ ...BTN.text, width: "100%", justifyContent: "center", padding: 12, marginTop: 4 }}>Keep editing</button>
       </div>
     </div>
   );
@@ -1636,7 +1624,7 @@ function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChang
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
               <div style={{ flex: 1, fontSize: 13, color: T.ink3 }}>{s.at ? <Nums text={`Sent ${msDayMonth(s.at)}`}/> : "Sent"}</div>
               {all && (
-                <button type="button" onClick={() => withdraw(s.id, open.some((c) => c.status === "in_force"))} aria-disabled={!!busy} style={smallBtn}>Withdraw all</button>
+                <button type="button" onClick={() => withdraw(s.id, open.some((c) => c.status === "in_force"))} aria-disabled={!!busy} className="forge-press forge-tint" style={BTN.small}>Withdraw all</button>
               )}
             </div>
             {s.rows.map((c) => {
@@ -1650,11 +1638,11 @@ function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChang
                       {adopted != null ? <> · <Nums text={`They've since settled on ${adopted}`}/></> : null}
                     </div>
                     {(c.warnings || []).map((w) => warningText(w)).filter(Boolean).map((t) => (
-                      <div key={t} style={{ fontSize: 12, color: T.under, marginTop: 2 }}>{t}</div>
+                      <div key={t} style={{ fontSize: 12, color: T.ink2, marginTop: 2 }}>{t}</div>
                     ))}
                   </div>
                   {withdrawable(c) && (
-                    <button type="button" onClick={() => withdraw(c.id, c.status === "in_force")} aria-disabled={!!busy} style={smallBtn}>
+                    <button type="button" onClick={() => withdraw(c.id, c.status === "in_force")} aria-disabled={!!busy} className="forge-press forge-tint" style={BTN.small}>
                       {busy === c.id ? "One moment" : "Withdraw"}
                     </button>
                   )}
@@ -1665,7 +1653,7 @@ function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChang
         );
       })}
       {sets.length > shown && (
-        <button type="button" onClick={() => setShown((n) => n + SETS_PAGE)} className="forge-press forge-tint" aria-label="Show earlier changes" style={{ ...quietBtn, width: "100%", marginTop: 8 }}>
+        <button type="button" onClick={() => setShown((n) => n + SETS_PAGE)} className="forge-press forge-tint" aria-label="Show earlier changes" style={{ ...BTN.quiet, width: "100%", marginTop: 8 }}>
           Show earlier
         </button>
       )}
@@ -1673,7 +1661,7 @@ function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChang
         {face ? "Confirm it's you to withdraw a change." : msg}
       </div>
       {face && (
-        <button type="button" onClick={confirmIt} className="forge-press forge-tint" style={{ ...quietBtn, marginTop: 8 }}>Confirm it's you</button>
+        <button type="button" onClick={confirmIt} className="forge-press forge-tint" style={{ ...BTN.quiet, marginTop: 8 }}>Confirm it's you</button>
       )}
     </div>
   );
@@ -1745,7 +1733,7 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
       {canContinue ? (
         <div data-run="" style={{ marginBottom: 12 }}>
           <button type="button" onClick={() => onRunSession?.(unsent.letter)}
-            className="forge-press forge-tint" style={{ ...quietBtn, width: "100%", color: T.ink, cursor: "pointer" }}>
+            className="forge-press forge-tint" style={{ ...BTN.quiet, width: "100%" }}>
             Continue
           </button>
           <div style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 6 }}>
@@ -1756,7 +1744,7 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
         <div data-run="" style={{ marginBottom: 12 }}>
           <div role="radiogroup" aria-label="Session to run" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {LETTERS.map((l) => (
-              <button key={l} type="button" role="radio" aria-checked={pick === l} onClick={() => setPick(l)} style={chip(pick === l)}>
+              <button key={l} type="button" role="radio" aria-checked={pick === l} onClick={() => setPick(l)} className="forge-press forge-tint" style={BTN.chip(pick === l)}>
                 {sessionName(l)}
               </button>
             ))}
@@ -1765,7 +1753,7 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
             {sessionName(next)} is next for {name || "them"}.
           </div>
           <button type="button" onClick={() => { if (!full) onRunSession?.(pick); }} disabled={full}
-            className="forge-press forge-tint" style={{ ...quietBtn, width: "100%", marginTop: 12, color: full ? T.ink3 : T.ink, cursor: full ? "default" : "pointer" }}>
+            className="forge-press forge-tint" style={{ ...BTN.quiet, width: "100%", marginTop: 12, opacity: full ? 0.6 : 1, cursor: full ? "default" : "pointer" }}>
             {name ? `Run a session with ${name}` : "Run a session"}
           </button>
           <div style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 6 }}>
@@ -1791,14 +1779,14 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
           </div>
           {/* Only before it reaches their phone: once there, keeping it is theirs (the route agrees). */}
           {c.status === "waiting" && (
-            <button type="button" onClick={() => withdraw(c.id)} aria-disabled={!!busy} style={smallBtn}>
+            <button type="button" onClick={() => withdraw(c.id)} aria-disabled={!!busy} className="forge-press forge-tint" style={BTN.small}>
               {busy === c.id ? "One moment" : "Withdraw"}
             </button>
           )}
         </div>
       ))}
       {rows.length > shown && (
-        <button type="button" onClick={() => setShown((n) => n + SETS_PAGE)} className="forge-press forge-tint" aria-label="Show earlier sessions you ran" style={{ ...quietBtn, width: "100%", marginTop: 8 }}>
+        <button type="button" onClick={() => setShown((n) => n + SETS_PAGE)} className="forge-press forge-tint" aria-label="Show earlier sessions you ran" style={{ ...BTN.quiet, width: "100%", marginTop: 8 }}>
           Show earlier
         </button>
       )}
@@ -1806,7 +1794,7 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
         {face ? "Confirm it's you to withdraw a session." : msg}
       </div>
       {face && (
-        <button type="button" onClick={confirmIt} className="forge-press forge-tint" style={{ ...quietBtn, marginTop: 8 }}>Confirm it&apos;s you</button>
+        <button type="button" onClick={confirmIt} className="forge-press forge-tint" style={{ ...BTN.quiet, marginTop: 8 }}>Confirm it&apos;s you</button>
       )}
     </div>
   );

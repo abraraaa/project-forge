@@ -228,6 +228,22 @@ describe("the sheet", () => {
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+
+  it("no control in the sheet carries a press class, through the confirm; Keep is the house commit", () => {
+    sheet();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.classList.contains("forge-sheet-ground")).toBe(true);
+    const pressIn = () => [...dialog.querySelectorAll(".forge-press, .forge-tint, .forge-lift")].map((b) => b.textContent);
+    expect(pressIn()).toEqual([]);
+    const keep = screen.getByRole("button", { name: "Keep" });
+    expect([keep.style.height, keep.style.fontSize, keep.style.fontWeight, keep.style.color, keep.style.background])
+      .toEqual(["56px", "17px", "500", "var(--commit-ink)", "var(--commit)"]);
+    const later = screen.getByRole("button", { name: "Later" });
+    expect([later.style.height, later.style.fontSize, later.style.color]).toEqual(["46px", "14px", "var(--ink-3)"]);
+    fireEvent.click(screen.getByRole("button", { name: "Not mine" }));
+    expect(screen.getByRole("button", { name: "Discard" })).toBeTruthy();
+    expect(pressIn()).toEqual([]);
+  });
 });
 
 // ── Home's slot ─────────────────────────────────────────────────────────────

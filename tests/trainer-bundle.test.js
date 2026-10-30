@@ -1,7 +1,9 @@
-// What the trainer pane and the session host can reach by static import. The
-// pane ships to the browser, so the server modules (storage, the MCP server,
-// the database) must stay out of its graph, and the validator, the shared
-// programme resolver, storage and the MCP server must not import in a circle.
+// What the trainer pane, the session host and the app shell can reach by
+// static import. The pane ships to the browser, so the server modules
+// (storage, the MCP server, the database) must stay out of its graph; the
+// shell stays off the exercise catalogue, which builds itself when it loads;
+// and the validator, the shared programme resolver, storage and the MCP
+// server must not import in a circle.
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -120,10 +122,18 @@ describe("no import cycle through storage, the trainer sync, the validator, the 
   }
 });
 
+describe("the app shell stays off the exercise catalogue", () => {
+  // The re-plan seed reads ROTATION_REVISED from lib/programme.js, which the
+  // shell already loads; lib/library.js builds the whole catalogue on load.
+  for (const f of ["components/ForgeApp.jsx", "lib/profile-actions.js"]) {
+    it(`${f} does not reach lib/library.js`, () => {
+      expect(leaks(f, ["lib/library.js"])).toEqual([]);
+    });
+  }
+});
+
 describe("repsForSession", () => {
-  it("the resolver's copy answers as the session engine's", () => {
-    const shapes = [5, "5", "8/leg", "20s", "45s", "", null, undefined, "AMRAP", "10-12"];
-    const reps = [6, 9, 0, -1, 2.5, null, undefined, "6", NaN, Infinity];
-    for (const s of shapes) for (const r of reps) expect(repsForSession(r, s), `${r} ${s}`).toEqual(engineReps(r, s));
+  it("the session engine's is the resolver's", () => {
+    expect(engineReps).toBe(repsForSession);
   });
 });

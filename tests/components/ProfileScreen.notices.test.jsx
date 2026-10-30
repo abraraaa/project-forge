@@ -4,7 +4,7 @@
 // Your clients (trainer). For trainers keeps its application-state sublines.
 // No answer (offline, 401, a failure) means the rows read as they always have.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, within, act } from "@testing-library/react";
 
 vi.mock("@/lib/webauthn", () => ({
   hasPasskey: vi.fn(async () => true),
@@ -21,6 +21,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: 
 const { default: ProfileScreen } = await import("@/components/ProfileScreen");
 const { default: ProfileView } = await import("@/components/ProfileView");
 const { P } = await import("@/lib/storage");
+const { TRAINER_NEWS, NEW_DAYS } = await import("@/lib/trainer-news");
+const { addDaysIso } = await import("@/lib/dates");
 
 const base = { existing: ["sam"], current: "sam", onActivate: vi.fn(), onCancel: vi.fn(),
   bodyweight: 80, setBwEditOpen: vi.fn(), onEditFocus: vi.fn() };
@@ -94,6 +96,23 @@ describe("Profile rows read the notices as words", () => {
     // No element carries a bare count (a pill or a badge would).
     const bare = [...document.body.querySelectorAll("*")].filter((el) => /^\s*[23]\s*$/.test(el.textContent));
     expect(bare).toHaveLength(0);
+  });
+});
+
+describe("the trainer New tag follows the calendar", () => {
+  it("goes quiet at midnight with Profile left open", async () => {
+    // The newest entry's last New day, 23:59 local; nothing newer can keep the tag.
+    const newest = TRAINER_NEWS.map((n) => n.shipped).sort().at(-1);
+    const [y, m, d] = addDaysIso(newest, NEW_DAYS - 1).split("-").map(Number);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(y, m - 1, d, 23, 59));
+    render(<ProfileScreen {...base} trainerShare={share({ trainer: true })} noticeDots={{}} />);
+    await screen.findByText("Passkey enabled");
+    const tag = () => within(screen.getByText("Your clients").closest("a")).queryByText("New");
+    expect(tag()).toBeTruthy();
+    vi.setSystemTime(new Date(y, m - 1, d + 1, 0, 1));
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    expect(tag()).toBeNull();
   });
 });
 

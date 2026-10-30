@@ -607,8 +607,8 @@ export async function PUT(request) {
     // so a device pushing from stale local state DELETED the other
     // device's meta fields. Now the existing blob merges with the incoming
     // payload through THE merge (lib/sync-merge.js — same module the
-    // client uses), with the incoming side winning ties: a push means "I
-    // just did something". The blob is therefore always a merged superset.
+    // client uses); equal stamps fall to content, not to the side that
+    // pushed. The blob is therefore always a merged superset.
     // Costs one blob read per PUT — colocated, cheap, and the price of
     // never losing a field. NOTE: read-merge-write is not atomic (Vercel
     // Blob has no compare-and-swap); two simultaneous PUTs can still race,

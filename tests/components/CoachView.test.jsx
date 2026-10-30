@@ -91,6 +91,14 @@ describe("CoachView", () => {
     expect(screen.queryByText("Disconnect")).toBeNull();
   });
 
+  it("Disconnect is a compact control: 36 px tall on the 8 px radius", async () => {
+    P.setActive("sam");
+    server.connections = [{ id: "c1", name: "My assistant", lastRead: null }];
+    await renderCoach();
+    const btn = screen.getByRole("button", { name: "Disconnect" });
+    expect([btn.style.height, btn.style.borderRadius]).toEqual(["36px", "8px"]);
+  });
+
   it("a copy-link AI puts the MCP link on the clipboard", async () => {
     P.setActive("sam");
     const writeText = vi.fn(async () => {});

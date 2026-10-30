@@ -29,6 +29,7 @@ import { planStartWeight, isWorkingWeight } from "@/lib/programme-resolve";
 import { getLoadType, parseTimedReps, usesOptionalChrome } from "@/lib/lift-translations";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
 import { fetchWithTimeout } from "@/lib/net";
+import { resetConfigFor } from "@/lib/profile-actions";
 
 // Human-readable "X ago" — tuned for < 12h windows (draft expiry cutoff).
 function formatAgo(ms) {
@@ -70,6 +71,12 @@ function rowPlan(ex, { reps, weights, bodyweight, anchors }) {
 // re-focus on every render).
 const focusOnMount = (el) => { el?.focus(); };
 
+// Two rotation configs hold the same pick in every slot.
+function samePicks(a, b) {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k]?.name === b[k]?.name);
+}
+
 // Notices poll floor: at most one GET per minute, however often the app
 // comes back to the foreground.
 const NOTICE_FLOOR_MS = 60_000;
@@ -102,7 +109,34 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // claimed from a surface that shows the ConsentLine.
   const [pnChipOpen, setPnChipOpen] = useState(false);
   const pnShowCard = pnStage === "card" || (pnStage === "chip" && pnChipOpen);
-  const hasRotationDrift = Object.keys(programmeBlock?.config || {}).length > 0;
+  // The link offers a reset only when one would change the week. A reset
+  // re-plans the template when it breaks a band under the chosen main lifts
+  // (Strong with Romanian Deadlift), seeded, so a block already holding that
+  // re-plan is where a reset lands, not drift.
+  const rotationConfig = programmeBlock?.config || {};
+  const blockNumber = programmeBlock?.number;
+  const rotated = Object.keys(rotationConfig).length > 0;
+  // Solved when the main thread is idle: the first sight of a seed is a full
+  // solve, tens of milliseconds on a phone, so the link settles a moment
+  // late rather than holding up Home's first paint. Later seeds hit the
+  // cache. The answer is kept with its key, so a stale week never decides.
+  const resetKey = rotated ? JSON.stringify([blockNumber, userFocus, mainLifts]) : null;
+  const [resetSolve, setResetSolve] = useState(null);
+  useEffect(() => {
+    if (!resetKey) return undefined;
+    const run = () => {
+      const config = resetConfigFor({ number: blockNumber, focus: userFocus, mainLifts });
+      setResetSolve((prev) => (prev && prev.key === resetKey && prev.config === config ? prev : { key: resetKey, config }));
+    };
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(run);
+      return () => cancelIdleCallback(id);
+    }
+    const id = setTimeout(run, 0);
+    return () => clearTimeout(id);
+  }, [resetKey, blockNumber, userFocus, mainLifts]);
+  const resetConfig = resetSolve && resetSolve.key === resetKey ? resetSolve.config : undefined;
+  const hasRotationDrift = rotated && resetConfig !== undefined && !samePicks(rotationConfig, resetConfig);
   const handleResetTap = () => {
     if (!resetArmed) {
       setResetArmed(true);

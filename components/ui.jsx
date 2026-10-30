@@ -82,6 +82,39 @@ export function MonoNums({ children, style = {} }) {
   );
 }
 
+// The house buttons, as style objects. Press classes stay at each call site:
+// a sheet's controls take none (the safe-area chin, app/globals.css), and
+// tests/press-lift.test.js reads the class on the tag. Heights follow the
+// radius law in lib/tokens.js: 12 at 44 px and up, 8 at 36.
+/** @type {{ commit: import("react").CSSProperties, quiet: import("react").CSSProperties, chip: (on: boolean) => import("react").CSSProperties, text: import("react").CSSProperties, small: import("react").CSSProperties }} */
+export const BTN = {
+  // The one coloured surface.
+  commit: {
+    width: "100%", height: 56, background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer",
+    fontFamily: T.text, fontSize: 17, fontWeight: 500, color: T.commitInk, boxShadow: T.elevStrong,
+  },
+  quiet: {
+    height: 46, padding: "0 16px", background: T.ground, border: `1px solid ${T.rule}`, borderRadius: T.r,
+    cursor: "pointer", fontFamily: T.text, fontSize: 14, fontWeight: 500, color: T.ink,
+  },
+  // A toggle: raised when on, a hairline when off.
+  chip: (on) => ({
+    minHeight: 36, padding: "0 12px", borderRadius: T.rSm, cursor: "pointer", fontFamily: T.text, fontSize: 13,
+    fontWeight: on ? 500 : 400, color: on ? T.ink : T.ink2, background: on ? T.surface : "transparent",
+    border: `1px solid ${on ? "transparent" : T.rule}`, boxShadow: on ? T.elev : "none",
+  }),
+  // A link; a trailing glyph sits in its gap.
+  text: {
+    background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink3,
+    display: "inline-flex", alignItems: "center", gap: 5,
+  },
+  // A row's own action, beside its text.
+  small: {
+    minHeight: 36, padding: "0 12px", background: "none", border: `1px solid ${T.rule}`, borderRadius: T.rSm,
+    cursor: "pointer", fontFamily: T.text, fontSize: 13, fontWeight: 400, color: T.ink2, flexShrink: 0,
+  },
+};
+
 // Tag — a small identifier: a key mark (short bar in the given colour)
 // beside sentence-case text. Replaces the pill chip — pills are on the
 // never-list; categorical colour reads as a mark, not a costume.

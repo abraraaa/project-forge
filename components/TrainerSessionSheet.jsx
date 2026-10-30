@@ -21,7 +21,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
-import { Card, Fade, MonoNums } from "@/components/ui";
+import { BTN, Card, Fade, MonoNums } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import { sessionDayWords, RPE_TRACK } from "@/lib/trainer-change";
@@ -116,10 +116,6 @@ function loadWords(loadType, weight) {
   if (loadType === "assisted_bodyweight") return kg && kg > 0 ? `${kg} kg assist` : "Bodyweight";
   return kg === null ? null : `${kg} kg`;
 }
-
-const quietBtn = {
-  background: "none", border: "none", cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink3,
-};
 
 // ─── Home card ───────────────────────────────────────────────────────────────
 
@@ -277,8 +273,7 @@ export default function TrainerSessionSheet({ card, todayIso, felt = {}, onFelt,
             <p style={{ fontSize: 13, color: T.ink3, lineHeight: 1.5, margin: "0 0 14px" }}>
               Keep adds it to your training, like a session you logged. You can&apos;t undo it.
             </p>
-            <button type="button" onClick={() => { haptic.commit(); onKeep(); }}
-              style={{ width: "100%", height: 54, background: T.commit, border: "none", borderRadius: T.r, cursor: "pointer", fontFamily: T.text, fontSize: 16, fontWeight: 500, color: T.commitInk, boxShadow: T.elevStrong }}>
+            <button type="button" onClick={() => { haptic.commit(); onKeep(); }} style={BTN.commit}>
               Keep
             </button>
             <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
@@ -287,7 +282,7 @@ export default function TrainerSessionSheet({ card, todayIso, felt = {}, onFelt,
                 Not mine
               </button>
               <button type="button" onClick={onClose}
-                style={{ ...quietBtn, flexShrink: 0, height: 46, padding: "0 16px", fontSize: 14 }}>
+                style={{ ...BTN.text, flexShrink: 0, height: 46, padding: "0 16px", fontSize: 14 }}>
                 {due ? "Close" : "Later"}
               </button>
             </div>

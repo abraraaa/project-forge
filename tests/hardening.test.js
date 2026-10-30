@@ -143,6 +143,14 @@ describe("credentials never ride URLs", () => {
       expect(opts.headers["X-HW-Auth"]).toBe(token);
     });
 
+    it.each([
+      [{ error: "Set up a passkey before deleting this profile", requiresPasskeySetup: true }, false, true],
+      [{ error: "Passkey authentication required", requiresAuth: true }, true, false],
+    ])("passes on why a refused wipe was refused (%j)", async (body, requiresAuth, requiresPasskeySetup) => {
+      vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 401, json: async () => body })));
+      expect(await blobDelete("Sam")).toEqual({ ok: false, error: body.error, requiresAuth, requiresPasskeySetup });
+    });
+
     it("sends no headers at all when there is no token", async () => {
       const fetchStub = stubFetch();
       await blobDelete("Sam");

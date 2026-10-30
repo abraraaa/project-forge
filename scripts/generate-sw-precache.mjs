@@ -23,9 +23,10 @@ export const SHELL_ROUTES = ["/", "/session", "/profile", "/profile/main-lifts",
 export const htmlFileFor = (route) => (route === "/" ? "index.html" : `${route.slice(1)}.html`);
 
 // Where a shell route's prerendered HTML sits under .next/server: the plain
-// layout (app/<route>.html), then the one Next 16.3.8 writes when a build
+// layout (app/<route>.html), then the one Next 16.3.8 and later write when a build
 // adapter is configured, as Vercel's build does: each page keyed by the
 // sha256 of its app entry ("/session/page") under route-cache/APP_PAGE.
+// Re-verified on 16.4.2.
 export const htmlPathsFor = (route) => {
   const entry = `${route === "/" ? "" : route}/page`;
   const key = createHash("sha256").update(entry).digest("hex");

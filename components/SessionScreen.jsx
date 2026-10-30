@@ -23,7 +23,8 @@ import Glyph from "@/components/Glyph";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import { pressLiftHandlers } from "@/lib/press-lift";
 import { savedKgFor } from "@/lib/session-kg";
-import { todayLocalIso, daysBetween, mondayIndex } from "@/lib/dates";
+import { daysBetween, mondayIndex } from "@/lib/dates";
+import { useTodayIso } from "@/lib/use-today-iso";
 import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
 import { WEEK, SWAP_DB } from "@/lib/programme";
@@ -242,7 +243,7 @@ export function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJum
         </div>
 
         <button onClick={onCancel}
-          style={{marginTop:10,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
+          style={{marginTop:10,flexShrink:0,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
           Back to current set
         </button>
       </div>
@@ -267,10 +268,12 @@ function loggedKgFor(top, optionalWeight) {
 function RecentHistorySheet({ exerciseName, recent, optionalWeight, onCancel }) {
   const { containerRef, onKeyDown } = useModalA11y(onCancel);
   const titleId = "recent-history-title";
+  // As state, so a sheet left open past midnight counts from the new day.
+  const todayIso = useTodayIso();
 
   const fmt = (dateStr) => {
     if (!dateStr) return "";
-    const diff = daysBetween(dateStr, todayLocalIso());
+    const diff = daysBetween(dateStr, todayIso);
     if (diff === null) return dateStr;
     if (diff <= 0) return "today";
     if (diff === 1) return "yesterday";
@@ -321,7 +324,7 @@ function RecentHistorySheet({ exerciseName, recent, optionalWeight, onCancel }) 
         </div>
 
         <button onClick={onCancel}
-          style={{marginTop:14,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
+          style={{marginTop:14,flexShrink:0,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
           Close
         </button>
       </div>
