@@ -14,9 +14,10 @@ import {
   REFERENCE_LIFTS, deriveMuscleAnchors, coldStartFromAnchor, startWeightFor, getLiftProfile, isBodyweightMovement, __test__,
 } from "../lib/lift-translations.js";
 import { hasCatalogueName, loadTypeOfName, planStartWeight, resolvedProgramme } from "../lib/programme-resolve.js";
-import { migrateV1ToV2, migrateV2ToV3, H, TS } from "../lib/storage.js";
+import { migrateV1ToV2, migrateV2ToV3, H, TS, getLocalProfile } from "../lib/storage.js";
 import { localSource, coachedSource } from "../lib/session-source.js";
 import { applySessionToEngine } from "../lib/session-engine.js";
+import { commitSessionRecord } from "../lib/session-commit.js";
 import { runTool } from "../lib/mcp-server.js";
 import { projectForTrainer } from "../lib/trainer-plan.js";
 import { EXERCISE_POOLS } from "../lib/programme.js";
@@ -479,16 +480,12 @@ describe("the stored field is inert", () => {
   const MUSCLES = [...new Set(Object.values(PROFILES).map((p) => p.primaryMuscle).filter(Boolean))];
   const ABSURD = Object.fromEntries(MUSCLES.map((m) => [m, { bestE1RM: 9999, bestE1RMLift: "Barbell Back Squat", bestE1RMDate: "2026-01-01" }]));
 
-  it("only storage, the sync merge, the diag page and the finalise writer read it", () => {
+  it("only storage, the sync merge and the diag page read it", () => {
     const readers = {};
     for (const f of [...files("lib"), ...files("components"), ...files("app")]) {
       const n = (code(f).match(READ) || []).length;
       if (n) readers[f] = n;
     }
-    // The finalise writer's read before its write, until the writer goes.
-    expect(readers["lib/session-engine.js"]).toBe(1);
-    expect(code("lib/session-engine.js")).toMatch(/const currentAnchor = TS\.get\(profile\)\.muscleAnchors\?\.\[anchorMuscle\]/);
-    delete readers["lib/session-engine.js"];
     expect(Object.keys(readers).sort()).toEqual(["app/diag-sync/page.jsx", "lib/storage.js", "lib/sync-merge.js"]);
   });
 
@@ -522,6 +519,37 @@ describe("the stored field is inert", () => {
     const plain = engineStarts([], lifts, { currentWeights });
     expect(engineStarts([], lifts, { stored: ABSURD, currentWeights })).toEqual(plain);
     expect(plain).toEqual(currentWeights);
+  });
+
+  it("a finish with reference and isolation lifts leaves the stored field as seeded", () => {
+    // As an older version left it: an isolation lift's inflated Shoulders,
+    // with its window of top sets, and a bare Chest entry.
+    const SEEDED = {
+      Shoulders: {
+        bestE1RM: 240, bestE1RMLift: "Rear Delt Fly", bestE1RMDate: "2026-09-01",
+        recentTopSets: [{ date: "2026-09-01", lift: "Rear Delt Fly", weight: 16, reps: 15, effectiveLoad: 16, est1rm: 24, anchorEquivalentE1RM: 240 }],
+      },
+      Chest: { bestE1RM: 80, bestE1RMLift: "Barbell Bench Press" },
+    };
+    const finishes = [
+      rec("2026-10-12", [ohp(65, 5), lift("Barbell Back Squat", "barbell", [[130, 5]]), rearDelt, lift("Leg Extension", "machine", [[90, 12]])]),
+      rec("2026-10-14", [ohp(67.5, 5), lift("Barbell Bench Press", "barbell", [[100, 5]]), lift("Cable Lateral Raise", "cable", [[12.5, 15]])]),
+    ];
+    for (const stored of [SEEDED, null]) {
+      localStorage.clear();
+      if (stored) TS.save("p", { ...TS.get("p"), muscleAnchors: stored });
+      const want = JSON.stringify(stored ?? {});
+      for (const r of finishes) {
+        commitSessionRecord("p", r);
+        for (const ex of r.blocks[0].exercises) expect(TS.get("p").lifts[ex.name], ex.name).toBeDefined();
+        // Byte for byte, in the store and in the sync payload.
+        expect(JSON.stringify(TS.get("p").muscleAnchors)).toBe(want);
+        expect(JSON.stringify(getLocalProfile("p").meta.trainingState.muscleAnchors)).toBe(want);
+      }
+      // The derived anchors moved with the reference lifts alone.
+      const pairs = Object.fromEntries(Object.entries(deriveMuscleAnchors(H.get("p"))).map(([m, a]) => [m, [a.bestE1RM, a.bestE1RMLift]]));
+      expect(pairs).toEqual({ Shoulders: [78.8, "Barbell Overhead Press"], Quadriceps: [151.7, "Barbell Back Squat"], Chest: [116.7, "Barbell Bench Press"] });
+    }
   });
 });
 

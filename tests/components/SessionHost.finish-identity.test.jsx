@@ -31,6 +31,12 @@
 // than every volume window now gives the Chest anchor the swap seeds from.
 // The record is the only change; the stored anchor is still seeded, unread.
 //
+// Re-recorded when finalise stopped writing the stored anchor: after the
+// finish, the trainingState's muscleAnchors holds only the seeded Chest
+// entry, in the store and in the push (the writer had added Back, Quadriceps
+// and Shoulders and appended Chest's top sets), and the push state's
+// trainingState hash moves with it.
+//
 // Text queries, not getByRole: see SessionScreen.surface.test.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 

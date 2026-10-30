@@ -54,7 +54,6 @@ const MUTATING_CALLS = [
   /\bBW\.set\s*\(/,
   /\bTS\.replaceState\s*\(/,
   /\bTS\.updateLift\s*\(/,
-  /\bTS\.updateMuscleAnchor\s*\(/,
   /\bTS\.updateVolume\s*\(/,
   /\bDays\.set\s*\(/,
   /\bH\.append\s*\(/,
