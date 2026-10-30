@@ -33,7 +33,7 @@ import BreatherModal from "@/components/BreatherModal";
 import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
 import { shouldOfferDeload, startDeload, dismissDeloadOffer, repTargetRepairs } from "@/lib/progression";
 import { applySessionToEngine } from "@/lib/session-engine";
-import { getLiftProfile, sanitiseWorkingWeights, getLoadType, weightStepForLoadType } from "@/lib/lift-translations";
+import { getLiftProfile, sanitiseWorkingWeights, getLoadType, weightStepForLoadType, deriveMuscleAnchors } from "@/lib/lift-translations";
 import { solveRotation } from "@/lib/rotation-solver";
 import {
   isPlatformAuthenticatorAvailable,
@@ -181,13 +181,6 @@ export default function ForgeApp(){
   // base on the retro sheet too, so a retro log never bakes one back in.
   const retroRepairs = useMemo(() => repTargetRepairs({ reps: workingReps, lifts: TS.get(activeProfile)?.lifts ?? {}, sessions: SESSIONS }), [workingReps, activeProfile]);
   const retroReps = useMemo(() => ({ ...workingReps, ...retroRepairs }), [workingReps, retroRepairs]);
-  // What the home card plans with, read the way the session reads it
-  // (lib/session-source.js). Re-read whenever the prescription moves.
-  const homePlan = useMemo(() => {
-    let ts = null;
-    try { ts = activeProfile ? TS.get(activeProfile) : null; } catch { ts = null; }
-    return { weights: workingWeights, reps: workingReps, lifts: ts?.lifts || {}, anchors: ts?.muscleAnchors || {} };
-  }, [activeProfile, workingWeights, workingReps]);
   // Append-only session log built during an active session
   // Snapshot of workingWeights at SESSION START. State (not ref) because the
   // DoneScreen consumes it during render. Set in handleReadinessStart /
@@ -215,6 +208,14 @@ export default function ForgeApp(){
     const p = P.getActive();
     return p ? H.get(p) : [];
   });
+  // What the home card plans with, read the way the session reads it
+  // (lib/session-source.js). Re-read whenever the prescription moves; the
+  // anchors derive from the history the card shows (deriveMuscleAnchors).
+  const homePlan = useMemo(() => {
+    let ts = null;
+    try { ts = activeProfile ? TS.get(activeProfile) : null; } catch { ts = null; }
+    return { weights: workingWeights, reps: workingReps, lifts: ts?.lifts || {}, anchors: deriveMuscleAnchors(history) };
+  }, [activeProfile, workingWeights, workingReps, history]);
   // Anti-dysmorphia: dismiss-once-per-render for recovery nudge
   const [recoveryDismissed,setRecoveryDismissed]=useState(false);
   // PWA install prompt (iOS needs custom UI; Android gets the OS prompt for free)
@@ -1401,7 +1402,7 @@ export default function ForgeApp(){
       {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={homeWeekDays} strengthDaySessions={homeWeekSessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={homeWeekDone} dayStates={homeWeekStates} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={handleDismissAbsenceNudge} trainerSessions={trainerSessions} onOpenTrainerSession={handleOpenTrainerSession} workingWeights={homePlan.weights} workingReps={homePlan.reps} liftStates={homePlan.lifts} muscleAnchors={homePlan.anchors} bodyweight={bodyweight}/>}
       {breatherOpen           && <BreatherModal onConfirm={handleStartBreather} onCancel={()=>setBreatherOpen(false)}/>}
       {trainerSheet           && <TrainerSessionSheet key={trainerSheet.id} card={trainerSheet} todayIso={todayIso} felt={trainerFelt[trainerSheet.id] ?? {}} onFelt={(felt)=>handleTrainerFelt(trainerSheet.id, felt)} onKeep={()=>handleKeepTrainerSession(trainerSheet.id)} onDiscard={()=>handleDiscardTrainerSession(trainerSheet.id)} onClose={()=>setTrainerSheetId(null)}/>}
-      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} muscleAnchors={TS.get(activeProfile)?.muscleAnchors} workingReps={retroReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} history={history} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
+      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} muscleAnchors={homePlan.anchors} workingReps={retroReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} history={history} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}

@@ -335,8 +335,20 @@ function e8Fixtures() {
       weights, reps,
       bodyweight: { kg: 70 + seed },
       addedLoads: { "Glute Bridge": { kg: 10, updatedAt: T1 }, "Push-Up": { kg: 5, updatedAt: T1 } },
-      trainingState: { lifts, muscleAnchors: { Quadriceps: { bestE1RM: 140 }, Chest: { bestE1RM: 100 }, Hamstrings: { bestE1RM: 160 } } },
+      trainingState: { lifts },
     };
+  };
+  // A loaded fixture's anchors, from history: one record with no session
+  // letter (the next session reads as without it). Quadriceps 140, Chest 100,
+  // Hamstrings 120 / 0.75 = 160.
+  const set = (weight, reps, est1rm) => ({ weight, reps, rir: 2, loadType: "barbell", effectiveLoad: weight, est1rm });
+  const ANCHOR_RECORD = {
+    id: "2026-09-01T10:00:00.000Z", date: "2026-09-01", schemaVersion: 3, readiness: "normal",
+    blocks: [{ id: "m1", type: "main", exercises: [
+      { name: "Barbell Back Squat", loadType: "barbell", sets: [set(120, 5, 140)] },
+      { name: "Barbell Bench Press", loadType: "barbell", sets: [set(75, 10, 100)] },
+      { name: "Romanian Deadlift", loadType: "barbell", sets: [set(100, 6, 120)] },
+    ] }],
   };
   const wk = (d) => Array.from({ length: 7 }, (_, i) => ({ type: i === d || i === d + 2 ? "strength" : "rest" }));
   const out = [];
@@ -350,7 +362,10 @@ function e8Fixtures() {
       ...(seed ? loaded(n) : { weights: {}, reps: {} }),
       ...(n % 4 === 0 ? { userWeek: [{ effectiveFrom: "2026-01-05", editedAt: "2026-01-05T00:00:00Z", week: wk(n % 5) }] } : {}),
     };
-    const history = n % 3 === 0 ? [] : [{ id: "2026-09-10", date: "2026-09-10", session: n % 3 === 1 ? "strength_a" : "strength_b", readiness: "normal", blocks: [] }];
+    const history = [
+      ...(seed ? [ANCHOR_RECORD] : []),
+      ...(n % 3 === 0 ? [] : [{ id: "2026-09-10", date: "2026-09-10", session: n % 3 === 1 ? "strength_a" : "strength_b", readiness: "normal", blocks: [] }]),
+    ];
     out.push({ focus: String(focus), meta, history });
   }
   return out;

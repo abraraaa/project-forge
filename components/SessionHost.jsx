@@ -148,10 +148,11 @@ export default function SessionHost({ mode = null } = {}) {
   const [trainerMarks] = useState(() => source.trainerMarks());
   // The day those marks are judged on, as state: it moves at midnight.
   const todayIso = useTodayIso();
-  // Muscle anchors as the session opened: the cold-start rung of every plan
-  // weight (planStartWeight). Only finalise moves them.
-  const [muscleAnchors] = useState(() => source.muscleAnchors());
   const [history]                    = useState(() => source.history());
+  // Muscle anchors as the session opened, derived from that history through
+  // the source: the cold-start rung of every plan weight (planStartWeight).
+  // One derivation per open; nothing in the session moves them.
+  const [muscleAnchors] = useState(() => source.muscleAnchors(history));
   const [bodyweight, setBodyweight]  = useState(() => source.bodyweight());
   const [programmeBlock]             = useState(() => source.programmeBlock());
   const [userFocus]                  = useState(() => source.focus());

@@ -249,6 +249,8 @@ export default function DiagSync() {
     focus: F.get(profile),
     bwKg: BW.getKg(profile),
     tsLifts: Object.keys((TS.get(profile) || {}).lifts || {}).length,
+    // A legacy field, carried as stored: anchors derive from history, so the
+    // app never reads it.
     tsAnchors: Object.keys((TS.get(profile) || {}).muscleAnchors || {}).length,
     pendingPushes: PQ.get().length,
     metaSize: JSON.stringify(getLocalProfile(profile).meta || {}).length,
@@ -471,7 +473,7 @@ export default function DiagSync() {
         <Row label="focus"                    value={snapshot.focus} />
         <Row label="bodyweight (kg)"          value={snapshot.bwKg ?? "—"} />
         <Row label="TS lifts tracked"         value={snapshot.tsLifts} />
-        <Row label="TS muscle anchors"        value={snapshot.tsAnchors} />
+        <Row label="TS muscle anchors (legacy, unread)" value={snapshot.tsAnchors} />
         <Row label="meta payload size"        value={`${snapshot.metaSize}b`} dim />
         <Row label="history payload size"     value={`${snapshot.historySize}b`} dim />
         <Row label="pending pushes (queue)"   value={snapshot.pendingPushes} />

@@ -7,13 +7,13 @@
 // Class lock: neither component may ever grow a second engine copy.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { H, TS } from "../lib/storage.js";
 import { applySessionToEngine } from "../lib/session-engine.js";
-import { coldStartFromAnchor } from "../lib/lift-translations.js";
+import { coldStartFromAnchor, deriveMuscleAnchors } from "../lib/lift-translations.js";
 import { lastSessionNote } from "../lib/progression.js";
 import { SESSION_COPY } from "../lib/session-copy.js";
 
@@ -357,7 +357,8 @@ describe("loaded rep climb reaches the session", () => {
 
 // A lift's first logged session replaces the cold-start guess: the next
 // prescription progresses from what was lifted, never from the anchor
-// (2026-10-13). The anchors are the ones that produced the live numbers.
+// (2026-10-13). Reference records in history set the anchors that produced
+// the live numbers, so each test still has an anchor to refuse.
 describe("a lift's first logged session progresses from what was lifted", () => {
   beforeEach(() => localStorage.clear());
   const firstRecord = (name, loadType, weight, reps, rir) => {
@@ -367,17 +368,37 @@ describe("a lift's first logged session progresses from what was lifted", () => 
       blocks: [{ id: "css2", type: "superset", exercises: [{ name, loadType, sets }] }],
     };
   };
-  const apply = (rec, muscleAnchors) => {
-    TS.save("p", { ...TS.get("p"), muscleAnchors });
+  /** One earlier reference set, its e1RM cached as logSet caches it. */
+  const reference = (name, loadType, weight, reps) => [{
+    v: 2, id: "2026-10-04T10:00:00.000Z", date: "2026-10-04", readiness: "normal", session: "strength-b",
+    blocks: [{ id: "b1", type: "main", exercises: [{ name, loadType, sets: [
+      { weight, reps, rir: 2, loadType, effectiveLoad: weight, est1rm: Math.round(weight * (1 + reps / 30) * 10) / 10 },
+    ] }] }],
+  }];
+  const BACK = reference("Lat Pulldown", "total", 105, 7);                // 129.5 / 0.85 = 152.4
+  const SHOULDERS = reference("Barbell Overhead Press", "barbell", 180, 5); // 210
+  const QUADS = reference("Barbell Back Squat", "barbell", 167.5, 11);      // 228.9
+  const backAnchor = deriveMuscleAnchors(BACK).Back;
+  /** The references go into history first (an id already there is skipped), then the record. */
+  const apply = (rec, references = []) => {
+    for (const r of references) H.append("p", r);
     H.append("p", rec);
     return applySessionToEngine("p", rec);
   };
 
+  it("the reference records set the anchors these tests refuse", () => {
+    expect(backAnchor).toEqual({ bestE1RM: 152.4, bestE1RMLift: "Lat Pulldown", bestE1RMDate: "2026-10-04" });
+    expect(deriveMuscleAnchors(SHOULDERS).Shoulders.bestE1RM).toBe(210);
+    expect(deriveMuscleAnchors(QUADS).Quadriceps.bestE1RM).toBe(228.9);
+    expect(coldStartFromAnchor("Face-Away Cable Row", backAnchor)).toBe(62.5);
+    expect(coldStartFromAnchor("DB Lu Raise", deriveMuscleAnchors(SHOULDERS).Shoulders)).toBe(16);
+    expect(coldStartFromAnchor("DB Split Squat", deriveMuscleAnchors(QUADS).Quadriceps)).toBe(43);
+  });
+
   it("a 26 kg cable row: 26 or 27.5, never the anchor's 62.5", () => {
-    const back = { Back: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" } };
     for (const [rir, want] of [[1.5, 26], [2, 27.5]]) {
       localStorage.clear();
-      const out = apply(firstRecord("Face-Away Cable Row", "cable", 26, [10, 10, 10, 10], rir), back);
+      const out = apply(firstRecord("Face-Away Cable Row", "cable", 26, [10, 10, 10, 10], rir), BACK);
       expect(out.wwUpdates["Face-Away Cable Row"], `rir ${rir}`).toBe(want);
       expect(out.wwUpdates["Face-Away Cable Row"]).not.toBe(62.5);
       const lift = TS.get("p").lifts["Face-Away Cable Row"];
@@ -388,9 +409,8 @@ describe("a lift's first logged session progresses from what was lifted", () => 
   });
 
   it("a cooked first session holds 26 kg, never the anchor's 62.5", () => {
-    const back = { Back: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" } };
     const rec = { ...firstRecord("Face-Away Cable Row", "cable", 26, [10, 10, 10, 10], 1), readiness: "cooked" };
-    const out = apply(rec, back);
+    const out = apply(rec, BACK);
     expect(out.wwUpdates["Face-Away Cable Row"]).toBe(26);
     const lift = TS.get("p").lifts["Face-Away Cable Row"];
     expect(lift.nextPrescribed).toBe(26);
@@ -398,11 +418,10 @@ describe("a lift's first logged session progresses from what was lifted", () => 
   });
 
   it("a second cooked session, still with no counted one, holds 26 kg, never the anchor's 62.5", () => {
-    const back = { Back: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" } };
     const cooked = (id) => ({ ...firstRecord("Face-Away Cable Row", "cable", 26, [10, 10, 10, 10], 1), id, date: id.slice(0, 10), readiness: "cooked" });
-    expect(apply(cooked("2026-10-11T10:00:00.000Z"), back).wwUpdates["Face-Away Cable Row"]).toBe(26);
+    expect(apply(cooked("2026-10-11T10:00:00.000Z"), BACK).wwUpdates["Face-Away Cable Row"]).toBe(26);
     expect(TS.get("p").lifts["Face-Away Cable Row"].currentRepRange).toMatchObject({ reps: 10, sets: 4 });
-    const out = apply(cooked("2026-10-13T10:00:00.000Z"), back);
+    const out = apply(cooked("2026-10-13T10:00:00.000Z"), BACK);
     expect(out.wwUpdates["Face-Away Cable Row"]).toBe(26);
     const lift = TS.get("p").lifts["Face-Away Cable Row"];
     expect(lift.history.at(-1).decision).toBe("HOLD");
@@ -411,37 +430,33 @@ describe("a lift's first logged session progresses from what was lifted", () => 
 
   for (const kg of [20, 30]) {
     it(`a later cooked session, still with no counted one, takes its own top set: 26 then ${kg} holds ${kg}`, () => {
-      const back = { Back: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" } };
       const cooked = (id, weight) => ({ ...firstRecord("Face-Away Cable Row", "cable", weight, [10, 10, 10, 10], 1), id, date: id.slice(0, 10), readiness: "cooked" });
-      expect(apply(cooked("2026-10-11T10:00:00.000Z", 26), back).wwUpdates["Face-Away Cable Row"]).toBe(26);
-      expect(apply(cooked("2026-10-13T10:00:00.000Z", kg), back).wwUpdates["Face-Away Cable Row"]).toBe(kg);
+      expect(apply(cooked("2026-10-11T10:00:00.000Z", 26), BACK).wwUpdates["Face-Away Cable Row"]).toBe(26);
+      expect(apply(cooked("2026-10-13T10:00:00.000Z", kg), BACK).wwUpdates["Face-Away Cable Row"]).toBe(kg);
     });
   }
 
   it("a 6 kg Lu raise adds a kilo, never the anchor's 16", () => {
-    const shoulders = { Shoulders: { bestE1RM: 210, bestE1RMLift: "Overhead Press" } };
-    const out = apply(firstRecord("DB Lu Raise", "per_db", 6, [10, 10, 10], 2), shoulders);
+    const out = apply(firstRecord("DB Lu Raise", "per_db", 6, [10, 10, 10], 2), SHOULDERS);
     expect(out.wwUpdates["DB Lu Raise"]).toBe(7);
     expect(out.wwUpdates["DB Lu Raise"]).not.toBe(16);
   });
 
   it("a 16 kg split squat at RPE 9.5 holds 16, never the anchor's 43", () => {
-    const quads = { Quadriceps: { bestE1RM: 228.9, bestE1RMLift: "Leg Press" } };
-    const out = apply(firstRecord("DB Split Squat", "per_db", 16, [10, 10, 10], 0.5), quads);
+    const out = apply(firstRecord("DB Split Squat", "per_db", 16, [10, 10, 10], 0.5), QUADS);
     expect(out.wwUpdates["DB Split Squat"]).toBe(16);
     expect(out.wwUpdates["DB Split Squat"]).not.toBe(43);
     expect(TS.get("p").lifts["DB Split Squat"].history.at(-1).decision).toBe("HOLD");
   });
 
+  // Calves has no reference lift, so no anchor sizes a calf raise.
   it("an unrated first session holds the performed weight", () => {
-    const calves = { Calves: { bestE1RM: 100, bestE1RMLift: "Standing Calf Raise" } };
-    const out = apply(firstRecord("Seated Calf Raise", "machine", 40, [15, 15, 15, 15], null), calves);
+    const out = apply(firstRecord("Seated Calf Raise", "machine", 40, [15, 15, 15, 15], null));
     expect(out.wwUpdates["Seated Calf Raise"]).toBe(40);
     expect(TS.get("p").lifts["Seated Calf Raise"].history.at(-1).decision).toBe("HOLD");
   });
 
   // A belted Pull-Up stores the added kg; effectiveLoad carries bodyweight.
-  const back = { Back: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" } };
   const pullUp = (weight, rir) => {
     const rec = firstRecord("Pull-Up", "loaded_bodyweight", weight, [8, 8, 8], rir);
     for (const set of rec.blocks[0].exercises[0].sets) set.effectiveLoad = 80 + weight;
@@ -449,18 +464,18 @@ describe("a lift's first logged session progresses from what was lifted", () => 
   };
 
   it("a first belted pull-up progresses from the 10 kg added, never the anchor", () => {
-    const out = apply(pullUp(10, 3), back);
+    const out = apply(pullUp(10, 3), BACK);
     const w = out.wwUpdates["Pull-Up"];
     // 10 kg plus one 1.25 kg rung at RIR 3.
     expect(w).toBe(11.25);
-    expect(w).not.toBe(coldStartFromAnchor("Pull-Up", back.Back));
+    expect(w).not.toBe(coldStartFromAnchor("Pull-Up", backAnchor));
     const lift = TS.get("p").lifts["Pull-Up"];
     expect(lift.currentWeight).toBe(10);
     expect(lift.history.at(-1).decision).not.toBe("COLD_START");
   });
 
   it("a first unloaded pull-up keeps the bodyweight cold start", () => {
-    const out = apply(pullUp(0, 3), back);
+    const out = apply(pullUp(0, 3), BACK);
     expect(out.wwUpdates["Pull-Up"]).toBe(0);
     expect(out.wrUpdates).toEqual({});
     expect(TS.get("p").lifts["Pull-Up"].history.at(-1).decision).toBe("COLD_START");
@@ -481,22 +496,23 @@ describe("a lift's first logged session progresses from what was lifted", () => 
   it("a first assisted pull-up keeps the cold start and holds 20 kg", () => {
     for (const name of ["Assisted Pull-Up", "Pull-Up"]) {
       localStorage.clear();
-      const out = apply(assisted(name, 20, [8, 8, 8], 3), back);
+      const out = apply(assisted(name, 20, [8, 8, 8], 3), BACK);
       expect(out.wwUpdates[name], name).toBe(20);
       const lift = TS.get("p").lifts[name];
       expect(lift.history.at(-1).decision, name).toBe("COLD_START");
       expect(lift.currentWeight, name).toBe(20);
-      // Factor 0: Assisted Pull-Up never writes the Back anchor from band kg.
-      if (name === "Assisted Pull-Up") expect(TS.get("p").muscleAnchors.Back).toEqual(back.Back);
+      // Band kg never sets the Back anchor: Assisted Pull-Up is no reference
+      // lift, and an assisted Pull-Up set is help, not load.
+      expect(deriveMuscleAnchors(H.get("p")).Back, name).toEqual(backAnchor);
     }
   });
 
   it("the second assisted session takes a rung of help off: 20 to 18.75", () => {
-    apply(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3), back);
-    const out = apply(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3, "2026-10-13T10:00:00.000Z"), back);
+    apply(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3), BACK);
+    const out = apply(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3, "2026-10-13T10:00:00.000Z"), BACK);
     expect(out.wwUpdates["Assisted Pull-Up"]).toBe(18.75);
     expect(TS.get("p").lifts["Assisted Pull-Up"].currentWeight).toBe(20);
-    expect(TS.get("p").muscleAnchors.Back).toEqual(back.Back);
+    expect(deriveMuscleAnchors(H.get("p")).Back).toEqual(backAnchor);
   });
 
   it("a deload session on an assisted lift leaves the 20 kg: the load type reaches the deload", () => {
@@ -523,7 +539,7 @@ describe("a lift's first logged session progresses from what was lifted", () => 
   };
 
   it("an unlabelled first assisted session holds 20 kg, not a belted 21.25", () => {
-    const out = apply(unlabelled(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3)), back);
+    const out = apply(unlabelled(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3)), BACK);
     expect(out.wwUpdates["Assisted Pull-Up"]).toBe(20);
     expect(TS.get("p").lifts["Assisted Pull-Up"].history.at(-1).decision).toBe("COLD_START");
   });
@@ -552,19 +568,17 @@ describe("a lift's first logged session progresses from what was lifted", () => 
     expect(out.wwUpdates["Assisted Pull-Up"]).toBe(18.75);
   });
 
-  it("an assisted session does not re-save the Back anchor it leaves alone", () => {
-    const spy = vi.spyOn(TS, "updateMuscleAnchor");
-    try {
-      apply(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3), back);
-      apply(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3, "2026-10-13T10:00:00.000Z"), back);
-      expect(spy).not.toHaveBeenCalled();
-    } finally {
-      spy.mockRestore();
-    }
+  it("assisted sessions leave the stored anchor field as it was, and the derived Back where the reference set it", () => {
+    const stored = { Back: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" } };
+    TS.save("p", { ...TS.get("p"), muscleAnchors: stored });
+    apply(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3), BACK);
+    apply(assisted("Assisted Pull-Up", 20, [8, 8, 8], 3, "2026-10-13T10:00:00.000Z"), BACK);
+    expect(TS.get("p").muscleAnchors).toEqual(stored);
+    expect(deriveMuscleAnchors(H.get("p")).Back).toEqual(backAnchor);
   });
 
   it("a cooked first belted pull-up holds 10 kg", () => {
-    const out = apply({ ...pullUp(10, 1), readiness: "cooked" }, back);
+    const out = apply({ ...pullUp(10, 1), readiness: "cooked" }, BACK);
     expect(out.wwUpdates["Pull-Up"]).toBe(10);
     expect(TS.get("p").lifts["Pull-Up"].history.at(-1).decision).toBe("HOLD");
   });
@@ -573,15 +587,73 @@ describe("a lift's first logged session progresses from what was lifted", () => 
   // the cold start while its sessions are all cooked: no lifted load to hold.
   it("a pure bodyweight lift whose sessions are all cooked never gets a W, vest or not", () => {
     const cooked = (weight, id) => ({ ...firstRecord("Push-Up", "bodyweight", weight, [12, 12, 12], 1), id, date: id.slice(0, 10), readiness: "cooked" });
-    expect(apply(cooked(null, "2026-10-11T10:00:00.000Z"), back).wwUpdates).not.toHaveProperty("Push-Up");
-    expect(apply(cooked(10, "2026-10-13T10:00:00.000Z"), back).wwUpdates).not.toHaveProperty("Push-Up");
+    expect(apply(cooked(null, "2026-10-11T10:00:00.000Z"), BACK).wwUpdates).not.toHaveProperty("Push-Up");
+    expect(apply(cooked(10, "2026-10-13T10:00:00.000Z"), BACK).wwUpdates).not.toHaveProperty("Push-Up");
   });
 
   it("an assisted lift whose sessions are all cooked keeps the cold start", () => {
-    apply({ ...assisted("Assisted Pull-Up", 20, [8, 8, 8], 1), readiness: "cooked" }, back);
-    const out = apply({ ...assisted("Assisted Pull-Up", 15, [8, 8, 8], 1, "2026-10-13T10:00:00.000Z"), readiness: "cooked" }, back);
+    apply({ ...assisted("Assisted Pull-Up", 20, [8, 8, 8], 1), readiness: "cooked" }, BACK);
+    const out = apply({ ...assisted("Assisted Pull-Up", 15, [8, 8, 8], 1, "2026-10-13T10:00:00.000Z"), readiness: "cooked" }, BACK);
     expect(out.wwUpdates["Assisted Pull-Up"]).toBe(15);
     expect(TS.get("p").lifts["Assisted Pull-Up"].history.at(-1).decision).toBe("COLD_START");
+  });
+});
+
+// A never-logged lift's cold start reads the anchor derived from history,
+// from reference lifts only, and never from the record being applied.
+describe("an unloaded first session cold-starts from the derived anchor", () => {
+  beforeEach(() => localStorage.clear());
+  const LSP = "Landmine Squeeze Press";
+  const set = (weight, reps, loadType) => ({
+    weight, reps, rir: 2, loadType, effectiveLoad: weight,
+    est1rm: weight === null ? null : Math.round(weight * (1 + reps / 30) * 10) / 10,
+  });
+  const rec = (id, exercises) => ({
+    v: 2, id, date: id.slice(0, 10), readiness: "normal", session: "strength-a",
+    blocks: [{ id: "ass1", type: "superset", exercises }],
+  });
+  const ohp = (weight) => ({ name: "Barbell Overhead Press", loadType: "barbell", sets: [set(weight, 5, "barbell")] });
+  const rearDelt = { name: "Rear Delt Fly", loadType: "per_db", sets: [set(16, 15, "per_db")] };
+  // The press logged with no weight: nothing to seed a lift state from.
+  const unloaded = { name: LSP, loadType: "barbell", sets: [set(null, 12, "barbell"), set(null, 12, "barbell")] };
+  /** Each earlier record through the engine as its finish ran it, then the record. */
+  const run = (earlier, applied, opts) => {
+    for (const r of earlier) {
+      H.append("p", r);
+      applySessionToEngine("p", r);
+    }
+    H.append("p", applied);
+    return applySessionToEngine("p", applied, opts);
+  };
+  const OHP_DAY = rec("2026-10-02T10:00:00.000Z", [ohp(61.25)]);
+
+  it("an overhead press of 61.25 x 5 starts Landmine Squeeze Press at 23.75", () => {
+    expect(OHP_DAY.blocks[0].exercises[0].sets[0].est1rm).toBe(71.5);
+    const out = run([OHP_DAY], rec("2026-10-09T10:00:00.000Z", [unloaded]));
+    // 71.5 x 0.75 x 0.45 = 24.1 -> 24, on the barbell's grid 23.75.
+    expect(out.wwUpdates[LSP]).toBe(23.75);
+    const last = TS.get("p").lifts[LSP].history.at(-1);
+    expect(last.decision).toBe("COLD_START");
+    expect(last.rationale).toContain("anchor_lift=Barbell Overhead Press");
+  });
+
+  it("a record never sizes its own cold start: a heavier press in it leaves 23.75", () => {
+    const out = run([OHP_DAY], rec("2026-10-09T10:00:00.000Z", [ohp(70), unloaded]));
+    expect(out.wwUpdates[LSP]).toBe(23.75);
+    // The next read takes the press the record carried: 81.7.
+    expect(deriveMuscleAnchors(H.get("p")).Shoulders.bestE1RM).toBe(81.7);
+  });
+
+  it("a rear delt fly alone sets no anchor: the start is the caller's weight, never 80", () => {
+    const fly = rec("2026-10-02T10:00:00.000Z", [rearDelt]);
+    expect(fly.blocks[0].exercises[0].sets[0].est1rm).toBe(24);
+    expect(coldStartFromAnchor(LSP, { bestE1RM: 24 / 0.1 })).toBe(80);
+    const out = run([fly], rec("2026-10-09T10:00:00.000Z", [unloaded]), { currentWeights: { [LSP]: 22 } });
+    expect(out.wwUpdates[LSP]).toBe(22);
+    expect(TS.get("p").lifts[LSP].history.at(-1).rationale).toContain("cold_start_no_anchor");
+    localStorage.clear();
+    const bare = run([fly], rec("2026-10-09T10:00:00.000Z", [unloaded]));
+    expect(bare.wwUpdates).not.toHaveProperty(LSP);
   });
 });
 

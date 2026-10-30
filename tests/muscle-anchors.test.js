@@ -1,14 +1,25 @@
+// @vitest-environment jsdom
 // Muscle anchors come from reference lifts, derived from history on read
 // (deriveMuscleAnchors, lib/lift-translations.js). The guard holds the
 // declared list to the lift profiles; the pins hold the derivation: which
 // records and sets count, the factor, the loaded-bodyweight fallback, the
 // pre-v2 record the server reads unmigrated, the memo and the frozen shape.
-import { describe, it, expect } from "vitest";
+// The readers' pins hold every plan surface to the derived anchor: the stored
+// field is inert, a trainer's device derives nothing, the owner's cold starts
+// come from the five sets that anchor them, and every reader agrees.
+import { describe, it, expect, beforeEach } from "vitest";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 import {
-  REFERENCE_LIFTS, deriveMuscleAnchors, coldStartFromAnchor, startWeightFor, getLiftProfile, __test__,
+  REFERENCE_LIFTS, deriveMuscleAnchors, coldStartFromAnchor, startWeightFor, getLiftProfile, isBodyweightMovement, __test__,
 } from "../lib/lift-translations.js";
-import { hasCatalogueName, loadTypeOfName } from "../lib/programme-resolve.js";
-import { migrateV1ToV2, migrateV2ToV3 } from "../lib/storage.js";
+import { hasCatalogueName, loadTypeOfName, planStartWeight, resolvedProgramme } from "../lib/programme-resolve.js";
+import { migrateV1ToV2, migrateV2ToV3, H, TS } from "../lib/storage.js";
+import { localSource, coachedSource } from "../lib/session-source.js";
+import { applySessionToEngine } from "../lib/session-engine.js";
+import { runTool } from "../lib/mcp-server.js";
+import { projectForTrainer } from "../lib/trainer-plan.js";
+import { EXERCISE_POOLS } from "../lib/programme.js";
 
 const { PROFILES, REFERENCE_MUSCLE_OF, referenceMuscleOf } = __test__;
 const DECLARED = Object.values(REFERENCE_LIFTS).flat();
@@ -382,5 +393,220 @@ describe("deriveMuscleAnchors: malformed input and the frozen shape", () => {
     expect(() => { a.Quadriceps.bestE1RM = 1; }).toThrow(TypeError);
     expect(() => { a.Chest = { bestE1RM: 1 }; }).toThrow(TypeError);
     expect(a.Quadriceps.bestE1RM).toBe(137.3);
+  });
+});
+
+// ─── The readers ─────────────────────────────────────────────────────────────
+
+const ROOT = join(import.meta.dirname, "..");
+const NOW = new Date("2026-10-30T12:00:00Z");
+const BODY = 79.8;
+const pool = (slot, name) => EXERCISE_POOLS[slot].pool.find((p) => p.name === name);
+/** A source file with its comment lines stripped. */
+const code = (f) => readFileSync(join(ROOT, f), "utf8").split("\n").filter((l) => !/^\s*(\/\/|\/?\*|\{\/\*)/.test(l)).join("\n");
+
+/** The owner's external-load set, as logSet cached it at their bodyweight. */
+const owned = (name, w, r) => ({
+  name, loadType: "barbell",
+  sets: [{ weight: w, reps: r, rir: 2, rpe: 8, loadType: "barbell", bodyweightUsed: BODY, effectiveLoad: w, est1rm: epley(w, r) }],
+});
+// The owner's anchor-setting sets, one record each, and nothing else of their history.
+const OWNER = [
+  rec("2026-09-28", [owned("Barbell Back Squat", 130, 5)]),     // 151.7
+  rec("2026-09-30", [owned("Barbell Bench Press", 95, 5)]),     // 110.8
+  rec("2026-10-02", [owned("Barbell Overhead Press", 61.25, 5)]), // 71.5
+  rec("2026-10-05", [owned("Barbell Hip Thrust", 140, 10)]),    // 186.7
+  rec("2026-10-07", [bwPullUp]),                                // the body alone, 79.8 x 9: 103.7
+];
+// The owner's Day A rotation, every lift in it never logged.
+const OWNER_SLOTS = [
+  ["ass1-A", "DB Step-Up"], ["ass1-B", "Landmine Squeeze Press"], ["ass2-A", "Reverse Hyperextension"],
+  ["ass2-B", "Seal Row"], ["afin-B", "Leg Press Calf Raise"],
+];
+const OWNER_CONFIG = Object.fromEntries(OWNER_SLOTS.map(([slot, name]) => [slot, pool(slot, name)]));
+
+/** A meta whose rep targets name every lift in its programme, so current_loads lists each. */
+function metaFor(extra = {}) {
+  const base = { bodyweight: { kg: BODY }, weights: {}, programmeBlock: { number: 3, config: OWNER_CONFIG }, ...extra };
+  const reps = {};
+  for (const l of resolvedProgramme(base)) if (!(l.name in reps)) reps[l.name] = l.ex.reps;
+  return { ...base, reps };
+}
+/** The programme's lifts that load a bar or a stack and progress by it, once each, none of them in `history`. */
+function neverLoggedLoaded(meta, history) {
+  const logged = new Set(history.flatMap((r) => r.blocks.flatMap((b) => b.exercises.map((e) => e.name))));
+  const seen = new Set();
+  return resolvedProgramme(meta, history).filter((l) => {
+    if (seen.has(l.name) || logged.has(l.name)) return false;
+    seen.add(l.name);
+    return !l.timed && !isBodyweightMovement(l.loadType) && getLiftProfile(l.name).progressesByLoad;
+  });
+}
+/** Every lift's first session, logged with no weight: nothing to seed a lift state from. */
+const unloadedSession = (lifts) => rec("2026-10-12", lifts.map((l) => ({
+  name: l.name, loadType: l.loadType,
+  sets: [1, 2].map(() => ({ weight: null, reps: l.reps, rir: 2, loadType: l.loadType, effectiveLoad: null, est1rm: null })),
+})));
+/** The engine's start for each lift, from that session applied after `history`. */
+function engineStarts(history, lifts, { stored = null, currentWeights = {} } = {}) {
+  localStorage.clear();
+  if (stored) TS.save("p", { ...TS.get("p"), muscleAnchors: stored });
+  for (const r of history) H.append("p", r);
+  const session = unloadedSession(lifts);
+  H.append("p", session);
+  return applySessionToEngine("p", session, { currentWeights }).wwUpdates;
+}
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** A lift's suggested start as the MCP programme tool words it. */
+const programmeStart = (text, name) => {
+  const m = text.match(new RegExp(`(?:: |\\+ )${escape(name)} \\d+ × \\S+ @ ([\\d.]+) kg`));
+  return m ? Number(m[1]) : null;
+};
+/** A lift's suggested start as current_loads words it. */
+const loadsStart = (text, name) => {
+  const m = text.match(new RegExp(`^- ${escape(name)}: ([\\d.]+) kg`, "m"));
+  return m ? Number(m[1]) : null;
+};
+
+describe("the stored field is inert", () => {
+  beforeEach(() => localStorage.clear());
+  const files = (dir) => readdirSync(join(ROOT, dir)).flatMap((f) => {
+    const p = join(ROOT, dir, f);
+    return statSync(p).isDirectory() ? files(relative(ROOT, p)) : /\.(jsx?|mjs)$/.test(f) ? [relative(ROOT, p)] : [];
+  });
+  // A property read of the stored field: `.muscleAnchors` not called, or its bracket form.
+  const READ = /\.muscleAnchors\b(?!\s*\()|\[\s*["'`]muscleAnchors["'`]\s*\]/g;
+  const MUSCLES = [...new Set(Object.values(PROFILES).map((p) => p.primaryMuscle).filter(Boolean))];
+  const ABSURD = Object.fromEntries(MUSCLES.map((m) => [m, { bestE1RM: 9999, bestE1RMLift: "Barbell Back Squat", bestE1RMDate: "2026-01-01" }]));
+
+  it("only storage, the sync merge, the diag page and the finalise writer read it", () => {
+    const readers = {};
+    for (const f of [...files("lib"), ...files("components"), ...files("app")]) {
+      const n = (code(f).match(READ) || []).length;
+      if (n) readers[f] = n;
+    }
+    // The finalise writer's read before its write, until the writer goes.
+    expect(readers["lib/session-engine.js"]).toBe(1);
+    expect(code("lib/session-engine.js")).toMatch(/const currentAnchor = TS\.get\(profile\)\.muscleAnchors\?\.\[anchorMuscle\]/);
+    delete readers["lib/session-engine.js"];
+    expect(Object.keys(readers).sort()).toEqual(["app/diag-sync/page.jsx", "lib/storage.js", "lib/sync-merge.js"]);
+  });
+
+  it("an absurd stored anchor with no history plans as no stored field does, everywhere", () => {
+    const meta = metaFor();
+    const lifts = neverLoggedLoaded(meta, []);
+    expect(lifts.length).toBeGreaterThan(15);
+    // Read, the absurd anchor would move the plan.
+    const moved = lifts.filter((l) => planStartWeight(l.ex, { working: {}, bodyweight: BODY, anchors: ABSURD }) !== planStartWeight(l.ex, { working: {}, bodyweight: BODY, anchors: {} }));
+    expect(moved.length).toBeGreaterThan(10);
+
+    // The home card and the session, through the lifter's source.
+    const homeStarts = (stored) => {
+      localStorage.clear();
+      if (stored) TS.save("p", { ...TS.get("p"), muscleAnchors: stored });
+      const source = localSource("p");
+      for (const anchors of [source.muscleAnchors(), source.muscleAnchors(H.get("p"))]) expect(anchors).toEqual({});
+      return lifts.map((l) => planStartWeight(l.ex, { working: {}, bodyweight: BODY, anchors: source.muscleAnchors(H.get("p")) }));
+    };
+    expect(homeStarts(ABSURD)).toEqual(homeStarts(null));
+
+    // The MCP tools and the resolved programme, from a synced meta.
+    const absurdMeta = { ...meta, trainingState: { muscleAnchors: ABSURD } };
+    for (const tool of ["programme", "current_loads"]) {
+      expect(runTool(tool, {}, { meta: absurdMeta, history: [] }, NOW).text, tool).toBe(runTool(tool, {}, { meta, history: [] }, NOW).text);
+    }
+    expect(resolvedProgramme(absurdMeta, []).map((l) => l.start)).toEqual(resolvedProgramme(meta, []).map((l) => l.start));
+
+    // The engine: an unloaded first session takes the caller's weight, as with no field.
+    const currentWeights = Object.fromEntries(lifts.map((l) => [l.name, 20]));
+    const plain = engineStarts([], lifts, { currentWeights });
+    expect(engineStarts([], lifts, { stored: ABSURD, currentWeights })).toEqual(plain);
+    expect(plain).toEqual(currentWeights);
+  });
+});
+
+describe("a trainer's device derives no anchor", () => {
+  it("the coached source answers none, though the view's sessions hold reference-lift sets", () => {
+    // Sets logged as external load, as older records hold them.
+    const history = [
+      rec("2026-10-02", [lift("Barbell Overhead Press", "external", [[61.25, 5]])]),
+      rec("2026-10-05", [lift("Barbell Back Squat", "external", [[130, 5]])]),
+    ];
+    const view = projectForTrainer({ meta: metaFor(), history }, { todayIso: "2026-10-09", edits: { rows: [], used: 0, freeAt: null } });
+    const sessions = view.sessions;
+    expect(sessions.map((s) => s.blocks[0].exercises[0].name)).toEqual(["Barbell Overhead Press", "Barbell Back Squat"]);
+    // The view's sets carry no est1rm: a derivation there would compute one
+    // from weight x reps.
+    expect(JSON.stringify(sessions)).not.toContain("est1rm");
+    expect(Object.keys(deriveMuscleAnchors(sessions)).sort()).toEqual(["Quadriceps", "Shoulders"]);
+    const source = coachedSource(view.plan, view);
+    expect(source.muscleAnchors(sessions)).toEqual({});
+    expect(source.muscleAnchors(source.history())).toEqual({});
+  });
+
+  it("the session host derives nothing itself: its anchors come through its source, once", () => {
+    const host = readFileSync(join(ROOT, "components/SessionHost.jsx"), "utf8");
+    expect(host).not.toMatch(/deriveMuscleAnchors/);
+    expect(code("components/SessionHost.jsx").match(/\bsource\.muscleAnchors\(/g)).toEqual(["source.muscleAnchors("]);
+    expect(code("components/SessionHost.jsx")).toMatch(/useState\(\(\) => source\.muscleAnchors\(history\)\)/);
+  });
+});
+
+describe("the owner's cold starts, from only the sets that anchor them", () => {
+  const STARTS = { "DB Step-Up": 21, "Landmine Squeeze Press": 23.75, "Reverse Hyperextension": 50, "Seal Row": 23, "Leg Press Calf Raise": 55 };
+  // Where the stored anchor started them.
+  const OLD = { "DB Step-Up": 31, "Landmine Squeeze Press": 80, "Reverse Hyperextension": 50, "Seal Row": 35, "Leg Press Calf Raise": 55 };
+
+  it("five sets anchor five muscles", () => {
+    const pairs = Object.fromEntries(Object.entries(deriveMuscleAnchors(OWNER)).map(([m, a]) => [m, [a.bestE1RM, a.bestE1RMLift]]));
+    expect(pairs).toEqual({
+      Quadriceps: [151.7, "Barbell Back Squat"], Chest: [110.8, "Barbell Bench Press"], Shoulders: [71.5, "Barbell Overhead Press"],
+      Back: [103.7, "Pull-Up"], Glutes: [186.7, "Barbell Hip Thrust"],
+    });
+  });
+
+  it("the never-logged lifts start at 21 each, 23.75, 50, 23 each and 55, none above its old start", () => {
+    const anchors = deriveMuscleAnchors(OWNER);
+    const got = Object.fromEntries(OWNER_SLOTS.map(([slot, name]) => [name, planStartWeight(pool(slot, name), { working: {}, bodyweight: BODY, anchors })]));
+    expect(got).toEqual(STARTS);
+    for (const name of Object.keys(OLD)) expect(got[name], name).toBeLessThanOrEqual(OLD[name]);
+    expect(["DB Step-Up", "Seal Row"].map((n) => loadTypeOfName(n))).toEqual(["per_db", "per_db"]);
+    // The calf raise keeps its template: at factor 0 no anchor sizes it.
+    expect(pool("afin-B", "Leg Press Calf Raise").weight).toBe(55);
+    expect(coldStartFromAnchor("Leg Press Calf Raise", { bestE1RM: 9999 })).toBeNull();
+  });
+});
+
+describe("every reader plans a never-logged lift at the same start", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("the home card, the resolved programme, both MCP tools and the engine agree", () => {
+    const meta = metaFor();
+    for (const r of OWNER) H.append("p", r);
+    const history = H.get("p");
+    const anchors = localSource("p").muscleAnchors(history);
+    expect(anchors).toEqual(deriveMuscleAnchors(OWNER));
+    const lifts = neverLoggedLoaded(meta, history);
+    for (const [, name] of OWNER_SLOTS) expect(lifts.map((l) => l.name)).toContain(name);
+    const programme = runTool("programme", {}, { meta, history }, NOW).text;
+    const loads = runTool("current_loads", {}, { meta, history }, NOW).text;
+    const engine = engineStarts(OWNER, lifts);
+    let anchored = 0;
+    for (const l of lifts) {
+      const home = planStartWeight(l.ex, { working: {}, bodyweight: BODY, anchors });
+      expect(home, l.name).toBeGreaterThan(0);
+      expect(l.start, l.name).toBe(home);
+      expect(programmeStart(programme, l.name), l.name).toBe(home);
+      expect(loadsStart(loads, l.name), l.name).toBe(home);
+      // An unloaded first session starts where the card did whenever an anchor
+      // sizes the lift; with none, the engine sizes nothing on its own.
+      if (planStartWeight(l.ex, { anchors, bodyweight: null, template: null }) !== null) {
+        anchored++;
+        expect(engine[l.name], l.name).toBe(home);
+      } else {
+        expect(Object.hasOwn(engine, l.name), l.name).toBe(false);
+      }
+    }
+    expect(anchored).toBeGreaterThanOrEqual(10);
   });
 });

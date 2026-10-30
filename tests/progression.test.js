@@ -19,7 +19,6 @@ import {
   computeNextPrescription,
   updateLiftStateFromSession,
   reconcileLiftStateWithSession,
-  updateMuscleAnchorFromSession,
   topSetWeight,
   isLatestSessionForLift,
   // Phase 3
@@ -40,7 +39,7 @@ import {
 import { startingWeightForLift, roundToHalfPlate, computeEffectiveLoad } from "../lib/storage.js";
 import { mondayOfWeekIso, addDaysIso } from "../lib/dates.js";
 import {
-  coldStartFromAnchor, sanitiseWorkingWeights, CATEGORY_COLD_START_MAX_KG, getLiftProfile,
+  coldStartFromAnchor, sanitiseWorkingWeights, CATEGORY_COLD_START_MAX_KG, getLiftProfile, deriveMuscleAnchors,
 } from "../lib/lift-translations.js";
 
 // ─── Test helpers ───────────────────────────────────────────────────────────
@@ -2015,16 +2014,16 @@ describe("assisted lifts around the progression", () => {
     expect(r2.rationale).toContain("in_recovery_phase");
   });
 
-  it("a factor-0 profile never writes the muscle anchor; a factor above 0 still does", () => {
-    const record = { date: "2026-10-20" };
-    const back = { bestE1RM: 150, bestE1RMLift: "Barbell Row", bestE1RMDate: "2026-10-01", recentTopSets: [] };
-    expect(updateMuscleAnchorFromSession(back, record, ex([set(20), set(20)]))).toBe(back);
-    expect(updateMuscleAnchorFromSession(null, record, ex([set(0, 12)]))).toBeNull();
+  it("a factor-0 profile and an assisted set never set the muscle anchor; a reference lift still does", () => {
+    const anchors = (...exercises) => deriveMuscleAnchors([{ id: "2026-10-20T10:00:00.000Z", date: "2026-10-20", readiness: "normal", blocks: [{ id: "a1", type: "main", exercises }] }]);
+    expect(anchors(ex([set(20), set(20)]))).toEqual({});
+    expect(anchors(ex([set(0, 12)]))).toEqual({});
     // A calf raise is factor 0 too: the old `|| 1` wrote it at factor 1.
-    const calf = { name: "Standing Calf Raise", sets: [{ weight: 100, reps: 12, est1rm: 140 }] };
-    expect(updateMuscleAnchorFromSession(null, record, calf)).toBeNull();
+    expect(anchors({ name: "Standing Calf Raise", sets: [{ weight: 100, reps: 12, est1rm: 140 }] })).toEqual({});
+    // A Pull-Up is a reference lift, but an assisted set's kg is help.
+    expect(anchors({ ...ex([set(20), set(20)]), name: "Pull-Up" })).toEqual({});
     const squat = { name: "Barbell Back Squat", sets: [{ weight: 100, reps: 5, est1rm: 116.7 }] };
-    expect(updateMuscleAnchorFromSession(null, record, squat).bestE1RM).toBe(116.7);
+    expect(anchors(squat)).toEqual({ Quadriceps: { bestE1RM: 116.7, bestE1RMLift: "Barbell Back Squat", bestE1RMDate: "2026-10-20" } });
   });
 
   // A lift state stored while the profile progressed by reps: no kg, and a
