@@ -1586,7 +1586,7 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
           </div>
         )}
 
-        <div style={{display:"flex",gap:8,marginTop:16}}>
+        <div style={{display:"flex",gap:8,marginTop:16,flexShrink:0}}>
           <button onClick={onCancel} style={{flex:1,padding:"14px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
             Cancel
           </button>
@@ -1595,7 +1595,7 @@ function WeekEditorSheet({ initialWeek, isCustom, onSave, onReset, onCancel }) {
           </button>
         </div>
         {isCustom && (
-          <button onClick={onReset} style={{marginTop:10,padding:"6px",background:"none",border:"none",cursor:"pointer",fontSize:12,color:T.ink3,textDecoration:"underline",textUnderlineOffset:3,fontFamily:T.text,alignSelf:"center"}}>
+          <button onClick={onReset} style={{marginTop:10,flexShrink:0,padding:"6px",background:"none",border:"none",cursor:"pointer",fontSize:12,color:T.ink3,textDecoration:"underline",textUnderlineOffset:3,fontFamily:T.text,alignSelf:"center"}}>
             Reset to default week (Mon/Wed/Fri strength)
           </button>
         )}
@@ -1670,9 +1670,9 @@ function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
           ))}
         </div>
 
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{display:"flex",flexDirection:"column",gap:10,flexShrink:0}}>
           <button onClick={onConfirm}
-            style={{width:"100%",height:54,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
+            style={{width:"100%",height:56,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong}}>
             Confirm rotation
           </button>
           <div style={{display:"flex",gap:10}}>
@@ -1709,7 +1709,7 @@ function StimulusShift({ deltas, label }) {
   );
 }
 
-function RotationSummaryModal({summary,onContinue}){
+export function RotationSummaryModal({summary,onContinue}){
   const count = summary.changes.length;
   const topDeltas = (summary.stimulusDelta || []).slice(0, 4);
   const solvedLine = summary.report && summary.report.outOfBand?.length === 0;
@@ -1765,7 +1765,7 @@ function RotationSummaryModal({summary,onContinue}){
             </div>
           ))}
         </div>
-        <button onClick={onContinue} style={{width:"100%",height:54,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+        <button onClick={onContinue} style={{width:"100%",height:56,flexShrink:0,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:16,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
           {summary.reason === "reset" ? "Done" : <>Continue to readiness <Glyph name="arrowRight" size={13}/></>}
         </button>
       </div>

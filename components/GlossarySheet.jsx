@@ -156,7 +156,7 @@ export default function GlossarySheet({ anchorTerm = null, onCancel }) {
         </div>
 
         <button onClick={onCancel}
-          style={{marginTop:14,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
+          style={{marginTop:14,flexShrink:0,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
           Close
         </button>
       </div>

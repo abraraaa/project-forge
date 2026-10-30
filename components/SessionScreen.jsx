@@ -243,7 +243,7 @@ export function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJum
         </div>
 
         <button onClick={onCancel}
-          style={{marginTop:10,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
+          style={{marginTop:10,flexShrink:0,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
           Back to current set
         </button>
       </div>
@@ -324,7 +324,7 @@ function RecentHistorySheet({ exerciseName, recent, optionalWeight, onCancel }) 
         </div>
 
         <button onClick={onCancel}
-          style={{marginTop:14,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
+          style={{marginTop:14,flexShrink:0,padding:"12px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
           Close
         </button>
       </div>
