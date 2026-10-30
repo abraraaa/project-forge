@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { P, PB, F, LS, getLocalProfile } from "../lib/storage.js";
 import { solveRotation, bandViolations, FOCUS_VOLUME_PROFILES } from "../lib/rotation-solver.js";
 import { saveMainLiftCore, saveFocusCore, resetProgrammeCore, replanSeed, replanBlock, resetConfigFor } from "../lib/profile-actions.js";
-import { LIBRARY_REVISED } from "../lib/library-revised.js";
+import { ROTATION_REVISED } from "../lib/programme.js";
 import { applyTrainerRows } from "../lib/trainer-sync.js";
 import { validateOp } from "../lib/trainer-change.js";
 import { computeWeeklyVolume, VOLUME_TARGETS } from "../lib/volume-audit.js";
@@ -187,13 +187,13 @@ describe("a re-plan is seeded: one change, one week", () => {
     return PB.get().config;
   };
 
-  it("the key: the block number, the main lifts in any order, the focus and the library revision", () => {
+  it("the key: the block number, the main lifts in any order, the focus and the rotation revision", () => {
     const lifts = { [HINGE]: RDL, "Barbell Back Squat": "Front Squat" };
     const key = replanSeed({ number: 2, mainLifts: lifts, focus: "Strong" });
     expect(replanSeed({ number: 2, mainLifts: { "Barbell Back Squat": "Front Squat", [HINGE]: RDL }, focus: "Strong" })).toBe(key);
     // A lift set back to its default is stored as itself and changes nothing.
     expect(replanSeed({ number: 2, mainLifts: { ...lifts, "Barbell Bench Press": "Barbell Bench Press" }, focus: "Strong" })).toBe(key);
-    expect(key).toContain(LIBRARY_REVISED);
+    expect(key).toContain(ROTATION_REVISED);
     expect(replanSeed({ number: 3, mainLifts: lifts, focus: "Strong" })).not.toBe(key);
     expect(replanSeed({ number: 2, mainLifts: { [HINGE]: RDL }, focus: "Strong" })).not.toBe(key);
     expect(replanSeed({ number: 2, mainLifts: lifts, focus: "Forged" })).not.toBe(key);

@@ -116,11 +116,27 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const rotationConfig = programmeBlock?.config || {};
   const blockNumber = programmeBlock?.number;
   const rotated = Object.keys(rotationConfig).length > 0;
-  const resetConfig = useMemo(
-    () => (rotated ? resetConfigFor({ number: blockNumber, focus: userFocus, mainLifts }) : null),
-    [rotated, blockNumber, userFocus, mainLifts],
-  );
-  const hasRotationDrift = rotated && !samePicks(rotationConfig, resetConfig);
+  // Solved when the main thread is idle: the first sight of a seed is a full
+  // solve, tens of milliseconds on a phone, so the link settles a moment
+  // late rather than holding up Home's first paint. Later seeds hit the
+  // cache. The answer is kept with its key, so a stale week never decides.
+  const resetKey = rotated ? JSON.stringify([blockNumber, userFocus, mainLifts]) : null;
+  const [resetSolve, setResetSolve] = useState(null);
+  useEffect(() => {
+    if (!resetKey) return undefined;
+    const run = () => {
+      const config = resetConfigFor({ number: blockNumber, focus: userFocus, mainLifts });
+      setResetSolve((prev) => (prev && prev.key === resetKey && prev.config === config ? prev : { key: resetKey, config }));
+    };
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(run);
+      return () => cancelIdleCallback(id);
+    }
+    const id = setTimeout(run, 0);
+    return () => clearTimeout(id);
+  }, [resetKey, blockNumber, userFocus, mainLifts]);
+  const resetConfig = resetSolve && resetSolve.key === resetKey ? resetSolve.config : undefined;
+  const hasRotationDrift = rotated && resetConfig !== undefined && !samePicks(rotationConfig, resetConfig);
   const handleResetTap = () => {
     if (!resetArmed) {
       setResetArmed(true);

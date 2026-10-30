@@ -123,10 +123,8 @@ describe("no import cycle through storage, the trainer sync, the validator, the 
 });
 
 describe("the app shell stays off the exercise catalogue", () => {
-  // The re-plans read only the library's revision date, from its own module.
-  it("the profile actions take the revision date from its own module", () => {
-    expect(edges("lib/profile-actions.js")).toContain("lib/library-revised.js");
-  });
+  // The re-plan seed reads ROTATION_REVISED from lib/programme.js, which the
+  // shell already loads; lib/library.js builds the whole catalogue on load.
   for (const f of ["components/ForgeApp.jsx", "lib/profile-actions.js"]) {
     it(`${f} does not reach lib/library.js`, () => {
       expect(leaks(f, ["lib/library.js"])).toEqual([]);
