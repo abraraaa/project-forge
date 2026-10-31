@@ -29,7 +29,9 @@
 // Re-recorded when cold starts began reading the anchor derived from history
 // instead of the stored one: a Bench Press record (60 x 10, e1RM 80) older
 // than every volume window now gives the Chest anchor the swap seeds from.
-// The record is the only change; the stored anchor is still seeded, unread.
+// The record and its day mark (days 2026-05-10, written at the finish) are
+// the only change, in the store and in the push, and the push state's days
+// hash moves with them; the stored anchor is still seeded, unread.
 //
 // Re-recorded when finalise stopped writing the stored anchor: after the
 // finish, the trainingState's muscleAnchors holds only the seeded Chest

@@ -144,6 +144,22 @@ describe("computeNextPrescription — cold start", () => {
     expect(bench.rationale).toContain("cold_start_from_anchor");
   });
 
+  it("an anchor that rounds the lift to 0 is no anchor: the caller's weight answers", () => {
+    // As startWeightFor's anchor rung, which takes only a start above zero.
+    const light = { bestE1RM: 3.9, bestE1RMLift: "Lat Pulldown" };
+    expect(coldStartFromAnchor("Seal Row", light)).toBe(0);
+    for (const currentWeight of [18, null]) {
+      const r = computeNextPrescription({
+        liftName: "Seal Row", history: [], liftState: null, muscleAnchor: light,
+        context: { readiness: "normal", currentWeight, loadType: "per_db" },
+      });
+      expect(r.decision).toBe("COLD_START");
+      expect(r.weight).toBe(currentWeight);
+      expect(r.rationale).toContain("cold_start_no_anchor");
+      expect(r.rationale).not.toContain("cold_start_from_anchor");
+    }
+  });
+
   it("returns currentWeight when neither history nor anchor available", () => {
     const result = computeNextPrescription({
       liftName: "Random New Lift",

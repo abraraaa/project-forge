@@ -489,6 +489,26 @@ describe("the stored field is inert", () => {
     expect(Object.keys(readers).sort()).toEqual(["app/diag-sync/page.jsx", "lib/storage.js", "lib/sync-merge.js"]);
   });
 
+  it("names it nowhere new: every mention, destructured or not, is counted per file", () => {
+    // READ sees a property read only; a destructured one gets past it. So a
+    // new mention of the name anywhere fails here until someone looks at it.
+    const MENTIONS = {
+      "app/diag-sync/page.jsx": 1,      // the legacy count it shows
+      "components/ForgeApp.jsx": 4,     // homePlan's anchors to the card and the retro sheet; the sheet's prop and its plan
+      "components/HomeScreen.jsx": 2,   // the prop and its plan
+      "components/SessionHost.jsx": 8,  // the source's anchors, read once, and the plans that take them
+      "lib/session-source.js": 2,       // each source's method
+      "lib/storage.js": 2,              // the default shape and the richness check
+      "lib/sync-merge.js": 2,           // the richness check
+    };
+    const mentions = {};
+    for (const f of [...files("lib"), ...files("components"), ...files("app")]) {
+      const n = (code(f).match(/\bmuscleAnchors\b/g) || []).length;
+      if (n) mentions[f] = n;
+    }
+    expect(mentions).toEqual(MENTIONS);
+  });
+
   it("an absurd stored anchor with no history plans as no stored field does, everywhere", () => {
     const meta = metaFor();
     const lifts = neverLoggedLoaded(meta, []);
@@ -608,18 +628,23 @@ describe("the owner's cold starts, from only the sets that anchor them", () => {
 describe("every reader plans a never-logged lift at the same start", () => {
   beforeEach(() => localStorage.clear());
 
-  it("the home card, the resolved programme, both MCP tools and the engine agree", () => {
+  /**
+   * Every reader's start for each never-logged loaded lift after `records`,
+   * held equal; returns the derived anchors, the lifts an anchor sized and
+   * the engine's starts.
+   */
+  function readersAgree(records) {
     const meta = metaFor();
-    for (const r of OWNER) H.append("p", r);
+    for (const r of records) H.append("p", r);
     const history = H.get("p");
     const anchors = localSource("p").muscleAnchors(history);
-    expect(anchors).toEqual(deriveMuscleAnchors(OWNER));
+    expect(anchors).toEqual(deriveMuscleAnchors(records));
     const lifts = neverLoggedLoaded(meta, history);
     for (const [, name] of OWNER_SLOTS) expect(lifts.map((l) => l.name)).toContain(name);
     const programme = runTool("programme", {}, { meta, history }, NOW).text;
     const loads = runTool("current_loads", {}, { meta, history }, NOW).text;
-    const engine = engineStarts(OWNER, lifts);
-    let anchored = 0;
+    const engine = engineStarts(records, lifts);
+    const anchored = [];
     for (const l of lifts) {
       const home = planStartWeight(l.ex, { working: {}, bodyweight: BODY, anchors });
       expect(home, l.name).toBeGreaterThan(0);
@@ -629,12 +654,50 @@ describe("every reader plans a never-logged lift at the same start", () => {
       // An unloaded first session starts where the card did whenever an anchor
       // sizes the lift; with none, the engine sizes nothing on its own.
       if (planStartWeight(l.ex, { anchors, bodyweight: null, template: null }) !== null) {
-        anchored++;
+        anchored.push(l.name);
         expect(engine[l.name], l.name).toBe(home);
       } else {
         expect(Object.hasOwn(engine, l.name), l.name).toBe(false);
       }
     }
-    expect(anchored).toBeGreaterThanOrEqual(10);
+    return { anchors, anchored, engine };
+  }
+
+  it("the home card, the resolved programme, both MCP tools and the engine agree", () => {
+    expect(readersAgree(OWNER).anchored.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it("an anchor that rounds a lift's start to 0 starts it on no reader", () => {
+    // One pulldown at 2.5 x 10 (e1RM 3.3) beside the pull-ups: the external
+    // set wins the fallback, so Back is 3.9 and Seal Row's anchor start is 0.
+    const light = [...OWNER, rec("2026-10-09", [lift("Lat Pulldown", "total", [[2.5, 10]])])];
+    const { anchors, anchored, engine } = readersAgree(light);
+    expect(anchors.Back).toEqual({ bestE1RM: 3.9, bestE1RMLift: "Lat Pulldown", bestE1RMDate: "2026-10-09" });
+    expect(coldStartFromAnchor("Seal Row", anchors.Back)).toBe(0);
+    // The card plans it as with no anchor; the engine writes no 0 under it.
+    const seal = pool("ass2-B", "Seal Row");
+    expect(planStartWeight(seal, { working: {}, bodyweight: BODY, anchors })).toBe(planStartWeight(seal, { working: {}, bodyweight: BODY, anchors: {} }));
+    expect(anchored).not.toContain("Seal Row");
+    expect(Object.values(engine)).not.toContain(0);
+    // A Back lift the light anchor still starts above 0 keeps it.
+    expect(anchored).toContain("Seated Cable Row");
+    expect(anchored.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it("the home card and the retro sheet plan with the anchors derived from the history the card shows", () => {
+    // ForgeApp's homePlan feeds both; the home leg above plans as HomeScreen
+    // does, from the anchors this memo derives.
+    const app = code("components/ForgeApp.jsx");
+    const memo = app.match(/const homePlan = useMemo\(\(\) => \{([\s\S]*?)\n\s*\}, \[([^\]]*)\]\);/);
+    expect(memo, "homePlan").not.toBeNull();
+    expect(memo[1]).toMatch(/\banchors: deriveMuscleAnchors\(history\) \};/);
+    expect(memo[1]).not.toMatch(/\bmuscleAnchors\b/);
+    expect(memo[2].split(",").map((d) => d.trim())).toEqual(["activeProfile", "workingWeights", "workingReps", "history"]);
+    expect(app.match(/muscleAnchors=\{homePlan\.anchors\}/g)).toHaveLength(2);
+    expect(app).toMatch(/<HomeScreen [^\n]*\bmuscleAnchors=\{homePlan\.anchors\}/);
+    expect(app).toMatch(/<RetrospectiveSessionSheet [^\n]*\bmuscleAnchors=\{homePlan\.anchors\}/);
+    // Each plans with the prop as it comes.
+    expect(code("components/HomeScreen.jsx")).toMatch(/\{ reps: liveReps, weights: workingWeights, bodyweight, anchors: muscleAnchors \};/);
+    expect(app).toMatch(/planStartWeight\(ex, \{ working: workingWeights, bodyweight, anchors: muscleAnchors \}\)/);
   });
 });
