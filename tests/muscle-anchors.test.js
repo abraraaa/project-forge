@@ -22,7 +22,7 @@ import { runTool } from "../lib/mcp-server.js";
 import { projectForTrainer } from "../lib/trainer-plan.js";
 import { EXERCISE_POOLS } from "../lib/programme.js";
 
-const { PROFILES, REFERENCE_MUSCLE_OF, referenceMuscleOf } = __test__;
+const { PROFILES, REFERENCE_MUSCLE_OF, referenceMuscleOf, BODY_INCLUSIVE_REFERENCE_LIFTS } = __test__;
 const DECLARED = Object.values(REFERENCE_LIFTS).flat();
 // Muscles with a lift that progresses by load at a factor above zero, but no
 // reference lift: their lifts never read an anchor.
@@ -78,6 +78,13 @@ describe("the guard: the declared reference lifts against the lift profiles", ()
 
   it("every member is a lift the catalogue can put in front of a lifter", () => {
     expect(DECLARED.filter((name) => !hasCatalogueName(name))).toEqual([]);
+  });
+
+  it("the pull-up family is exactly the members the catalogue loads with the body, all on Back", () => {
+    const family = [...BODY_INCLUSIVE_REFERENCE_LIFTS].sort();
+    expect(family).toEqual(DECLARED.filter((name) => loadTypeOfName(name) === "loaded_bodyweight").sort());
+    expect(family).toHaveLength(5);
+    for (const name of family) expect(REFERENCE_MUSCLE_OF.get(name), name).toBe("Back");
   });
 
   it("names the muscles a loadable lift has but no reference lift serves", () => {
@@ -282,6 +289,21 @@ describe("deriveMuscleAnchors: the loaded-bodyweight fallback", () => {
     // Nor does a pulldown set with no usable e1RM.
     const empty = lift("Lat Pulldown", "total", [[null, 10, null]]);
     expect(deriveMuscleAnchors([rec("2026-10-01", [empty, bwPullUp])]).Back.bestE1RM).toBe(103.7);
+  });
+
+  it("a pull-up family set counts only with the body in its load: a belt-only set never stands in as the reference", () => {
+    // A pre-v2 set the migration typed external, logged without a bodyweight: the belt alone.
+    const beltOnly = { name: "Pull-Up", loadType: "external", sets: [{ weight: 10, reps: 8, rir: 2, rpe: 8, loadType: "external", bodyweightUsed: null, effectiveLoad: 10, est1rm: 12.7 }] };
+    expect(deriveMuscleAnchors([rec("2026-06-15", [beltOnly]), rec("2026-10-01", [bwPullUp])]).Back)
+      .toEqual({ bestE1RM: 103.7, bestE1RMLift: "Pull-Up", bestE1RMDate: "2026-10-01" });
+    expect(deriveMuscleAnchors([rec("2026-06-15", [beltOnly])]).Back).toBeUndefined();
+    // The same set as the server reads a raw v1 record: no load type anywhere.
+    const rawBelt = { name: "Pull-Up", sets: [{ weight: 10, reps: 8, rpe: "normal" }] };
+    expect(deriveMuscleAnchors([rec("2026-06-15", [rawBelt]), rec("2026-10-01", [bwPullUp])]).Back.bestE1RM).toBe(103.7);
+    expect(deriveMuscleAnchors([rec("2026-06-15", [rawBelt])])).toEqual({});
+    // The bucket is the lift's, not the set's: a pulldown stays an external-load reference whatever its set says.
+    const oddPulldown = lift("Lat Pulldown", "loaded_bodyweight", [[65, 10]]);
+    expect(deriveMuscleAnchors([rec("2026-10-01", [oddPulldown, bwPullUp])]).Back.bestE1RMLift).toBe("Lat Pulldown");
   });
 
   it("the loaded_bw spelling falls back too", () => {
