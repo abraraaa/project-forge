@@ -63,6 +63,17 @@ npm run dev           # http://localhost:3000
 
 The repo name and the `forge:`/`forge/` storage prefixes keep their old spelling on purpose — deep plumbing, invisible to users, not worth a migration.
 
+## MCP
+
+Heatwayve exposes a remote [Model Context Protocol](https://modelcontextprotocol.io) server for read-only training tools.
+
+- **Endpoint:** `https://heatwayve.app/mcp` (Streamable HTTP)
+- **Connect:** [heatwayve.app/connect](https://heatwayve.app/connect) — OAuth with Face ID / passkey; scope `training:read`
+- **Tools (read-only):** `training_snapshot`, `recent_sessions`, `programme`, `chart_style`, `current_loads`, `lift_history`
+- **Claude:** [Add Heatwayve connector](https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Heatwayve&connectorUrl=https%3A%2F%2Fheatwayve.app%2Fmcp)
+
+Unauthenticated calls receive `401` with `WWW-Authenticate` pointing at the OAuth protected-resource metadata.
+
 ## License
 
 Heatwayve is **source-available, not open-source**. The default terms are **PolyForm Strict 1.0.0** (read, study, run privately; no redistribution, no derivatives, no reuse of code or content) — see [LICENSE](./LICENSE) for the binding text and [LICENSING.md](./LICENSING.md) for what it means in practice. Commercial licences (SaaS, white-label, integrations, any commercial use) are available — contact `ab@heatwayve.app`.
