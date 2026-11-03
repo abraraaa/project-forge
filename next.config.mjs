@@ -98,6 +98,13 @@ const nextConfig = {
         { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
       ],
     }, {
+      // Extensionless: the static server would send application/octet-stream,
+      // and nosniff above would then keep clients from reading it as text.
+      source: "/.well-known/mcp-registry-auth",
+      headers: [
+        { key: "Content-Type", value: "text/plain; charset=utf-8" },
+      ],
+    }, {
       // Operational surfaces stay out of the index. A response HEADER rather
       // than page metadata: these routes are client components and cannot
       // export `metadata`, and the header applies to the response itself so
