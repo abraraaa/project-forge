@@ -306,10 +306,10 @@ describe("deriveMuscleAnchors: the loaded-bodyweight fallback", () => {
     expect(deriveMuscleAnchors([rec("2026-10-01", [oddPulldown, bwPullUp])]).Back.bestE1RMLift).toBe("Lat Pulldown");
   });
 
-  it("the loaded_bw spelling falls back too", () => {
-    const heavy = pullUp({ weight: 20, reps: 8, loadType: "loaded_bw", bodyweightUsed: 80, effectiveLoad: 100, est1rm: 110 });
-    expect(deriveMuscleAnchors([rec("2026-10-01", [pulldown, heavy])]).Back).toEqual({ bestE1RM: 102, bestE1RMLift: "Lat Pulldown", bestE1RMDate: "2026-10-01" });
-    expect(deriveMuscleAnchors([rec("2026-10-01", [heavy])]).Back.bestE1RM).toBe(110);
+  it("a loaded_bw set never counts: storage puts no body in its load, so its e1RM is the belt alone", () => {
+    const beltOnly = pullUp({ weight: 20, reps: 8, loadType: "loaded_bw", bodyweightUsed: 80, effectiveLoad: 20, est1rm: 25.3 });
+    expect(deriveMuscleAnchors([rec("2026-10-01", [beltOnly])])).toEqual({});
+    expect(deriveMuscleAnchors([rec("2026-10-01", [beltOnly, bwPullUp])]).Back.bestE1RM).toBe(103.7);
   });
 });
 
