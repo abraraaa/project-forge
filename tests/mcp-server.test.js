@@ -418,7 +418,8 @@ describe("resolvedProgramme behind describeProgramme (E8)", () => {
   // row): the two B pools changed places; the tool code was unchanged. Strong
   // re-captured for the same re-pair and its Day A drop moving to the lunge +
   // landmine superset (ass1), so Strong's Day A keeps the hip extension + row.
-  const BEFORE = { undefined: "b3300b1ccaf5a650", Forged: "10847b3fb2ae6e97", Strong: "8148cb665c65a12e", Sculpt: "22d29f87e6b4c284" };
+  // Re-captured 2026-11-03: the band lifts left the pools, so the solved weeks moved.
+  const BEFORE = { undefined: "cb3829023b12a37d", Forged: "306de8ea775fc383", Strong: "d4e4270deb836e25", Sculpt: "b2ec1ca7140d32d0" };
   const fixtures = e8Fixtures();
   const texts = fixtures.map((f) => [runTool("programme", {}, f, now).text, runTool("current_loads", {}, f, now).text]);
 

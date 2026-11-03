@@ -128,11 +128,9 @@ describe("a swapped-in lift arrives with a weight to stand on", () => {
     // acceptable (they are nominal-resistance band moves) but it should never
     // grow silently, so the list is pinned.
     const UNSEEDABLE = new Set([
-      // Nominal-resistance band moves — no meaningful anchor exists.
-      "Resistance Band Crossover",
-      "Resistance Band Face Pull",
       // Weighted Dips and Hang Power Clean left this list on 2026-10-11 when
-      // they got lift profiles.
+      // they got lift profiles; Resistance Band Crossover and Resistance Band
+      // Face Pull on 2026-11-03, as reps-only band profiles.
     ]);
     const orphans = new Set();
     for (const alts of Object.values(SWAP_DB)) {
