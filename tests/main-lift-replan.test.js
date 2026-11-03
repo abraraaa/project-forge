@@ -26,9 +26,9 @@ describe("main-lift change keeps the week in band", () => {
   beforeEach(() => { localStorage.clear(); P.add("sam"); P.setActive("sam"); });
 
   it("a swap that breaks a band re-plans the block's accessories", () => {
-    // Seed 25: Push Press for Power Clean leaves Calves out of band.
-    const before = setup(25);
-    expect(bandViolations(before, { focus: "Forged", mainLifts: { "Power Clean": "Push Press" } })).toContain("Calves");
+    // Seed 7: Push Press for Power Clean leaves Upper Back out of band.
+    const before = setup(7);
+    expect(bandViolations(before, { focus: "Forged", mainLifts: { "Power Clean": "Push Press" } })).toContain("Upper Back");
     const { summary, mainLifts } = saveMainLiftCore("sam", "Power Clean", "Push Press");
     expect(mainLifts["Power Clean"]).toBe("Push Press");
     expect(summary?.reason).toBe("main_lift");
