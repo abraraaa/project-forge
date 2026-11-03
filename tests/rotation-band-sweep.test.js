@@ -56,11 +56,11 @@ describe("Strong sweep: every solved week in band and inside its CNS budget", ()
 });
 
 describe("the complete repair on the week that found it", () => {
-  // Strong, Power Clean to Push Press, lcg seed 25: the bounded pass spends
+  // Strong, Power Clean to Push Press, lcg seed 64: the bounded pass spends
   // its six swaps on soft drift and stops with Calves at 5.9. The complete
   // repair changes one slot, css1-A DB Lateral Lunge to DB Walking Lunge.
   const solve = (completeRepair) =>
-    solveRotation({ focus: "Strong", mainLifts: { "Power Clean": "Push Press" }, rng: lcg(25), completeRepair });
+    solveRotation({ focus: "Strong", mainLifts: { "Power Clean": "Push Press" }, rng: lcg(64), completeRepair });
 
   it("without it the week is under MEV on Calves", () => {
     const { report } = solve(false);

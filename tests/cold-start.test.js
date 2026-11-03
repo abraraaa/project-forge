@@ -5,9 +5,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { startWeightFor, coldStartFromAnchor, snapToImplement, getLiftProfile, __test__ } from "../lib/lift-translations.js";
+import { startWeightFor, coldStartFromAnchor, snapToImplement, getLiftProfile, deriveMuscleAnchors, REFERENCE_LIFTS, __test__ } from "../lib/lift-translations.js";
 import { planStartWeight, startingWeightForLift, newDraftLog, logSet, finaliseDraft, H, TS } from "../lib/storage.js";
-import { updateMuscleAnchorFromSession } from "../lib/progression.js";
 import { applySessionToEngine } from "../lib/session-engine.js";
 import { runTool } from "../lib/mcp-server.js";
 import { EXERCISE_POOLS } from "../lib/programme.js";
@@ -19,6 +18,18 @@ const now = new Date("2026-09-24T12:00:00Z");
 const GLUTES = { bestE1RM: 140 * (1 + 10 / 30), bestE1RMLift: "Barbell Hip Thrust" };
 const ANCHORS = { Glutes: GLUTES };
 const BRIDGE = EXERCISE_POOLS["ass2-A"].pool.find((p) => p.name === "Barbell Glute Bridge");
+
+/** A finalised record, its exercises in one block. */
+const record = (id, exercises) => ({
+  id, date: id.slice(0, 10), schemaVersion: 3, session: "strength-c", readiness: "normal",
+  blocks: [{ id: "c1", type: "main", exercises }],
+});
+/** One barbell set as logSet caches it: the e1RM on the bar's load. */
+const barbell = (name, weight, reps, est1rm) => ({
+  name, loadType: "barbell", sets: [{ weight, reps, rir: 2, loadType: "barbell", effectiveLoad: weight, est1rm }],
+});
+// The owner's hip thrust as history holds it: the Glutes anchor, 186.7.
+const HIP_THRUST = record("2026-09-20T10:00:00.000Z", [barbell("Barbell Hip Thrust", 140, 10, 186.7)]);
 
 describe("startWeightFor: the rungs, in order", () => {
   const squat = { name: "Barbell Back Squat", weight: 60, loadType: "barbell" };
@@ -144,14 +155,18 @@ describe("one resolver: no plan surface computes its own start", () => {
 });
 
 describe("MCP tools read the same start", () => {
+  // The anchor comes from the history the tools read, never from meta.
   const meta = (extra = {}) => ({
     bodyweight: { kg: 80 },
-    trainingState: { muscleAnchors: ANCHORS },
     ...extra,
   });
 
+  it("the hip thrust record is the Glutes anchor the resolver tests use", () => {
+    expect(deriveMuscleAnchors([HIP_THRUST]).Glutes).toEqual({ bestE1RM: 186.7, bestE1RMLift: "Barbell Hip Thrust", bestE1RMDate: "2026-09-20" });
+    expect(GLUTES.bestE1RM).toBeCloseTo(186.7, 1);
+  });
   it("current_loads shows 112.5 for the glute bridge with a target and no working weight", () => {
-    const d = { meta: meta({ reps: { "Barbell Glute Bridge": 12 } }), history: [] };
+    const d = { meta: meta({ reps: { "Barbell Glute Bridge": 12 } }), history: [HIP_THRUST] };
     expect(runTool("current_loads", {}, d, now).text).toBe("- Barbell Glute Bridge: 112.5 kg (suggested start) × 12");
   });
   it("current_loads without the anchor shows the template, never 'bodyweight'", () => {
@@ -169,12 +184,12 @@ describe("MCP tools read the same start", () => {
     }
   });
   it("a stored null reads as no working weight in both tools, as the resolver reads it", () => {
-    const d = { meta: meta({ weights: { "Barbell Glute Bridge": null }, reps: { "Barbell Glute Bridge": 12 }, programmeBlock: { number: 1, config: { "ass2-A": BRIDGE } } }), history: [] };
+    const d = { meta: meta({ weights: { "Barbell Glute Bridge": null }, reps: { "Barbell Glute Bridge": 12 }, programmeBlock: { number: 1, config: { "ass2-A": BRIDGE } } }), history: [HIP_THRUST] };
     expect(runTool("current_loads", {}, d, now).text).toBe("- Barbell Glute Bridge: 112.5 kg (suggested start) × 12");
     expect(runTool("programme", {}, d, now).text).toContain("Barbell Glute Bridge 3 × 12 @ 112.5 kg (suggested start)");
   });
   it("the programme plans the rotated-in glute bridge at 112.5", () => {
-    const d = { meta: meta({ programmeBlock: { number: 1, config: { "ass2-A": BRIDGE } } }), history: [] };
+    const d = { meta: meta({ programmeBlock: { number: 1, config: { "ass2-A": BRIDGE } } }), history: [HIP_THRUST] };
     expect(runTool("programme", {}, d, now).text).toContain("Barbell Glute Bridge 3 × 12 @ 112.5 kg (suggested start)");
   });
 });
@@ -199,7 +214,9 @@ describe("an unset (a stored null) is no stored value, at every rung and in the 
 
 // Five lifts that used to fall to name inference: the default (no anchor), the
 // dumbbell incline rule, the Chest press rule and the triceps "extension" rule.
-describe("lift profiles: each listed lift reads and writes its own anchor", () => {
+// A reference lift among them sets its muscle's derived anchor; the others
+// leave it absent.
+describe("lift profiles: each listed lift reads its own profile; a reference lift sets its muscle's anchor", () => {
   const CASES = [
     { name: "Push Press",             loadType: "barbell",           weight: 50, reps: 5,  want: { primaryMuscle: "Shoulders",  category: "upper_push",         factor: 1.2 } },
     { name: "Hang Power Clean",       loadType: "barbell",           weight: 50, reps: 3,  want: { primaryMuscle: "Power",      category: "power",              factor: 0.9 } },
@@ -208,14 +225,20 @@ describe("lift profiles: each listed lift reads and writes its own anchor", () =
     { name: "Reverse Hyperextension", loadType: "machine",           weight: 25, reps: 12, want: { primaryMuscle: "Glutes",     category: "accessory_compound", factor: 0.35 } },
   ];
   const BW = 80;
+  const REFERENCE = new Set(Object.values(REFERENCE_LIFTS).flat());
+
+  it("three are reference lifts, two are not", () => {
+    expect(CASES.filter((c) => REFERENCE.has(c.name)).map((c) => c.name)).toEqual(["Push Press", "Hang Power Clean", "Incline BB Press"]);
+  });
 
   for (const c of CASES) {
+    const member = REFERENCE.has(c.name);
     it(`${c.name}: its own profile, not inference`, () => {
       expect(Object.hasOwn(__test__.PROFILES, c.name)).toBe(true);
       expect(getLiftProfile(c.name)).toEqual({ ...c.want, progressesByLoad: true });
     });
 
-    it(`${c.name}: one logged set writes the ${c.want.primaryMuscle} anchor`, () => {
+    it(`${c.name}: one logged set ${member ? "sets" : "leaves absent"} the derived ${c.want.primaryMuscle} anchor`, () => {
       const d = newDraftLog({ profileName: "p", session: "strength-b", blockNumber: 1, readiness: "normal", bodyweight: BW });
       logSet(d, {
         blockId: "b2", blockType: "main", exerciseName: c.name, muscle: "", swapped: true, fromPool: null,
@@ -226,11 +249,17 @@ describe("lift profiles: each listed lift reads and writes its own anchor", () =
       const set = ex.sets[0];
       // The anchor key, as lib/session-engine.js picks it.
       expect(getLiftProfile(ex.name).primaryMuscle).toBe(c.want.primaryMuscle);
-      const anchor = updateMuscleAnchorFromSession(null, rec, ex);
-      expect(anchor?.bestE1RMLift).toBe(c.name);
       // Weighted Dips: the e1RM is on bodyweight plus the belt, as Weighted Pull-Up's.
       if (c.loadType === "loaded_bodyweight") expect(set.effectiveLoad).toBe(BW + c.weight);
-      expect(anchor?.bestE1RM).toBeCloseTo(set.est1rm / c.want.factor, 0);
+      expect(set.est1rm).toBeGreaterThan(0);
+      const anchors = deriveMuscleAnchors([rec]);
+      if (member) {
+        expect(anchors).toEqual({
+          [c.want.primaryMuscle]: { bestE1RM: Math.round((set.est1rm / c.want.factor) * 10) / 10, bestE1RMLift: c.name, bestE1RMDate: rec.date },
+        });
+      } else {
+        expect(anchors).toEqual({});
+      }
     });
   }
 
@@ -241,13 +270,14 @@ describe("lift profiles: each listed lift reads and writes its own anchor", () =
 });
 
 // The engine's own cold start (a lift with no state and no loaded sets to
-// seed from) lands on the implement's grid. The Biceps anchor gives
-// 56 x 0.75 x 0.35 = 14.7 -> 14.5, a dumbbell no rack has.
+// seed from) lands on the implement's grid. An EZ bar curl record (42 x 8,
+// e1RM 53.2) gives the Biceps anchor 56: 56 x 0.75 x 0.35 = 14.7 -> 14.5, a
+// dumbbell no rack has.
 describe("the engine's cold start lands on the implement's grid", () => {
-  const biceps = { bestE1RM: 56, bestE1RMLift: "DB Curl" };
+  const curl = record("2026-10-04T10:00:00.000Z", [barbell("EZ Bar Curl", 42, 8, 53.2)]);
   const firstSession = (weight, readiness) => {
     localStorage.clear();
-    TS.save("p", { ...TS.get("p"), muscleAnchors: { Biceps: biceps } });
+    H.append("p", curl);
     const set = { weight, reps: 12, rir: 0, loadType: "per_db", effectiveLoad: weight, est1rm: weight === null ? null : 21 };
     const rec = {
       v: 2, id: "2026-10-11T10:00:00.000Z", date: "2026-10-11", readiness, session: "strength-c",
@@ -259,6 +289,8 @@ describe("the engine's cold start lands on the implement's grid", () => {
 
   it("a per-dumbbell lift with no logged load cold-starts on a whole kilo", () => {
     const out = firstSession(null, "normal");
+    const biceps = deriveMuscleAnchors(H.get("p")).Biceps;
+    expect(biceps).toEqual({ bestE1RM: 56, bestE1RMLift: "EZ Bar Curl", bestE1RMDate: "2026-10-04" });
     expect(coldStartFromAnchor("Incline DB Curl", biceps)).toBe(14.5);
     expect(out.wwUpdates["Incline DB Curl"]).toBe(15);
     expect(TS.get("p").lifts["Incline DB Curl"].history.at(-1).decision).toBe("COLD_START");

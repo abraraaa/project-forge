@@ -43,6 +43,12 @@ const squat = (date, kg = 100, reps = 5, extra = {}) => ({
   ...extra,
 });
 
+/** A stored muscle anchor, the legacy field older versions wrote: nothing here reads it. */
+function storeAnchor(p, muscle, anchor) {
+  const ts = TS.get(p);
+  TS.save(p, { ...ts, muscleAnchors: { ...(ts.muscleAnchors || {}), [muscle]: anchor } }, { touch: true });
+}
+
 /** A profile that trained the squat at 100 × 5, in delta mode with nothing dirty. */
 function seed(p = PROFILE) {
   P.add(p);
@@ -329,7 +335,7 @@ describe("applyTrainerRows", () => {
     ]);
   });
 
-  it("an unset at any bodyweight or anchors, and for a lift with no template weight: their plan reads no weight, the same everywhere", () => {
+  it("an unset at any bodyweight or stored anchor, and for a lift with no template weight: their plan reads no weight, the same everywhere", () => {
     const outs = [];
     for (const [label, body, anchor, main] of [
       ["none", null, null, null], ["b60", 60, null, null], ["b120", 120, null, null],
@@ -339,7 +345,7 @@ describe("applyTrainerRows", () => {
       P.add(PROFILE);
       P.setActive(PROFILE);
       if (body !== null) BW.set(PROFILE, body);
-      if (anchor !== null) TS.updateMuscleAnchor(PROFILE, "Quadriceps", { bestE1RM: anchor });
+      if (anchor !== null) storeAnchor(PROFILE, "Quadriceps", { bestE1RM: anchor });
       const lift = main ?? SQUAT;
       const base = rowFor({ kind: "weight", lift: SQUAT, kg: 60 }); // drafted while the squat was their main
       if (main) P.setMainLift(PROFILE, SQUAT, main);
@@ -441,15 +447,15 @@ describe("applyTrainerRows", () => {
     for (const c of puts()) expect(JSON.stringify(c.body)).not.toMatch(/"reset"/);
   });
 
-  it("no top set yet: the max the route offers lands, one step over acks limits, at any bodyweight or anchors", () => {
+  it("no top set yet: the max the route offers lands, one step over acks limits, at any bodyweight or stored anchor", () => {
     const BENCH = "Barbell Bench Press";
     const MAX = CATEGORY_COLD_START_MAX_KG.upper_push; // over the bench's template (50)
     const outcomes = [];
     for (const [p, setup] of [
       ["light", (q) => BW.set(q, 60)],
       ["heavy", (q) => BW.set(q, 120)],
-      ["weak", (q) => TS.updateMuscleAnchor(q, "Chest", { bestE1RM: 20 })],
-      ["strong", (q) => TS.updateMuscleAnchor(q, "Chest", { bestE1RM: 400 })],
+      ["weak", (q) => storeAnchor(q, "Chest", { bestE1RM: 20 })],
+      ["strong", (q) => storeAnchor(q, "Chest", { bestE1RM: 400 })],
     ]) {
       seed(p);
       setup(p);

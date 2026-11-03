@@ -69,7 +69,7 @@ describe("cnsCost", () => {
   });
 
   it("an accessory without external load is cheap whatever its category", () => {
-    expect(cnsCost({ name: "Banded Hip Thrust", weight: null })).toBeLessThan(cnsCost(ex("Banded Hip Thrust")));
+    expect(cnsCost({ name: "Reverse Hyperextension", weight: null })).toBeLessThan(cnsCost(ex("Reverse Hyperextension")));
     expect(cnsCost({ name: "Pull-Up", weight: null })).toBeLessThan(cnsCost({ name: "Weighted Pull-Up", weight: 8 }));
   });
 

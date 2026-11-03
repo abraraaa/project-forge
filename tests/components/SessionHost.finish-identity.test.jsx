@@ -26,6 +26,19 @@
 // ass1-B) and Chest-Supported DB Row in ass2 (fromPool ass2-B), each taking
 // the ratings the script taps at its new place; the same lifts and loads.
 //
+// Re-recorded when cold starts began reading the anchor derived from history
+// instead of the stored one: a Bench Press record (60 x 10, e1RM 80) older
+// than every volume window now gives the Chest anchor the swap seeds from.
+// The record and its day mark (days 2026-05-10, written at the finish) are
+// the only change, in the store and in the push, and the push state's days
+// hash moves with them; the stored anchor is still seeded, unread.
+//
+// Re-recorded when finalise stopped writing the stored anchor: after the
+// finish, the trainingState's muscleAnchors holds only the seeded Chest
+// entry, in the store and in the push (the writer had added Back, Quadriceps
+// and Shoulders and appended Chest's top sets), and the push state's
+// trainingState hash moves with it.
+//
 // Text queries, not getByRole: see SessionScreen.surface.test.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -66,8 +79,16 @@ function seed({ priorDaysAgo }) {
     "45-Degree Hip Extension": 10, "Landmine Press": 20, "Standing Calf Raise": 40,
   });
   P.saveReps(WHO, { "Barbell Back Squat": 5, "Barbell Bench Press": 6 });
-  TS.updateMuscleAnchor(WHO, "Chest", { bestE1RM: 80, bestE1RMLift: "Barbell Bench Press" });
+  // The legacy stored anchor, carried as stored: nothing reads it.
+  const ts = TS.get(WHO);
+  TS.save(WHO, { ...ts, muscleAnchors: { ...(ts.muscleAnchors || {}), Chest: { bestE1RM: 80, bestE1RMLift: "Barbell Bench Press" } } }, { touch: true });
   BW.set(WHO, 78);
+  // The Chest anchor the swap seeds from: one bench record, 150 days back,
+  // older than every volume window.
+  vi.setSystemTime(T0 - 150 * 86_400_000);
+  const bench = newDraftLog({ profileName: WHO, session: "strength-a", blockNumber: 1, readiness: "normal" });
+  logSet(bench, { blockId: "a2", blockType: "main", exerciseName: "Barbell Bench Press", muscle: "Chest", weight: 60, reps: 10, rpe: 8, prescribed: { reps: 10, weight: 60, sets: 3 } });
+  H.append(WHO, finaliseDraft(bench));
   // One earlier session, so the engine and the return gap have a past.
   vi.setSystemTime(T0 - priorDaysAgo * 86_400_000);
   const prior = newDraftLog({ profileName: WHO, session: "strength-b", blockNumber: 1, readiness: "normal" });
@@ -151,7 +172,7 @@ describe("localStorage after a live finish is unchanged", () => {
       const { ran, store, pushes } = await finishAndRead(priorDaysAgo);
       expect(ran).toMatchObject({ swapped: true, added: true, edited: true });
       expect(D.load(WHO)).toBeNull();
-      expect(H.get(WHO)).toHaveLength(2);
+      expect(H.get(WHO)).toHaveLength(3);
       const want = recorded[name];
       expect(Object.keys(store)).toEqual(Object.keys(want.store));
       for (const k of Object.keys(want.store)) expect([k, store[k]]).toEqual([k, want.store[k]]);

@@ -528,10 +528,12 @@ describe("W8: never performed — the larger of the category's cold-start cap an
       }
     }
   });
-  it("the validator reads no bodyweight, muscle anchor or engine start, in any phase", () => {
-    const SRC = readFileSync(join(ROOT, "lib/trainer-change.js"), "utf8");
-    const code = SRC.split("\n").filter((l) => !/^\s*(\/\/|\*)/.test(l)).join("\n");
-    expect(code).not.toMatch(/bodyweight\?*\.kg|muscleAnchors|planStartWeight|startingWeightForLift|NO_HISTORY_FACTOR/);
+  it("the validator and the trainer's plan read no bodyweight, muscle anchor or engine start, in any phase", () => {
+    for (const file of ["lib/trainer-change.js", "lib/trainer-plan.js"]) {
+      const SRC = readFileSync(join(ROOT, file), "utf8");
+      const code = SRC.split("\n").filter((l) => !/^\s*(\/\/|\*)/.test(l)).join("\n");
+      expect(code, file).not.toMatch(/bodyweight\?*\.kg|muscleAnchors|deriveMuscleAnchors|planStartWeight|startingWeightForLift|NO_HISTORY_FACTOR/);
+    }
   });
 });
 

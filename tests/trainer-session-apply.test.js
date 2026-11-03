@@ -96,14 +96,19 @@ function stubFetch(responder = () => ({})) {
 const posts = () => fetchCalls.filter((c) => c.url === "/api/sync/trainer");
 const puts = () => fetchCalls.filter((c) => c.url === "/api/sync" && c.method === "PUT");
 
-/** The client: W, R, an anchor, a bodyweight, one earlier session; in delta mode with nothing dirty. */
+/**
+ * The client: W, R, a stored anchor (the legacy field: both paths carry it,
+ * neither reads it), a bodyweight, one earlier session; in delta mode with
+ * nothing dirty.
+ */
 function seedClient({ priorDaysAgo = 2, reps = { [SQUAT]: 5, [BENCH]: 6 } } = {}) {
   vi.setSystemTime(T0 - priorDaysAgo * 86_400_000);
   P.add(WHO);
   P.setActive(WHO);
   P.saveWeights(WHO, BASE_W);
   P.saveReps(WHO, reps);
-  TS.updateMuscleAnchor(WHO, "Chest", { bestE1RM: 80, bestE1RMLift: BENCH });
+  const ts = TS.get(WHO);
+  TS.save(WHO, { ...ts, muscleAnchors: { ...(ts.muscleAnchors || {}), Chest: { bestE1RM: 80, bestE1RMLift: BENCH } } }, { touch: true });
   BW.set(WHO, 78);
   const prior = newDraftLog({ profileName: WHO, session: "strength-b", blockNumber: 1, readiness: "normal" });
   logSet(prior, { blockId: "b1", blockType: "main", exerciseName: SQUAT, muscle: "Quadriceps", weight: 97.5, reps: 5, rpe: 8, loadType: "barbell", prescribed: { reps: 5, weight: 97.5, sets: 3 } });
