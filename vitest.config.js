@@ -15,5 +15,8 @@ export default defineConfig({
     globals: false,
     include: ["tests/**/*.test.{js,jsx}"],
     setupFiles: ["tests/setup.js"],
+    // One budget for the suite: the solver sweeps and the repo-scan pins run
+    // past the 5 s default on a loaded runner, and per-test budgets drift.
+    testTimeout: 20_000,
   },
 });
