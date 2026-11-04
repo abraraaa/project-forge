@@ -62,14 +62,15 @@ describe("band contract — rotations stay inside every landmark band", () => {
     });
   }
 
-  it("memory yields to the band: Sculpt seed 5022, fourth chained rotation", () => {
+  it("memory yields to the band: Sculpt seed 5011, fourth chained rotation", () => {
     // A seed family where the remembered week breaks a band. Remove the
     // relaxed second solve and this goes red; the loop above cannot tell.
     // Re-picked when the pools change (was Forged seed 5010, then Sculpt
-    // seed 5000 until Day A's re-pair). The relaxed solve is now the fallback
+    // seed 5000 until Day A's re-pair, Sculpt seed 5022 until the 2026-11-03
+    // pool edits). The relaxed solve is now the fallback
     // behind the complete repair, run only when no single-slot change mends
     // the remembered week; the repair is off here to pin the relaxed solve.
-    const rng = seeded(5022);
+    const rng = seeded(5011);
     let history = {}, config = null, r;
     for (let block = 0; block < 4; block++) {
       if (config) history = pushHistoryBlock(history, config);
