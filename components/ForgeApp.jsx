@@ -1748,7 +1748,7 @@ export function RotationSummaryModal({summary,onContinue}){
             Ready for you. Each muscle group tuned to hit just how you like it.
           </div>
         )}
-        {topDeltas.length > 0 && <StimulusShift deltas={topDeltas} label="This block · muscle stimulus" />}
+        {topDeltas.length > 0 && <StimulusShift deltas={topDeltas} label="Muscle stimulus this block" />}
         <div style={{flex:1,overflowY:"auto",marginBottom:18,marginRight:-8,paddingRight:8}}>
           {count===0 && (
             <div style={{padding:"18px 0",fontSize:13,color:T.ink3,textAlign:"center"}}>

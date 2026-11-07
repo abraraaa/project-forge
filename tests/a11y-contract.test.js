@@ -64,3 +64,25 @@ describe("a11y contract", () => {
     ).toEqual([]);
   });
 });
+
+describe("keyboard focus", () => {
+  const css = read("app/globals.css");
+  it("one ring for every control, in the commit colour, shown only on keyboard focus", () => {
+    const rule = css.match(/:where\(([^)]*(?:\([^)]*\)[^)]*)*)\):focus-visible\s*\{([^}]*)\}/);
+    expect(rule, "a :where(...):focus-visible rule in globals.css").not.toBeNull();
+    for (const sel of ["a", "button", "input", "select", "textarea", '[role="button"]']) expect(rule[1]).toContain(sel);
+    expect(rule[2]).toMatch(/outline:\s*2px solid var\(--commit\)/);
+    expect(rule[2]).not.toMatch(/transition/);
+  });
+  it("no control turns the ring off inline (only code-focused containers may)", () => {
+    const off = [];
+    for (const f of files) {
+      const src = read(f);
+      for (const m of src.matchAll(/<(input|textarea|select|button|a)\b/g)) {
+        const tag = tagAt(src, m.index);
+        if (/outline:\s*["']?none/.test(tag)) off.push(`${f}: <${m[1]}>`);
+      }
+    }
+    expect(off).toEqual([]);
+  });
+});

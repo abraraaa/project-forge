@@ -33,9 +33,9 @@ describe("GlossarySheet", () => {
     render(<GlossarySheet onCancel={() => {}} />);
     // These titles are the public API of the sheet — anywhere in the app
     // that opens with a specific anchor expects these IDs to exist.
-    expect(screen.getByText("MEV · MAV · MRV")).toBeTruthy();
+    expect(screen.getByText("MEV, MAV and MRV")).toBeTruthy();
     expect(screen.getByText("1RM")).toBeTruthy();
-    expect(screen.getByText("RPE · RIR")).toBeTruthy();
+    expect(screen.getByText("RPE and RIR")).toBeTruthy();
     expect(screen.getByText("Block")).toBeTruthy();
     expect(screen.getByText("Rotation")).toBeTruthy();
     expect(screen.getByText("Superset")).toBeTruthy();

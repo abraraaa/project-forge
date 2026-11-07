@@ -68,14 +68,14 @@ function trainerRowFor(share, dots) {
   if (!share) return null;
   const { sharing, ended, open } = share;
   const fresh = newCount(dots?.trainerChange);
-  const changed = newCount(dots?.trainerSession) ? "Logged a session with you · on Home"
-    : fresh ? `Changed your plan · ${fresh} new` : null;
+  const changed = newCount(dots?.trainerSession) ? "Logged a session with you, waiting on Home"
+    : fresh ? `Changed your plan, ${fresh} new` : null;
   if (sharing?.name) {
     if (changed) return { title: sharing.name, sub: changed };
     if (!sharing.live) return { title: sharing.name, sub: "Paused" };
     const edits = share.edits && typeof share.edits === "object" ? share.edits : null;
     // No switch in the reply: no claim about changes either way.
-    return { title: sharing.name, sub: !edits ? "Sees your training" : edits.on === true ? "Sees your training · can change your plan" : "Sees your training · can't change your plan" };
+    return { title: sharing.name, sub: !edits ? "Sees your training" : edits.on === true ? "Sees your training and can change your plan" : "Sees your training but can't change your plan" };
   }
   if (ended?.name && Number.isFinite(ended.at)) return { title: ended.name, sub: changed || `Ended ${shortDate.format(new Date(ended.at))}` };
   // Sharing they stopped themselves leaves no ended notice, but changes sent
@@ -415,7 +415,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
     if (availability === "available")    return { colour: T.ink2,    glyph: "check", label: existing.some(e=>e.toLowerCase()===name.trim().toLowerCase()) ? "on this device" : "available" };
     if (availability === "taken")        return { colour: T.heat[4], glyph: "cross", label: "taken" };
     if (availability === "invalid")      return { colour: T.heat[4], glyph: "cross", label: "invalid" };
-    if (availability === "network-err")  return { colour: T.ink2,    glyph: "info",  label: "offline · try anyway" };
+    if (availability === "network-err")  return { colour: T.ink2,    glyph: "info",  label: "offline" };
     return null;
   };
   const pip = availabilityPip();
@@ -477,7 +477,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 aria-describedby="name-status"
                 aria-invalid={availability === "taken" || availability === "invalid" || !!submitError}
                 autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck="false"
-                style={{width:"100%",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,padding:"14px 48px 14px 16px",fontFamily:T.text,fontSize:17,fontWeight:500,color:T.ink,outline:"none",caretColor:T.commit,transition:`box-shadow 180ms ${T.ease}`}}
+                style={{width:"100%",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,padding:"14px 48px 14px 16px",fontFamily:T.text,fontSize:17,fontWeight:500,color:T.ink,caretColor:T.commit,transition:`box-shadow 180ms ${T.ease}`}}
               />
               {pip && (
                 // Decorative: the same state is announced in the status line
@@ -502,12 +502,12 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             {submitError ? (
               <span style={{color:T.heat[4]}}>{submitError}</span>
             ) : pip ? (
-              <span>{pip.label === "available" && "Available · this will be your username"}
+              <span>{pip.label === "available" && "Available. This will be your username."}
                     {pip.label === "on this device" && "Welcome back"}
                     {pip.label === "taken" && "Already taken on Heatwayve"}
                     {pip.label === "invalid" && "No slashes, dots-only names, or control characters — they don't survive syncing"}
                     {pip.label === "checking" && "Checking…"}
-                    {pip.label === "offline · try anyway" && "Couldn't check from here. Claim it and see."}
+                    {pip.label === "offline" && "Couldn't check from here. Claim it and see."}
               </span>
             ) : name.trim().length === 1 ? (
               // Previously silent: one character left the button disabled with
@@ -742,7 +742,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>On a breather</div>
               <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
-                {restingReason ? `${reasonLabel(restingReason)} · your rhythm's paused` : "Your rhythm's paused"}
+                {restingReason ? `${reasonLabel(restingReason)}, your rhythm's paused` : "Your rhythm's paused"}
               </div>
             </div>
             <button className="forge-press" onClick={onEndBreather}
@@ -1235,7 +1235,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 onClick={()=>wipeProfile(confirmWipe,{cloud:true})}
                 style={{padding:"16px",background:T.surface,border:"none",boxShadow:`inset 0 0 0 1px ${T.heat[4]}`,borderRadius:T.r,cursor:wipeBusy?"default":"pointer",textAlign:"left",opacity:wipeBusy?0.5:1,fontFamily:T.text}}>
                 <div style={{fontSize:15,fontWeight:500,color:T.heat[4],lineHeight:1.3,marginBottom:3}}>
-                  {wipeBusy ? "Wiping…" : "Full wipe · cloud & device"}
+                  {wipeBusy ? "Wiping…" : "Full wipe, cloud and device"}
                 </div>
                 <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
                   Deletes your weights, history and the name claim. A record of any trainer changes to your plan stays. Can&apos;t be undone.

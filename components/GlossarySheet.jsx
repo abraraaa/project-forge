@@ -23,7 +23,7 @@ import { useModalA11y } from "@/lib/a11y";
 const TERMS = [
   {
     id: "volume-landmarks",
-    title: "MEV · MAV · MRV",
+    title: "MEV, MAV and MRV",
     subtitle: "Weekly volume landmarks",
     body: (
       <>
@@ -55,7 +55,7 @@ const TERMS = [
   },
   {
     id: "rpe-rir",
-    title: "RPE · RIR",
+    title: "RPE and RIR",
     subtitle: "How hard a set was",
     body: (
       <>

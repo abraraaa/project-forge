@@ -339,7 +339,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
   const opts=[
     {id:"fresh", rpe:6, label:"Fresh", sub:"Full programme, and a shot at more on your main lift."},
     {id:"normal",rpe:8, label:"Normal",sub:"The work, as written."},
-    {id:"cooked",rpe:10,label:"Cooked",sub:"Deload weights · trimmed volume."},
+    {id:"cooked",rpe:10,label:"Cooked",sub:"Deload weights, trimmed volume."},
   ];
   // Short, enum-only reasons. Fed into the session record so patterns can
   // surface. Only shown when readiness is "cooked".
@@ -791,14 +791,14 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 </div>
               )}
               <button onClick={openAddedLoad}
-                aria-label={addedKg != null ? `Bodyweight + ${addedKg} kg — tap to edit added weight` : "+ kg · optional — tap to add weight"}
+                aria-label={addedKg != null ? `Bodyweight + ${addedKg} kg — tap to edit added weight` : "+ kg, optional — tap to add weight"}
                 style={addedKg != null
                   ? {background:"none",border:"none",padding:0,cursor:"pointer",textAlign:"left",fontFamily:T.text,fontSize:15,color:T.ink2}
                   : {marginTop:10,padding:"6px 11px",background:"none",border:`1px dashed ${T.ink3}`,borderRadius:T.rSm,
                     cursor:"pointer",fontSize:13,color:T.ink2,fontFamily:T.text}}>
                 {addedKg != null
                   ? <>Bodyweight + <span style={{fontFamily:T.measured}}>{addedKg}</span> kg</>
-                  : "+ kg · optional"}
+                  : "+ kg, optional"}
               </button>
             </>
           ) : isBodyweightMovement(loadType) ? (
@@ -1227,7 +1227,7 @@ function DrumEditOverlay({target,planWeights,setPlanWeights,planReps,setPlanReps
         </div>
         <div style={{display:"flex",gap:16,justifyContent:(hasWeight||optionalChrome)?"space-between":"center"}}>
           {hasWeight&&!optionalChrome&&<SplitWeightDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
-          {optionalChrome&&<ScrollDrum value={kg} onChange={setKg} step={weightStep} min={0} max={Math.max(ADDED_LOAD_MAX_KG,initKg)} label="+ kg · optional" zeroLabel="none"/>}
+          {optionalChrome&&<ScrollDrum value={kg} onChange={setKg} step={weightStep} min={0} max={Math.max(ADDED_LOAD_MAX_KG,initKg)} label="+ kg, optional" zeroLabel="none"/>}
           <ScrollDrum value={reps} onChange={(v)=>{setRepsTouched(true);setReps(v);}} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined} tone={target.timed?null:repTone}/>
         </div>
         {/* House pattern: Cancel/Confirm on the bottom row, no corner ✕.
@@ -1390,7 +1390,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
           ) : (
             <>
               <span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:T.heat[2]}}/>
-              Saved locally · syncs when online
+              Saved on this device, syncs when online
             </>
           )}
         </div>

@@ -514,7 +514,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         <Fade d={260}>
           <Card style={{margin:"16px 24px 0",padding:"16px 18px 18px"}}>
             <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8}}>
-              <div style={{fontSize:13,color:T.ink3}}>Today&rsquo;s bonus · optional</div>
+              <div style={{fontSize:13,color:T.ink3}}>Today&rsquo;s bonus, optional</div>
               <div style={{fontSize:12,color:T.ink3}}>~<span style={{fontFamily:T.measured}}>5</span> min</div>
             </div>
             <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.25,marginBottom:4}}>
@@ -671,7 +671,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             aria-label={`Milestone: ${formatTonnage(tonnageMilestone)} moved — tap to dismiss`}
             style={{display:"block",width:"calc(100% - 48px)",margin:"20px 24px 0",padding:"18px 20px",background:T.surface,border:"none",borderRadius:T.r,boxShadow:T.elev,textAlign:"left",cursor:"pointer",fontFamily:T.text}}>
             <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
-              Milestone · <span style={{fontFamily:T.measured}}>{formatTonnage(tonnageMilestone)}</span>
+              Milestone: <span style={{fontFamily:T.measured}}>{formatTonnage(tonnageMilestone)}</span>
             </div>
             <div style={{fontFamily:T.measured,fontWeight:300,fontSize:34,letterSpacing:"-0.04em",color:T.ink,lineHeight:1}}>
               {formatTonnage(tonnageTotalKg)}<span style={{fontSize:15,color:T.ink3,letterSpacing:0}}> moved</span>
@@ -840,7 +840,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               <div style={{fontSize:13,color:T.ink3,lineHeight:1.45}}>
                 {historyCount === 0
                   ? "Complete a session to light it up"
-                  : <><span style={{fontFamily:T.measured}}>{historyCount}</span> session{historyCount===1?"":"s"} · volume vs the bands · 1RM trends</>}
+                  : <><span style={{fontFamily:T.measured}}>{historyCount}</span> session{historyCount===1?"":"s"}, volume against the bands and 1RM trends</>}
               </div>
             </div>
             <Glyph name="arrowRight" size={14} color={T.ink3} style={{flexShrink:0}}/>
