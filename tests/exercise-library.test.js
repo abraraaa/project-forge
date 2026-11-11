@@ -156,8 +156,7 @@ describe("exercise library — programme coverage", () => {
 
 // Entries added without verified footage. Named here so the gap is visible and
 // shrinks only when a real clip lands — never filled with a guessed id.
-// Added 2026-11-03 without footage: a video joins only once its id is checked.
-const AWAITING_FOOTAGE = new Set(["Reverse Pec Deck", "Rear Delt Row"]);
+const AWAITING_FOOTAGE = new Set([]);
 
 describe("demo videos — joined from the app's own footage, never invented", () => {
   it("carries a video for every catalogue entry not awaiting footage", () => {
