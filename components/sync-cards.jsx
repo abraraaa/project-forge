@@ -99,17 +99,17 @@ export function SyncStatusCard({ profile, hasPasskey = undefined }) {
             {stateLabel[status.state]}
           </div>
           {status.lastSync && status.state === "idle" && (
-            <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: T.ink2, marginTop: 2 }}>
               Last sync: {formatTime(status.lastSync)}
             </div>
           )}
           {status.error && (
-            <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: T.ink2, marginTop: 2 }}>
               Will retry when online
             </div>
           )}
           {status.state === "needsAuth" && (
-            <div style={{ fontSize: 11, color: T.ink3, marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: T.ink2, marginTop: 2 }}>
               {hasPasskey
                 ? "Confirm it's you below to resume"
                 : "Add a passkey to carry it across devices"}
@@ -206,7 +206,7 @@ export function SyncNowRow({ profile, hasPasskey = undefined }) {
       style={{ padding: "15px 2px", borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}`, cursor: busy ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", opacity: busy ? 0.7 : 1 }}>
       <div>
         <div style={{ fontSize: 15, fontWeight: 500, color: T.ink }}>Sync now</div>
-        <div style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}>{subtitle}</div>
+        <div style={{ fontSize: 12, color: T.ink2, marginTop: 2 }}>{subtitle}</div>
       </div>
       {busy ? <span style={{ fontSize: 14, color: T.ink3 }}>…</span> : <Glyph name="refresh" size={14} color={T.ink3}/>}
     </div>

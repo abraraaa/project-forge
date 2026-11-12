@@ -42,7 +42,7 @@ function useUpgradeAction(profile, onDone) {
       if (await runUpgrade(profile)) onDone?.();
       else setError("Cancelled — your old passkey still works for now.");
     } catch (e) {
-      setError(e?.message || "That didn’t work. Try again in a moment.");
+      setError(e?.message === "WebAuthn not supported" ? "This browser can’t use passkeys." : "That didn’t work. Try again in a moment.");
     }
     setBusy(false);
   };
@@ -66,14 +66,14 @@ export function PasskeyUpgradeCard({ profile, state, onDone }) {
     <div style={{ marginTop: 16, padding: "18px 20px", background: T.surface, boxShadow: T.elev, borderRadius: T.r }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, color: T.ink3, marginBottom: 6 }}>
+          <div style={{ fontSize: 13, color: T.ink2, marginBottom: 6 }}>
             {days === null ? "Security" : days > 0 ? `Security · ${days} days` : "Security"}
           </div>
           <div style={{ fontSize: 16, fontWeight: 500, color: T.ink, lineHeight: 1.35, marginBottom: 6 }}>
             {HEADLINE}
           </div>
           <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5 }}>{BODY}</p>
-          <p style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 8 }}>{TWO_PROMPTS}</p>
+          <p style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 8 }}>{TWO_PROMPTS}</p>
         </div>
         <button onClick={run} disabled={busy} style={btn(busy)}>
           {busy ? "…" : "Set up"}
@@ -112,7 +112,7 @@ export function PasskeyUpgradeModal({ profile, state, onDone, onSnooze }) {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
           <Glyph name="check" size={13} color={T.ink3} />
-          <span style={{ fontSize: 13, color: T.ink3 }}>
+          <span style={{ fontSize: 13, color: T.ink2 }}>
             {days !== null && days > 0 ? `${days} days left` : "Security"}
           </span>
         </div>
@@ -120,7 +120,7 @@ export function PasskeyUpgradeModal({ profile, state, onDone, onSnooze }) {
           {HEADLINE}
         </div>
         <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, marginTop: 10 }}>{BODY}</p>
-        <p style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 8 }}>{TWO_PROMPTS}</p>
+        <p style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 8 }}>{TWO_PROMPTS}</p>
         {error && <div style={{ marginTop: 12, fontSize: 12, color: T.heat[4] }}>{error}</div>}
         <button onClick={run} disabled={busy} style={{ ...btn(busy), width: "100%", marginTop: 18, padding: "13px 16px", fontSize: 15 }}>
           {busy ? "…" : "Set up a new passkey"}

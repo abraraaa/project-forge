@@ -442,3 +442,40 @@ describe("FirstRun on its own: save props and the closing line", () => {
     expect(p.onDone).not.toHaveBeenCalled();
   });
 });
+
+// The launch masthead (components/client-shells.jsx) paints first on a cold
+// "/"; the first-run intro replaces it, so its head must read and sit the same.
+describe("the first-run intro opens on the launch masthead's head", () => {
+  const head = (root) => {
+    const h1 = root.querySelector("h1");
+    return {
+      kicker: h1.previousElementSibling.textContent,
+      kickerStyle: h1.previousElementSibling.getAttribute("style"),
+      h1: h1.textContent.trim(),
+      h1Style: h1.getAttribute("style"),
+      lede: h1.nextElementSibling?.textContent.replace(/\s+/g, " ").trim(),
+      ledeStyle: h1.nextElementSibling?.getAttribute("style"),
+      column: (/** @type {HTMLElement} */ (h1.closest("[style*='max-width']"))).style,
+    };
+  };
+
+  it("same kicker, h1 and lede, styled the same, in the same top-aligned column", async () => {
+    const { LaunchMasthead } = await import("@/components/client-shells");
+    const masthead = head(render(<LaunchMasthead />).container);
+    cleanup();
+    localStorage.removeItem("forge:onboarded");
+    const intro = head(render(<ForgeApp />).container);
+    expect.soft(screen.queryByText("The programme")).toBeNull();
+    expect.soft(intro.h1).toBe("Train with intention");
+    expect.soft(intro.lede).toBe("Evidence-based strength training that adjusts to what you actually lifted and keeps every muscle’s weekly volume honest.");
+    for (const k of ["kicker", "kickerStyle", "h1", "h1Style", "lede", "ledeStyle"]) expect.soft(intro[k], k).toBe(masthead[k]);
+    expect.soft(intro.h1Style).toContain("font-size: 45px");
+    for (const k of ["maxWidth", "paddingTop", "paddingLeft", "paddingRight", "marginTop", "marginLeft"]) {
+      expect.soft(intro.column[k], k).toBe(masthead.column[k]);
+    }
+    expect.soft(intro.column.justifyContent).toBe("");
+    // The rest of the intro is unchanged, after the lede.
+    expect(screen.getByText(/^Three strength sessions, A, B and C/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Begin" })).toBeTruthy();
+  });
+});

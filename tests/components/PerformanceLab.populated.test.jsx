@@ -115,6 +115,22 @@ describe("PerformanceLab — populated history", () => {
     expect(screen.getAllByText(/in band/).length).toBeGreaterThan(0);
   });
 
+  it("strength keeps its kicker and says why when no main lift qualifies yet", () => {
+    // Sessions logged, but every set is accessory work: no main-lift top set.
+    const history = buildHistory().map((rec) => ({
+      ...rec, blocks: rec.blocks.map((b) => ({ ...b, id: "acc", type: "accessory" })),
+    }));
+    render(<PerformanceLab history={history} onBack={() => {}} />);
+    expect(screen.getByText(/Strength · e1RM/)).toBeTruthy();
+    expect(screen.getByText("No main-lift top sets yet. Your next main lift starts the trend.")).toBeTruthy();
+    expect(screen.queryByText(/Week one/i)).toBeNull();
+  });
+
+  it("with a main-lift top set the empty line stays away", () => {
+    render(<PerformanceLab history={buildHistory()} onBack={() => {}} />);
+    expect(screen.queryByText(/No main-lift top sets yet/)).toBeNull();
+  });
+
   it("§07 drill-down: a muscle row unfolds the eight-week band terrain, one at a time", () => {
     render(<PerformanceLab history={buildHistory()} onBack={() => {}} />);
     const quads = screen.getByLabelText(/^Quads: .* sets per week/);

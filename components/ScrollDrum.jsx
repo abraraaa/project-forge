@@ -86,7 +86,7 @@ function Wheel({ values, value, onChange, fmt = (v) => String(v), eq = (a, b) =>
 }
 
 function wheelLabel(text) {
-  return text ? <div style={{ fontSize: 12, fontWeight: 500, color: T.ink3, marginBottom: 8 }}>{text}</div> : null;
+  return text ? <div style={{ fontSize: 12, fontWeight: 500, color: T.ink2, marginBottom: 8 }}>{text}</div> : null;
 }
 
 export default function ScrollDrum({ value, onChange, step = 1.25, min = 0, max = 500, integer = false, label = "", unit = null, tone = null, zeroLabel = null }) {
@@ -152,7 +152,7 @@ export function SplitWeightDrum({ value, onChange, step = 1.25, min = 0, max = 4
         <Wheel values={ints} value={whole} onChange={(w) => onChange(Math.round((w + frac) * 100) / 100)} width="58%" />
         <Wheel values={decs} value={frac} onChange={(d) => onChange(Math.round((whole + d) * 100) / 100)} fmt={fmtDec} width="42%" />
       </div>
-      <div style={{ fontSize: 12, color: T.ink3, marginTop: 8 }}>
+      <div style={{ fontSize: 12, color: T.ink2, marginTop: 8 }}>
         steps of <span style={{ fontFamily: T.measured }}>{step}</span>
       </div>
     </div>

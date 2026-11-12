@@ -64,3 +64,30 @@ describe("a11y contract", () => {
     ).toEqual([]);
   });
 });
+
+describe("keyboard focus", () => {
+  const css = read("app/globals.css");
+  it("one ring for every control, in the commit colour, shown only on keyboard focus", () => {
+    // Plain string slicing, no nested regex: the selector list between
+    // ":where(" and "):focus-visible", the body between the braces after it.
+    const end = css.indexOf("):focus-visible");
+    expect(end, "a :where(...):focus-visible rule in globals.css").toBeGreaterThan(-1);
+    const selectors = css.slice(css.lastIndexOf(":where(", end), end);
+    const open = css.indexOf("{", end);
+    const body = css.slice(open + 1, css.indexOf("}", open));
+    for (const sel of ["a", "button", "input", "select", "textarea", '[role="button"]']) expect(selectors).toContain(sel);
+    expect(body).toMatch(/outline:\s*2px solid var\(--commit\)/);
+    expect(body).not.toMatch(/transition/);
+  });
+  it("no control turns the ring off inline (only code-focused containers may)", () => {
+    const off = [];
+    for (const f of files) {
+      const src = read(f);
+      for (const m of src.matchAll(/<(input|textarea|select|button|a)\b/g)) {
+        const tag = tagAt(src, m.index);
+        if (/outline:\s*["']?none/.test(tag)) off.push(`${f}: <${m[1]}>`);
+      }
+    }
+    expect(off).toEqual([]);
+  });
+});

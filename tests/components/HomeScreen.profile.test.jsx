@@ -48,8 +48,15 @@ describe("home header — the Profile entry", () => {
 
   it("keeps the sync dot beside the name", () => {
     render(home({ syncState: "error" }));
-    const name = within(screen.getByRole("button", { name: "Profile, sam" })).getByText("sam");
+    const name = within(screen.getByRole("button", { name: "Profile, sam, not synced" })).getByText("sam");
     expect(name.parentElement.querySelectorAll('span[style*="border-radius: 50%"]')).toHaveLength(1);
+  });
+
+  it("says the sync error in words, not only the dot's colour", () => {
+    const { rerender } = render(home({ syncState: "error" }));
+    expect(screen.getByRole("button", { name: "Profile, sam, not synced" })).toBeTruthy();
+    rerender(home({ syncState: "pushing" }));
+    expect(screen.getByRole("button", { name: "Profile, sam" })).toBeTruthy();
   });
 
   it("with nothing new the kicker is just the word", async () => {

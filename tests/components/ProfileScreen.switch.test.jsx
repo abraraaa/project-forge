@@ -120,7 +120,7 @@ describe("Profile: Not you?", () => {
     const input = screen.getByRole("textbox", { name: "Your name" });
     expect(before(signIn, input)).toBe(true);
     fireEvent.change(input, { target: { value: "  Kim " } });
-    expect(await screen.findByText("Available · this will be your username", {}, { timeout: 2000 })).toBeTruthy();
+    expect(await screen.findByText("Available. This will be your username.", {}, { timeout: 2000 })).toBeTruthy();
     expect(checkProfileExists).toHaveBeenCalledWith("Kim");
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(p.onActivate).toHaveBeenCalledTimes(1));
@@ -206,7 +206,7 @@ describe("Profile: Delete this profile", () => {
     fireEvent.click(row());
     const sheet = screen.getByRole("dialog", { name: "Delete sam?" });
     expect(within(sheet).getByText("Remove from this device")).toBeTruthy();
-    expect(within(sheet).getByText("Full wipe · cloud & device")).toBeTruthy();
+    expect(within(sheet).getByText("Full wipe, cloud and device")).toBeTruthy();
     expect(row().textContent).toBe("Delete this profile");
   });
 
@@ -230,7 +230,7 @@ describe("Profile: Delete this profile", () => {
     render(<ProfileScreen {...props({ existing: ["sam", "alex"] })} />);
     await settle();
     fireEvent.click(row()); fireEvent.click(row());
-    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Full wipe · cloud & device")); });
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Full wipe, cloud and device")); });
     expect(blobDelete.mock.calls).toEqual([["sam", { authToken: null }]]);
     expect(localStorage.getItem("forge:alex:weights")).toBe("{}");
     expect(JSON.parse(localStorage.getItem("forge:profiles"))).toEqual(["alex"]);
@@ -244,7 +244,7 @@ describe("Profile: Delete this profile", () => {
     fireEvent.click(row()); fireEvent.click(row());
     const sheet = screen.getByRole("dialog", { name: "Delete sam?" });
     expect(within(sheet).getByText(/nothing ever synced/)).toBeTruthy();
-    expect(within(sheet).queryByText("Full wipe · cloud & device")).toBeNull();
+    expect(within(sheet).queryByText("Full wipe, cloud and device")).toBeNull();
   });
 
   it("a failed full wipe says a house line, never the server's words, and keeps the profile", async () => {
@@ -253,7 +253,7 @@ describe("Profile: Delete this profile", () => {
     render(<ProfileScreen {...props({ existing: ["sam", "alex"] })} />);
     await settle();
     fireEvent.click(row()); fireEvent.click(row());
-    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Full wipe · cloud & device")); });
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Full wipe, cloud and device")); });
     expect(within(screen.getByRole("dialog", { name: "Delete sam?" })).getByText("Couldn't reach the cloud. Try again?")).toBeTruthy();
     expect(document.body.textContent).not.toContain("SENTINEL");
     expect(localStorage.getItem("forge:sam:weights")).toBe("{}");
@@ -270,7 +270,7 @@ describe("Profile: Delete this profile", () => {
     await waitFor(() => expect(passkeyStatus).toHaveBeenCalledWith("sam"));
     await act(async () => {});
     fireEvent.click(row()); fireEvent.click(row());
-    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Full wipe · cloud & device")); });
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Full wipe, cloud and device")); });
     expect(within(screen.getByRole("dialog", { name: "Delete sam?" })).getByText("Set up a passkey before deleting this profile.")).toBeTruthy();
     expect(document.body.textContent).not.toContain("SENTINEL");
     expect(localStorage.getItem("forge:sam:weights")).toBe("{}");
@@ -286,7 +286,7 @@ describe("Profile: Delete this profile", () => {
     render(<ProfileScreen {...props({ existing: ["sam", "alex"] })} />);
     await settle();
     fireEvent.click(row()); fireEvent.click(row());
-    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Full wipe · cloud & device")); });
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Full wipe, cloud and device")); });
     const verify = () => screen.getByRole("dialog", { name: "Verify it's you" });
     await act(async () => { fireEvent.click(within(verify()).getByText("Authenticate")); });
     expect(within(verify()).getByText(copy)).toBeTruthy();

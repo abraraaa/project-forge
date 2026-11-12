@@ -23,7 +23,7 @@ import { useModalA11y } from "@/lib/a11y";
 const TERMS = [
   {
     id: "volume-landmarks",
-    title: "MEV · MAV · MRV",
+    title: "MEV, MAV and MRV",
     subtitle: "Weekly volume landmarks",
     body: (
       <>
@@ -55,7 +55,7 @@ const TERMS = [
   },
   {
     id: "rpe-rir",
-    title: "RPE · RIR",
+    title: "RPE and RIR",
     subtitle: "How hard a set was",
     body: (
       <>
@@ -137,7 +137,7 @@ export default function GlossarySheet({ anchorTerm = null, onCancel }) {
       className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
         className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
+        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
           Glossary
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:14}}>

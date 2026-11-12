@@ -47,7 +47,7 @@ export default function BugReportSheet({ profileName = null, onClose }) {
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{ overscrollBehavior: "contain", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="bug-title" tabIndex={-1} onClick={(e) => e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{ padding: "24px 24px 36px", width: "100%", animation: `slideUp 260ms ${T.ease}`, outline: "none" }}>
-        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>
           {COPY.eyebrow}
         </div>
         <div id="bug-title" style={{ fontSize: 18, fontWeight: 500, fontFamily: T.text, color: T.ink, lineHeight: 1.3, marginBottom: 16 }}>
@@ -65,7 +65,7 @@ export default function BugReportSheet({ profileName = null, onClose }) {
             maxLength={2000}
             rows={5}
             placeholder={COPY.placeholder}
-            style={{ width: "100%", background: T.well, border: "none", borderRadius: T.r, padding: "14px 16px", fontSize: 16, lineHeight: 1.5, color: T.ink, fontFamily: T.text, resize: "none", outline: "none", marginBottom: 8 }}
+            style={{ width: "100%", background: T.well, border: "none", borderRadius: T.r, padding: "14px 16px", fontSize: 16, lineHeight: 1.5, color: T.ink, fontFamily: T.text, resize: "none", marginBottom: 8 }}
           />
         )}
         {state === "failed" && (

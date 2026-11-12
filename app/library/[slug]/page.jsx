@@ -64,7 +64,7 @@ function TempoSection({ name }) {
   const segments = t.tempo ? decodeTempo(t.tempo) : null;
   return (
     <section style={{ marginTop: 36 }}>
-      <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 10px" }}>
+      <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 10px" }}>
         Tempo
       </h2>
       {segments ? (
@@ -72,24 +72,24 @@ function TempoSection({ name }) {
           {segments.map((seg, i) => (
             <div key={i}>
               <span style={{ fontFamily: T.measured, fontSize: 32, fontWeight: 300, letterSpacing: "-0.03em", color: seg.n === "X" ? T.heat[3] : T.ink }}>{seg.n}</span>
-              <span style={{ display: "block", fontSize: 11, color: T.ink3, marginTop: 2 }}>{seg.label}</span>
+              <span style={{ display: "block", fontSize: 11, color: T.ink2, marginTop: 2 }}>{seg.label}</span>
             </div>
           ))}
         </div>
       ) : (
         <p style={{ fontSize: 15, color: T.ink, margin: 0 }}>
-          Hold, don&apos;t count reps.
+          Hold, don&rsquo;t count reps.
         </p>
       )}
       <p style={{ fontSize: 13, color: T.ink2, marginTop: 12, lineHeight: 1.6 }}>{t.principle}</p>
-      {t.note && <p style={{ fontSize: 13, color: T.ink3, marginTop: 8, lineHeight: 1.6 }}>{t.note}</p>}
+      {t.note && <p style={{ fontSize: 13, color: T.ink2, marginTop: 8, lineHeight: 1.6 }}>{t.note}</p>}
       {/* The evidence, in full and reachable. This used to print the first
           sentence of each citation — authors only, no title, no journal, no
           year, and no way to check it. A claim you can't follow is decoration;
           the whole reason this repo is public is that the science can be
           checked, and the same holds for the pages built from it. */}
       <div style={{ marginTop: 12 }}>
-        <p style={{ fontSize: 12, color: T.ink3, lineHeight: 1.6, margin: 0 }}>
+        <p style={{ fontSize: 12, color: T.ink2, lineHeight: 1.6, margin: 0 }}>
           {t.evidence === "derived"
             ? "Derived from tempo research on this movement class."
             : "Measured directly for this movement."}
@@ -99,7 +99,7 @@ function TempoSection({ name }) {
             const src = TEMPO_SOURCES[s];
             if (!src) return null;
             return (
-              <li key={s} style={{ fontSize: 12, color: T.ink3, lineHeight: 1.6, marginTop: 5 }}>
+              <li key={s} style={{ fontSize: 12, color: T.ink2, lineHeight: 1.6, marginTop: 5 }}>
                 {src.url ? (
                   <a href={src.url} target="_blank" rel="noopener noreferrer"
                     style={{ color: T.ink2, textDecoration: "underline", textUnderlineOffset: "2px", textDecorationColor: T.rule }}>
@@ -170,12 +170,12 @@ export default async function ExercisePage({ params }) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(exerciseLd) }} />
 
-      <Link href="/library" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <Link href="/library" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5, padding: "14px 0", margin: "-14px 0" }}>
         <Glyph name="arrowLeft" size={12} color={T.ink3}/> The library
       </Link>
 
       <div style={{ marginTop: 32 }}>
-        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>
           {entry.categoryLabel}
         </div>
         <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: 0 }}>{entry.name}</h1>
@@ -188,16 +188,16 @@ export default async function ExercisePage({ params }) {
       </div>
 
       <section style={{ marginTop: 36 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 6px" }}>
+        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 6px" }}>
           Muscle contribution per set
         </h2>
         <MuscleBar muscle={entry.primary} weight={1} primary />
         {entry.secondary.map((s) => (
           <MuscleBar key={s.muscle} muscle={s.muscle} weight={s.weight} />
         ))}
-        <p style={{ fontSize: 13, color: T.ink3, marginTop: 12, lineHeight: 1.6 }}>
-          These are the weights Heatwayve&apos;s volume audit actually computes with — deliberately
-          conservative, so compounds don&apos;t masquerade as full coverage. A <span style={{ fontFamily: T.measured }}>0.5</span> means a set
+        <p style={{ fontSize: 13, color: T.ink2, marginTop: 12, lineHeight: 1.6 }}>
+          These are the weights Heatwayve&rsquo;s volume audit actually computes with — deliberately
+          conservative, so compounds don&rsquo;t masquerade as full coverage. A <span style={{ fontFamily: T.measured }}>0.5</span> means a set
           counts as half a set for that muscle: meaningful help, not a replacement for direct work.
         </p>
       </section>
@@ -214,7 +214,7 @@ export default async function ExercisePage({ params }) {
       <TempoSection name={entry.name} />
 
       <section style={{ marginTop: 36 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 6px" }}>
+        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 6px" }}>
           How Heatwayve progresses it
         </h2>
         <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}><MonoNums>{entry.progression}</MonoNums></p>
@@ -222,31 +222,31 @@ export default async function ExercisePage({ params }) {
 
       {entry.swaps.length > 0 && (
         <section style={{ marginTop: 36 }}>
-          <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 6px" }}>
+          <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 6px" }}>
             Swap it for
           </h2>
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {entry.swaps.map((s) => (
-              <li key={s.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "11px 0", borderBottom: `1px solid ${T.ruleFaint}` }}>
+              <li key={s.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, borderBottom: `1px solid ${T.ruleFaint}` }}>
                 {s.slug ? (
-                  <Link href={`/library/${s.slug}`} style={{ fontSize: 15, fontWeight: 400, color: T.ink, fontFamily: T.text, textDecoration: "none" }}>
+                  <Link href={`/library/${s.slug}`} style={{ display: "block", flex: 1, padding: "11px 0", fontSize: 15, fontWeight: 400, color: T.ink, fontFamily: T.text, textDecoration: "none" }}>
                     {s.name}
                   </Link>
                 ) : (
-                  <span style={{ fontSize: 15, fontWeight: 400, color: T.ink, fontFamily: T.text }}>{s.name}</span>
+                  <span style={{ flex: 1, padding: "11px 0", fontSize: 15, fontWeight: 400, color: T.ink, fontFamily: T.text }}>{s.name}</span>
                 )}
-                <span style={{ fontSize: 12, color: T.ink3, fontFamily: T.text, flexShrink: 0 }}>{s.equipment}</span>
+                <span style={{ fontSize: 12, color: T.ink2, fontFamily: T.text, flexShrink: 0 }}>{s.equipment}</span>
               </li>
             ))}
           </ul>
-          <p style={{ fontSize: 13, color: T.ink3, marginTop: 12, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 13, color: T.ink2, marginTop: 12, lineHeight: 1.6 }}>
             Same movement pattern, same progression continuity — these are the alternatives the
-            app offers mid-session when a rack is taken or equipment isn&apos;t there.
+            app offers mid-session when a rack is taken or equipment isn&rsquo;t there.
           </p>
         </section>
       )}
 
-      <p style={{ marginTop: 48, fontSize: 13, color: T.ink3, fontFamily: T.text, lineHeight: 1.6 }}>
+      <p style={{ marginTop: 48, fontSize: 13, color: T.ink2, fontFamily: T.text, lineHeight: 1.6 }}>
         Knowing the numbers is one thing; hitting them for fifty weeks is another.{" "}
         <Link href="/" style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>Open Heatwayve</Link> — it
         prescribes the weight, holds you to the tempo, and runs this arithmetic on

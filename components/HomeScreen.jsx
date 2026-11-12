@@ -290,7 +290,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             </div>
             <StreakLine rhythm={rhythm} resting={resting}/>
           </div>
-          <button onClick={onProfile} aria-label={`Profile, ${profileName}${noticeLit ? ", something new" : ""}`} style={{...linkBtn,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,minWidth:0,textAlign:"left"}}>
+          <button onClick={onProfile} aria-label={`Profile, ${profileName}${noticeLit ? ", something new" : ""}${syncState === "error" ? ", not synced" : ""}`} style={{...linkBtn,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,minWidth:0,textAlign:"left"}}>
             {/* The notice dot rides the kicker, never the name line: solid
                 ink, still, so it can't be read as sync (name line) or heat.
                 Out of flow, 5px after the word, so lighting it moves nothing. */}
@@ -373,7 +373,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       <Fade d={100} opaque>
         <div className="home-headline" style={{padding:"26px 24px 0",transformOrigin:"left top"}}>
           <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:8}}>
-            <span style={{fontSize:13,color:T.ink3}}>{dayLabel}</span>
+            <span style={{fontSize:13,color:T.ink2}}>{dayLabel}</span>
             {!isViewingToday && (
               <span style={{fontSize:12,color:T.ink3}}>
                 {viewDate.toLocaleDateString("en-GB",{day:"numeric",month:"short"})}
@@ -405,7 +405,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                   {[[String(viewSession.blocks.length),"blocks"],["~65","minutes"],[String(supersets),"supersets"]].map(([v,l],i)=>(
                     <div key={l} style={{flex:1,padding:i===0?"13px 0 13px 24px":i===2?"13px 24px 13px 18px":"13px 0 13px 18px",borderLeft:i>0?`1px solid ${T.rule}`:"none"}}>
                       <div style={{fontFamily:T.measured,fontSize:26,color:T.ink,letterSpacing:"-0.04em",lineHeight:1}}>{v}</div>
-                      <div style={{fontSize:12,color:T.ink3,marginTop:3}}>{l}</div>
+                      <div style={{fontSize:12,color:T.ink2,marginTop:3}}>{l}</div>
                     </div>
                   ))}
                 </div>
@@ -426,7 +426,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                   <div key={b.id} style={{display:"flex",alignItems:"center",gap:13,padding:"11px 0",borderBottom:`1px solid ${T.ruleFaint}`}}>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:16,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
-                      <div style={{fontSize:13,color:T.ink3,marginTop:2}}>
+                      <div style={{fontSize:13,color:T.ink2,marginTop:2}}>
                         <span style={{fontFamily:T.measured}}>{b.sets} × {p.reps}</span>
                         {p.kg != null && <> {p.working ? "at" : "from"} {p.prefix}<span style={{fontFamily:T.measured}}>{p.kg}</span> {p.unit}</>}
                       </div>
@@ -461,7 +461,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,
                 display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,
               }}>
-                <span style={{fontSize:14,color:T.ink3}}>
+                <span style={{fontSize:14,color:T.ink2}}>
                   {diffDays > 0 ? "Upcoming" : "Past session"}
                 </span>
                 <Tag color={dayKey}>{viewDate.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})}</Tag>
@@ -475,7 +475,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       {!cfg.canBegin && cfg.tips && (
         <Fade d={160}>
           <div style={{margin:"20px 24px 0"}}>
-            <div style={{fontSize:13,color:T.ink3,paddingBottom:8,borderBottom:`1px solid ${T.rule}`}}>
+            <div style={{fontSize:13,color:T.ink2,paddingBottom:8,borderBottom:`1px solid ${T.rule}`}}>
               {viewDay.type==="rest" ? "Recovery notes" : "Session notes"}
             </div>
             {cfg.tips.map((tip,i)=>(
@@ -514,7 +514,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         <Fade d={260}>
           <Card style={{margin:"16px 24px 0",padding:"16px 18px 18px"}}>
             <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8}}>
-              <div style={{fontSize:13,color:T.ink3}}>Today&rsquo;s bonus · optional</div>
+              <div style={{fontSize:13,color:T.ink2}}>Today&rsquo;s bonus, optional</div>
               <div style={{fontSize:12,color:T.ink3}}>~<span style={{fontFamily:T.measured}}>5</span> min</div>
             </div>
             <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.25,marginBottom:4}}>
@@ -556,7 +556,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         <Fade d={240}>
           <div style={{margin:"22px 0 0",padding:"12px 24px 12px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
-              <span style={{fontSize:13,color:T.ink3}}>Tonnage, six weeks</span>
+              <span style={{fontSize:13,color:T.ink2}}>Tonnage, six weeks</span>
               <span style={{fontFamily:T.measured,fontSize:12,color:T.heat[3]}}>{formatTonnage(wave[wave.length-1].kg)}</span>
             </div>
             <svg width="100%" height="30" viewBox="0 0 342 30" preserveAspectRatio="none" style={{display:"block",overflow:"visible"}} aria-hidden="true">
@@ -583,7 +583,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       {pendingDraft && (
         <Fade d={160}>
           <Card style={{margin:"20px 24px 0",padding:"16px 18px 18px"}}>
-            <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>Unfinished session</div>
+            <div style={{fontSize:13,color:T.ink2,marginBottom:6}}>Unfinished session</div>
             <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.3}}>
               Pick up where you left off.
             </div>
@@ -610,11 +610,11 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <Card style={{margin:"20px 24px 0",padding:"16px 18px",cursor:"pointer"}}>
             <div onClick={onOpenBwEdit} style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:13,color:T.ink3,marginBottom:5}}>Bodyweight</div>
+                <div style={{fontSize:13,color:T.ink2,marginBottom:5}}>Bodyweight</div>
                 <div style={{fontSize:16,fontWeight:500,color:T.ink,lineHeight:1.35,marginBottom:4}}>
                   How much do you weigh today?
                 </div>
-                <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
+                <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>
                   Tap to update — keeps loaded pull-ups and dips honest.
                 </div>
               </div>
@@ -640,7 +640,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         return (
           <Fade d={170}>
             <Card style={{margin:"20px 24px 0",padding:"18px 20px"}}>
-              <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>{copy.kicker}</div>
+              <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>{copy.kicker}</div>
               <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.3,marginBottom:8}}>
                 {copy.headline}
               </div>
@@ -670,8 +670,8 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <button className="forge-press" onClick={onDismissTonnageMilestone}
             aria-label={`Milestone: ${formatTonnage(tonnageMilestone)} moved — tap to dismiss`}
             style={{display:"block",width:"calc(100% - 48px)",margin:"20px 24px 0",padding:"18px 20px",background:T.surface,border:"none",borderRadius:T.r,boxShadow:T.elev,textAlign:"left",cursor:"pointer",fontFamily:T.text}}>
-            <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
-              Milestone · <span style={{fontFamily:T.measured}}>{formatTonnage(tonnageMilestone)}</span>
+            <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
+              Milestone: <span style={{fontFamily:T.measured}}>{formatTonnage(tonnageMilestone)}</span>
             </div>
             <div style={{fontFamily:T.measured,fontWeight:300,fontSize:34,letterSpacing:"-0.04em",color:T.ink,lineHeight:1}}>
               {formatTonnage(tonnageTotalKg)}<span style={{fontSize:15,color:T.ink3,letterSpacing:0}}> moved</span>
@@ -689,7 +689,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <Card style={{margin:"20px 24px 0",padding:"16px 18px"}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>A gentle nudge</div>
+                <div style={{fontSize:13,color:T.ink2,marginBottom:6}}>A gentle nudge</div>
                 <div style={{fontSize:14,color:T.ink,lineHeight:1.5}}>
                   {recoveryNudge.message}
                 </div>
@@ -707,7 +707,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <Card style={{margin:"20px 24px 0",padding:"16px 18px"}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>No drama</div>
+                <div style={{fontSize:13,color:T.ink2,marginBottom:6}}>No drama</div>
                 <p style={{fontSize:14,color:T.ink,lineHeight:1.55,margin:0}}>
                   <span style={{fontFamily:T.measured}}>{absenceNudge.days}</span> days off. Here for a session, or need a breather? No wrong answer.
                 </p>
@@ -764,7 +764,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             <div tabIndex={-1} ref={pnChipOpen ? focusOnMount : undefined} style={{outline:"none"}}>
               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,marginBottom:12}}>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>Secure across devices</div>
+                  <div style={{fontSize:13,color:T.ink2,marginBottom:6}}>Secure across devices</div>
                   <div style={{fontSize:16,fontWeight:500,color:T.ink,lineHeight:1.35,marginBottom:6}}>
                     Add a passkey
                   </div>
@@ -810,7 +810,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <Card style={{margin:"20px 24px 0",padding:"16px 18px"}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:13,color:T.ink3,marginBottom:4}}>
+                <div style={{fontSize:13,color:T.ink2,marginBottom:4}}>
                   Block <span style={{fontFamily:T.measured}}>{programmeBlock?.number}</span> · <span style={{fontFamily:T.measured}}>{weeksOnBlock}</span> weeks
                 </div>
                 <div style={{fontSize:16,fontWeight:500,color:T.ink,lineHeight:1.3,marginBottom:4}}>
@@ -837,10 +837,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             style={{display:"flex",width:"100%",alignItems:"center",gap:12,padding:"14px 0",background:"none",border:"none",borderBottom:`1px solid ${T.ruleFaint}`,cursor:"pointer",textAlign:"left",fontFamily:T.text}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:16,fontWeight:500,color:T.ink,marginBottom:2}}>Performance lab</div>
-              <div style={{fontSize:13,color:T.ink3,lineHeight:1.45}}>
+              <div style={{fontSize:13,color:T.ink2,lineHeight:1.45}}>
                 {historyCount === 0
                   ? "Complete a session to light it up"
-                  : <><span style={{fontFamily:T.measured}}>{historyCount}</span> session{historyCount===1?"":"s"} · volume vs the bands · 1RM trends</>}
+                  : <><span style={{fontFamily:T.measured}}>{historyCount}</span> session{historyCount===1?"":"s"}, volume against the bands and 1RM trends</>}
               </div>
             </div>
             <Glyph name="arrowRight" size={14} color={T.ink3} style={{flexShrink:0}}/>
@@ -850,7 +850,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             style={{display:"flex",width:"100%",alignItems:"center",gap:12,padding:"14px 0",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,cursor:"pointer",textAlign:"left",fontFamily:T.text}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:16,fontWeight:500,color:T.ink,marginBottom:2}}>Locker room</div>
-              <div style={{fontSize:13,color:T.ink3,lineHeight:1.45}}>Weigh in, shoot the change. Yours alone.</div>
+              <div style={{fontSize:13,color:T.ink2,lineHeight:1.45}}>Weigh in, shoot the change. Yours alone.</div>
             </div>
             <Glyph name="arrowRight" size={14} color={T.ink3} style={{flexShrink:0}}/>
           </button>
@@ -907,7 +907,7 @@ function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFo
     <div onKeyDown={onKeyDown} onClick={onCancel} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
         className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
+        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
           <span style={{fontFamily:T.measured}}>{weeksOnBlock}</span> weeks on this block
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:30,color:T.ink,marginBottom:8}}>
@@ -945,7 +945,7 @@ function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFo
 function StreakLine({rhythm, resting=false}){
   if (resting) {
     return (
-      <div style={{fontSize:12,color:T.ink3,marginTop:3}}>Resting — on a breather</div>
+      <div style={{fontSize:12,color:T.ink2,marginTop:3}}>Resting — on a breather</div>
     );
   }
   const completed = rhythm?.completed || 0;
@@ -955,8 +955,8 @@ function StreakLine({rhythm, resting=false}){
   const window  = rhythm?.window || 28;
   const over = completed > expected;
   return (
-    <div style={{fontSize:12,color:T.ink3,marginTop:3}}>
-      <span style={{fontFamily:T.measured,color:T.ink2}}>{over ? `${expected}+` : completed}</span> of <span style={{fontFamily:T.measured}}>{expected}</span> sessions, past <span style={{fontFamily:T.measured}}>{window}</span> days{over ? " · strong" : ""}
+    <div style={{fontSize:12,color:T.ink2,marginTop:3}}>
+      <span style={{fontFamily:T.measured,color:T.ink}}>{over ? `${expected}+` : completed}</span> of <span style={{fontFamily:T.measured}}>{expected}</span> sessions, past <span style={{fontFamily:T.measured}}>{window}</span> days{over ? " · strong" : ""}
     </div>
   );
 }

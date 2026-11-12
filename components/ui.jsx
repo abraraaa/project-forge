@@ -28,9 +28,23 @@ import { T } from "@/lib/tokens";
 //
 // It is not only a metric. The opacity:0 is in the SERVER HTML, so the page
 // ships invisible and stays that way until hydration runs the effect.
+//
+// Under prefers-reduced-motion the rise is dropped and only the fade runs.
+// Read during render: every consumer mounts client-only (ssr:false shells in
+// components/client-shells.jsx), so no server markup can disagree with it.
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 export function useFadeIn(d = 0, { opaque = false } = {}) {
   const [v, setV] = useState(false);
   useEffect(() => { const t = setTimeout(() => setV(true), d); return () => clearTimeout(t); }, [d]);
+  if (prefersReducedMotion()) {
+    return {
+      opacity: opaque ? 1 : (v ? 1 : 0),
+      transition: `opacity 260ms ${T.ease} ${d}ms`,
+    };
+  }
   return {
     opacity: opaque ? 1 : (v ? 1 : 0),
     transform: v ? "translateY(0)" : "translateY(10px)",
