@@ -10,6 +10,7 @@ import { pressLiftHandlers } from "@/lib/press-lift";
 import { P } from "@/lib/storage";
 import { authenticatePasskey } from "@/lib/webauthn";
 import { fetchWithTimeout } from "@/lib/net";
+import { REPLY_COPY } from "@/lib/trainer-apply-copy";
 
 export default function ConnectView({ clientName, host, params }) {
   // The field is the truth. The name used to seed from localStorage during
@@ -32,11 +33,17 @@ export default function ConnectView({ clientName, host, params }) {
   const [error, setError] = useState(null);
 
   const send = async (approve, authToken = null) => {
-    const res = await fetchWithTimeout("/api/oauth/consent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ authToken, profile: currentName(), params, approve }),
-    });
+    let res;
+    try {
+      res = await fetchWithTimeout("/api/oauth/consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authToken, profile: currentName(), params, approve }),
+      });
+    } catch {
+      setError(REPLY_COPY.offline);
+      return false;
+    }
     const body = await res.json().catch(() => ({}));
     if (body.redirect) { window.location.assign(body.redirect); return true; }
     // House lines only: the server's own words never reach the screen.
@@ -81,7 +88,7 @@ export default function ConnectView({ clientName, host, params }) {
       <label htmlFor="hw-connect-name" style={{display:"block",fontSize:13,color:T.ink3,marginBottom:6}}>Your Heatwayve name</label>
       <input id="hw-connect-name" ref={inputRef} value={name} onChange={e => setName(e.target.value)}
         autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={busy}
-        style={{width:"100%",boxSizing:"border-box",height:48,padding:"0 14px",fontFamily:T.text,fontSize:16,color:T.ink,background:"transparent",border:`1px solid ${T.rule}`,borderRadius:T.r,marginBottom:20}}/>
+        style={{width:"100%",boxSizing:"border-box",height:48,padding:"0 14px",fontFamily:T.text,fontSize:16,color:T.ink,background:"transparent",border:`1px solid ${T.ink3}`,borderRadius:T.r,marginBottom:20}}/>
 
       <button type="button" onClick={onAllow} aria-disabled={busy} className="forge-press forge-lift" {...pressLiftHandlers}
         style={{width:"100%",height:52,background:T.commit,border:"none",borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.commitInk,boxShadow:T.elevStrong,opacity:busy?0.6:1}}>
@@ -91,7 +98,7 @@ export default function ConnectView({ clientName, host, params }) {
         style={{width:"100%",height:44,marginTop:10,background:"none",border:"none",cursor:"pointer",fontFamily:T.text,fontSize:14,color:T.ink2}}>
         Not now
       </button>
-      <div role="status" aria-live="polite" style={{fontSize:12,color:T.ink3,marginTop:10,minHeight:16,textAlign:"center"}}>{error || ""}</div>
+      <div role="status" aria-live="polite" style={{fontSize:12,color:T.ink2,marginTop:10,minHeight:16,textAlign:"center"}}>{error || ""}</div>
     </div>
   );
 }

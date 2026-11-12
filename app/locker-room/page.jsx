@@ -34,6 +34,8 @@ import { ensurePhotoAccess } from "@/lib/auth-session";
 import { preparePhoto, uploadPhoto, deletePhoto, fetchPhotoIndex, fetchPhotoObjectUrl } from "@/lib/photos";
 import { todayLocalIso, parseLocalDate } from "@/lib/dates";
 import BodyweightDrum from "@/components/BodyweightDrum";
+import BodyweightEditModal from "@/components/BodyweightEditModal";
+import { BTN } from "@/components/ui";
 
 // ── Prefetch/eviction geometry — pure, exported, and PINNED ──────────────────
 // The bounded-window loader that replaced the N+1 reveal (#264) is a real
@@ -88,6 +90,7 @@ export default function LockerRoom() {
   const [askBw, setAskBw] = useState(null); // date just uploaded, awaiting the weight question
   const [bwDraft, setBwDraft] = useState(75);
   const [showDrum, setShowDrum] = useState(false);
+  const [bwEditOpen, setBwEditOpen] = useState(false);
   const trackRef = useRef(null);
   const lastSnapRef = useRef(0);
   const urlsRef = useRef({});
@@ -185,7 +188,7 @@ export default function LockerRoom() {
       const date = todayLocalIso();
       const latestBw = BW.getKg(profile);
       const res = await uploadPhoto(profile, token, date, blob, { bodyweightAt: latestBw });
-      if (!res.ok) { setErr(res.error || "That one didn't stick. Try it again?"); return; }
+      if (!res.ok) { setErr("That one didn't stick. Try it again?"); return; }
       haptic.commit();
       const idx = await fetchPhotoIndex(profile, token);
       if (idx.ok) {
@@ -215,13 +218,20 @@ export default function LockerRoom() {
     } finally { setAskBw(null); setShowDrum(false); setBusy(false); }
   };
 
+  // Same save as Profile's bodyweight edit: journal entry, then the sync push.
+  const saveBw = (kg) => {
+    if (!kg) return;
+    BW.set(profile, kg);
+    pushNow(profile).catch(() => {});
+  };
+
   const doDelete = async () => {
     const cur = photos[Math.round(pos)];
     if (!cur) return;
     setBusy(true); setErr(null);
     try {
       const res = await deletePhoto(profile, token, cur.date);
-      if (!res.ok) { setErr(res.error || "Couldn't remove it — try again."); return; }
+      if (!res.ok) { setErr("Couldn't remove it — try again."); return; }
       if (urls[cur.date]) { URL.revokeObjectURL(urls[cur.date]); delete urlsRef.current[cur.date]; }
       const next = photos.filter((p) => p.date !== cur.date);
       setPhotos(next);
@@ -288,7 +298,12 @@ export default function LockerRoom() {
   })();
 
   const bwChart = (h = 120) => {
-    if (bwSeries.length === 0) return <p style={{ fontSize: 13, color: T.ink3 }}>Log a weight. The line needs two points; the truth needs a few more.</p>;
+    if (bwSeries.length === 0) return (
+      <div>
+        <p style={{ fontSize: 13, color: T.ink3 }}>Log a weight. The line needs two points; the truth needs a few more.</p>
+        <button type="button" onClick={() => setBwEditOpen(true)} style={{ ...BTN.text, marginTop: 8 }}>Log a weight</button>
+      </div>
+    );
     if (bwSeries.length === 1) {
       // The very first log must visibly LAND (boss, 2026-07-24) — one point
       // renders as a marked reading, not placeholder copy.
@@ -477,6 +492,12 @@ export default function LockerRoom() {
               <span style={{ fontSize: 13, color: T.ink2 }}>Didn&apos;t load. Tap to try again.</span>
             </button>
           )}
+          {!urls[photos[i0].date] && !failed.has(photos[i0].date) && (
+            <div role="status"
+              style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ fontSize: 13, color: T.ink3 }}>One moment</span>
+            </div>
+          )}
           <div className="forge-vellum" style={{ position: "absolute", left: 12, bottom: 12, padding: "8px 12px", borderRadius: T.r, boxShadow: "0 4px 14px -8px rgba(36,28,25,0.4)" }}>
             <div style={{ ...mono, fontSize: 17, color: T.ink }}>{cur?.bodyweightAt != null ? `${cur.bodyweightAt} kg` : "—"}</div>
             <div style={{ fontSize: 11, color: T.ink3 }}>{cur?.date}</div>
@@ -503,6 +524,7 @@ export default function LockerRoom() {
           )}
         </div>
       </>)}
+      <BodyweightEditModal open={bwEditOpen} onClose={() => setBwEditOpen(false)} currentKg={BW.getKg(profile)} onSave={saveBw} />
     </div>
   );
 }

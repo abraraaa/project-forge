@@ -42,7 +42,7 @@ function useUpgradeAction(profile, onDone) {
       if (await runUpgrade(profile)) onDone?.();
       else setError("Cancelled — your old passkey still works for now.");
     } catch (e) {
-      setError(e?.message || "That didn’t work. Try again in a moment.");
+      setError(e?.message === "WebAuthn not supported" ? "This browser can’t use passkeys." : "That didn’t work. Try again in a moment.");
     }
     setBusy(false);
   };

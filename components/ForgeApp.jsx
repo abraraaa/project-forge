@@ -1359,7 +1359,7 @@ export default function ForgeApp(){
       }
     } catch (e) {
       console.error("[forge:passkey-register]", e);
-      setPnError(e.message || "Passkey setup failed");
+      setPnError(e?.message === "WebAuthn not supported" ? "This browser can't use passkeys." : "The passkey didn't take. Another go in a bit.");
     }
     setPnBusy(false);
   };
@@ -1467,7 +1467,7 @@ function OnboardingScreen({ onContinue }) {
           Three strength sessions, A, B and C, always in that order. Miss a day and the next one waits for you.
         </p>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginBottom: 30 }}>
-          Tell us how each set felt. That sets your next weight: more when it was easy, less when it wasn&apos;t.
+          Tell us how each set felt. That sets your next weight: more when it was easy, less when it wasn&rsquo;t.
         </p>
       </Fade>
 
@@ -1654,7 +1654,7 @@ function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
         )}
         {unsolved && (
           <div style={{fontSize:13,color:T.ink2,marginBottom:14,lineHeight:1.5}}>
-            This roll couldn&apos;t fully balance {report.outOfBand.join(", ")} — roll again, or confirm knowing that.
+            This roll couldn&rsquo;t fully balance {report.outOfBand.join(", ")} — roll again, or confirm knowing that.
           </div>
         )}
 
@@ -1989,7 +1989,7 @@ export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, mus
   if (!meta || meta.type !== "strength" || !sessionDef) {
     return (
       <div style={{padding:"72px 24px",fontFamily:T.text,color:T.ink2,textAlign:"center"}}>
-        <p>Couldn&apos;t resolve the session for that date.</p>
+        <p>Couldn&rsquo;t resolve the session for that date.</p>
         <button onClick={onCancel} style={{marginTop:20,padding:"12px 20px",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,color:T.ink,cursor:"pointer",fontFamily:T.text,display:"inline-flex",alignItems:"center",gap:5}}><Glyph name="arrowLeft" size={12}/> Back</button>
       </div>
     );
@@ -2017,7 +2017,7 @@ export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, mus
       <Fade d={60}>
         <div style={{padding:"16px 20px 0"}}>
           <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
-            Defaults from the prescribed session. Tap any cell to adjust — the rest auto-fill until you override them. Skip what you didn&apos;t do.
+            Defaults from the prescribed session. Tap any cell to adjust — the rest auto-fill until you override them. Skip what you didn&rsquo;t do.
           </div>
         </div>
       </Fade>

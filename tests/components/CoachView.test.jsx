@@ -115,6 +115,43 @@ describe("CoachView", () => {
     }
   });
 
+  it("a failed list load says so in one quiet line", async () => {
+    P.setActive("sam");
+    fetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ error: "Unavailable" }) });
+    render(<CoachView />);
+    expect(await screen.findByText("Couldn't load your connections just now.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Unavailable");
+  });
+
+  it("an offline list load says so too", async () => {
+    P.setActive("sam");
+    fetchWithTimeout.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    render(<CoachView />);
+    expect(await screen.findByText("Couldn't load your connections just now.")).toBeTruthy();
+  });
+
+  it("a 401 (no passkey, nothing to list) still hides the section", async () => {
+    P.setActive("sam");
+    fetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ requiresAuth: true }) });
+    render(<CoachView />);
+    await act(async () => {});
+    expect(fetchWithTimeout).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Couldn't load your connections just now.")).toBeNull();
+    expect(screen.queryByText("Nothing connected yet.")).toBeNull();
+    expect(screen.queryByText("Connected")).toBeNull();
+  });
+
+  it("a disconnect that doesn't take says so while the row survives", async () => {
+    P.setActive("sam");
+    server.connections = [{ id: "c1", name: "Claude", lastRead: null }];
+    await renderCoach();
+    fetchWithTimeout.mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ error: "Unavailable" }) });
+    await act(async () => { fireEvent.click(screen.getByText("Disconnect")); });
+    expect(await screen.findByText("Couldn't disconnect just now. Try again.")).toBeTruthy();
+    expect(screen.getByText("Disconnect")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Unavailable");
+  });
+
   it("with no active profile it sends you home and renders nothing", () => {
     const replace = vi.spyOn(router, "replace");
     const { container } = render(<CoachView />);

@@ -16,14 +16,15 @@ import { copyCoachContext } from "@/lib/coach-share";
 import { CONNECT_OPTIONS, MCP_URL, ago } from "@/lib/coach-connect";
 import { fetchWithTimeout } from "@/lib/net";
 
-/** @returns {Promise<any[] | null>} null when the server won't say (no sign-in, offline). */
+/** @returns {Promise<any[] | null | false>} null when there's no sign-in (nothing to list); false when the list couldn't be loaded (offline, server trouble). */
 async function fetchConnections(profile) {
   try {
     const res = await fetchWithTimeout(`/api/sync/connections?profile=${encodeURIComponent(profile)}`);
-    if (!res.ok) return null;
+    if (res.status === 401) return null;
+    if (!res.ok) return false;
     const body = await res.json();
     return Array.isArray(body.connections) ? body.connections : [];
-  } catch { return null; }
+  } catch { return false; }
 }
 
 export default function CoachView() {
@@ -41,15 +42,22 @@ export default function CoachView() {
   // Connected AIs — shown only when the server answers (a profile without a
   // passkey has no sync sign-in, and nothing to list).
   const [connections, setConnections] = useState(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [disconnectFailed, setDisconnectFailed] = useState(false);
   const [busyId, setBusyId] = useState(null);
   useEffect(() => {
     if (!current) return undefined;
     let off = false;
-    fetchConnections(current).then((list) => { if (!off && list) setConnections(list); });
+    fetchConnections(current).then((list) => {
+      if (off) return;
+      if (list) setConnections(list);
+      else if (list === false) setLoadFailed(true);
+    });
     return () => { off = true; };
   }, [current]);
   const onDisconnect = async (id) => {
     setBusyId(id);
+    setDisconnectFailed(false);
     try {
       await fetchWithTimeout("/api/sync/connections", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -58,6 +66,8 @@ export default function CoachView() {
     } catch { /* the reload shows the truth either way */ }
     const list = await fetchConnections(current);
     if (list) setConnections(list);
+    // The row is still on screen unless the reload came back without it.
+    setDisconnectFailed(!list || list.some((c) => c.id === id));
     setBusyId(null);
   };
 
@@ -121,6 +131,14 @@ export default function CoachView() {
           </div>
         </Fade>
 
+        {loadFailed && !connections && (
+          <Fade d={110}>
+            <div style={{padding:"16px 2px",borderBottom:`1px solid ${T.rule}`}}>
+              <div style={{fontSize:13,color:T.ink3}}>Couldn&apos;t load your connections just now.</div>
+            </div>
+          </Fade>
+        )}
+
         {connections && (
           <Fade d={110}>
             <div style={{padding:"16px 2px",borderBottom:`1px solid ${T.rule}`}}>
@@ -139,6 +157,9 @@ export default function CoachView() {
                   </button>
                 </div>
               ))}
+              {disconnectFailed && (
+                <div role="status" style={{fontSize:13,color:T.ink3,paddingTop:6}}>Couldn&apos;t disconnect just now. Try again.</div>
+              )}
             </div>
           </Fade>
         )}

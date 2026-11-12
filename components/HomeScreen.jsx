@@ -290,7 +290,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             </div>
             <StreakLine rhythm={rhythm} resting={resting}/>
           </div>
-          <button onClick={onProfile} aria-label={`Profile, ${profileName}${noticeLit ? ", something new" : ""}`} style={{...linkBtn,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,minWidth:0,textAlign:"left"}}>
+          <button onClick={onProfile} aria-label={`Profile, ${profileName}${noticeLit ? ", something new" : ""}${syncState === "error" ? ", not synced" : ""}`} style={{...linkBtn,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:3,minWidth:0,textAlign:"left"}}>
             {/* The notice dot rides the kicker, never the name line: solid
                 ink, still, so it can't be read as sync (name line) or heat.
                 Out of flow, 5px after the word, so lighting it moves nothing. */}
