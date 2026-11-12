@@ -102,6 +102,18 @@ describe("Apply: the panel", () => {
     expect(screen.queryByLabelText("Your Heatwayve name")).toBeNull();
   });
 
+  it("every field draws its border in ink3, the sign-in name and the application's too", async () => {
+    const { default: TrainerView } = await import("../../components/TrainerView.jsx");
+    render(<TrainerView/>);
+    await flush();
+    expect(screen.getByLabelText("Your Heatwayve name").style.border).toBe("1px solid var(--ink-3)");
+    cleanup();
+    await signIn();
+    for (const label of ["Where do you coach?", "A link (optional)"]) {
+      expect(screen.getByLabelText(label).style.border, label).toBe("1px solid var(--ink-3)");
+    }
+  });
+
   it("sends with sign-in's ceremony: one Face ID, the fields trimmed, no link when none is typed", async () => {
     server.routes["POST /api/trainer/apply"] = { status: 200, body: { ok: true, status: "applied" } };
     await signIn();

@@ -694,7 +694,12 @@ export default function TrainerView() {
             <p style={{ fontSize: 15, color: T.ink, margin: "0 0 14px" }}>
               {shown.state === "missing" ? "Not shared with you now." : "Couldn't open that just now."}
             </p>
-            <button type="button" onClick={() => { closeClient(); loadRoster(); }} className="forge-press forge-tint" style={BTN.quiet}>Back to clients</button>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {shown.state === "error" && (
+                <button type="button" onClick={() => showClient(open.i, open)} className="forge-press forge-tint" style={BTN.quiet}>Try again</button>
+              )}
+              <button type="button" onClick={() => { closeClient(); loadRoster(); }} className="forge-press forge-tint" style={BTN.quiet}>Back to clients</button>
+            </div>
           </div>
         )}
         {shown?.state === "ready" && (
@@ -724,7 +729,7 @@ function NameField({ inputRef, disabled }) {
       <label htmlFor="hw-trainer-name" style={{ display: "block", fontSize: 13, color: T.ink3, marginBottom: 6 }}>Your Heatwayve name</label>
       <input id="hw-trainer-name" ref={inputRef} defaultValue="" autoComplete="username" autoCapitalize="none"
         autoCorrect="off" spellCheck={false} disabled={disabled}
-        style={{ width: "100%", boxSizing: "border-box", height: 48, padding: "0 14px", fontFamily: T.text, fontSize: 16, color: T.ink, background: "transparent", border: `1px solid ${T.rule}`, borderRadius: T.r, marginBottom: 20 }}/>
+        style={{ width: "100%", boxSizing: "border-box", height: 48, padding: "0 14px", fontFamily: T.text, fontSize: 16, color: T.ink, background: "transparent", border: `1px solid ${T.ink3}`, borderRadius: T.r, marginBottom: 20 }}/>
     </>
   );
 }
@@ -734,7 +739,7 @@ const fieldLabel = { display: "block", fontSize: 13, color: T.ink3, marginBottom
 /** @type {import("react").CSSProperties} */
 const fieldStyle = {
   width: "100%", boxSizing: "border-box", padding: "12px 14px", fontFamily: T.text, fontSize: 16, color: T.ink,
-  background: "transparent", border: `1px solid ${T.rule}`, borderRadius: T.r,
+  background: "transparent", border: `1px solid ${T.ink3}`, borderRadius: T.r,
 };
 
 // What being a trainer means, and the name clients see.
@@ -857,6 +862,7 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
   const [status, setStatus] = useState(null); // { code, status, usedBy } for the code shown
   const [now, setNow] = useState(invite.issuedAt || 0);
   const [shared, setShared] = useState(null);
+  const [cancelFailed, setCancelFailed] = useState(/** @type {string | null} */ (null)); // the code a cancel failed for
   const code = invite.code || null;
   const usedNow = useEffectEvent(() => { onUsed?.(); });
   // The code that reached a final status (used, run out, cancelled): its
@@ -913,8 +919,10 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
     try { await navigator.clipboard.writeText(url); setShared("copied"); } catch { setShared("fail"); }
   };
   const onCancel = async () => {
+    setCancelFailed(null);
     const r = await call("/api/trainer/invite", { action: "cancel" });
     if (r.status === 200) { finalFor.current = code; setStatus({ code, status: "cancelled", usedBy: null }); }
+    else setCancelFailed(code);
   };
 
   // A final status (used, run out, cancelled) is what to read: it leads, and
@@ -935,6 +943,10 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
 
         {invite.issuing && <div role="status" style={{ fontSize: 13, color: T.ink3, minHeight: 32 }}>One moment</div>}
         {invite.error && <div role="status" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5 }}>{invite.error}</div>}
+        {/* Not open yet stays so until launch; a retry can't change it. */}
+        {invite.error && invite.error !== APPLY_COPY.notOpen && (
+          <button type="button" onClick={onIssue} style={{ ...BTN.quiet, marginTop: 14 }}>Try again</button>
+        )}
         {code && (
           // One live region throughout, so a change is announced. It sits first
           // in the DOM; while the code is live, order moves it below the how-to.
@@ -975,6 +987,7 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
               )}
             </div>
             {shared === "fail" && <div style={{ order: 5, fontSize: 12, color: T.ink2, marginTop: 8 }}>Couldn't reach the clipboard. Read the code out instead.</div>}
+            {cancelFailed === code && state === "pending" && <div role="status" style={{ order: 5, fontSize: 12, color: T.ink2, marginTop: 8 }}>Couldn't cancel that just now. Try again.</div>}
           </div>
         )}
         <button type="button" onClick={onClose} style={{ ...BTN.text, width: "100%", justifyContent: "center", padding: 12, marginTop: 14 }}>

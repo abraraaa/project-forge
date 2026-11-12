@@ -16,7 +16,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { T, DISPLAY } from "@/lib/tokens";
-import { Fade } from "@/components/ui";
+import { BTN, Fade } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ShareApprove, { APPROVE_COPY } from "@/components/ShareApprove";
@@ -322,6 +322,12 @@ export default function TrainerShareView() {
     document.getElementById("hw-share-code")?.focus();
   };
 
+  // Try again after a status that didn't load: "One moment" while it runs.
+  const onRetry = async () => {
+    setState(null);
+    setState(await fetchShare(current));
+  };
+
   const onApproved = async () => {
     const next = await fetchShare(current);
     if (next.ok) { setArrived(true); setState(next); }
@@ -591,8 +597,14 @@ export default function TrainerShareView() {
       <Fade d={0}>
         {kicker}
         <p role="status" style={line}>{state.error}</p>
+        {/* Signing in again happens elsewhere; a retry can't change that. */}
+        {state.error !== SIGN_IN && (
+          <button type="button" onClick={onRetry} className="forge-press forge-tint" style={{ ...BTN.quiet, width: "100%", marginTop: 12 }}>Try again</button>
+        )}
       </Fade>
     );
+  } else {
+    content = <div role="status" style={{ fontSize: 13, color: T.ink3 }}>One moment</div>;
   }
 
   return (

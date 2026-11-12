@@ -229,6 +229,15 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   // Where their changes stand (view.edits); "on" without a plan means it couldn't be read.
   const edits = plan ? "on" : view?.edits === "on" ? "unavailable" : view?.edits;
   const lead = self ? "Read only." : leadLine(edits, name);
+  const [planRetrying, setPlanRetrying] = useState(false);
+  const [planRetryFailed, setPlanRetryFailed] = useState(false);
+  const onPlanRetry = async () => {
+    if (planRetrying) return;
+    setPlanRetrying(true); setPlanRetryFailed(false);
+    const ok = await onChanged?.();
+    setPlanRetrying(false);
+    if (ok === false) setPlanRetryFailed(true);
+  };
   // The export: a client's (the pane only renders while the grant is live) or
   // your own, which the route serves as "me".
   const exportRef = self ? SELF_REF : typeof clientRef === "string" && clientRef ? clientRef : null;
@@ -250,6 +259,15 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
       <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>
         {lead} Sessions from the last 24 weeks; main lifts over 12 months.
       </p>
+      {edits === "unavailable" && onChanged && (
+        <div data-plan-retry="">
+          <button type="button" onClick={onPlanRetry} aria-disabled={planRetrying}
+            style={{ ...BTN.text, padding: "12px 0", lineHeight: "20px" }}>
+            {planRetrying ? "One moment" : "Try again"}
+          </button>
+          <div role="status" aria-live="polite" style={statusLine}>{planRetryFailed ? NOT_LATEST : ""}</div>
+        </div>
+      )}
       <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "6px 0 0" }}>
         {since ? <>Sharing since <Nums text={msDayMonth(since)}/></> : null}
         {since && looked ? " · " : null}
@@ -1048,6 +1066,7 @@ const sheetStyle = {
 const subKicker = { fontSize: 12, color: T.ink3, margin: "16px 0 4px" };
 /** @type {import("react").CSSProperties} */
 const statusLine = { fontSize: 13, color: T.ink2, lineHeight: 1.5, minHeight: 0 };
+const NOT_LATEST = "Couldn't get their latest just now. Try again.";
 
 /**
  * The plan section and its sheets. Every request goes through onChange
@@ -1113,11 +1132,14 @@ function PlanSection({ plan, name, sessions, todayIso, unsent = null, onChange, 
     setStatus(`Left out ${indices.length} change${indices.length === 1 ? "" : "s"}. Review again when ready.`);
   };
 
-  const onSent = () => {
+  // A reload that fails is said after the sent line, unless another line replaced it.
+  const onSent = async () => {
+    const sent = `Sent to ${name || "them"}.`;
     setDrafts(EMPTY_DRAFTS);
     setReviewing(false);
-    setStatus(`Sent to ${name || "them"}.`);
-    onChanged?.();
+    setStatus(sent);
+    const ok = await onChanged?.();
+    if (ok === false) setStatus((s) => (s === sent ? `${sent} ${NOT_LATEST}` : s));
   };
 
   // The line follows the reload: false from onChanged means it didn't load.
@@ -1125,7 +1147,7 @@ function PlanSection({ plan, name, sessions, todayIso, unsent = null, onChange, 
     setReviewing(false);
     setStatus("Getting their latest.");
     const ok = await onChanged?.();
-    setStatus(ok === false ? "Couldn't get their latest just now. Try again." : "Showing their latest.");
+    setStatus(ok === false ? NOT_LATEST : "Showing their latest.");
   };
 
   const bySession = useMemo(() => {
@@ -1550,13 +1572,13 @@ function useWithdraw({ onChange, onFaceId, onChanged, words }) {
     setBusy(x); setMsg(""); setFace(null);
     const r = await onChange({ withdraw: x }).catch(() => ({ status: 0, body: {} }));
     setBusy(null);
-    if (r.status === 200 && Array.isArray(r.body?.withdrawn) && r.body.withdrawn.length === 0) {
+    if (r.status === 200) {
       // Nothing matched: it was undone already, or has moved past taking back.
-      setMsg(words.nothing);
-      onChanged?.();
-    } else if (r.status === 200) {
-      setMsg(words.done(ctx));
-      onChanged?.();
+      const said = Array.isArray(r.body?.withdrawn) && r.body.withdrawn.length === 0 ? words.nothing : words.done(ctx);
+      setMsg(said);
+      const ok = await onChanged?.();
+      // A reload that fails is said after the line, unless another line replaced it.
+      if (ok === false) setMsg((m) => (m === said ? `${said} ${NOT_LATEST}` : m));
     } else if (r.status === 403 && r.body?.needsFaceId) {
       setFace({ x, ctx });
     } else if (r.status === 403 && r.body?.editsOff) {
