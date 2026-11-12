@@ -31,7 +31,7 @@ export function LineChart({ series }) {
   const trendId = `hwTrend${uid}`, areaId = `hwArea${uid}`;
   const W = 320, H = 108, PAD_X = 12, PAD_Y = 18;
   if (!series || series.length === 0) {
-    return <div style={{padding:"24px 0", fontSize:13, color:T.ink3, textAlign:"center"}}>Nothing to chart yet</div>;
+    return <div style={{padding:"24px 0", fontSize:13, color:T.ink2, textAlign:"center"}}>Nothing to chart yet</div>;
   }
   // Single data point: show the number, no line.
   if (series.length === 1) {
@@ -39,8 +39,8 @@ export function LineChart({ series }) {
     return (
       <div style={{textAlign:"center", padding:"18px 0"}}>
         <div style={{fontFamily:T.measured, fontSize:48, fontWeight:300, letterSpacing:"-0.04em", color:T.ink, lineHeight:1}}>{p.est1RM}<span style={{fontSize:18, color:T.ink3, marginLeft:4}}>kg</span></div>
-        <div style={{fontSize:12, color:T.ink3, marginTop:8}}>{p.date} · top set <span style={{fontFamily:T.measured}}>{p.topSet.weight}</span> kg × <span style={{fontFamily:T.measured}}>{p.topSet.reps}</span></div>
-        <div style={{fontSize:12, color:T.ink3, marginTop:6}}>Log another session to see the trend</div>
+        <div style={{fontSize:12, color:T.ink2, marginTop:8}}>{p.date} · top set <span style={{fontFamily:T.measured}}>{p.topSet.weight}</span> kg × <span style={{fontFamily:T.measured}}>{p.topSet.reps}</span></div>
+        <div style={{fontSize:12, color:T.ink2, marginTop:6}}>Log another session to see the trend</div>
       </div>
     );
   }

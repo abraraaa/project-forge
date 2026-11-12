@@ -146,7 +146,7 @@ function clockTime(ms) {
 }
 
 /** @type {import("react").CSSProperties} */
-const kickerStyle = { fontSize: 13, color: T.ink3, marginBottom: 8 };
+const kickerStyle = { fontSize: 13, color: T.ink2, marginBottom: 8 };
 /** @type {import("react").CSSProperties} */
 const h1Style = { ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" };
 /** A roster row's button: a hairline row. --press is the press itself, never a resting fill. @type {import("react").CSSProperties} */
@@ -163,7 +163,7 @@ const openMark = { position: "absolute", left: 0, top: 0, bottom: 0, width: 3, b
 /** @type {import("react").CSSProperties} */
 const rowTitle = { display: "block", fontSize: 15, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 /** @type {import("react").CSSProperties} */
-const rowLine = { display: "block", fontSize: 12, color: T.ink3, marginTop: 3, lineHeight: 1.45 };
+const rowLine = { display: "block", fontSize: 12, color: T.ink2, marginTop: 3, lineHeight: 1.45 };
 
 export default function TrainerView() {
   const router = useRouter();
@@ -537,10 +537,22 @@ export default function TrainerView() {
     else if (steps === 2) window.history.go(-2);
     else router.back();
   }, "nav-back");
+  // Signed out on a page opened cold (a shared link or a typed address: this
+  // page was the document the browser loaded, not a route reached inside the
+  // app) there is no Profile to go back to, so the row is the public pages'
+  // "← Heatwayve" to /. Read from the navigation entry, never the device's stores.
+  const [openedCold] = useState(() => {
+    try {
+      const entry = performance.getEntriesByType("navigation")[0];
+      return !!entry && new URL(entry.name).pathname === window.location.pathname;
+    } catch { return false; }
+  });
+  const outside = phase === "signedOut" && openedCold;
+  const toHome = () => withNavTransition(() => router.push("/"), "nav-back");
   // The house back row, as Profile's "← Home": the text link, its label in ink2.
   const profileRow = (style) => (
-    <button type="button" onClick={toProfile} style={{ ...BTN.text, color: T.ink2, ...style }}>
-      <Glyph name="arrowLeft" size={12} color={T.ink3}/> Profile
+    <button type="button" onClick={outside ? toHome : toProfile} style={{ ...BTN.text, color: T.ink2, ...style }}>
+      <Glyph name="arrowLeft" size={12} color={T.ink3}/> {outside ? "Heatwayve" : "Profile"}
     </button>
   );
 
@@ -570,7 +582,7 @@ export default function TrainerView() {
       <div {...root}>
         <div className="forge-wide-solo">
           {profileRow({ marginBottom: 32 })}
-          {phase === "loading" && <div role="status" style={{ fontSize: 13, color: T.ink3 }}>One moment</div>}
+          {phase === "loading" && <div role="status" style={{ fontSize: 13, color: T.ink2 }}>One moment</div>}
           {phase === "error" && (
             <>
               <div style={kickerStyle}>For trainers</div>
@@ -667,7 +679,7 @@ export default function TrainerView() {
             })}
           </ul>
         )}
-        <div style={{ marginTop: 28, fontSize: 12, color: T.ink3 }}>
+        <div style={{ marginTop: 28, fontSize: 12, color: T.ink2 }}>
           {me && <div style={{ marginBottom: 4 }}>Signed in as {me}</div>}
           <button type="button" onClick={() => setSignOutOpen(true)} style={{ ...BTN.text, padding: "8px 0" }}>Sign out</button>
         </div>
@@ -688,7 +700,7 @@ export default function TrainerView() {
             {clients.length === 0 ? EMPTY_ROSTER : "Pick a client to see their training."}
           </p>
         )}
-        {shown?.state === "loading" && <div role="status" style={{ fontSize: 13, color: T.ink3 }}>One moment</div>}
+        {shown?.state === "loading" && <div role="status" style={{ fontSize: 13, color: T.ink2 }}>One moment</div>}
         {(shown?.state === "missing" || shown?.state === "error") && (
           <div>
             <p style={{ fontSize: 15, color: T.ink, margin: "0 0 14px" }}>
@@ -726,7 +738,7 @@ const EMPTY_ROSTER = "No clients yet. Show them a code; they add you under Profi
 function NameField({ inputRef, disabled }) {
   return (
     <>
-      <label htmlFor="hw-trainer-name" style={{ display: "block", fontSize: 13, color: T.ink3, marginBottom: 6 }}>Your Heatwayve name</label>
+      <label htmlFor="hw-trainer-name" style={{ display: "block", fontSize: 13, color: T.ink2, marginBottom: 6 }}>Your Heatwayve name</label>
       <input id="hw-trainer-name" ref={inputRef} defaultValue="" autoComplete="username" autoCapitalize="none"
         autoCorrect="off" spellCheck={false} disabled={disabled}
         style={{ width: "100%", boxSizing: "border-box", height: 48, padding: "0 14px", fontFamily: T.text, fontSize: 16, color: T.ink, background: "transparent", border: `1px solid ${T.ink3}`, borderRadius: T.r, marginBottom: 20 }}/>
@@ -735,7 +747,7 @@ function NameField({ inputRef, disabled }) {
 }
 
 /** @type {import("react").CSSProperties} */
-const fieldLabel = { display: "block", fontSize: 13, color: T.ink3, marginBottom: 6 };
+const fieldLabel = { display: "block", fontSize: 13, color: T.ink2, marginBottom: 6 };
 /** @type {import("react").CSSProperties} */
 const fieldStyle = {
   width: "100%", boxSizing: "border-box", padding: "12px 14px", fontFamily: T.text, fontSize: 16, color: T.ink,
@@ -941,7 +953,7 @@ function InviteSheet({ invite, onIssue, onClose, onUsed }) {
         style={{ padding: "26px 24px calc(24px + env(safe-area-inset-bottom))", width: "100%", animation: `slideUp 260ms ${T.ease}`, boxSizing: "border-box", outline: "none", fontFamily: T.text, color: T.ink }}>
         <div id="trainer-invite-title" style={{ fontSize: 18, fontWeight: 500, lineHeight: 1.3, marginBottom: 14 }}>Show them this</div>
 
-        {invite.issuing && <div role="status" style={{ fontSize: 13, color: T.ink3, minHeight: 32 }}>One moment</div>}
+        {invite.issuing && <div role="status" style={{ fontSize: 13, color: T.ink2, minHeight: 32 }}>One moment</div>}
         {invite.error && <div role="status" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5 }}>{invite.error}</div>}
         {/* Not open yet stays so until launch; a retry can't change it. */}
         {invite.error && invite.error !== APPLY_COPY.notOpen && (

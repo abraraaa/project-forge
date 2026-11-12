@@ -83,9 +83,9 @@ export default function ConnectView({ clientName, host, params }) {
       <p style={{fontSize:14,color:T.ink2,marginBottom:6,lineHeight:1.6}}>
         It reads your training — lifts, volume, rhythm. Read only. Photos stay locked.
       </p>
-      <p style={{fontSize:12,color:T.ink3,marginBottom:32,lineHeight:1.5}}>Returns to {host}</p>
+      <p style={{fontSize:12,color:T.ink2,marginBottom:32,lineHeight:1.5}}>Returns to {host}</p>
 
-      <label htmlFor="hw-connect-name" style={{display:"block",fontSize:13,color:T.ink3,marginBottom:6}}>Your Heatwayve name</label>
+      <label htmlFor="hw-connect-name" style={{display:"block",fontSize:13,color:T.ink2,marginBottom:6}}>Your Heatwayve name</label>
       <input id="hw-connect-name" ref={inputRef} value={name} onChange={e => setName(e.target.value)}
         autoComplete="username" autoCapitalize="none" spellCheck={false} disabled={busy}
         style={{width:"100%",boxSizing:"border-box",height:48,padding:"0 14px",fontFamily:T.text,fontSize:16,color:T.ink,background:"transparent",border:`1px solid ${T.ink3}`,borderRadius:T.r,marginBottom:20}}/>

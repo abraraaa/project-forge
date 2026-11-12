@@ -46,6 +46,7 @@ import { useModalA11y, haptic } from "@/lib/a11y";
 import { withNavTransition } from "@/lib/nav-transitions";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Fade, MonoNums } from "@/components/ui";
+import { LaunchHead, LAUNCH_COLUMN } from "@/components/client-shells";
 import Glyph from "@/components/Glyph";
 import ScrollDrum from "@/components/ScrollDrum";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
@@ -1383,13 +1384,13 @@ export default function ForgeApp(){
       <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 32px",position:"relative",overflow:"clip"}}>
         <div style={{position:"relative",textAlign:"center"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:T.ink3,margin:"0 auto 24px",animation:`pulse 1400ms ${T.ease} infinite`}}/>
-          <div style={{fontSize:13,color:T.ink3,marginBottom:14}}>
+          <div style={{fontSize:13,color:T.ink2,marginBottom:14}}>
             Restoring
           </div>
           <div style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:10}}>
             Welcome back, {activeProfile}
           </div>
-          <div style={{fontSize:13,color:T.ink3,lineHeight:1.55}}>
+          <div style={{fontSize:13,color:T.ink2,lineHeight:1.55}}>
             Pulling your training history…
           </div>
         </div>
@@ -1438,32 +1439,24 @@ export default function ForgeApp(){
 function OnboardingScreen({ onContinue }) {
   return (
     <div style={{
-      background: "transparent", minHeight: "100vh", maxWidth: 430, margin: "0 auto",
+      ...LAUNCH_COLUMN, paddingBottom: 48,
+      background: "transparent",
       fontFamily: T.text, color: T.ink, WebkitFontSmoothing: "antialiased",
-      padding: "72px 24px 48px", position: "relative", overflow: "hidden",
-      // Centre the editorial column when the viewport is taller than the
-      // content; on short viewports content just fills naturally.
-      display: "flex", flexDirection: "column", justifyContent: "center",
+      position: "relative", overflow: "hidden",
     }}>
-      {/* Masthead per the grammar (§14): kicker Heatwayve · title a noun ·
-          the sentence lives in the support line. */}
-      {/* opaque: this is the first-run screen, and it is what a cold visitor
-          (and every crawler) actually sees. A fade from zero disqualifies it
-          as an LCP candidate in Chromium, which is why PageSpeed reported
-          NO_LCP and errored out five diagnostics that derive from it. */}
-      <Fade d={0} opaque>
-        <div style={{ fontSize: 13, fontWeight: 500, color: T.ink2, marginBottom: 18 }}>
-          Heatwayve
-        </div>
-        <h1 style={{ ...DISPLAY, fontSize: 46, color: T.ink, marginBottom: 14 }}>
-          The programme
-        </h1>
-      </Fade>
+      {/* Masthead per the grammar (§14): kicker Heatwayve · title the line ·
+          the sentence lives in the lede. It is the launch masthead's own head
+          and column (components/client-shells.jsx), so the swap moves nothing. */}
+      {/* No Fade on the head: the masthead has already painted it in this
+          exact place, so it must not move or dim. It is also what a cold
+          visitor (and every crawler) sees, and a fade from zero disqualifies
+          an element as an LCP candidate in Chromium. */}
+      <LaunchHead />
 
       {/* Two support lines: the A/B/C rotation and effort-led progression.
           Everything else is asked for after the name. */}
       <Fade d={120}>
-        <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginBottom: 14 }}>
+        <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginTop: 24, marginBottom: 14 }}>
           Three strength sessions, A, B and C, always in that order. Miss a day and the next one waits for you.
         </p>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginBottom: 30 }}>
@@ -1633,7 +1626,7 @@ function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
       className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
         className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
+        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
           Rotation preview
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:30,color:T.ink,marginBottom:8}}>
@@ -1698,7 +1691,7 @@ function RotationPreviewSheet({ preview, onConfirm, onReroll, onCancel }) {
 function StimulusShift({ deltas, label }) {
   return (
     <div style={{marginBottom:16}}>
-      <div style={{fontSize:12,color:T.ink3,marginBottom:6}}>{label}</div>
+      <div style={{fontSize:12,color:T.ink2,marginBottom:6}}>{label}</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:"6px 18px"}}>
         {deltas.map(({ bucket, delta }) => (
           <span key={bucket} style={{fontSize:13,color:T.ink2}}>
@@ -1725,7 +1718,7 @@ export function RotationSummaryModal({summary,onContinue}){
             swap that pushed a muscle out of band, or a reset whose template
             did. Mid-block re-plans keep the block number and must not claim
             a new one. */}
-        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
+        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
           {summary.reason ? "Block" : "New block"} · <span style={{fontFamily:T.measured}}>{summary.blockNumber}</span>
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:30,color:T.ink,marginBottom:8}}>
@@ -1751,7 +1744,7 @@ export function RotationSummaryModal({summary,onContinue}){
         {topDeltas.length > 0 && <StimulusShift deltas={topDeltas} label="Muscle stimulus this block" />}
         <div style={{flex:1,overflowY:"auto",marginBottom:18,marginRight:-8,paddingRight:8}}>
           {count===0 && (
-            <div style={{padding:"18px 0",fontSize:13,color:T.ink3,textAlign:"center"}}>
+            <div style={{padding:"18px 0",fontSize:13,color:T.ink2,textAlign:"center"}}>
               Rotation ran — same picks held. Rare but possible.
             </div>
           )}
@@ -1819,7 +1812,7 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
 
         <div style={{marginBottom:16}}>
           <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink}}>Recent days</div>
-          <div style={{fontSize:13,color:T.ink3,marginTop:5,lineHeight:1.5}}>
+          <div style={{fontSize:13,color:T.ink2,marginTop:5,lineHeight:1.5}}>
             {draftBlocks
               ? "Finish your live session first"
               : "Log what you actually trained. Leave the rest."}
@@ -1834,7 +1827,7 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
                 <span style={{fontSize:14,color:T.ink2}}>Well kept.</span>
               </div>
             ) : (
-              <div style={{padding:"14px 4px 4px",fontSize:13,color:T.ink3,textAlign:"center",lineHeight:1.5}}>
+              <div style={{padding:"14px 4px 4px",fontSize:13,color:T.ink2,textAlign:"center",lineHeight:1.5}}>
                 Nothing pending.
               </div>
             )
@@ -1878,7 +1871,7 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
           })}
         </div>
 
-        <div style={{marginTop:14,fontSize:12,color:T.ink3,textAlign:"center",lineHeight:1.5}}>
+        <div style={{marginTop:14,fontSize:12,color:T.ink2,textAlign:"center",lineHeight:1.5}}>
           Only the last week. Anything older is archaeology.
         </div>
         {/* House pattern: actions live on the bottom row, no corner ✕ */}
@@ -2006,7 +1999,7 @@ export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, mus
             <div style={{fontSize:16,fontWeight:500,lineHeight:1.25,color:T.ink}}>
               {meta.sessionName} <span style={{color:T.ink3,fontWeight:400}}>· {meta.dateLabel}</span>
             </div>
-            <div style={{fontSize:12,color:T.ink3,marginTop:3}}>
+            <div style={{fontSize:12,color:T.ink2,marginTop:3}}>
               Logging from memory
             </div>
           </div>
@@ -2016,7 +2009,7 @@ export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, mus
       {/* Hint about auto-fill — small, only relevant on first use */}
       <Fade d={60}>
         <div style={{padding:"16px 20px 0"}}>
-          <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
+          <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>
             Defaults from the prescribed session. Tap any cell to adjust — the rest auto-fill until you override them. Skip what you didn&rsquo;t do.
           </div>
         </div>
@@ -2047,7 +2040,7 @@ export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, mus
                     <div style={{fontSize:16,fontWeight:500,lineHeight:1.25,color:T.ink}}>
                       {entry.name}
                     </div>
-                    <div style={{fontSize:12,color:T.ink3,marginTop:3}}>
+                    <div style={{fontSize:12,color:T.ink2,marginTop:3}}>
                       <span style={{fontFamily:T.measured}}>{entry.sets} × {entry.prescribed.reps}</span> {entry.muscle ? `· ${entry.muscle}` : ""}
                     </div>
                   </div>
@@ -2181,7 +2174,7 @@ export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, mus
                 <div style={{...DISPLAY,fontSize:28,color:T.ink}}>
                   {entry.name}
                 </div>
-                <div style={{fontSize:13,color:T.ink3,marginTop:5}}>
+                <div style={{fontSize:13,color:T.ink2,marginTop:5}}>
                   Set <span style={{fontFamily:T.measured}}>{editor.cellIdx + 1}</span> of <span style={{fontFamily:T.measured}}>{entry.sets}</span>{editor.cellIdx === 0 ? " · auto-fills the rest" : ""}
                 </div>
               </div>

@@ -166,7 +166,7 @@ export default function PerformanceLab({ history, onBack, resting = false, break
               </div>
               {/* Both halves, because only stating one is the misleading half:
                   travel volume IS counted, travel load is NOT evidence. */}
-              <div style={{fontSize:11,color:T.ink3,lineHeight:1.45,marginTop:3}}>
+              <div style={{fontSize:11,color:T.ink2,lineHeight:1.45,marginTop:3}}>
                 Sets counted.<br/>Weights held.
               </div>
             </div>
@@ -199,7 +199,7 @@ export default function PerformanceLab({ history, onBack, resting = false, break
       {/* Breather banner — only when a break is DECLARED (resting). */}
       {resting && !isEmpty && (
         <div style={{margin:"18px 24px 0"}}>
-          <div style={{fontSize:13,color:T.ink3,marginBottom:4}}>On a breather</div>
+          <div style={{fontSize:13,color:T.ink2,marginBottom:4}}>On a breather</div>
           <div style={{fontSize:14,color:T.ink2,lineHeight:1.5}}>
             Your numbers are holding. Come back when it feels right.
           </div>
@@ -214,7 +214,7 @@ export default function PerformanceLab({ history, onBack, resting = false, break
               (the e1RM numbers are the headline), the rhythm she controls
               second, the volume diagnostics that explain both last. */}
           <div className="lab-card" style={{margin:"24px 24px 0"}}>
-            <div style={{paddingBottom:8,borderBottom:`1px solid ${T.rule}`,fontSize:13,color:T.ink3}}>
+            <div style={{paddingBottom:8,borderBottom:`1px solid ${T.rule}`,fontSize:13,color:T.ink2}}>
               Strength · e1RM vs <span style={{fontFamily:T.measured}}>28</span> days · tap a lift for the full trend
             </div>
             {mainLifts.length === 0 && (
@@ -249,7 +249,7 @@ export default function PerformanceLab({ history, onBack, resting = false, break
               {/* The kicker earns its ink: without it the sheet sat flush
                   under the last muscle row and read as a comment ON that row —
                   naming a different muscle, which is how the boss found it. */}
-              <div style={{fontSize:12,color:T.ink3,marginBottom:5}}>Next week</div>
+              <div style={{fontSize:12,color:T.ink2,marginBottom:5}}>Next week</div>
               <span style={{fontSize:13,color:T.ink2,lineHeight:1.45}}>
                 {plateaus.length > 0
                   ? <>Your {plateaus[0].lift} has held at <span style={{fontFamily:T.measured}}>{plateaus[0].weight}</span> kg for <span style={{fontFamily:T.measured}}>{plateaus[0].sessions}</span> sessions. A deload or a rep-range shift breaks the pattern.</>
@@ -265,7 +265,7 @@ export default function PerformanceLab({ history, onBack, resting = false, break
 
           {/* Readiness breakdown — the one other place the ramp speaks. */}
           <div className="lab-card" style={{margin:"28px 24px 0"}}>
-            <div style={{paddingBottom:8,borderBottom:`1px solid ${T.rule}`,fontSize:13,color:T.ink3}}>
+            <div style={{paddingBottom:8,borderBottom:`1px solid ${T.rule}`,fontSize:13,color:T.ink2}}>
               How you&rsquo;ve shown up · readiness across all sessions
             </div>
             <div style={{paddingTop:14}}>
@@ -327,7 +327,7 @@ function EmptyState() {
       <div style={{padding:"0 24px"}}>
         {/* Section header within the page — never the page title (§11.3);
             "The lab" above stays the room. */}
-        <div style={{fontSize:13,color:T.ink3,paddingBottom:6,borderBottom:`1px solid ${T.rule}`,marginBottom:10}}>
+        <div style={{fontSize:13,color:T.ink2,paddingBottom:6,borderBottom:`1px solid ${T.rule}`,marginBottom:10}}>
           Week one
         </div>
         <p style={{fontSize:13, color:T.ink2, lineHeight:1.6, maxWidth:"36ch"}}>
@@ -338,7 +338,7 @@ function EmptyState() {
       </div>
       {groups.map(g => (
         <div key={g.label}>
-          <div style={{padding:"14px 24px 5px",fontSize:12,color:T.ink3}}>{g.label}</div>
+          <div style={{padding:"14px 24px 5px",fontSize:12,color:T.ink2}}>{g.label}</div>
           <div style={{padding:"0 24px"}}>
             {g.rows.map(m => {
               const t = VOLUME_TARGETS[m];
@@ -360,7 +360,7 @@ function EmptyState() {
           </div>
         </div>
       ))}
-      <div style={{margin:"14px 24px 0",fontSize:12,color:T.ink3,lineHeight:1.5}}>
+      <div style={{margin:"14px 24px 0",fontSize:12,color:T.ink2,lineHeight:1.5}}>
         Hatched to each muscle&rsquo;s minimum effective volume · ticks at MEV and MRV · real landmarks, no simulated data.
       </div>
     </div>
@@ -436,7 +436,7 @@ function BestLine({ best, todayIso }) {
     ? <>bodyweight + {n(best.weight)} kg × {n(best.reps)}</>
     : <>{n(best.weight)} kg × {n(best.reps)}</>;
   return (
-    <div data-testid="lift-best" style={{marginTop:8,fontSize:12,color:T.ink3,lineHeight:1.45}}>
+    <div data-testid="lift-best" style={{marginTop:8,fontSize:12,color:T.ink2,lineHeight:1.45}}>
       Best: {set} · {when}{recent ? " · this block" : ""}
     </div>
   );
@@ -466,7 +466,7 @@ function ConsistencyCells({ weeks }) {
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",paddingBottom:8,borderBottom:`1px solid ${T.rule}`}}>
-        <span style={{fontSize:13,color:T.ink3}}>
+        <span style={{fontSize:13,color:T.ink2}}>
           Consistency · last <span style={{fontFamily:T.measured}}>{weeks.length}</span> weeks vs your week
         </span>
         <span style={{fontSize:12,color:T.ink2}}>
@@ -578,7 +578,7 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
   return (
     <div style={{margin:"6px 0 0"}}>
       <div style={{padding:"14px 24px 0",display:"flex",alignItems:"center",gap:6}}>
-        <span style={{fontSize:13,color:T.ink3}}>
+        <span style={{fontSize:13,color:T.ink2}}>
           Sets per week vs MEV/MAV/MRV · last <span style={{fontFamily:T.measured}}>{audit.weeksAnalysed}</span> complete weeks
         </span>
         <GlossaryTrigger anchorTerm="volume-landmarks" onOpen={openGlossary} label="Explain MEV / MAV / MRV"/>
@@ -596,7 +596,7 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
           <div key={g.label}>
             {/* §13.2 — a label that could be data is wasted ink. */}
             <div style={{padding:"12px 24px 5px",display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-              <span style={{fontSize:12,color:T.ink3}}>{g.label}</span>
+              <span style={{fontSize:12,color:T.ink2}}>{g.label}</span>
               <span style={{fontSize:11,color:T.ink2}}>
                 <span style={{fontFamily:T.measured}}>{gSets}</span> sets · <span style={{fontFamily:T.measured}}>{inBand}</span> of <span style={{fontFamily:T.measured}}>{judged}</span> in band
               </span>
@@ -611,7 +611,7 @@ function VolumeLandscape({ trend, audit, totalSessions = 0, openGlossary }) {
           </div>
         );
       })}
-      <div style={{margin:"14px 24px 0",fontSize:12,color:T.ink3,lineHeight:1.5}}>
+      <div style={{margin:"14px 24px 0",fontSize:12,color:T.ink2,lineHeight:1.5}}>
         Sparklines are the last <span style={{fontFamily:T.measured}}>8</span> weeks · ticks mark MEV and MRV · beyond-MRV work is hatched. Read from your recent weeks, not your lifetime average.
       </div>
     </div>
@@ -712,7 +712,7 @@ function BandTerrain({ muscle, series, target, weeks, muted = false }) {
   const v = (series || []).map((n) => Number(n) || 0);
   if (v.length < 2) {
     return (
-      <div style={{fontSize:12,color:T.ink3,lineHeight:1.5}}>
+      <div style={{fontSize:12,color:T.ink2,lineHeight:1.5}}>
         Two weeks of history and the terrain draws itself.
       </div>
     );
@@ -756,7 +756,7 @@ function BandTerrain({ muscle, series, target, weeks, muted = false }) {
 
   return (
     <div aria-label={`${muscle}, last ${v.length} weeks: ${v.join(", ")} sets${target ? `. MEV ${target.mev}, MAV ${target.mav}, MRV ${target.mrv}. ${judged} of ${v.length} weeks in the productive band` : ", no landmark"}. Average ${avg} sets per week`}>
-      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:6,fontSize:11,color:T.ink3}}>
+      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:6,fontSize:11,color:T.ink2}}>
         <span>
           {target
             ? <><span style={{fontFamily:T.measured}}>{judged}</span> of <span style={{fontFamily:T.measured}}>{v.length}</span> weeks in the productive band</>

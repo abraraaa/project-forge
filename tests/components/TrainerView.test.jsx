@@ -1211,6 +1211,28 @@ describe("TrainerView: one way back at each level", () => {
     expect(back).toHaveBeenCalledTimes(1);
   });
 
+  it("sign-in opened cold, as the page the browser loaded: the row is the public pages' Heatwayve, to /", async () => {
+    server.routes["POST /api/trainer/clients"] = { status: 401, body: {} };
+    const push = vi.spyOn(nav, "push"); const back = vi.spyOn(nav, "back"); const replace = vi.spyOn(nav, "replace");
+    // The document load was this very page, not a route reached inside the app.
+    vi.spyOn(performance, "getEntriesByType").mockImplementation((type) => (type === "navigation" ? [{ name: window.location.href }] : []));
+    const { container } = await mount();
+    expect(screen.queryByRole("button", { name: "Profile" })).toBeNull();
+    const row = screen.getByRole("button", { name: "Heatwayve" });
+    expect(container.querySelector(".forge-wide-solo").firstElementChild).toBe(row);
+    expectHouseRow(row, "Heatwayve");
+    expect(row.style.marginBottom).toBe("32px");
+    fireEvent.click(row);
+    expect(push).toHaveBeenCalledWith("/");
+    expect(back).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+    // Signed in, opened just as cold: the roster's row is still Profile.
+    cleanup();
+    signedIn();
+    const again = await mount();
+    expect(within(again.container.querySelector(".forge-wide-back")).getByRole("button", { name: "Profile" })).toBeTruthy();
+  });
+
   it("the applicant's landing and the Terms panel keep the same row", async () => {
     server.routes["POST /api/trainer/clients"] = { status: 401, body: {} };
     server.routes["POST /api/trainer/session"] = { status: 403, body: { notTrainer: true, name: "coachkim" } };

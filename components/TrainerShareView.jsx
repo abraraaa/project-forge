@@ -414,7 +414,7 @@ export default function TrainerShareView() {
     const undoBtn = { minHeight: 44, flexShrink: 0, background: "none", border: "none", padding: "0 2px", cursor: "pointer", fontFamily: T.text, fontSize: 13, fontWeight: 500, color: T.ink };
     return (
       <Fade d={60}>
-        <h2 style={{ marginTop: 28, marginBottom: 6, fontSize: 13, fontWeight: 400, color: T.ink3 }}>{allTheirs ? `Changes from ${who}` : "Changes to your plan"}</h2>
+        <h2 style={{ marginTop: 28, marginBottom: 6, fontSize: 13, fontWeight: 400, color: T.ink2 }}>{allTheirs ? `Changes from ${who}` : "Changes to your plan"}</h2>
         <p style={{ ...small, margin: "0 0 10px" }}>Undo any change until you&apos;ve trained at it. Your logged sessions never change.</p>
         <div ref={undoLineRef} tabIndex={-1} role="status" aria-live="polite" style={{ ...small, color: T.ink, minHeight: 16, marginBottom: 6, outline: "none" }}>{undoLine || ""}</div>
         {bySet(changes).map((set) => {
@@ -459,7 +459,7 @@ export default function TrainerShareView() {
     );
   };
 
-  const kicker = <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>Your trainer</div>;
+  const kicker = <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>Your trainer</div>;
   const h1 = (text, ref) => (
     <h1 ref={ref} tabIndex={-1} style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 14px", overflowWrap: "anywhere", outline: "none" }}>{text}</h1>
   );
@@ -528,8 +528,8 @@ export default function TrainerShareView() {
         {changesList(who)}
 
         <Fade d={80}>
-          <div style={{ marginTop: 28, marginBottom: 6, fontSize: 13, color: T.ink3 }}>When {who} looked</div>
-          <p style={{ fontSize: 12, color: T.ink3, lineHeight: 1.6, margin: "0 0 10px" }}>Roster check-ins show once a day.</p>
+          <div style={{ marginTop: 28, marginBottom: 6, fontSize: 13, color: T.ink2 }}>When {who} looked</div>
+          <p style={{ fontSize: 12, color: T.ink2, lineHeight: 1.6, margin: "0 0 10px" }}>Roster check-ins show once a day.</p>
           {looks.length ? (
             <ul aria-label={`When ${who} looked`} style={{ listStyle: "none", margin: 0, padding: 0, borderTop: `1px solid ${T.rule}` }}>
               {looks.map((l, i) => (
@@ -604,7 +604,7 @@ export default function TrainerShareView() {
       </Fade>
     );
   } else {
-    content = <div role="status" style={{ fontSize: 13, color: T.ink3 }}>One moment</div>;
+    content = <div role="status" style={{ fontSize: 13, color: T.ink2 }}>One moment</div>;
   }
 
   return (

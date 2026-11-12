@@ -137,7 +137,7 @@ function bestOf(points) {
 }
 
 /** @type {import("react").CSSProperties} */
-const kicker = { fontSize: 13, color: T.ink3, paddingBottom: 8, borderBottom: `1px solid ${T.rule}`, marginBottom: 12 };
+const kicker = { fontSize: 13, color: T.ink2, paddingBottom: 8, borderBottom: `1px solid ${T.rule}`, marginBottom: 12 };
 /** @type {import("react").CSSProperties} */
 const section = { marginTop: 32 };
 
@@ -254,7 +254,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   return (
     <div style={{ fontFamily: T.text, color: T.ink }}>
       {/* 1. Header */}
-      <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>{self ? "Your training" : "Shared with you"}</div>
+      <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>{self ? "Your training" : "Shared with you"}</div>
       <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" }}>{title}</h1>
       <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>
         {lead} Sessions from the last 24 weeks; main lifts over 12 months.
@@ -288,7 +288,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
           {/* 2. Breather: never a reason */}
           {resting && (
             <div style={section} data-section="breather">
-              <div style={{ fontSize: 13, color: T.ink3, marginBottom: 4 }}>On a breather</div>
+              <div style={{ fontSize: 13, color: T.ink2, marginBottom: 4 }}>On a breather</div>
               <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5 }}>Paused for now. {self ? "Your" : "Their"} numbers are holding.</div>
             </div>
           )}
@@ -310,7 +310,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
               </button>
             </div>
             {weeks.length > 0 && (
-              <div style={{ fontSize: 12, color: T.ink3, marginTop: 8 }}>
+              <div style={{ fontSize: 12, color: T.ink2, marginTop: 8 }}>
                 Oldest first, from the week of <Nums text={isoDayMonth(weeks[0].mondayIso)}/>.
               </div>
             )}
@@ -586,7 +586,7 @@ function LiftLedger({ lift, rows, from }) {
   return (
     <div data-ledger={lift} style={{ marginTop: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        <div style={{ flex: 1, fontSize: 13, color: T.ink3 }}>Ledger</div>
+        <div style={{ flex: 1, fontSize: 13, color: T.ink2 }}>Ledger</div>
         <div role="group" aria-label={`${lift} ledger sets`} style={{ display: "flex", gap: 6 }}>
           <button type="button" aria-pressed={mode === "top"} aria-label={`Top sets for ${lift}`} onClick={() => pick("top")} className="forge-press forge-tint" style={BTN.chip(mode === "top")}>Top sets</button>
           <button type="button" aria-pressed={mode === "all"} aria-label={`All sets for ${lift}`} onClick={() => pick("all")} className="forge-press forge-tint" style={BTN.chip(mode === "all")}>All sets</button>
@@ -604,7 +604,7 @@ function LiftLedger({ lift, rows, from }) {
             .filter(Boolean).join(" · ");
           return (
             <Fragment key={r.key}>
-              {i === firstTop && <div data-ledger-older="" style={{ fontSize: 12, color: T.ink3, padding: "10px 0 4px" }}><Nums text={olderText}/></div>}
+              {i === firstTop && <div data-ledger-older="" style={{ fontSize: 12, color: T.ink2, padding: "10px 0 4px" }}><Nums text={olderText}/></div>}
               <div data-ledger-row={r.key} data-tier={r.tier} style={{ borderTop: `1px solid ${T.ruleFaint}` }}>
                 <button type="button" aria-expanded={open} onClick={() => flip(r.key)} className="forge-press forge-tint"
                   style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 44, padding: "8px 0", background: "none", border: "none", cursor: "pointer", fontFamily: T.text, fontSize: 14, color: T.ink, textAlign: "left" }}>
@@ -658,7 +658,7 @@ function LiftLedger({ lift, rows, from }) {
                 <Fragment key={r.key}>
                   {i === firstTop && (
                     <tbody data-ledger-older="">
-                      <tr><td colSpan={cols} style={{ ...cell, fontSize: 12, color: T.ink3, paddingTop: 12 }}><Nums text={olderText}/></td></tr>
+                      <tr><td colSpan={cols} style={{ ...cell, fontSize: 12, color: T.ink2, paddingTop: 12 }}><Nums text={olderText}/></td></tr>
                     </tbody>
                   )}
                   <tbody data-ledger-row={r.key} data-tier={r.tier}>
@@ -1063,7 +1063,7 @@ const sheetStyle = {
   animation: `slideUp 260ms ${T.ease}`, maxHeight: "90vh", overflowY: "auto", outline: "none",
 };
 /** @type {import("react").CSSProperties} */
-const subKicker = { fontSize: 12, color: T.ink3, margin: "16px 0 4px" };
+const subKicker = { fontSize: 12, color: T.ink2, margin: "16px 0 4px" };
 /** @type {import("react").CSSProperties} */
 const statusLine = { fontSize: 13, color: T.ink2, lineHeight: 1.5, minHeight: 0 };
 const NOT_LATEST = "Couldn't get their latest just now. Try again.";
@@ -1341,7 +1341,7 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
 
         {main && (
           <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>Main lift</div>
+            <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>Main lift</div>
             <div role="radiogroup" aria-label="Main lift" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {main.options.map((o) => (
                 <button key={o} type="button" role="radio" aria-checked={choice === o} onClick={() => setChoice(o)} style={BTN.chip(choice === o)}>{o}</button>
@@ -1359,7 +1359,7 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
           <>
             {b && (
               <div data-weight="" style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>{weightLabel}</div>
+                <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>{weightLabel}</div>
                 {blocked ? (
                   <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5, margin: 0 }}><Nums text={blockedText}/></p>
                 ) : (
@@ -1380,7 +1380,7 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
                         onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                         style={{ width: `${Math.max(5, kgText.length + 1)}ch`, maxWidth: "100%", textAlign: "center", fontFamily: T.measured, fontSize: 26, color: T.ink, background: "transparent", border: "none", borderBottom: `1px solid ${T.rule}`, padding: 0 }}/>
                     </Stepper>
-                    <div style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 8 }}>
+                    <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 8 }}>
                       <div><Nums text={range}/></div>
                       <div><Nums text={`Not below ${minKg} kg${help}`}/></div>
                       {presetNote && <div>{presetNote}</div>}
@@ -1394,7 +1394,7 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
             )}
             {!b && <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 12px" }}>{noWeight}</p>}
             <div data-reps="" style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>{timed ? "Seconds" : perLeg(lift.reps) ? "Reps, each leg" : "Reps"}</div>
+              <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>{timed ? "Seconds" : perLeg(lift.reps) ? "Reps, each leg" : "Reps"}</div>
               <Stepper label={timed ? "Seconds" : "Reps"} unit={timed ? "s" : "reps"}
                 canDown={repsDown < reps} canUp={repsUp > reps}
                 onDown={() => setReps(repsDown)} onUp={() => setReps(repsUp)}>
@@ -1655,7 +1655,7 @@ function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChang
                 <div key={c.id} data-change={c.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "4px 0" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, color: T.ink, overflowWrap: "anywhere" }}><Nums text={changeLine(c)}/></div>
-                    <div style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: T.ink2, marginTop: 2 }}>
                       <Nums text={trainerStatusText(c, name)}/>
                       {adopted != null ? <> · <Nums text={`They've since settled on ${adopted}`}/></> : null}
                     </div>
@@ -1758,7 +1758,7 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
             className="forge-press forge-tint" style={{ ...BTN.quiet, width: "100%" }}>
             Continue
           </button>
-          <div style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 6 }}>
+          <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 6 }}>
             Opens where you left it on this device.
           </div>
         </div>
@@ -1771,14 +1771,14 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
               </button>
             ))}
           </div>
-          <div style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 6 }}>
+          <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 6 }}>
             {sessionName(next)} is next for {name || "them"}.
           </div>
           <button type="button" onClick={() => { if (!full) onRunSession?.(pick); }} disabled={full}
             className="forge-press forge-tint" style={{ ...BTN.quiet, width: "100%", marginTop: 12, opacity: full ? 0.6 : 1, cursor: full ? "default" : "pointer" }}>
             {name ? `Run a session with ${name}` : "Run a session"}
           </button>
-          <div style={{ fontSize: 12, color: T.ink3, lineHeight: 1.5, marginTop: 6 }}>
+          <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 6 }}>
             A session you haven&apos;t sent yet opens where you left it on this device.
           </div>
         </div>
@@ -1789,7 +1789,7 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
           <div style={{ fontSize: 14, color: T.ink, overflowWrap: "anywhere" }}>
             <Nums text={sessionRunLine({ after: { letter: unsent.letter, date: unsent.date, sets: unsent.sets } }, todayIso)}/>
           </div>
-          <div style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}>Not sent yet · on this iPad</div>
+          <div style={{ fontSize: 12, color: T.ink2, marginTop: 2 }}>Not sent yet · on this iPad</div>
         </div>
       )}
       {rows.length === 0 && !unsent && <div style={{ fontSize: 13, color: T.ink2 }}>None sent yet.</div>}
@@ -1797,7 +1797,7 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
         <div key={c.id} data-ran={c.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, color: T.ink, overflowWrap: "anywhere" }}><Nums text={sessionRunLine(c, todayIso)}/></div>
-            <div style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}><Nums text={sessionStatusText(c, name, nowMs)}/></div>
+            <div style={{ fontSize: 12, color: T.ink2, marginTop: 2 }}><Nums text={sessionStatusText(c, name, nowMs)}/></div>
           </div>
           {/* Only before it reaches their phone: once there, keeping it is theirs (the route agrees). */}
           {c.status === "waiting" && (

@@ -84,7 +84,7 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
           <div style={{...DISPLAY,fontSize:28,color:T.ink}}>
             Welcome back, {name}
           </div>
-          <p style={{fontSize:13,color:T.ink3,marginTop:10}}>
+          <p style={{fontSize:13,color:T.ink2,marginTop:10}}>
             {/* Migration greeting — new origin AND inside the 60-day
                 window, so it self-retires (boss catch, 2026-07-27: a
                 move nobody narrates forever). Known accepted edge: a
@@ -105,7 +105,7 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px calc(32px + env(safe-area-inset-bottom))",width:"100%",animation:`slideUp 260ms ${T.ease}`,maxHeight:"92vh",overflowY:"auto",boxSizing:"border-box",position:"relative",outline:"none"}}>
-        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
+        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
           Is this you?
         </div>
         <div id={titleId} style={{fontSize:18,fontWeight:500,fontFamily:T.text,color:T.ink,lineHeight:1.3,marginBottom:12}}>
@@ -147,7 +147,7 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
               {passkeyBusy ? "Verifying…" : "Sign in with passkey"}
             </button>
 
-            <p style={{fontSize:12,color:T.ink3,textAlign:"center",lineHeight:1.5}}>
+            <p style={{fontSize:12,color:T.ink2,textAlign:"center",lineHeight:1.5}}>
               Lost access to your passkey?{" "}
               <a href="mailto:ab@heatwayve.app?subject=Passkey%20recovery"
                 style={{color:T.ink2,textDecoration:"underline",textUnderlineOffset:3}}>
@@ -167,7 +167,7 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
             </p>
 
             <div style={{padding:"14px 16px",borderRadius:T.r,background:T.surface,boxShadow:T.elev,marginBottom:22}}>
-              <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>
+              <div style={{fontSize:13,color:T.ink2,marginBottom:6}}>
                 What to do
               </div>
               <p style={{fontSize:13,color:T.ink,lineHeight:1.55}}>

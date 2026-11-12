@@ -12,7 +12,7 @@ export default function MainLiftEditor({ mainLifts = {}, onChange }) {
         const chosen = mainLifts[canonical] || canonical;
         return (
           <div key={canonical} style={{padding:"12px 2px",borderBottom:`1px solid ${T.rule}`}}>
-            <div style={{fontSize:12,color:T.ink3,marginBottom:7}}>{MAIN_LIFT_GROUPS[canonical] || canonical}</div>
+            <div style={{fontSize:12,color:T.ink2,marginBottom:7}}>{MAIN_LIFT_GROUPS[canonical] || canonical}</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
               {mainLiftOptions(canonical).map((opt) => {
                 const sel = opt === chosen;

@@ -411,7 +411,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   // Visual state for availability pip. Glyph names, not characters — every
   // symbol is drawn (§10.5); checking carries no glyph, the label suffices.
   const availabilityPip = () => {
-    if (availability === "checking")     return { colour: T.ink3,    glyph: null,    label: "checking" };
+    if (availability === "checking")     return { colour: T.ink2,    glyph: null,    label: "checking" };
     if (availability === "available")    return { colour: T.ink2,    glyph: "check", label: existing.some(e=>e.toLowerCase()===name.trim().toLowerCase()) ? "on this device" : "available" };
     if (availability === "taken")        return { colour: T.heat[4], glyph: "cross", label: "taken" };
     if (availability === "invalid")      return { colour: T.heat[4], glyph: "cross", label: "invalid" };
@@ -498,7 +498,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               glyph and a disabled button, which told a screen-reader user
               nothing about WHY they were stuck. */}
           <div id="name-status" role="status" aria-live="polite"
-            style={{marginTop:10,minHeight:16,fontSize:12,fontFamily:T.text,color:pip?.colour || T.ink3,display:"flex",alignItems:"center",gap:6,transition:`color 180ms ${T.ease}`}}>
+            style={{marginTop:10,minHeight:16,fontSize:12,fontFamily:T.text,color:pip?.colour || T.ink2,display:"flex",alignItems:"center",gap:6,transition:`color 180ms ${T.ease}`}}>
             {submitError ? (
               <span style={{color:T.heat[4]}}>{submitError}</span>
             ) : pip ? (
@@ -512,9 +512,9 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             ) : name.trim().length === 1 ? (
               // Previously silent: one character left the button disabled with
               // no stated reason.
-              <span style={{color:T.ink3}}>A bit more — names need 2 characters or more.</span>
+              <span style={{color:T.ink2}}>A bit more — names need 2 characters or more.</span>
             ) : (
-              <span style={{color:T.ink3}}>2 characters or more, no slashes. Case doesn&apos;t matter.</span>
+              <span style={{color:T.ink2}}>2 characters or more, no slashes. Case doesn&apos;t matter.</span>
             )}
           </div>
 
@@ -545,7 +545,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
               absent, §11.3), then their name, and a tap leads to "Not you?" at
               the foot of More. The wrapper gives screen readers the page
               heading; the button stays the one target. */}
-          <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>Profile</div>
+          <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>Profile</div>
           <div role="heading" aria-level={1}>
           <button type="button" onClick={openSwitch} aria-controls="profile-switch"
             aria-label={`${current}, switch or sign in as someone else`}
@@ -583,7 +583,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
       <Fade d={120}>
-        <div style={{fontSize:13,color:T.ink3,marginBottom:12}}>
+        <div style={{fontSize:13,color:T.ink2,marginBottom:12}}>
           {existing.length > 0 ? "Add new" : "Name"}
         </div>
         {nameField}
@@ -595,7 +595,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           door, not permanent settings furniture. */}
       {!current && <Fade d={180}>
         <div style={{marginTop:36,padding:"18px 20px",background:T.surface,boxShadow:T.elev,borderRadius:T.r}}>
-          <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>
+          <div style={{fontSize:13,color:T.ink2,marginBottom:6}}>
             No email. No phone.
           </div>
           <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.35,marginBottom:6}}>
@@ -612,7 +612,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           their own Trainer section. */}
       {current && (
         <Fade d={230}>
-          <div style={{marginTop:36,marginBottom:2,fontSize:13,color:T.ink3}}>Coaching</div>
+          <div style={{marginTop:36,marginBottom:2,fontSize:13,color:T.ink2}}>Coaching</div>
         </Fade>
       )}
       {current && (
@@ -621,7 +621,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Talk it through</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Your numbers, your AI</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>Your numbers, your AI</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
@@ -636,7 +636,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,textDecoration:"none",color:"inherit"}}>
             <div style={{minWidth:0}}>
               <div style={{fontSize:15,fontWeight:500,color:T.ink,overflowWrap:"anywhere"}}>{trainerRow.title}</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{trainerRow.sub}</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>{trainerRow.sub}</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
@@ -652,7 +652,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {current && trainerShare?.trainerOpen && trainerShare.trainer && (
         <Fade d={235}>
           <div role="group" aria-labelledby="profile-trainer-kicker">
-            <div id="profile-trainer-kicker" style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>Trainer</div>
+            <div id="profile-trainer-kicker" style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink2}}>Trainer</div>
             <Link href="/trainer" onClick={() => markApplicationSeen(current, trainerShare)}
               style={{padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,textDecoration:"none",color:"inherit"}}>
               <div style={{minWidth:0}}>
@@ -660,7 +660,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                   <span style={{fontSize:15,fontWeight:500,color:T.ink}}>Your clients</span>
                   {trainerNews && <span style={{fontSize:11,color:T.ink3}}>New</span>}
                 </div>
-                <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{clientsSub(noticeDots)}</div>
+                <div style={{fontSize:12,color:T.ink2,marginTop:2}}>{clientsSub(noticeDots)}</div>
               </div>
               <Glyph name="arrowRight" size={13} color={T.ink3}/>
             </Link>
@@ -670,7 +670,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
       {current && (
         <Fade d={236}>
-          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>Training</div>
+          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink2}}>Training</div>
         </Fade>
       )}
 
@@ -682,7 +682,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             className="forge-press forge-tint" style={{padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Training focus</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>
                 {userFocus} · {FOCUS_SUMMARIES[userFocus] || FOCUS_SUMMARIES.Forged}
               </div>
             </div>
@@ -699,7 +699,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Main lifts</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{mainLiftSummary(mainLifts)}</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>{mainLiftSummary(mainLifts)}</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
@@ -713,7 +713,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             className="forge-press forge-tint" style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Bodyweight</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>
                 {bodyweight ? (
                   (() => {
                     const bwData = BW.get(current);
@@ -741,7 +741,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           <div style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>On a breather</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>
                 {restingReason ? `${reasonLabel(restingReason)}, your rhythm's paused` : "Your rhythm's paused"}
               </div>
             </div>
@@ -757,7 +757,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             className="forge-press forge-tint" style={{width:"100%",textAlign:"left",padding:"15px 2px",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",fontFamily:T.text}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Need a breather?</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Pause your rhythm while life happens</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>Pause your rhythm while life happens</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </button>
@@ -766,7 +766,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
       {current && (
         <Fade d={278}>
-          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>Account</div>
+          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink2}}>Account</div>
         </Fade>
       )}
 
@@ -779,7 +779,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           <div style={{marginTop:16,padding:"18px 20px",background:T.surface,boxShadow:T.elev,borderRadius:T.r}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>
+                <div style={{fontSize:13,color:T.ink2,marginBottom:6}}>
                   Secure your profile
                 </div>
                 <div style={{fontSize:16,fontWeight:500,color:T.ink,lineHeight:1.35,marginBottom:6}}>
@@ -835,7 +835,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div>
                 <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Passkey enabled</div>
-                <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Your profile is secured with biometric auth</div>
+                <div style={{fontSize:12,color:T.ink2,marginTop:2}}>Your profile is secured with biometric auth</div>
               </div>
               <Glyph name="check" size={13} color={T.ink3}/>
             </div>
@@ -887,7 +887,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
       {current && (
         <Fade d={296}>
-          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>Device</div>
+          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink2}}>Device</div>
         </Fade>
       )}
 
@@ -898,7 +898,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           <div style={{borderTop:`1px solid ${T.rule}`,padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Appearance</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>
                 {themePref === "light" ? "Always light" : themePref === "dark" ? "Always dark" : "Follows your device"}
               </div>
             </div>
@@ -915,7 +915,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{width:"100%",padding:"15px 2px",background:"none",border:"none",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",textAlign:"left",fontFamily:T.text}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Add to home screen</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>One tap to open. Fullscreen, offline, yours.</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>One tap to open. Fullscreen, offline, yours.</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </button>
@@ -932,7 +932,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
           the pages fetch fresh (they read LS directly). */}
       {current && isAdminSession(current) && (
         <Fade d={298}>
-          <div style={{marginTop:24,marginBottom:2,fontSize:13,color:T.ink3}}>
+          <div style={{marginTop:24,marginBottom:2,fontSize:13,color:T.ink2}}>
             Your keys, boss
           </div>
         </Fade>
@@ -943,7 +943,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{marginTop:4,padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Bug reports</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{bugsSub(noticeDots)}</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>{bugsSub(noticeDots)}</div>
             </div>
             <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
           </a>
@@ -955,7 +955,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{marginTop:4,padding:"15px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Trainer applications</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{applicationsSub(noticeDots)}</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>{applicationsSub(noticeDots)}</div>
             </div>
             <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
           </a>
@@ -967,7 +967,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Sync diagnostics</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Local store counts + force pull/push</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>Local store counts + force pull/push</div>
             </div>
             <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
           </a>
@@ -982,7 +982,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Safe-area ruler</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Status-bar clearance + live insets</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>Status-bar clearance + live insets</div>
             </div>
             <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
           </a>
@@ -995,7 +995,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Touch bloom</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>HDR candidates on the commit surface</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>HDR candidates on the commit surface</div>
             </div>
             <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
           </a>
@@ -1004,7 +1004,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
       {current && (
         <Fade d={304}>
-          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink3}}>More</div>
+          <div style={{marginTop:28,marginBottom:2,fontSize:13,color:T.ink2}}>More</div>
         </Fade>
       )}
 
@@ -1017,7 +1017,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{width:"100%",padding:"15px 2px",background:"none",border:"none",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:"inherit",textAlign:"left",fontFamily:T.text}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Report a bug</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Something off? Tell me where it hurts.</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>Something off? Tell me where it hurts.</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </button>
@@ -1033,7 +1033,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Explore the full exercise library</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Every lift, laid bare. Bedtime reading for the committed.</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>Every lift, laid bare. Bedtime reading for the committed.</div>
             </div>
             <Glyph name="arrowUpRight" size={13} color={T.ink3}/>
           </Link>
@@ -1046,7 +1046,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Privacy</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>What we hold, and how to make it go away.</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>What we hold, and how to make it go away.</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
@@ -1065,7 +1065,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
             style={{padding:"15px 2px",borderBottom:`1px solid ${T.rule}`,display:"flex",alignItems:"center",justifyContent:"space-between",textDecoration:"none",color:"inherit"}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.ink}}>For trainers</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:2}}>{trainerShare.trainer ? APPLY_ROW_COPY.approved : applyRowSub(trainerShare.application)}</div>
+              <div style={{fontSize:12,color:T.ink2,marginTop:2}}>{trainerShare.trainer ? APPLY_ROW_COPY.approved : applyRowSub(trainerShare.application)}</div>
             </div>
             <Glyph name="arrowRight" size={13} color={T.ink3}/>
           </Link>
@@ -1084,7 +1084,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 style={ROW}>
                 <div>
                   <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Not you?</div>
-                  <div style={{fontSize:12,color:T.ink3,marginTop:2}}>Switch to someone else on this device</div>
+                  <div style={{fontSize:12,color:T.ink2,marginTop:2}}>Switch to someone else on this device</div>
                 </div>
                 <Glyph name={switchOpen?"chevronUp":"chevronDown"} size={13} color={T.ink3}/>
               </button>
@@ -1130,7 +1130,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
       {needsPasskeyAuth && (
         <div onKeyDown={authKeyDown} onClick={()=>setNeedsPasskeyAuth(null)} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <div ref={authRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-vellum" style={{borderRadius:T.r,padding:"32px 28px",width:"90%",maxWidth:340,textAlign:"center",outline:"none",boxShadow:"0 10px 24px -14px rgba(36,28,25,0.35)"}}>
-            <div style={{fontSize:13,color:T.ink3,marginBottom:10}}>
+            <div style={{fontSize:13,color:T.ink2,marginBottom:10}}>
               Authentication required
             </div>
             <div id="auth-title" style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:12}}>
@@ -1213,7 +1213,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                   <div style={{fontSize:15,fontWeight:500,color:T.heat[4],lineHeight:1.3,marginBottom:3}}>
                     {wipeBusy ? "Deleting…" : "Delete this profile"}
                   </div>
-                  <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
+                  <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>
                     Everything lives on this device only. Can&apos;t be undone.
                   </div>
                 </button>
@@ -1225,7 +1225,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 <div style={{fontSize:15,fontWeight:500,color:T.ink,lineHeight:1.3,marginBottom:3}}>
                   Remove from this device
                 </div>
-                <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
+                <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>
                   Cloud data stays. Reclaim the name any time.
                 </div>
               </button>
@@ -1237,7 +1237,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
                 <div style={{fontSize:15,fontWeight:500,color:T.heat[4],lineHeight:1.3,marginBottom:3}}>
                   {wipeBusy ? "Wiping…" : "Full wipe, cloud and device"}
                 </div>
-                <div style={{fontSize:13,color:T.ink3,lineHeight:1.5}}>
+                <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>
                   Deletes your weights, history and the name claim. A record of any trainer changes to your plan stays. Can&apos;t be undone.
                 </div>
               </button>

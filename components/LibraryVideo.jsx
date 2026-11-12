@@ -25,7 +25,7 @@ export default function LibraryVideo({ vid, name }) {
         <Glyph name="play" size={15} color={T.ink2}/>
         <span>
           <span style={{display:"block",fontSize:14,fontWeight:500,color:T.ink}}>Watch it done</span>
-          <span style={{display:"block",fontSize:12,color:T.ink3,marginTop:2}}>Loads from YouTube when you tap</span>
+          <span style={{display:"block",fontSize:12,color:T.ink2,marginTop:2}}>Loads from YouTube when you tap</span>
         </span>
       </button>
     );

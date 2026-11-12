@@ -19,7 +19,7 @@ export default function FocusStep({ value, onChange, onNext }) {
   return (
     <div style={{maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",display:"flex",flexDirection:"column"}}>
       <Fade d={0}>
-        <div style={{fontSize:13,color:T.ink3,marginBottom:18}}>Training</div>
+        <div style={{fontSize:13,color:T.ink2,marginBottom:18}}>Training</div>
         <div style={{...DISPLAY,fontSize:38,color:T.ink,marginBottom:16}}>Focus</div>
       </Fade>
       <Fade d={80}>

@@ -38,7 +38,7 @@ export default function BreatherModal({ onConfirm, onCancel }) {
           rhythm holds where it is. It picks up the moment you train again.
         </p>
 
-        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 12 }}>
+        <div style={{ fontSize: 13, color: T.ink2, marginBottom: 12 }}>
           Care to say?
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>

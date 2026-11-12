@@ -300,7 +300,7 @@ export default function LockerRoom() {
   const bwChart = (h = 120) => {
     if (bwSeries.length === 0) return (
       <div>
-        <p style={{ fontSize: 13, color: T.ink3 }}>Log a weight. The line needs two points; the truth needs a few more.</p>
+        <p style={{ fontSize: 13, color: T.ink2 }}>Log a weight. The line needs two points; the truth needs a few more.</p>
         <button type="button" onClick={() => setBwEditOpen(true)} style={{ ...BTN.text, marginTop: 8 }}>Log a weight</button>
       </div>
     );
@@ -315,7 +315,7 @@ export default function LockerRoom() {
             <span style={{ fontSize: 28 }}><span style={{ ...mono, letterSpacing: "-0.03em" }}>{only.kg}</span> <span style={{ fontSize: 15, color: T.ink2 }}>kg</span></span>
             <span style={{ fontSize: 12, color: T.ink3 }}>{only.date}</span>
           </div>
-          <p style={{ fontSize: 13, color: T.ink3, marginTop: 8 }}>First point on the curve — the next one draws the line.</p>
+          <p style={{ fontSize: 13, color: T.ink2, marginTop: 8 }}>First point on the curve — the next one draws the line.</p>
         </div>
       );
     }
@@ -370,7 +370,7 @@ export default function LockerRoom() {
     );
   };
 
-  if (!profile) return <div style={page}><p style={{ color: T.ink3 }}>No active profile — sign in first, then come back to the Locker Room.</p></div>;
+  if (!profile) return <div style={page}><p style={{ color: T.ink2 }}>No active profile — sign in first, then come back to the Locker Room.</p></div>;
 
   // ── Chart-first layout: ungated bodyweight on top, photos behind the toggle ──
   const photosVisible = shown && photos !== null;
@@ -409,7 +409,7 @@ export default function LockerRoom() {
         )}
       </div>
       <div style={{ padding: "24px 0 0" }}>
-        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>
           Bodyweight &amp; photos
         </div>
         <h1 className="home-headline" style={{ ...DISPLAY, fontSize: 45, color: T.ink, margin: 0, transformOrigin: "left top" }}>
@@ -430,7 +430,7 @@ export default function LockerRoom() {
 
       {photosVisible && photos.length === 0 && (
         <div style={{ marginTop: 18 }}>
-          <p style={{ fontSize: 13, color: T.ink3, marginBottom: 12 }}>No photos yet. The first one&apos;s the hardest.</p>
+          <p style={{ fontSize: 13, color: T.ink2, marginBottom: 12 }}>No photos yet. The first one&apos;s the hardest.</p>
           <label htmlFor={PICK_ID} role="button" style={{ ...commitBtn, display: "inline-block" }}>Add your first photo</label>
         </div>
       )}
@@ -439,7 +439,7 @@ export default function LockerRoom() {
           or when. Enough for someone returning to their own name to know to
           ask; nothing a stranger can act on. */}
       {photosVisible && held && (
-        <p style={{ marginTop: 14, fontSize: 12, color: T.ink3, lineHeight: 1.6 }}>
+        <p style={{ marginTop: 14, fontSize: 12, color: T.ink2, lineHeight: 1.6 }}>
           Earlier photos from a previous sign-in on this name are held, and are
           not shown here. If they&rsquo;re yours,{" "}
           <a
@@ -495,7 +495,7 @@ export default function LockerRoom() {
           {!urls[photos[i0].date] && !failed.has(photos[i0].date) && (
             <div role="status"
               style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: 13, color: T.ink3 }}>One moment</span>
+              <span style={{ fontSize: 13, color: T.ink2 }}>One moment</span>
             </div>
           )}
           <div className="forge-vellum" style={{ position: "absolute", left: 12, bottom: 12, padding: "8px 12px", borderRadius: T.r, boxShadow: "0 4px 14px -8px rgba(36,28,25,0.4)" }}>

@@ -131,7 +131,7 @@ function EffortPanel({ label = "How hard was that?", onCommit }) {
   const [rpe, setRpe] = useState(8);
   return (
     <div style={{margin:"14px 20px 0",animation:`fadeSlide 240ms ${T.ease}`}}>
-      <div style={{fontSize:13,color:T.ink3,marginBottom:10}}>{label}</div>
+      <div style={{fontSize:13,color:T.ink2,marginBottom:10}}>{label}</div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:2}}>
         <div style={{fontSize:14,color:T.ink}}><MonoNums>{rirText(rpe)}</MonoNums></div>
         <div style={{
@@ -196,7 +196,7 @@ export function SessionOverviewSheet({ session, currentBlockIdx, draftLog, onJum
     <div onKeyDown={onKeyDown} onClick={onCancel} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
         className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"90vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
+        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
           Session overview
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:6}}>
@@ -290,7 +290,7 @@ function RecentHistorySheet({ exerciseName, recent, optionalWeight, onCancel }) 
       className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}
         className="forge-sheet-ground forge-vellum" style={{padding:"26px 24px 32px",width:"100%",animation:`slideUp 280ms ${T.ease}`,maxHeight:"85vh",display:"flex",flexDirection:"column",outline:"none"}}>
-        <div style={{fontSize:13,color:T.ink3,marginBottom:8}}>
+        <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
           Recent history
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:14}}>
@@ -389,7 +389,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
                   <span aria-hidden="true" style={{width:24,height:heatMarkHeight(o.rpe),background:heatForRpe(o.rpe),borderRadius:T.rMark,opacity:sel?1:0.5,transition:`opacity 200ms ${T.ease}`,flexShrink:0}}/>
                   <div>
                     <div style={{fontSize:17,fontWeight:500,color:T.ink}}>{o.label}</div>
-                    <div style={{fontSize:13,color:T.ink3,marginTop:2}}><MonoNums>{o.sub}</MonoNums></div>
+                    <div style={{fontSize:13,color:T.ink2,marginTop:2}}><MonoNums>{o.sub}</MonoNums></div>
                   </div>
                 </div>
                 {/* The check exists only on the chosen row — absence is the
@@ -405,7 +405,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
       {readiness === "cooked" && (
         <Fade d={0}>
           <div style={{marginTop:26}}>
-            <div style={{fontSize:13,color:T.ink3,marginBottom:10,display:"flex",alignItems:"baseline",justifyContent:"space-between"}}>
+            <div style={{fontSize:13,color:T.ink2,marginBottom:10,display:"flex",alignItems:"baseline",justifyContent:"space-between"}}>
               <span>What&rsquo;s going on?</span>
               <span style={{fontSize:12,color:T.ink3}}>optional</span>
             </div>
@@ -455,7 +455,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
                 </span>
                 <div>
                   <div style={{fontSize:17,fontWeight:500,color:T.ink}}>Travel mode</div>
-                  <div style={{fontSize:13,color:T.ink3,marginTop:2}}>
+                  <div style={{fontSize:13,color:T.ink2,marginTop:2}}>
                     {travel
                       ? "Same session, bodyweight. On until you turn it off."
                       : "No gym? Train with the room you're in."}
@@ -721,7 +721,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           </button>
         </div>
         {(loadTypeSubtitle || deloadDayTag) && (
-          <div style={{fontSize:13,color:T.ink3,marginTop:10}}>
+          <div style={{fontSize:13,color:T.ink2,marginTop:10}}>
             {loadTypeSubtitle}
             {loadTypeSubtitle && deloadDayTag && " · "}
             {deloadDayTag && <MonoNums>{deloadDayTag}</MonoNums>}
@@ -732,7 +732,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             workout, and the user meets the kit requirement halfway through
             set one. */}
         {activeEx?.travel && (activeEx?.travelFrom || activeEx?.kit) && (
-          <div style={{fontSize:13,color:T.ink3,marginTop:8,display:"flex",alignItems:"baseline",gap:7}}>
+          <div style={{fontSize:13,color:T.ink2,marginTop:8,display:"flex",alignItems:"baseline",gap:7}}>
             <Glyph name="plane" size={12} color={T.ink3}/>
             <span>
               {activeEx.travelFrom ? <>Standing in for {activeEx.travelFrom}</> : "Travel"}
@@ -765,10 +765,10 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 <span style={{fontSize:15,color:T.ink3}}>{weightLabel}</span>
               </div>
               {weightCaption && (
-                <div style={{fontSize:12,color:T.ink3,marginTop:8}}>{weightCaption}</div>
+                <div style={{fontSize:12,color:T.ink2,marginTop:8}}>{weightCaption}</div>
               )}
               {delta != null && delta !== 0 && (
-                <div style={{fontSize:13,color:T.ink3,marginTop:weightCaption?4:9}}>
+                <div style={{fontSize:13,color:T.ink2,marginTop:weightCaption?4:9}}>
                   {loadType === "assisted_bodyweight" ? (
                     /* The kg is help: less of it is progress. */
                     <><span style={{fontFamily:T.measured,color:T.heat[3]}}>{Math.abs(delta)}</span> kg {delta<0?"less":"more"} help than last time</>
@@ -870,7 +870,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           <div style={{fontFamily:T.measured,fontSize:22,color:lastRpe!=null?heatForRpe(lastRpe):T.ink3}}>
             {last?.topSet ? `${lastW ?? "—"}${lastW!=null?"":""} × ${last.topSet.reps ?? "—"}${lastRpe!=null?` @ ${lastRpe%1===0?lastRpe:lastRpe.toFixed(1)}`:""}` : "—"}
           </div>
-          <div style={{fontSize:12,color:T.ink3,marginTop:3,display:"flex",alignItems:"center",gap:5}}>
+          <div style={{fontSize:12,color:T.ink2,marginTop:3,display:"flex",alignItems:"center",gap:5}}>
             this lift, last time
             {recent.length > 0 && <Glyph name="arrowRight" size={10} color={T.ink3}/>}
           </div>
@@ -933,7 +933,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           {/* The partner reads before the action it explains. Nothing during
               B: the counter and the button already say it. */}
           {isSS&&!fork&&phase==="A"&&partnerEx&&(
-            <div style={{margin:"14px 20px 0",fontSize:13,color:T.ink3}}>
+            <div style={{margin:"14px 20px 0",fontSize:13,color:T.ink2}}>
               Then {partnerEx.name} · <MonoNums>{partnerFigures}</MonoNums>, no rest
             </div>
           )}
@@ -969,14 +969,14 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                 </div>
                 {/* The promise that makes it safe to say yes — and it is a
                     promise the engine actually keeps (lib/progression.js). */}
-                <div style={{fontSize:12,color:T.ink3,marginTop:9,lineHeight:1.45}}>
+                <div style={{fontSize:12,color:T.ink2,marginTop:9,lineHeight:1.45}}>
                   Miss it and nothing is lost — a reach never counts against you.
                 </div>
               </div>
             </Fade>
           )}
           {reachArmed && (
-            <div style={{margin:"14px 20px 0",fontSize:13,color:T.ink3}}>
+            <div style={{margin:"14px 20px 0",fontSize:13,color:T.ink2}}>
               Reaching. Nothing to lose.
             </div>
           )}
@@ -1052,7 +1052,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           {/* Ramp sets logged as working sets read as misses to the engine.
               Main lifts only, until the block's first set is in. */}
           {block.type==="main"&&!fork&&loggedSets.length===0&&(
-            <div style={{margin:"14px 20px 0",fontSize:13,color:T.ink3}}>
+            <div style={{margin:"14px 20px 0",fontSize:13,color:T.ink2}}>
               Log working sets only. Warm-ups don't count.
             </div>
           )}
@@ -1066,7 +1066,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
               <div>
                 <div style={{...DISPLAY,fontSize:28,color:T.ink}}>{vidEx.name}</div>
-                <div style={{fontSize:13,color:T.ink3,marginTop:5}}>{vidEx.muscle}</div>
+                <div style={{fontSize:13,color:T.ink2,marginTop:5}}>{vidEx.muscle}</div>
               </div>
               <button onClick={()=>setShowVid(false)} aria-label="Close video" style={{background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.rSm,padding:"8px 10px",cursor:"pointer"}}><Glyph name="cross" size={12} color={T.ink2}/></button>
             </div>
@@ -1152,24 +1152,24 @@ function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"24px 24px 36px",width:"100%",animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
         <div style={{marginBottom:6}}>
-          <div style={{fontSize:13,color:T.ink3,marginBottom:6}}>Swap exercise</div>
+          <div style={{fontSize:13,color:T.ink2,marginBottom:6}}>Swap exercise</div>
           <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink}}>{activeEx?.name}</div>
         </div>
         {options.length===0&&(
-          <div style={{marginTop:14,padding:"20px 0",fontSize:13,color:T.ink3,textAlign:"center"}}>No approved alternatives for this lift</div>
+          <div style={{marginTop:14,padding:"20px 0",fontSize:13,color:T.ink2,textAlign:"center"}}>No approved alternatives for this lift</div>
         )}
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {options.map((o,i)=>(
             <button key={i} onClick={()=>applySwap(o)} style={{padding:"13px 16px",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",textAlign:"left",fontFamily:T.text}}>
               <span>
                 <span style={{fontSize:15,fontWeight:500,color:T.ink,display:"block"}}>{o.name}</span>
-                <span style={{fontSize:12,color:T.ink3,marginTop:2,display:"block"}}>{o.muscle}</span>
+                <span style={{fontSize:12,color:T.ink2,marginTop:2,display:"block"}}>{o.muscle}</span>
               </span>
               <span style={{fontSize:12,color:T.ink3,flexShrink:0,marginLeft:12}}>{o.eq}</span>
             </button>
           ))}
         </div>
-        <div style={{marginTop:14,fontSize:12,color:T.ink3,textAlign:"center"}}>Tap an exercise to swap for this set</div>
+        <div style={{marginTop:14,fontSize:12,color:T.ink2,textAlign:"center"}}>Tap an exercise to swap for this set</div>
         {/* House pattern: actions live on the bottom row, no corner ✕ */}
         <button onClick={onClose} style={{marginTop:12,width:"100%",padding:"14px",background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontSize:14,color:T.ink2,fontFamily:T.text}}>Cancel</button>
       </div>
@@ -1223,7 +1223,7 @@ function DrumEditOverlay({target,planWeights,setPlanWeights,planReps,setPlanReps
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"24px 24px 32px",width:"100%",animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
         <div style={{marginBottom:18}}>
           <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink}}>{target.exName}</div>
-          <div style={{fontSize:13,color:T.ink3,marginTop:5}}>Scroll to adjust</div>
+          <div style={{fontSize:13,color:T.ink2,marginTop:5}}>Scroll to adjust</div>
         </div>
         <div style={{display:"flex",gap:16,justifyContent:(hasWeight||optionalChrome)?"space-between":"center"}}>
           {hasWeight&&!optionalChrome&&<SplitWeightDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
@@ -1322,7 +1322,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
   return (
     <div style={{maxWidth:430,margin:"0 auto",padding:"72px 24px 48px",position:"relative",overflow:"clip"}}>
       <Fade d={0}>
-        <div style={{fontSize:13,color:T.ink3,marginBottom:12}}>
+        <div style={{fontSize:13,color:T.ink2,marginBottom:12}}>
           {profileName} · {session.name}
         </div>
         <h1 style={{...DISPLAY,fontWeight:500,fontSize:46,color:T.ink,marginBottom:12}}>
@@ -1332,7 +1332,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
       </Fade>
       {nudges.length > 0 && (
         <Fade d={80}>
-          <div style={{fontSize:13,color:T.ink3,paddingBottom:8,borderBottom:`1px solid ${T.rule}`}}>Main lifts</div>
+          <div style={{fontSize:13,color:T.ink2,paddingBottom:8,borderBottom:`1px solid ${T.rule}`}}>Main lifts</div>
         </Fade>
       )}
       {nudges.map((n,i)=>(
@@ -1340,7 +1340,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"13px 0",borderBottom:`1px solid ${T.ruleFaint}`}}>
             <div style={{minWidth:0}}>
               <div style={{fontSize:14,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.ex}</div>
-              <div style={{fontSize:12,color:T.ink3,marginTop:3}}>
+              <div style={{fontSize:12,color:T.ink2,marginTop:3}}>
                 {n.changed?"Next time, heavier.":"Hold — grind it smooth."}
               </div>
             </div>
@@ -1376,7 +1376,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
 
       {/* Sync confirmation line */}
       <Fade d={320}>
-        <div style={{marginTop:24,textAlign:"center",fontSize:12,color:T.ink3,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+        <div style={{marginTop:24,textAlign:"center",fontSize:12,color:T.ink2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
           {syncState.state === "idle" || syncState.state === "pushing" ? (
             <>
               <span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:T.ink2}}/>

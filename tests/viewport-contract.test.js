@@ -35,7 +35,7 @@ walk("app");
 // these files) fails CI. Shrink opportunistically; delete entries at zero.
 const GRANDFATHERED_VH = {
   "components/ErrorBoundary.jsx": 1,
-  "components/ForgeApp.jsx": 4,
+  "components/ForgeApp.jsx": 3,
   "components/HomeScreen.jsx": 1,
   "components/PerformanceLab.jsx": 1,
   "components/ProfileScreen.jsx": 3,
