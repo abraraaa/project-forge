@@ -74,20 +74,20 @@ const SECTIONS = [
   },
 ];
 
-const H2 = { fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` };
+const H2 = { fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` };
 const P = { fontSize: 15, color: T.ink2, lineHeight: 1.6, margin: "0 0 10px" };
 
 export default function TrainerTermsPage() {
   return (
-    <div style={{ padding: "40px 24px 64px", maxWidth: 640, margin: "0 auto", fontFamily: T.text }}>
-      <Link href="/" style={{ fontSize: 13, color: T.ink2, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+    <div style={{ padding: "52px 24px 64px", maxWidth: 640, margin: "0 auto", fontFamily: T.text }}>
+      <Link href="/" style={{ fontSize: 13, color: T.ink2, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5, padding: "14px 0", margin: "-14px 0" }}>
         <Glyph name="arrowLeft" size={12} color={T.ink3} /> Heatwayve
       </Link>
       <div style={{ marginTop: 32 }}>
-        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>{KICKER}</div>
+        <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>{KICKER}</div>
         <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: 0 }}>Trainer Terms</h1>
         <p style={{ ...P, fontSize: 16, marginTop: 14 }}>Your clients choose to share their training with you. Here's what that asks of you.</p>
-        {SINCE && <p data-terms-since="" style={{ fontSize: 13, color: T.ink3, margin: "4px 0 0" }}>Updated {SINCE}</p>}
+        {SINCE && <p data-terms-since="" style={{ fontSize: 13, color: T.ink2, margin: "4px 0 0" }}>Updated {SINCE}</p>}
       </div>
       {SECTIONS.map((s) => (
         <section key={s.h} style={{ marginTop: 36 }}>

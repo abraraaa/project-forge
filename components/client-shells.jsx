@@ -26,6 +26,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import dynamic from "next/dynamic";
+import { DISPLAY } from "@/lib/tokens";
 
 const FieldBeat = () => <div style={{ minHeight: "100vh" }} aria-hidden="true" />;
 
@@ -36,11 +37,11 @@ const FieldBeat = () => <div style={{ minHeight: "100vh" }} aria-hidden="true" /
 const LaunchMasthead = () => (
   <div className="forge-launch">
     <div style={{ padding: "52px 24px 0", maxWidth: 430, margin: "0 auto" }}>
-      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 8 }}>Heatwayve</div>
+      <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 8 }}>Heatwayve</div>
       {/* Display size: LCP only supersedes when a LARGER element paints, so
           this must be at least as big as the h1 that replaces it. Bing does not
           credit an h1 inside <noscript>, which is where the only one was. */}
-      <h1 style={{ fontFamily: "var(--font-bodoni), serif", fontOpticalSizing: "none", fontSize: 45, lineHeight: 1.05, color: "var(--ink)", margin: 0, fontWeight: 400 }}>
+      <h1 style={{ ...DISPLAY, fontSize: 45, lineHeight: 1.05, color: "var(--ink)", margin: 0 }}>
         Train with intention
       </h1>
       <div style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 12, lineHeight: 1.45, maxWidth: "32ch" }}>
