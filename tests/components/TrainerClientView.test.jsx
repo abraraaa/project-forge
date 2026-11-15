@@ -580,6 +580,20 @@ describe("TrainerClientView: the plan", () => {
     expect(within(document.querySelector("[data-tray]")).getByRole("button").textContent).toBe("No changes yet");
   });
 
+  it("a send whose reload fails keeps the sent line and says the list may be behind", async () => {
+    const onChanged = vi.fn(async () => false);
+    render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()} onChanged={onChanged}/>);
+    openLift("Barbell Back Squat");
+    tap("More weight");
+    tap("Add to changes");
+    await review();
+    await act(async () => { tap("Send to Sam"); });
+    await settle();
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(within(document.querySelector('[data-section="plan"]')).getAllByRole("status")[0].textContent)
+      .toBe("Sent to Sam. Couldn't get their latest just now. Try again.");
+  });
+
   it("the top of the range passes the route's own check; reps ride in the same set with their warning", async () => {
     // Stored reps, so raising both reads as a double step.
     const data = planData({ reps: { "Barbell Back Squat": 5 } });
@@ -847,6 +861,42 @@ describe("TrainerClientView: the plan", () => {
     expect(within(box).getByRole("status").textContent).toBe("Nothing to withdraw. It's already undone, or it can't be taken back now.");
     expect(within(box).getByRole("status").textContent).not.toContain("Withdrawn");
     expect(onChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("a plan that couldn't load offers Try again, which reloads the pane and says when that fails too", async () => {
+    let ok = false;
+    const onChanged = vi.fn(async () => ok);
+    render(<TrainerClientView client={client} view={{ ...view(), edits: "on" }} onChanged={onChanged}/>);
+    const box = document.querySelector("[data-plan-retry]");
+    expect(within(box).getByRole("status").textContent).toBe("");
+    await act(async () => { fireEvent.click(within(box).getByRole("button", { name: "Try again" })); });
+    await settle();
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(within(box).getByRole("status").textContent).toBe("Couldn't get their latest just now. Try again.");
+    ok = true;
+    await act(async () => { fireEvent.click(within(box).getByRole("button", { name: "Try again" })); });
+    await settle();
+    expect(onChanged).toHaveBeenCalledTimes(2);
+    expect(within(box).getByRole("status").textContent).toBe("");
+    cleanup();
+    // No way to reload, or a lead that isn't the unavailable one: no Try again.
+    render(<TrainerClientView client={client} view={{ ...view(), edits: "on" }}/>);
+    expect(document.querySelector("[data-plan-retry]")).toBeNull();
+    cleanup();
+    render(<TrainerClientView client={client} view={{ ...view(), edits: "off" }} onChanged={onChanged}/>);
+    expect(document.querySelector("[data-plan-retry]")).toBeNull();
+  });
+
+  it("a withdraw whose reload fails says so after the withdrawn line", async () => {
+    const v = planView();
+    v.plan.changes = [{ id: "s1.0", set: "s1", kind: "weight", target: "Barbell Back Squat", before: 102.5, after: 105, from: null, status: "waiting", reason: null, date: null, at: Date.now(), warnings: [] }];
+    const onChanged = vi.fn(async () => false);
+    render(<TrainerClientView client={client} view={v} onChange={fakeRoute()} onChanged={onChanged}/>);
+    const box = document.querySelector('[data-section="changes"]');
+    await act(async () => { fireEvent.click(within(box).getByRole("button", { name: "Withdraw" })); });
+    await settle();
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(within(box).getByRole("status").textContent).toBe("Withdrawn. It won't reach Sam. Couldn't get their latest just now. Try again.");
   });
 
   it("the reps stepper starts inside its range, so every step lands inside it", () => {

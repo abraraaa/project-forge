@@ -95,16 +95,16 @@ export default function VolumeLandmarksPage() {
   };
 
   return (
-    <div style={{ padding: "40px 24px 64px", maxWidth: 640, margin: "0 auto" }}>
+    <div style={{ padding: "52px 24px 64px", maxWidth: 640, margin: "0 auto" }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(termsLd) }} />
 
-      <Link href="/" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <Link href="/" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5, padding: "14px 0", margin: "-14px 0" }}>
         <Glyph name="arrowLeft" size={12} color={T.ink3} /> Heatwayve
       </Link>
 
       <div style={{ marginTop: 32 }}>
-        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>Volume landmarks</div>
+        <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>Volume landmarks</div>
         <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: 0 }}>How much is enough</h1>
         <p style={{ fontSize: 16, color: T.ink2, marginTop: 14, lineHeight: 1.6 }}>
           Almost every programme tells you how many sets to do today. Very few
@@ -114,13 +114,13 @@ export default function VolumeLandmarksPage() {
       </div>
 
       <section style={{ marginTop: 40 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 14px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
+        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 14px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
           The three numbers
         </h2>
         {TERMS.map((t) => (
           <div key={t.abbr} style={{ marginBottom: 22 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 5 }}>
-              <span style={{ fontFamily: T.measured, fontSize: 17, color: T.ink }}>{t.abbr}</span>
+              <span style={{ fontFamily: T.text, fontWeight: 500, fontSize: 17, color: T.ink }}>{t.abbr}</span>
               <span style={{ fontSize: 14, color: T.ink2 }}>{t.name}</span>
             </div>
             <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, margin: 0 }}>{t.body}</p>
@@ -129,7 +129,7 @@ export default function VolumeLandmarksPage() {
       </section>
 
       <section style={{ marginTop: 36 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
+        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
           The unit: weighted sets per week
         </h2>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65 }}>
@@ -158,7 +158,7 @@ export default function VolumeLandmarksPage() {
       </section>
 
       <section style={{ marginTop: 36 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
+        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
           Weekly, but not all at once
         </h2>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65 }}>
@@ -179,10 +179,10 @@ export default function VolumeLandmarksPage() {
       </section>
 
       <section style={{ marginTop: 36 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 4px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
+        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 4px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
           The landmarks, per muscle
         </h2>
-        <p style={{ fontSize: 13, color: T.ink3, lineHeight: 1.6, margin: "10px 0 14px" }}>
+        <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.6, margin: "10px 0 14px" }}>
           Weighted sets per week. These are the exact values Heatwayve audits
           against — this table is generated from them, so it cannot drift.
         </p>
@@ -190,9 +190,9 @@ export default function VolumeLandmarksPage() {
           <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 14 }}>
             <thead>
               <tr>
-                <th style={{ textAlign: "left", padding: "8px 0", color: T.ink3, fontWeight: 400, fontSize: 12, borderBottom: `1px solid ${T.rule}` }}>Muscle</th>
+                <th style={{ textAlign: "left", padding: "8px 0", color: T.ink2, fontWeight: 400, fontSize: 12, borderBottom: `1px solid ${T.rule}` }}>Muscle</th>
                 {["MEV", "MAV", "MRV"].map((h) => (
-                  <th key={h} style={{ textAlign: "right", padding: "8px 0 8px 16px", color: T.ink3, fontWeight: 400, fontSize: 12, borderBottom: `1px solid ${T.rule}` }}>{h}</th>
+                  <th key={h} style={{ textAlign: "right", padding: "8px 0 8px 16px", color: T.ink2, fontWeight: 400, fontSize: 12, borderBottom: `1px solid ${T.rule}` }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -208,7 +208,7 @@ export default function VolumeLandmarksPage() {
             </tbody>
           </table>
         </div>
-        <p style={{ fontSize: 13, color: T.ink3, lineHeight: 1.6, marginTop: 14 }}>
+        <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.6, marginTop: 14 }}>
           Two entries deserve a note. <strong style={{ color: T.ink2, fontWeight: 500 }}>Traps</strong> and{" "}
           <strong style={{ color: T.ink2, fontWeight: 500 }}>Core</strong> carry an
           MEV of zero — not because they do not matter, but because deadlifts,
@@ -217,14 +217,14 @@ export default function VolumeLandmarksPage() {
           are the same idea, sharper: that row is a fatigue budget, there to
           warn you when a deadlift-heavy stretch is quietly stacking axial load.
         </p>
-        <p style={{ fontSize: 13, color: T.ink3, lineHeight: 1.6, marginTop: 10 }}>
+        <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.6, marginTop: 10 }}>
           Each deltoid head is judged on its own. Lumping them together is how
           side delts end up permanently under-trained behind a pile of pressing.
         </p>
       </section>
 
       <section style={{ marginTop: 36 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
+        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
           What these numbers are not
         </h2>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65 }}>
@@ -242,7 +242,7 @@ export default function VolumeLandmarksPage() {
       </section>
 
       <section style={{ marginTop: 36 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
+        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
           Where this comes from
         </h2>
         {Object.entries(VOLUME_SOURCES).map(([k, src]) => (
@@ -253,13 +253,13 @@ export default function VolumeLandmarksPage() {
                 : src.cite}
             </p>
             {src.note && (
-              <p style={{ fontSize: 13, color: T.ink3, lineHeight: 1.6, margin: "5px 0 0" }}>{src.note}</p>
+              <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.6, margin: "5px 0 0" }}>{src.note}</p>
             )}
           </div>
         ))}
       </section>
 
-      <p style={{ marginTop: 44, fontSize: 14, color: T.ink3, lineHeight: 1.6 }}>
+      <p style={{ marginTop: 44, fontSize: 14, color: T.ink2, lineHeight: 1.6 }}>
         Heatwayve does this arithmetic for you every week, per muscle, from the
         sets you actually logged.{" "}
         <Link href="/" style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>

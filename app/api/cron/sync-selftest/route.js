@@ -1,10 +1,11 @@
 // app/api/cron/sync-selftest/route.js
 // ─────────────────────────────────────────────────────────────────────────────
-// Nightly sync round-trip self-test — runs INSIDE Vercel, where
-// BLOB_READ_WRITE_TOKEN already lives, so the credential is never copied
+// Nightly sync round-trip self-test — runs INSIDE Vercel, where the Blob
+// store is reached over OIDC (VERCEL_OIDC_TOKEN and BLOB_STORE_ID; no
+// read-write token exists since 2026-11-11), so no credential is ever copied
 // into a second tool (this replaced a GitHub Actions nightly that needed a
-// hand-synced secret — the copy was the bug: it goes stale the moment
-// Vercel rotates the token or you paste from the wrong store).
+// hand-synced secret — the copy was the bug: it went stale the moment the
+// token rotated or was pasted from the wrong store).
 //
 // It exercises the REAL sync handlers (app/api/sync/route.js) against the
 // REAL Blob store — the addRandomSuffix class of bug (writer + reader agree

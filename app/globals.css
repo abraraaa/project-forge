@@ -807,3 +807,11 @@ body { --trend-1: var(--heat-1); --trend-2: var(--heat-2); --trend-3: var(--heat
 .hw-breathe {
   animation: hwBreathe 5.4s ease-in-out infinite;
 }
+
+/* Keyboard focus: one ring, in the commit colour, drawn at once. A pointer
+   or touch press never shows it (:focus-visible). Programmatic focus targets
+   (tabindex -1: dialog containers) are left out. */
+:where(a, button, input, select, textarea, summary, [role="button"], [role="tab"], [role="switch"], [role="radio"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--commit);
+  outline-offset: 2px;
+}

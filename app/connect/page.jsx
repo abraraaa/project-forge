@@ -25,7 +25,7 @@ function Refusal({ message }) {
   return (
     <div style={{ maxWidth: 430, margin: "0 auto", padding: "72px 24px 48px", fontFamily: T.text }}>
       <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>Connect your AI</div>
-      <h1 style={{ ...DISPLAY, fontSize: 34, color: T.ink, margin: "0 0 10px" }}>That didn't work</h1>
+      <h1 style={{ ...DISPLAY, fontSize: 34, color: T.ink, margin: "0 0 10px" }}>That didn&rsquo;t work</h1>
       <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6 }}>{message}</p>
     </div>
   );

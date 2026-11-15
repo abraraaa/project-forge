@@ -468,6 +468,38 @@ describe("TrainerView: a client", () => {
     await flush();
     expect(screen.getByText("Not shared with you now.")).toBeTruthy();
     expect(screen.getByText("Back to clients")).toBeTruthy();
+    // Not shared is not a failure: nothing to try again.
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("a client that couldn't open offers Try again, which opens the same client", async () => {
+    signedIn();
+    const base = server.routes["POST /api/trainer/client"];
+    let fail = true;
+    server.routes["POST /api/trainer/client"] = (b) => (fail ? { status: 500, body: { error: "SENTINEL" } } : base(b));
+    await mount();
+    fireEvent.click(screen.getByText("Bea"));
+    await flush();
+    expect(screen.getByText("Couldn't open that just now.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("SENTINEL");
+    const again = screen.getByRole("button", { name: "Try again" });
+    expect([again.className, ...size(again)]).toEqual(["forge-press forge-tint", ...QUIET]);
+    expect(screen.getByRole("button", { name: "Back to clients" })).toBeTruthy();
+    fail = false;
+    await act(async () => { fireEvent.click(again); });
+    await flush();
+    expect(posts("/api/trainer/client").map((c) => c.body.ref)).toEqual(["hwg_b", "hwg_b"]);
+    expect(screen.getByText("Alex", { selector: "h1" })).toBeTruthy();
+    expect(screen.queryByText("Couldn't open that just now.")).toBeNull();
+    // Your own training tries again as itself.
+    fail = true;
+    fireEvent.click(screen.getByText("Your training"));
+    await flush();
+    fail = false;
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Try again" })); });
+    await flush();
+    expect(posts("/api/trainer/client").map((c) => c.body.ref).slice(-2)).toEqual(["me", "me"]);
+    expect(screen.getByText("You", { selector: "h1" })).toBeTruthy();
   });
 
   it("remove posts the ref, then reloads the roster", async () => {
@@ -808,6 +840,54 @@ describe("TrainerView: the invite sheet", () => {
     await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
     await flush();
     expect(within(screen.getByRole("dialog")).getByText("Not open yet.")).toBeTruthy();
+    // It stays so until launch: nothing to try again.
+    expect(within(screen.getByRole("dialog")).queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("an issue that failed offers Try again, which issues a code", async () => {
+    signedIn();
+    let reply = { status: 500, body: { error: "SENTINEL" } };
+    server.routes["POST /api/trainer/invite"] = () => reply;
+    server.routes["GET /api/trainer/invite"] = { status: 200, body: { status: "pending", expiresAt: Date.now() + 3_600_000 } };
+    await mount();
+    await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
+    await flush();
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("status").textContent).toBe("Couldn't do that just now. Try again.");
+    expect(dialog.textContent).not.toContain("SENTINEL");
+    const again = within(dialog).getByRole("button", { name: "Try again" });
+    expect(size(again)).toEqual(QUIET);
+    expect(pressIn(dialog)).toEqual([]);
+    reply = { status: 200, body: { code: CODE, expiresAt: Date.now() + 3_600_000 } };
+    await act(async () => { fireEvent.click(again); });
+    await flush();
+    expect(posts("/api/trainer/invite").map((c) => c.body)).toEqual([{ action: "issue" }, { action: "issue" }]);
+    expect(dialog.querySelector("[data-code]").textContent).toBe("ABCD 0EFG H1JK");
+    expect(within(dialog).queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("a cancel that didn't go through says so, and the code still works", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(issuedAt);
+    signedIn();
+    inviteRoutes();
+    const issueRoute = server.routes["POST /api/trainer/invite"];
+    let cancel = { status: 0, body: {} };
+    server.routes["POST /api/trainer/invite"] = (b) => (b.action === "cancel" ? cancel : issueRoute(b));
+    await mount();
+    await act(async () => { fireEvent.click(screen.getByText("Add a client")); });
+    await flush();
+    const dialog = screen.getByRole("dialog");
+    await act(async () => { fireEvent.click(within(dialog).getByText("Cancel code")); });
+    await flush();
+    expect(within(dialog).getByText("Couldn't cancel that just now. Try again.")).toBeTruthy();
+    expect(within(dialog).getByText("Waiting for them…")).toBeTruthy();
+    expect(within(dialog).getByText("Cancel code")).toBeTruthy();
+    cancel = { status: 200, body: { ok: true } };
+    await act(async () => { fireEvent.click(within(dialog).getByText("Cancel code")); });
+    await flush();
+    expect(within(dialog).queryByText("Couldn't cancel that just now. Try again.")).toBeNull();
+    expect(within(dialog).getByText("Cancelled. This code no longer works.")).toBeTruthy();
   });
 });
 
@@ -1129,6 +1209,28 @@ describe("TrainerView: one way back at each level", () => {
     fireEvent.click(row);
     expect(replace).toHaveBeenCalledWith("/profile");
     expect(back).toHaveBeenCalledTimes(1);
+  });
+
+  it("sign-in opened cold, as the page the browser loaded: the row is the public pages' Heatwayve, to /", async () => {
+    server.routes["POST /api/trainer/clients"] = { status: 401, body: {} };
+    const push = vi.spyOn(nav, "push"); const back = vi.spyOn(nav, "back"); const replace = vi.spyOn(nav, "replace");
+    // The document load was this very page, not a route reached inside the app.
+    vi.spyOn(performance, "getEntriesByType").mockImplementation((type) => (type === "navigation" ? [{ name: window.location.href }] : []));
+    const { container } = await mount();
+    expect(screen.queryByRole("button", { name: "Profile" })).toBeNull();
+    const row = screen.getByRole("button", { name: "Heatwayve" });
+    expect(container.querySelector(".forge-wide-solo").firstElementChild).toBe(row);
+    expectHouseRow(row, "Heatwayve");
+    expect(row.style.marginBottom).toBe("32px");
+    fireEvent.click(row);
+    expect(push).toHaveBeenCalledWith("/");
+    expect(back).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+    // Signed in, opened just as cold: the roster's row is still Profile.
+    cleanup();
+    signedIn();
+    const again = await mount();
+    expect(within(again.container.querySelector(".forge-wide-back")).getByRole("button", { name: "Profile" })).toBeTruthy();
   });
 
   it("the applicant's landing and the Terms panel keep the same row", async () => {

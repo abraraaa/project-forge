@@ -58,7 +58,7 @@ describe("profile deletion — a confirmed local-only profile gets one honest op
   it("the cloud/device split renders only when a passkey might exist", () => {
     // A CONFIRMED passkey-less profile never synced (the sync gate demands
     // proof of control) and cannot hold photos (the camera requires a
-    // passkey) — offering "Full wipe · cloud & device" there invents a
+    // passkey) — offering "Full wipe, cloud and device" there invents a
     // second copy of the data to worry about. Unknown passkey state keeps
     // the full dialog. The delete paths themselves are untouched.
     const src = readFileSync(resolve(root, "components/ProfileScreen.jsx"), "utf8");

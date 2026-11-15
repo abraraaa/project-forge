@@ -86,7 +86,7 @@ describe("home — the notice dot", () => {
   it("never sits on the name line, and the sync dot stays where it is", async () => {
     fetchMock.mockReturnValue(reply(200, { dots: { application: "approved" } }));
     render(home({ syncState: "error" }));
-    const btn = await screen.findByRole("button", { name: "Profile, sam, something new" });
+    const btn = await screen.findByRole("button", { name: "Profile, sam, something new, not synced" });
     const nameLine = within(btn).getByText("sam").parentElement;
     const round = nameLine.querySelectorAll('span[style*="border-radius: 50%"]');
     expect(round).toHaveLength(1);

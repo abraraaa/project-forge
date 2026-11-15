@@ -1177,7 +1177,7 @@ function CoachedReview({ review, name, title, send, onFaceId, onSetId, onBack, o
       )}
       {exercises.length > 0 && (days.length ? (
         <div role="group" aria-label="Which day" style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 13, color: T.ink3, marginBottom: 10 }}>Which day was it?</div>
+          <div style={{ fontSize: 13, color: T.ink2, marginBottom: 10 }}>Which day was it?</div>
           <div style={{ display: "flex", gap: 8 }}>
             {days.map(([label, d]) => {
               const sel = day === d;
@@ -1359,7 +1359,7 @@ export function CoachedSessionPage() {
         style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2, marginBottom: 22, display: "inline-flex", alignItems: "center", gap: 6 }}>
         <Glyph name="arrowLeft" size={12} color={T.ink3}/> Your clients
       </button>
-      <div role="status" style={{ fontSize: 15, color: state ? T.ink : T.ink3, lineHeight: 1.6 }}>
+      <div role="status" style={{ fontSize: 15, color: state ? T.ink : T.ink2, lineHeight: 1.6 }}>
         {state?.text ?? "One moment"}
       </div>
     </div>

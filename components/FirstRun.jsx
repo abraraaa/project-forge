@@ -125,7 +125,7 @@ export default function FirstRun({
     return (
       <div style={PAGE}>
         <Fade d={0}>
-          <div style={{ fontSize: 13, color: T.ink3, marginBottom: 18 }}>
+          <div style={{ fontSize: 13, color: T.ink2, marginBottom: 18 }}>
             Secure across devices
           </div>
           <div style={{ ...DISPLAY, fontSize: 38, color: T.ink, marginBottom: 16 }}>
@@ -229,7 +229,7 @@ export default function FirstRun({
   return (
     <div style={PAGE}>
       <Fade d={0}>
-        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 18 }}>
+        <div style={{ fontSize: 13, color: T.ink2, marginBottom: 18 }}>
           One measurement
         </div>
         <div style={{ ...DISPLAY, fontSize: 38, color: T.ink, marginBottom: 16 }}>

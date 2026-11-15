@@ -101,16 +101,16 @@ export default async function MusclePage({ params }) {
   );
 
   return (
-    <div style={{ padding: "40px 24px 64px", maxWidth: 640, margin: "0 auto" }}>
+    <div style={{ padding: "52px 24px 64px", maxWidth: 640, margin: "0 auto" }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(listLd) }} />
 
-      <Link href="/anatomy" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <Link href="/anatomy" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5, padding: "14px 0", margin: "-14px 0" }}>
         <Glyph name="arrowLeft" size={12} color={T.ink3} /> Anatomy
       </Link>
 
       <div style={{ marginTop: 32 }}>
-        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>
           <span style={{ fontFamily: T.measured }}>{contributors.length}</span> movements train it
         </div>
         <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: 0 }}>{muscle}</h1>
@@ -122,10 +122,10 @@ export default async function MusclePage({ params }) {
       </div>
 
       <section style={{ marginTop: 38 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 4px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
+        <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 4px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
           Trains it directly &middot; <span style={{ fontFamily: T.measured }}>{primaries.length}</span>
         </h2>
-        <p style={{ fontSize: 13, color: T.ink3, lineHeight: 1.6, margin: "10px 0 4px" }}>
+        <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.6, margin: "10px 0 4px" }}>
           A full set each. This is where the volume comes from when you are
           short.
         </p>
@@ -136,10 +136,10 @@ export default async function MusclePage({ params }) {
 
       {assistors.length > 0 && (
         <section style={{ marginTop: 38 }}>
-          <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 4px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
+          <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 4px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
             Trains it on the way past &middot; <span style={{ fontFamily: T.measured }}>{assistors.length}</span>
           </h2>
-          <p style={{ fontSize: 13, color: T.ink3, lineHeight: 1.6, margin: "10px 0 4px" }}>
+          <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.6, margin: "10px 0 4px" }}>
             Partial credit, and the reason most people&rsquo;s totals are higher
             than they think. The number is the share of one set.
           </p>
@@ -151,14 +151,14 @@ export default async function MusclePage({ params }) {
 
       {target && (
         <section style={{ marginTop: 38 }}>
-          <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
+          <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
             How much {low} wants
           </h2>
           <div style={{ display: "flex", gap: 28, marginBottom: 14 }}>
             {[["MEV", target.mev], ["MAV", target.mav], ["MRV", target.mrv]].map(([k, v]) => (
               <div key={k}>
                 <div style={{ fontFamily: T.measured, fontSize: 24, color: T.ink }}>{v}</div>
-                <div style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}>{k}</div>
+                <div style={{ fontSize: 12, color: T.ink2, marginTop: 2 }}>{k}</div>
               </div>
             ))}
           </div>
@@ -173,7 +173,7 @@ export default async function MusclePage({ params }) {
         </section>
       )}
 
-      <p style={{ marginTop: 44, fontSize: 14, color: T.ink3, lineHeight: 1.6 }}>
+      <p style={{ marginTop: 44, fontSize: 14, color: T.ink2, lineHeight: 1.6 }}>
         {contributors[0] && (
           <>The heaviest hitter here is{" "}
             <Link href={`/library/${contributors[0].entry.slug}`} style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>

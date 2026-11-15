@@ -72,7 +72,7 @@ function WithVest({ initial = {}, onAddedLoad, ...p }) {
 }
 // The drum's optional kg wheel, scoped through its label. Scope through the
 // dialog: the card chip carries the same text while the drum is open.
-const kgWheel = (d) => within(d.getByText("+ kg · optional").parentElement);
+const kgWheel = (d) => within(d.getByText("+ kg, optional").parentElement);
 // The reps (or seconds) wheel, scoped through its label the same way.
 const repsWheel = (d, label) => within(d.getAllByText(label)[0].parentElement);
 // A distinct stale working weight, so reading or seeding from W is caught.
@@ -189,7 +189,7 @@ describe("loaded bodyweight lifts present added weight as optional, stored in W"
     it(`with W ${label}: "Bodyweight · 80 kg" and the quiet optional chip`, () => {
       const { container } = render(<WithBelt {...props({ block: mainBlock(pullUp) })} initial={initial} />);
       expect(flat(document.body.textContent)).toContain("Bodyweight · 80 kg");
-      expect(screen.getByText("+ kg · optional")).toBeTruthy();
+      expect(screen.getByText("+ kg, optional")).toBeTruthy();
       expect(screen.getByLabelText(/tap to add weight/)).toBeTruthy();
       expect(screen.queryByText("Add weight")).toBeNull();
       expect(screen.queryByText("Added load")).toBeNull();
@@ -202,7 +202,7 @@ describe("loaded bodyweight lifts present added weight as optional, stored in W"
     const { container } = render(<WithBelt {...props({ block: mainBlock(pullUp) })} initial={{ "Pull-Up": 5 }} />);
     expect(flat(document.body.textContent)).toContain("Bodyweight + 5 kg");
     expect(screen.getByLabelText(/edit added weight/)).toBeTruthy();
-    expect(screen.queryByText("+ kg · optional")).toBeNull();
+    expect(screen.queryByText("+ kg, optional")).toBeNull();
     expect(screen.queryByLabelText("Add 1.25 kg")).toBeNull();
     expect(bigNumber(container)).toBeNull();
   });
@@ -210,7 +210,7 @@ describe("loaded bodyweight lifts present added weight as optional, stored in W"
   it("the chip opens the optional wheel; Confirm 7.5 writes today's W, never the added-load store", () => {
     const onSetWW = vi.fn(), onAddedLoad = vi.fn(), setPlanReps = vi.fn();
     const { container } = render(<WithBelt {...props({ block: mainBlock(pullUp), setAddedLoad: onAddedLoad, setPlanReps })} onSetWW={onSetWW} />);
-    fireEvent.click(screen.getByText("+ kg · optional"));
+    fireEvent.click(screen.getByText("+ kg, optional"));
     const d = drum(container);
     expect(kgWheel(d).getByText("none")).toBeTruthy();
     expect(d.queryByText(/steps of/)).toBeNull();
@@ -229,7 +229,7 @@ describe("loaded bodyweight lifts present added weight as optional, stored in W"
     fireEvent.click(d2.getByText(/Confirm/));
     expect(onSetWW).toHaveBeenLastCalledWith({ "Pull-Up": 0 });
     expect(onAddedLoad).not.toHaveBeenCalled();
-    expect(screen.getByText("+ kg · optional")).toBeTruthy();
+    expect(screen.getByText("+ kg, optional")).toBeTruthy();
   });
 
   it("\"this lift, last time\" reads a loaded-bodyweight set's weight as added kg", () => {
@@ -245,7 +245,7 @@ describe("loaded bodyweight lifts present added weight as optional, stored in W"
     const pushUp = { name: "Decline Push-Up", muscle: "Upper chest", reps: 15, weight: null, loadType: "bodyweight" };
     const setPlanWeights = vi.fn(), onAddedLoad = vi.fn();
     const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), getW: () => null, setPlanWeights })} onAddedLoad={onAddedLoad} />);
-    fireEvent.click(screen.getByText("+ kg · optional"));
+    fireEvent.click(screen.getByText("+ kg, optional"));
     const d = drum(container);
     fireEvent.click(kgWheel(d).getByText("7.5"));
     fireEvent.click(d.getByText(/Confirm/));
@@ -257,7 +257,7 @@ describe("loaded bodyweight lifts present added weight as optional, stored in W"
     const assisted = { name: "Assisted Pull-Up", muscle: "Lats", loadType: "assisted_bodyweight", weight: null, reps: 8 };
     const { container } = render(<WithDrum {...props({ block: mainBlock(assisted), getW: () => null })} />);
     expect(screen.getByText("Set assistance")).toBeTruthy();
-    expect(screen.queryByText("+ kg · optional")).toBeNull();
+    expect(screen.queryByText("+ kg, optional")).toBeNull();
 
     fireEvent.click(screen.getByText("Set assistance"));
     const d = drum(container);
@@ -277,7 +277,7 @@ describe("loaded bodyweight lifts present added weight as optional, stored in W"
       return out;
     };
     const a = card(pushUp), b = card(pullUp);
-    expect(a.line).toBe("Bodyweight · 80 kg+ kg · optional");
+    expect(a.line).toBe("Bodyweight · 80 kg+ kg, optional");
     expect(b).toEqual(a);
   });
 });
@@ -294,15 +294,15 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
     expect(bigNumber(container)).toBeNull();
     expect(screen.queryByLabelText("Add 1.25 kg")).toBeNull();
     expect(screen.queryByText("Add weight")).toBeNull();
-    expect(screen.getByText("+ kg · optional")).toBeTruthy();
+    expect(screen.getByText("+ kg, optional")).toBeTruthy();
     expect(screen.getByLabelText(/tap to add weight/)).toBeTruthy();
   });
 
   it("the chip opens a drum: optional kg wheel, 0 reads \"none\" in the text face, reps unchanged", () => {
     const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom })} />);
-    fireEvent.click(screen.getByText("+ kg · optional"));
+    fireEvent.click(screen.getByText("+ kg, optional"));
     const d = drum(container);
-    expect(d.getByText("+ kg · optional")).toBeTruthy();
+    expect(d.getByText("+ kg, optional")).toBeTruthy();
     expect(kgWheel(d).getByText("none").style.fontFamily).toContain("familjen");
     expect(kgWheel(d).getByText("10").style.fontFamily).toContain("spline");
     expect(d.queryByText(/steps of/)).toBeNull();
@@ -312,7 +312,7 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
   it("Confirm writes the added load, never W", () => {
     const setPlanWeights = vi.fn(), setPlanReps = vi.fn(), onAddedLoad = vi.fn();
     const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setPlanWeights, setPlanReps })} onAddedLoad={onAddedLoad} />);
-    fireEvent.click(screen.getByText("+ kg · optional"));
+    fireEvent.click(screen.getByText("+ kg, optional"));
     const d = drum(container);
     fireEvent.click(kgWheel(d).getByText("10"));
     fireEvent.click(d.getByText(/Confirm/));
@@ -328,7 +328,7 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
     const calf = { name: "Single-Leg Calf Raise", muscle: "Calves", reps: "15/leg", weight: null, loadType: "bodyweight" };
     const setPlanWeights = vi.fn(), setPlanReps = vi.fn(), onAddedLoad = vi.fn();
     const { container } = render(<WithVest {...props({ block: mainBlock(calf), getW: () => 37, planWeights: { "Single-Leg Calf Raise": 37 }, setPlanWeights, setPlanReps })} onAddedLoad={onAddedLoad} />);
-    fireEvent.click(screen.getByText("+ kg · optional"));
+    fireEvent.click(screen.getByText("+ kg, optional"));
     const d = drum(container);
     fireEvent.click(kgWheel(d).getByText("10"));
     fireEvent.click(d.getByText(/Confirm/));
@@ -372,7 +372,7 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
   it("reps-only confirm leaves the added load alone", () => {
     const setPlanWeights = vi.fn(), setPlanReps = vi.fn(), onAddedLoad = vi.fn();
     const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setPlanWeights, setPlanReps })} onAddedLoad={onAddedLoad} />);
-    fireEvent.click(screen.getByText("+ kg · optional"));
+    fireEvent.click(screen.getByText("+ kg, optional"));
     fireEvent.click(drum(container).getByText(/Confirm/));
     expect(onAddedLoad).not.toHaveBeenCalled();
     expect(setPlanWeights).not.toHaveBeenCalled();
@@ -382,7 +382,7 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
     // Seeded from W (37), picking "none" would be a change and write 0.
     const setPlanWeights = vi.fn(), setPlanReps = vi.fn(), onAddedLoad = vi.fn();
     const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setPlanWeights, setPlanReps })} onAddedLoad={onAddedLoad} />);
-    fireEvent.click(screen.getByText("+ kg · optional"));
+    fireEvent.click(screen.getByText("+ kg, optional"));
     const d = drum(container);
     fireEvent.click(kgWheel(d).getByText("none"));
     fireEvent.click(d.getByText(/Confirm/));
@@ -395,7 +395,7 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
     expect(text).toContain("Bodyweight + 10 kg");
     expect(text).not.toContain("37");
     expect(screen.getByLabelText(/edit added weight/)).toBeTruthy();
-    expect(screen.queryByText("+ kg · optional")).toBeNull();
+    expect(screen.queryByText("+ kg, optional")).toBeNull();
     expect(screen.queryByLabelText("Add 1.25 kg")).toBeNull();
     expect(screen.queryByText("Add weight")).toBeNull();
     expect(bigNumber(container)).toBeNull();
@@ -405,7 +405,7 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
     const setPlanWeights = vi.fn(), onAddedLoad = vi.fn();
     const { container } = render(<WithVest {...props({ block: mainBlock(pushUp), ...phantom, setPlanWeights })} onAddedLoad={onAddedLoad} />);
 
-    fireEvent.click(screen.getByText("+ kg · optional"));
+    fireEvent.click(screen.getByText("+ kg, optional"));
     const d = drum(container);
     fireEvent.click(kgWheel(d).getByText("10"));
     fireEvent.click(d.getByText(/Confirm/));
@@ -418,7 +418,7 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
 
     expect(onAddedLoad.mock.calls).toEqual([["Decline Push-Up", 10], ["Decline Push-Up", 0]]);
     expect(flat(document.body.textContent)).toContain("Bodyweight · 80 kg");
-    expect(screen.getByText("+ kg · optional")).toBeTruthy();
+    expect(screen.getByText("+ kg, optional")).toBeTruthy();
     expect(setPlanWeights).not.toHaveBeenCalled();
   });
 
@@ -428,7 +428,7 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
     const lsit = { name: "L-Sit Hold", muscle: "Core", reps: "20s", weight: null, loadType: "bodyweight" };
     const setPlanReps = vi.fn();
     const { container } = render(<WithVest {...props({ block: mainBlock(lsit), getW: () => 37, planWeights: { "L-Sit Hold": 37 }, setPlanReps })} />);
-    fireEvent.click(screen.getByText("+ kg · optional"));
+    fireEvent.click(screen.getByText("+ kg, optional"));
     const d = drum(container);
     expect(d.getAllByText("sec").length).toBeGreaterThan(0);
     expect(kgWheel(d).getByText("none")).toBeTruthy();
@@ -437,7 +437,7 @@ describe("pure bodyweight lifts take an optional added weight — never W", () =
     expect(setPlanReps).not.toHaveBeenCalled();
 
     // Moved, it writes seconds.
-    fireEvent.click(screen.getByText("+ kg · optional"));
+    fireEvent.click(screen.getByText("+ kg, optional"));
     const d2 = drum(container);
     fireEvent.click(repsWheel(d2, "sec").getByText("25"));
     fireEvent.click(d2.getByText(/Confirm/));

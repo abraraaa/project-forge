@@ -26,27 +26,41 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import dynamic from "next/dynamic";
+import { DISPLAY } from "@/lib/tokens";
 
 const FieldBeat = () => <div style={{ minHeight: "100vh" }} aria-hidden="true" />;
+
+// The column the launch head sits in. The first-run intro (OnboardingScreen in
+// components/ForgeApp.jsx) uses it too, so the head lands where it was.
+export const LAUNCH_COLUMN = { maxWidth: 430, margin: "0 auto", paddingTop: 52, paddingLeft: 24, paddingRight: 24 };
+
+// Kicker, h1 and lede, shared by the masthead and the first-run intro that
+// replaces it, so the swap moves nothing.
+export const LaunchHead = () => (
+  <>
+    <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 8 }}>Heatwayve</div>
+    {/* Display size: LCP only supersedes when a LARGER element paints, so
+        this must be at least as big as the h1 that replaces it (the intro
+        renders this same one). Bing does not credit an h1 inside <noscript>,
+        which is where the only one was. */}
+    <h1 style={{ ...DISPLAY, fontSize: 45, lineHeight: 1.05, color: "var(--ink)", margin: 0 }}>
+      Train with intention
+    </h1>
+    <div style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 12, lineHeight: 1.45, maxWidth: "32ch" }}>
+      Evidence-based strength training that adjusts to what you actually
+      lifted and keeps every muscle&rsquo;s weekly volume honest.
+    </div>
+  </>
+);
 
 // Masthead on the home shell only, and only outside the installed app
 // (.forge-launch, globals.css). LCP measured element render delay at 5,320ms
 // waiting on the bundle; LCP counts text and images, so a skeleton would not
 // have helped. Installed users already get the manifest splash.
-const LaunchMasthead = () => (
+export const LaunchMasthead = () => (
   <div className="forge-launch">
-    <div style={{ padding: "52px 24px 0", maxWidth: 430, margin: "0 auto" }}>
-      <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 8 }}>Heatwayve</div>
-      {/* Display size: LCP only supersedes when a LARGER element paints, so
-          this must be at least as big as the h1 that replaces it. Bing does not
-          credit an h1 inside <noscript>, which is where the only one was. */}
-      <h1 style={{ fontFamily: "var(--font-bodoni), serif", fontOpticalSizing: "none", fontSize: 45, lineHeight: 1.05, color: "var(--ink)", margin: 0, fontWeight: 400 }}>
-        Train with intention
-      </h1>
-      <div style={{ fontSize: 15, color: "var(--ink-2)", marginTop: 12, lineHeight: 1.45, maxWidth: "32ch" }}>
-        Evidence-based strength training that adjusts to what you actually
-        lifted — and keeps every muscle&rsquo;s weekly volume honest.
-      </div>
+    <div style={LAUNCH_COLUMN}>
+      <LaunchHead />
     </div>
   </div>
 );

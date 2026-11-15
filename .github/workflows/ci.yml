@@ -39,5 +39,3 @@ jobs:
 
       - name: Build
         run: npm run build
-        env:
-          BLOB_READ_WRITE_TOKEN: "ci-placeholder-token"

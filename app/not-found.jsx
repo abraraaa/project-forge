@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { T, DISPLAY } from "@/lib/tokens";
-import Glyph from "@/components/Glyph";
 
 export const metadata = {
   title: "Not found",
@@ -13,11 +12,12 @@ export default function NotFound() {
   return (
     <div style={{
       color: T.ink, fontFamily: T.text,
-      padding: "88px 24px 24px",
+      width: "100%", maxWidth: 640, margin: "0 auto",
+      padding: "88px 24px 64px",
       display: "flex", flexDirection: "column", alignItems: "flex-start",
     }}>
-      <div style={{ fontSize: 13, color: T.ink3, marginBottom: 12 }}>
-        404 · nothing here
+      <div style={{ fontSize: 13, color: T.ink2, marginBottom: 12 }}>
+        Error 404
       </div>
 
       <h1 style={{ ...DISPLAY, fontSize: 40, color: T.ink, margin: 0 }}>
@@ -25,7 +25,7 @@ export default function NotFound() {
       </h1>
 
       <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: "14px 0 32px", maxWidth: "34ch" }}>
-        This page doesn&apos;t exist — or it moved. Your training is where you left it.
+        This page doesn&rsquo;t exist, or it moved. Your training is where you left it.
       </p>
 
       <Link
@@ -34,10 +34,10 @@ export default function NotFound() {
           padding: "15px 22px", background: T.commit, color: T.commitInk,
           borderRadius: T.r, boxShadow: T.elevStrong, fontFamily: T.text,
           fontSize: 16, fontWeight: 500, textDecoration: "none",
-          display: "inline-flex", alignItems: "center", gap: 8,
+          display: "inline-flex", alignItems: "center",
         }}
       >
-        Take me home <Glyph name="arrowRight" size={13} />
+        Take me home
       </Link>
     </div>
   );

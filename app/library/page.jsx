@@ -23,7 +23,7 @@ export default function LibraryIndexPage() {
   const groups = libraryByMuscle();
   return (
     <div style={{ minHeight: "100vh", padding: "max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 64px", maxWidth: 640, margin: "0 auto" }}>
-      <Link href="/" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <Link href="/" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5, padding: "14px 0", margin: "-14px 0" }}>
         <Glyph name="arrowLeft" size={12} color={T.ink3}/> Home
       </Link>
 
@@ -34,7 +34,7 @@ export default function LibraryIndexPage() {
 
       {groups.map(({ muscle, exercises }) => (
         <section key={muscle} style={{ marginTop: 40 }}>
-          <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink3, margin: "0 0 4px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
+          <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 4px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
             {muscle} · <span style={{ fontFamily: T.measured }}>{exercises.length}</span>
           </h2>
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
@@ -45,7 +45,7 @@ export default function LibraryIndexPage() {
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "13px 0", textDecoration: "none" }}
                 >
                   <span style={{ fontSize: 16, fontWeight: 400, color: T.ink, fontFamily: T.text }}>{e.name}</span>
-                  <span style={{ fontSize: 12, color: T.ink3, fontFamily: T.text, flexShrink: 0 }}>{e.categoryLabel}</span>
+                  <span style={{ fontSize: 12, color: T.ink2, fontFamily: T.text, flexShrink: 0 }}>{e.categoryLabel}</span>
                 </Link>
               </li>
             ))}
@@ -53,7 +53,7 @@ export default function LibraryIndexPage() {
         </section>
       ))}
 
-      <p style={{ marginTop: 48, fontSize: 13, color: T.ink3, fontFamily: T.text, lineHeight: 1.6 }}>
+      <p style={{ marginTop: 48, fontSize: 13, color: T.ink2, fontFamily: T.text, lineHeight: 1.6 }}>
         Reading about it is the easy part. <Link href="/" style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>Open Heatwayve</Link> and
         get coached on the tempo, the load and the volume — every set, every week,
         against a programme that adjusts to what you actually lifted.

@@ -319,6 +319,42 @@ describe("TrainerShareView: no trainer", () => {
     expect(document.body.textContent).not.toContain(body.error);
   });
 
+  it("says One moment while the status loads, not just the back link", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    P.setActive("sam");
+    let land;
+    fetchWithTimeout.mockImplementationOnce(() => new Promise((r) => { land = r; }));
+    await act(async () => { render(<TrainerShareView />); });
+    expect(screen.getByRole("status").textContent).toBe("One moment");
+    server.status = status({ sharing: sharing() });
+    await act(async () => { land({ ok: true, status: 200, json: async () => server.status }); });
+    expect(screen.queryByText("One moment")).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Jo");
+  });
+
+  it("a status that didn't load offers Try again, which loads it again with One moment meanwhile", async () => {
+    fetchWithTimeout.mockRejectedValueOnce(new Error("offline"));
+    await renderView();
+    expect(screen.getByRole("status").textContent).toBe("Couldn't reach Heatwayve. Try again.");
+    let land;
+    fetchWithTimeout.mockImplementationOnce(() => new Promise((r) => { land = r; }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Try again" })); });
+    expect(screen.getByRole("status").textContent).toBe("One moment");
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    server.status = status({ sharing: sharing() });
+    await act(async () => { land({ ok: true, status: 200, json: async () => server.status }); });
+    expect(fetchWithTimeout).toHaveBeenLastCalledWith("/api/sync/trainer?profile=sam&today=2026-10-01");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Jo");
+  });
+
+  it.each([[429, true], [500, true], [401, false]])("a %i on the status offers Try again: %s", async (code, offered) => {
+    fetchWithTimeout.mockResolvedValueOnce({ ok: false, status: code, json: async () => ({}) });
+    await renderView();
+    // Signing in again happens elsewhere, so a 401 has nothing to retry.
+    expect(!!screen.queryByRole("button", { name: "Try again" })).toBe(offered);
+  });
+
   it("with no active profile, goes home and fetches nothing", async () => {
     await act(async () => { render(<TrainerShareView />); });
     expect(router.replace).toHaveBeenCalledWith("/");

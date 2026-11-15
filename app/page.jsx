@@ -14,33 +14,35 @@
 import Link from "next/link";
 import { ForgeAppShell } from "@/components/client-shells";
 
+const LINK = { color: "var(--ink)", textDecoration: "underline", textUnderlineOffset: 3 };
+
 export default function Page() {
   return (
     <>
       <noscript>
-        <div style={{ padding: "40px 24px", maxWidth: 640, margin: "0 auto" }}>
+        <div style={{ padding: "40px 24px", maxWidth: 430, margin: "0 auto" }}>
           <p>
             The app itself needs JavaScript &mdash; a three-day A/B/C rotation
             that progresses from how hard your sets actually felt, holding every
             muscle&rsquo;s weekly volume against the MEV/MAV/MRV landmarks.
             These pages do not:
           </p>
-          <ul>
-            <li>
-              <Link href="/library">The exercise library</Link> — every movement, with
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            <li style={{ marginTop: 12 }}>
+              <Link href="/library" style={LINK}>The exercise library</Link> — every movement, with
               the weighted per-muscle contributions the volume audit computes
               with, its tempo prescription and approved alternatives.
             </li>
-            <li>
-              <Link href="/anatomy">Explore your anatomy</Link> — one page per muscle,
+            <li style={{ marginTop: 12 }}>
+              <Link href="/anatomy" style={LINK}>Explore your anatomy</Link> — one page per muscle,
               ranking every movement by the share of a set it genuinely credits.
             </li>
-            <li>
-              <Link href="/volume-landmarks">Volume landmarks</Link> — what MEV, MAV
+            <li style={{ marginTop: 12 }}>
+              <Link href="/volume-landmarks" style={LINK}>Volume landmarks</Link> — what MEV, MAV
               and MRV mean, and the per-muscle weekly set targets behind them.
             </li>
-            <li>
-              <Link href="/privacy">Privacy</Link> — what we hold, and how to delete it.
+            <li style={{ marginTop: 12 }}>
+              <Link href="/privacy" style={LINK}>Privacy</Link> — what we hold, and how to delete it.
             </li>
           </ul>
         </div>

@@ -37,15 +37,15 @@ export default function AnatomyIndexPage() {
   };
 
   return (
-    <div style={{ padding: "40px 24px 64px", maxWidth: 640, margin: "0 auto" }}>
+    <div style={{ padding: "52px 24px 64px", maxWidth: 640, margin: "0 auto" }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(listLd) }} />
 
-      <Link href="/" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <Link href="/" style={{ fontSize: 13, color: T.ink2, fontFamily: T.text, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5, padding: "14px 0", margin: "-14px 0" }}>
         <Glyph name="arrowLeft" size={12} color={T.ink3} /> Heatwayve
       </Link>
 
       <div style={{ marginTop: 32 }}>
-        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>
           <span style={{ fontFamily: T.measured }}>{muscles.length}</span> muscles
         </div>
         <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: 0 }}>Explore your anatomy</h1>
@@ -63,7 +63,7 @@ export default function AnatomyIndexPage() {
             <Link href={`/anatomy/${muscleSlug(muscle)}`}
               style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "14px 0", textDecoration: "none" }}>
               <span style={{ fontSize: 16, color: T.ink, fontFamily: T.text }}>{muscle}</span>
-              <span style={{ fontSize: 12, color: T.ink3, flexShrink: 0 }}>
+              <span style={{ fontSize: 12, color: T.ink2, flexShrink: 0 }}>
                 <span style={{ fontFamily: T.measured }}>{n}</span> movements
               </span>
             </Link>
@@ -71,7 +71,7 @@ export default function AnatomyIndexPage() {
         ))}
       </ul>
 
-      <p style={{ marginTop: 40, fontSize: 14, color: T.ink3, lineHeight: 1.6 }}>
+      <p style={{ marginTop: 40, fontSize: 14, color: T.ink2, lineHeight: 1.6 }}>
         Reading the other way round — one movement, every muscle it touches — is{" "}
         <Link href="/library" style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>
           the exercise library

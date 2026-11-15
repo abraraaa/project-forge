@@ -20,7 +20,7 @@ export default function LibraryMasthead({ count }) {
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, fontSize: 13, color: T.ink2, marginBottom: 8 }}>
         <span><span style={{ fontFamily: T.measured, fontSize: 12 }}>{count}</span> movements</span>
         <button onClick={() => setOpen(o => !o)} aria-expanded={open}
-          style={{ background: "none", border: "none", padding: "4px 0", cursor: "pointer", fontFamily: T.text, fontSize: 12, fontWeight: 500, color: open ? T.ink : T.ink2, textDecoration: "underline", textUnderlineOffset: 3, textDecorationColor: T.rule, lineHeight: 1 }}>
+          style={{ background: "none", border: "none", padding: "12px 4px", margin: "-8px -4px", cursor: "pointer", fontFamily: T.text, fontSize: 12, fontWeight: 500, color: open ? T.ink : T.ink2, textDecoration: "underline", textUnderlineOffset: 3, textDecorationColor: T.rule, lineHeight: 1 }}>
           About
         </button>
       </div>
@@ -33,8 +33,8 @@ export default function LibraryMasthead({ count }) {
       {open && (
         <p style={{ fontSize: 14, color: T.ink2, marginTop: 10, lineHeight: 1.6, paddingTop: 10, borderTop: `1px solid ${T.ruleFaint}` }}>
           Each movement carries the weighted muscle contributions Heatwayve
-          uses to audit your training volume — a squat isn&apos;t &quot;legs&quot;,
-          it&apos;s quads first, glutes and hamstrings meaningfully, core along
+          uses to audit your training volume — a squat isn&rsquo;t &quot;legs&quot;,
+          it&rsquo;s quads first, glutes and hamstrings meaningfully, core along
           for the ride. The same numbers the app computes with, published.
         </p>
       )}

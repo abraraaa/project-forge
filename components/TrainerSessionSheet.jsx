@@ -130,7 +130,7 @@ export function TrainerSessionCard({ card, more = 0, todayIso, nowMs, onReview }
   return (
     <Fade d={165}>
       <Card style={{ margin: "20px 24px 0", padding: "18px 20px" }}>
-        <div data-trainer-session-card="" style={{ fontSize: 13, color: T.ink3, marginBottom: 8 }}>From your trainer</div>
+        <div data-trainer-session-card="" style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>From your trainer</div>
         <div id={titleId} style={{ fontSize: 17, fontWeight: 500, color: T.ink, lineHeight: 1.3, marginBottom: 8 }}>
           {sessionTitle(card, todayIso)}. Keep it?
         </div>
@@ -226,7 +226,7 @@ export default function TrainerSessionSheet({ card, todayIso, felt = {}, onFelt,
         className="forge-sheet-ground forge-vellum"
         style={{ padding: "22px 24px calc(28px + env(safe-area-inset-bottom))", width: "100%", animation: `slideUp 280ms ${T.ease}`, maxHeight: "90vh", display: "flex", flexDirection: "column", boxSizing: "border-box", outline: "none" }}>
 
-        <div style={{ fontSize: 13, color: T.ink3, marginBottom: 10 }}>From your trainer</div>
+        <div style={{ fontSize: 13, color: T.ink2, marginBottom: 10 }}>From your trainer</div>
         <h2 id={titleId} style={{ ...DISPLAY, fontSize: 28, lineHeight: 1.08, color: T.ink, margin: 0 }}>
           {sessionTitle(card, todayIso)}
         </h2>
@@ -246,7 +246,7 @@ export default function TrainerSessionSheet({ card, todayIso, felt = {}, onFelt,
                 <div style={{ fontSize: 15, fontWeight: 500, color: T.ink }}>
                   {ex.name}{oneLoad ? <span style={{ fontWeight: 400, color: T.ink2 }}> · <MonoNums>{oneLoad}</MonoNums></span> : null}
                 </div>
-                {ex.swapped && <div style={{ fontSize: 12, color: T.ink3, marginTop: 2 }}>Swapped in on the day</div>}
+                {ex.swapped && <div style={{ fontSize: 12, color: T.ink2, marginTop: 2 }}>Swapped in on the day</div>}
                 {(ex.sets ?? []).map((s, si) => {
                   const key = feltKey(bi, ei, si);
                   const sent = typeof s?.rpe === "number" ? s.rpe : null;
@@ -270,7 +270,7 @@ export default function TrainerSessionSheet({ card, todayIso, felt = {}, onFelt,
 
         {!confirming ? (
           <div style={{ paddingTop: 14, borderTop: `1px solid ${T.rule}` }}>
-            <p style={{ fontSize: 13, color: T.ink3, lineHeight: 1.5, margin: "0 0 14px" }}>
+            <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 14px" }}>
               Keep adds it to your training, like a session you logged. You can&apos;t undo it.
             </p>
             <button type="button" onClick={() => { haptic.commit(); onKeep(); }} style={BTN.commit}>

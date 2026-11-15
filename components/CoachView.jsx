@@ -16,14 +16,15 @@ import { copyCoachContext } from "@/lib/coach-share";
 import { CONNECT_OPTIONS, MCP_URL, ago } from "@/lib/coach-connect";
 import { fetchWithTimeout } from "@/lib/net";
 
-/** @returns {Promise<any[] | null>} null when the server won't say (no sign-in, offline). */
+/** @returns {Promise<any[] | null | false>} null when there's no sign-in (nothing to list); false when the list couldn't be loaded (offline, server trouble). */
 async function fetchConnections(profile) {
   try {
     const res = await fetchWithTimeout(`/api/sync/connections?profile=${encodeURIComponent(profile)}`);
-    if (!res.ok) return null;
+    if (res.status === 401) return null;
+    if (!res.ok) return false;
     const body = await res.json();
     return Array.isArray(body.connections) ? body.connections : [];
-  } catch { return null; }
+  } catch { return false; }
 }
 
 export default function CoachView() {
@@ -41,15 +42,22 @@ export default function CoachView() {
   // Connected AIs — shown only when the server answers (a profile without a
   // passkey has no sync sign-in, and nothing to list).
   const [connections, setConnections] = useState(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [disconnectFailed, setDisconnectFailed] = useState(false);
   const [busyId, setBusyId] = useState(null);
   useEffect(() => {
     if (!current) return undefined;
     let off = false;
-    fetchConnections(current).then((list) => { if (!off && list) setConnections(list); });
+    fetchConnections(current).then((list) => {
+      if (off) return;
+      if (list) setConnections(list);
+      else if (list === false) setLoadFailed(true);
+    });
     return () => { off = true; };
   }, [current]);
   const onDisconnect = async (id) => {
     setBusyId(id);
+    setDisconnectFailed(false);
     try {
       await fetchWithTimeout("/api/sync/connections", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -58,6 +66,8 @@ export default function CoachView() {
     } catch { /* the reload shows the truth either way */ }
     const list = await fetchConnections(current);
     if (list) setConnections(list);
+    // The row is still on screen unless the reload came back without it.
+    setDisconnectFailed(!list || list.some((c) => c.id === id));
     setBusyId(null);
   };
 
@@ -90,7 +100,7 @@ export default function CoachView() {
         <Fade d={80}>
           <div style={{padding:"18px 2px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`}}>
             <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Connect your AI</div>
-            <div style={{fontSize:12,color:T.ink3,marginTop:4,lineHeight:1.5,marginBottom:14}}>
+            <div style={{fontSize:12,color:T.ink2,marginTop:4,lineHeight:1.5,marginBottom:14}}>
               It reads your training as it happens — read only, photos stay locked.
             </div>
             <label htmlFor="hw-connect-ai" style={{position:"absolute",width:1,height:1,overflow:"hidden",clip:"rect(0 0 0 0)"}}>Your AI</label>
@@ -117,14 +127,22 @@ export default function CoachView() {
             <ol style={{margin:"14px 0 0",paddingLeft:18,fontSize:12,color:T.ink2,lineHeight:1.6}}>
               {option.steps.map((st) => <li key={st}>{st}</li>)}
             </ol>
-            <div style={{fontSize:11,color:T.ink3,marginTop:10,fontFamily:T.measured,overflowWrap:"anywhere"}}>{MCP_URL}</div>
+            <div style={{fontSize:11,color:T.ink2,marginTop:10,fontFamily:T.measured,overflowWrap:"anywhere"}}>{MCP_URL}</div>
           </div>
         </Fade>
+
+        {loadFailed && !connections && (
+          <Fade d={110}>
+            <div style={{padding:"16px 2px",borderBottom:`1px solid ${T.rule}`}}>
+              <div style={{fontSize:13,color:T.ink2}}>Couldn&apos;t load your connections just now.</div>
+            </div>
+          </Fade>
+        )}
 
         {connections && (
           <Fade d={110}>
             <div style={{padding:"16px 2px",borderBottom:`1px solid ${T.rule}`}}>
-              <div style={{fontSize:13,color:T.ink3,marginBottom:connections.length ? 6 : 0}}>
+              <div style={{fontSize:13,color:T.ink2,marginBottom:connections.length ? 6 : 0}}>
                 {connections.length ? "Connected" : "Nothing connected yet."}
               </div>
               {connections.map((c) => (
@@ -139,6 +157,9 @@ export default function CoachView() {
                   </button>
                 </div>
               ))}
+              {disconnectFailed && (
+                <div role="status" style={{fontSize:13,color:T.ink2,paddingTop:6}}>Couldn&apos;t disconnect just now. Try again.</div>
+              )}
             </div>
           </Fade>
         )}
@@ -146,7 +167,7 @@ export default function CoachView() {
         <Fade d={140}>
           <div style={{padding:"18px 2px",borderBottom:`1px solid ${T.rule}`}}>
             <div style={{fontSize:15,fontWeight:500,color:T.ink}}>Hand it the story</div>
-            <div style={{fontSize:12,color:T.ink3,marginTop:4,lineHeight:1.5,marginBottom:14}}>
+            <div style={{fontSize:12,color:T.ink2,marginTop:4,lineHeight:1.5,marginBottom:14}}>
               Lifts, volume, rhythm — in one copy. A snapshot: it sees today, not tomorrow.
             </div>
             {/* Quiet: Connect holds the one commit surface on this screen. */}
@@ -154,7 +175,7 @@ export default function CoachView() {
               style={{width:"100%",height:52,background:"none",border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink}}>
               {copied === "ok" ? "Copied" : "Copy your training"}
             </button>
-            <div role="status" aria-live="polite" style={{fontSize:12,color:T.ink3,marginTop:10,minHeight:16}}>
+            <div role="status" aria-live="polite" style={{fontSize:12,color:T.ink2,marginTop:10,minHeight:16}}>
               {copied === "ok" ? "Paste it into any chat." : copied === "fail" ? "Couldn't reach the clipboard — try again." : ""}
             </div>
           </div>

@@ -24,7 +24,7 @@ export default function MainLiftsStep({ mainLifts = {}, onChange, onNext }) {
   return (
     <div style={{maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px",display:"flex",flexDirection:"column"}}>
       <Fade d={0}>
-        <div style={{fontSize:13,color:T.ink3,marginBottom:18}}>Training</div>
+        <div style={{fontSize:13,color:T.ink2,marginBottom:18}}>Training</div>
         <div style={{...DISPLAY,fontSize:38,color:T.ink,marginBottom:16}}>Main lifts</div>
       </Fade>
       <Fade d={80}>
@@ -43,7 +43,7 @@ export default function MainLiftsStep({ mainLifts = {}, onChange, onNext }) {
             const listId = `first-run-lift-${slot.replace(/\W+/g, "-")}`;
             return (
               <div key={slot} style={{padding:"12px 2px",borderBottom:`1px solid ${T.rule}`}}>
-                <div style={{fontSize:12,color:T.ink3,marginBottom:4}}>{MAIN_LIFT_GROUPS[slot] || slot}</div>
+                <div style={{fontSize:12,color:T.ink2,marginBottom:4}}>{MAIN_LIFT_GROUPS[slot] || slot}</div>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
                   <span style={{fontSize:16,color:T.ink}}>{chosen}</span>
                   <button type="button" onClick={() => { haptic.tap(); setOpen(isOpen ? null : slot); }}

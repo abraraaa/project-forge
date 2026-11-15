@@ -45,7 +45,7 @@ export default function InstallWalkthrough({ onDismiss, migration = false, cta =
           boxSizing:"border-box",
         }}>
         {/* No corner ✕ — house modal doctrine (bottom-row dismiss only). */}
-        <div style={{fontSize:13,fontWeight:500,color:T.ink3,marginBottom:8}}>
+        <div style={{fontSize:13,fontWeight:500,color:T.ink2,marginBottom:8}}>
           {migration ? "Same fire, new home" : "Live on your home screen"}
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:10}}>

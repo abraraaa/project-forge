@@ -63,3 +63,42 @@ describe("connect page: the server's words never show", () => {
     expect(document.body.textContent).not.toContain("SENTINEL");
   });
 });
+
+describe("connect page: offline", () => {
+  const offline = "Couldn't reach Heatwayve. Try again.";
+
+  it("a network failure after Face ID says offline, not Face ID, and frees the buttons", async () => {
+    const { authenticatePasskey } = await import("@/lib/webauthn");
+    const { fetchWithTimeout } = await import("@/lib/net");
+    const { default: ConnectView } = await import("../components/ConnectView.jsx");
+    authenticatePasskey.mockResolvedValueOnce({ authToken: "t" });
+    fetchWithTimeout.mockRejectedValueOnce(new Error("The operation was aborted. SENTINEL"));
+    render(<ConnectView clientName="Notes" host="example.com" params={{}} />);
+    fireEvent.change(screen.getByLabelText("Your Heatwayve name"), { target: { value: "sam" } });
+    fireEvent.click(screen.getByText("Let it in"));
+    expect(await screen.findByText(offline)).toBeTruthy();
+    expect(screen.getByText("Let it in")).toBeTruthy();
+    expect(screen.getByText("Not now").disabled).toBe(false);
+    expect(document.body.textContent).not.toContain("SENTINEL");
+  });
+
+  it("a network failure on Not now says offline and frees the buttons", async () => {
+    const { fetchWithTimeout } = await import("@/lib/net");
+    const { default: ConnectView } = await import("../components/ConnectView.jsx");
+    fetchWithTimeout.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    render(<ConnectView clientName="Notes" host="example.com" params={{}} />);
+    fireEvent.click(screen.getByText("Not now"));
+    expect(await screen.findByText(offline)).toBeTruthy();
+    expect(screen.getByText("Let it in")).toBeTruthy();
+    expect(screen.getByText("Not now").disabled).toBe(false);
+  });
+});
+
+describe("connect page: legible field and status", () => {
+  it("the name field is outlined in ink-3 and the status line reads in ink-2", async () => {
+    const { default: ConnectView } = await import("../components/ConnectView.jsx");
+    render(<ConnectView clientName="Notes" host="example.com" params={{}} />);
+    expect(screen.getByLabelText("Your Heatwayve name").style.border).toBe("1px solid var(--ink-3)");
+    expect(screen.getByRole("status").style.color).toBe("var(--ink-2)");
+  });
+});

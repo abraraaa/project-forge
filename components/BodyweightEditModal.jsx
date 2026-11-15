@@ -169,7 +169,7 @@ function BodyweightEditModalInner({ kg, setKg, onClose, onSave, isFirstTime, pro
   };
 
   const sub = (text) => (
-    <div style={{ fontSize: 13, color: T.ink3, marginTop: 5, lineHeight: 1.5, maxWidth: 280 }}>{text}</div>
+    <div style={{ fontSize: 13, color: T.ink2, marginTop: 5, lineHeight: 1.5, maxWidth: 280 }}>{text}</div>
   );
   const cta = (label, onClick, { disabled = false, describedBy = undefined } = {}) => (
     <button onClick={onClick} disabled={disabled || busy} aria-describedby={describedBy} style={{ width: "100%", padding: "16px", background: T.commit, border: "none", borderRadius: T.r, cursor: busy ? "default" : "pointer", fontFamily: T.text, fontSize: 16, fontWeight: 500, color: T.commitInk, boxShadow: T.elevStrong, display: "flex", alignItems: "center", justifyContent: "space-between", opacity: busy ? 0.6 : 1 }}>
