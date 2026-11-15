@@ -43,7 +43,7 @@ const { readJsonByPrefix } = await import("../lib/blob-utils.js");
 const { NATIVE_RP_ID, LEGACY_RP_ID } = await import("../lib/origin.js");
 
 const BOTH = [NATIVE_RP_ID, LEGACY_RP_ID];
-const AFTER_SUNSET = [NATIVE_RP_ID];
+const NATIVE_ONLY = [NATIVE_RP_ID];
 const A = "hwa_" + "a".repeat(26);
 const B = "hwa_" + "b".repeat(26);
 const SAM = { accountId: A, storageKey: "sam" };
@@ -55,13 +55,15 @@ describe("credentialExists (credential index)", () => {
 
   it("a native passkey on the account keeps its grant", async () => {
     rows.set(A, [row("n1", NATIVE_RP_ID)]);
-    expect(await credentialExists(SAM, "n1", AFTER_SUNSET)).toBe(true);
+    expect(await credentialExists(SAM, "n1", NATIVE_ONLY)).toBe(true);
   });
 
-  it("an old-domain passkey keeps its grant only while that domain is served", async () => {
-    rows.set(A, [row("l1", LEGACY_RP_ID)]);
-    expect(await credentialExists(SAM, "l1", BOTH)).toBe(true);
-    expect(await credentialExists(SAM, "l1", AFTER_SUNSET)).toBe(false);
+  it("an old-domain passkey keeps no grant: only the native rpId is accepted", async () => {
+    rows.set(A, [row("l1", LEGACY_RP_ID), row("x1", undefined)]);
+    expect(await credentialExists(SAM, "l1")).toBe(false);
+    expect(await credentialExists(SAM, "x1")).toBe(false);
+    expect(await credentialExists(SAM, "l1", BOTH)).toBe(true); // the rule reads the accepted set
+    expect(await credentialExists(SAM, "l1", NATIVE_ONLY)).toBe(false);
   });
 
   it("a keyless row ends the grant, and an index row is final (no Blob second opinion)", async () => {
@@ -70,7 +72,7 @@ describe("credentialExists (credential index)", () => {
     expect(await credentialExists(SAM, "k1", BOTH)).toBe(false);
     rows.set(A, [row("l1", LEGACY_RP_ID)]);
     doc = { credentials: [cred("l1", NATIVE_RP_ID)] };
-    expect(await credentialExists(SAM, "l1", AFTER_SUNSET)).toBe(false);
+    expect(await credentialExists(SAM, "l1", NATIVE_ONLY)).toBe(false);
   });
 
   it("a passkey indexed on a different account does not keep this account's grant", async () => {
@@ -94,11 +96,11 @@ describe("credentialExists (Blob fallback, no index row)", () => {
 
   it("with the fallback on, the account's own Blob doc decides, under the same usability rule", async () => {
     doc = { credentials: [cred("n1", NATIVE_RP_ID), cred("l1", LEGACY_RP_ID), { id: "x1", publicKey: "pk" }, cred("k1", NATIVE_RP_ID, "")] };
-    expect(await credentialExists(SAM, "n1", AFTER_SUNSET)).toBe(true);
+    expect(await credentialExists(SAM, "n1", NATIVE_ONLY)).toBe(true);
     expect(await credentialExists(SAM, "l1", BOTH)).toBe(true);
-    expect(await credentialExists(SAM, "l1", AFTER_SUNSET)).toBe(false);
+    expect(await credentialExists(SAM, "l1", NATIVE_ONLY)).toBe(false);
     expect(await credentialExists(SAM, "x1", BOTH)).toBe(true); // no rpId reads as the old domain
-    expect(await credentialExists(SAM, "x1", AFTER_SUNSET)).toBe(false);
+    expect(await credentialExists(SAM, "x1", NATIVE_ONLY)).toBe(false);
     expect(await credentialExists(SAM, "k1", BOTH)).toBe(false);
     expect(await credentialExists(SAM, "gone", BOTH)).toBe(false);
     // The storage key's own prefix, byte-identical to the pre-account path.

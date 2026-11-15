@@ -107,12 +107,12 @@ export async function POST(request) {
     // From the credentials as they stand, before this registration.
     const reclaim = isReclaimOfLapsedProfile(existing) && !neverLapse;
     // hasUsablePasskey: a legacy-only profile has no ceremony left to prove
-    // control with once the rpId retires, so it reverts to the bootstrap claim
-    // (as a new account). A trainer's never does.
+    // control with, so it reverts to the bootstrap claim (as a new account).
+    // A trainer's never does.
     const protectedNow = hasUsablePasskey(existing) || (neverLapse && existing.credentials.length > 0);
     // Options made the same reclaim-or-not call and baked the matching user.id
     // into the passkey: the signed challenge names it, the challenge blob
-    // carries it. A call that has flipped since (e.g. across the rpId sunset)
+    // carries it. A call that has flipped since (the passkeys on file changed)
     // fails here and the client starts over, so the recorded user handle is
     // always the one the passkey holds.
     if (stateless) {
@@ -142,7 +142,7 @@ export async function POST(request) {
         response: { ...credential, clientExtensionResults: credential.clientExtensionResults || {} },
         expectedChallenge,
         expectedOrigin,
-        // Both rpIds during the window; the library reports which matched.
+        // The library reports the rpId it matched.
         expectedRPID: acceptedRpIds,
         requireUserVerification: true,
       });

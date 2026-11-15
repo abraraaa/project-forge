@@ -11,41 +11,34 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { isReclaimOfLapsedProfile } from "../lib/auth-server.js";
 import { retiredPhotoKey } from "../lib/db.js";
-import { NATIVE_RP_ID, acceptedRpIds } from "../lib/origin.js";
+import { NATIVE_RP_ID } from "../lib/origin.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const src = (p) => readFileSync(resolve(root, p), "utf8");
-const at = (d) => new Date(`${d}T12:00:00`).getTime();
-const OPEN = acceptedRpIds(at("2026-09-01"));   // window open
-const AFTER = acceptedRpIds(at("2026-12-01"));  // legacy retired
 
 const legacy = { id: "l", publicKey: "k" };
 const native = { id: "n", publicKey: "k", rpId: NATIVE_RP_ID };
 
 describe("the re-claim trigger — false whenever control was proved", () => {
   it("is FALSE for a first-ever claim: there is nothing to inherit", () => {
-    expect(isReclaimOfLapsedProfile({ credentials: [] }, OPEN)).toBe(false);
-    expect(isReclaimOfLapsedProfile(null, OPEN)).toBe(false);
+    expect(isReclaimOfLapsedProfile({ credentials: [] })).toBe(false);
+    expect(isReclaimOfLapsedProfile(null)).toBe(false);
   });
 
   it("is FALSE when adding a second passkey to a live profile", () => {
-    expect(isReclaimOfLapsedProfile({ credentials: [native] }, OPEN)).toBe(false);
+    expect(isReclaimOfLapsedProfile({ credentials: [native] })).toBe(false);
   });
 
-  it("is FALSE during the rpId UPGRADE — the flow we just shipped", () => {
-    expect(isReclaimOfLapsedProfile({ credentials: [legacy] }, OPEN)).toBe(false);
-  });
-
-  it("is FALSE after the sunset for someone who already upgraded", () => {
-    expect(isReclaimOfLapsedProfile({ credentials: [legacy, native] }, AFTER)).toBe(false);
+  it("is FALSE for a holder of a native passkey beside a legacy one", () => {
+    expect(isReclaimOfLapsedProfile({ credentials: [legacy, native] })).toBe(false);
   });
 
   it("is TRUE only when a lapsed name is taken by someone who could not prove control", () => {
-    expect(isReclaimOfLapsedProfile({ credentials: [legacy] }, AFTER)).toBe(true);
+    expect(isReclaimOfLapsedProfile({ credentials: [legacy] })).toBe(true);
   });
 
   it("is TRUE for a profile whose only credentials were always keyless", () => {
-    expect(isReclaimOfLapsedProfile({ credentials: [{ id: "a" }] }, OPEN)).toBe(true);
+    expect(isReclaimOfLapsedProfile({ credentials: [{ id: "a" }] })).toBe(true);
   });
 });
 

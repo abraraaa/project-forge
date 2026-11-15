@@ -71,6 +71,25 @@ describe("Profile passkey setup card", () => {
   });
 });
 
+describe("a profile whose only passkeys are legacy", () => {
+  // /api/auth/check reports such a profile as having no passkey.
+  it("lands on the ordinary set-up card, with no re-enrolment prompt", async () => {
+    // A value an earlier sign-in may have left on this device.
+    localStorage.setItem("forge:sam:passkeyUpgrade", JSON.stringify({ needed: true, urgent: true, daysLeft: 1 }));
+    try {
+      profile();
+      expect(await screen.findByRole("button", { name: "Set up" })).toBeTruthy();
+      expect(screen.getByText("Add a passkey")).toBeTruthy();
+      expect(screen.queryByText("Passkey enabled")).toBeNull();
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.queryByText(/new passkey/i)).toBeNull();
+      expect(document.body.textContent).not.toMatch(/days left|redundant/);
+    } finally {
+      localStorage.removeItem("forge:sam:passkeyUpgrade");
+    }
+  });
+});
+
 describe("quiet consent tap for existing holders", () => {
   it("with the flag off, never renders, even with no consent on file", async () => {
     expect(REAL_TAP_FLAG).toBe(true);

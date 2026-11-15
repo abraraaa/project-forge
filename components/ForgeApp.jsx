@@ -24,7 +24,6 @@ import { commitSessionRecord } from "@/lib/session-commit";
 import { makeDayContext, resolveRange, sessionsFrom, owedDays, trainingRhythm, beginSessionIdx } from "@/lib/day-state";
 import { useTodayIso } from "@/lib/use-today-iso";
 import { nudgeAbsence, weeklySlotsFromWeek } from "@/lib/absence";
-import { isHeatwayveOrigin, migrationWindowOpen, hasPreFlipStory } from "@/lib/origin";
 import { activeBreak } from "@/lib/breaks";
 import { todayLocalIso, jsDow, mondayOfWeekIso, addDaysIso } from "@/lib/dates";
 import InstallWalkthrough, { canWalkthroughInstall } from "@/components/InstallWalkthrough";
@@ -1407,7 +1406,7 @@ export default function ForgeApp(){
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}
-      {showIosInstall         && <InstallWalkthrough migration={isHeatwayveOrigin() && migrationWindowOpen() && hasPreFlipStory(history)} onDismiss={()=>{ LS.set("forge:iosInstallDismissed", true); setShowIosInstall(false); }}/>}
+      {showIosInstall         && <InstallWalkthrough onDismiss={()=>{ LS.set("forge:iosInstallDismissed", true); setShowIosInstall(false); }}/>}
       <BodyweightEditModal open={bwEditOpen} onClose={()=>setBwEditOpen(false)} currentKg={bodyweight} onSave={updateBodyweight} profileName={activeProfile}/>
       {weekEditorOpen && (
         <WeekEditorSheet

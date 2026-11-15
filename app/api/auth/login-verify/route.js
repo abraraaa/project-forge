@@ -6,7 +6,6 @@ import crypto from "crypto";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { readJsonDirect, deleteByPrefix, writeJsonReplacingPrefix } from "@/lib/blob-utils";
 import { rpConfigFromRequest, hasChallengeSecret, verifyChallenge, mintAuthToken, isAdminIdentity } from "@/lib/auth-server";
-import { LEGACY_RP_ID, passkeyNudgeUrgent, daysUntilPasskeySunset } from "@/lib/origin";
 import { normaliseProfile } from "@/lib/profile-name";
 import { credentialsPrefix, credentialsPath } from "@/lib/storage-keys";
 import { acceptedConsentVersion } from "@/lib/consent";
@@ -96,7 +95,7 @@ export async function POST(request) {
         response: { ...credential, clientExtensionResults: credential.clientExtensionResults || {} },
         expectedChallenge,
         expectedOrigin,
-        // Both rpIds while the window is open; the library reports the match.
+        // The library reports the rpId it matched.
         expectedRPID: acceptedRpIds,
         requireUserVerification: true,
         credential: {
@@ -201,9 +200,6 @@ export async function POST(request) {
     // hw_photos: any active day rotates it, so a device in use never re-auths.
     const syncToken = quiet ? null : await mintAuthToken({ identity, ttlMs: 30 * 86400000, scope: "sync" });
 
-    // A legacy-rpId login is a credential that stops working at the sunset.
-    const onLegacyCredential = verifiedRpId === LEGACY_RP_ID;
-
     const res = NextResponse.json({
       ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600,
       // Single-admin recognition: a UI hint only — every admin surface
@@ -211,15 +207,6 @@ export async function POST(request) {
       admin: isAdminIdentity(identity),
       // Present only when the request carried an accepted consent claim.
       ...(consentVersion ? { consentRecorded } : null),
-      ...(onLegacyCredential
-        ? {
-            passkeyUpgrade: {
-              needed: true,
-              urgent: passkeyNudgeUrgent(),
-              daysLeft: daysUntilPasskeySunset(),
-            },
-          }
-        : null),
     });
     // Quiet: the ceremony token in the body is all this device keeps.
     if (quiet) return res;

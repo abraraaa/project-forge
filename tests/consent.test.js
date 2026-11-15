@@ -110,7 +110,6 @@ describe("consent is claimed only where the line shows", () => {
 
   it("only the surfaces that render ConsentLine build a claim", () => {
     expect(filesContaining(["components", "lib", "app"], "consentClaim(", ["lib/consent.js"])).toEqual(CLAIMERS);
-    expect(read("components/PasskeyUpgrade.jsx")).not.toContain("consentClaim");
   });
 
   it("every registration in those files carries the claim", () => {
