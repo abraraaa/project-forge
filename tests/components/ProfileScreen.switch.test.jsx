@@ -293,6 +293,27 @@ describe("Profile: Delete this profile", () => {
     expect(document.body.textContent).not.toContain("SENTINEL");
     expect(document.body.textContent).not.toContain("WebAuthn");
   });
+
+  it("a cancelled Verify says the house line, and tapping outside clears it", async () => {
+    const needsAuth = { ok: false, error: "Passkey authentication required", requiresAuth: true };
+    blobDelete.mockResolvedValueOnce(needsAuth).mockResolvedValueOnce(needsAuth);
+    authenticatePasskey.mockResolvedValueOnce(null);
+    render(<ProfileScreen {...props({ existing: ["sam", "alex"] })} />);
+    await settle();
+    const openVerify = async () => {
+      fireEvent.click(row()); fireEvent.click(row());
+      await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Full wipe, cloud and device")); });
+      return screen.getByRole("dialog", { name: "Verify it's you" });
+    };
+    let verify = await openVerify();
+    await act(async () => { fireEvent.click(within(verify).getByText("Authenticate")); });
+    expect(within(verify).getByText("Face ID didn't go through. Try again.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Authentication cancelled");
+    fireEvent.click(verify.parentElement);
+    expect(screen.queryByRole("dialog", { name: "Verify it's you" })).toBeNull();
+    verify = await openVerify();
+    expect(within(verify).queryByText("Face ID didn't go through. Try again.")).toBeNull();
+  });
 });
 
 describe("Profile: a signed-out device keeps its gate", () => {

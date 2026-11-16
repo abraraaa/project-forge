@@ -64,7 +64,7 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
           onActivate(name, { claim: false });
         }, 800);
       } else {
-        setPasskeyError("Authentication cancelled");
+        setPasskeyError("Face ID didn't go through. Try again.");
       }
     } catch (e) {
       setPasskeyError(e?.message === "WebAuthn not supported" ? "This browser can't use passkeys." : "Face ID didn't go through. Try again.");

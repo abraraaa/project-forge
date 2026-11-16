@@ -256,7 +256,7 @@ input, button, textarea, select { font: inherit; }
    URLs are the one thing that cannot ride light-dark() (it is a <color>
    function). data-mode is stamped by lib/theme.js and the pre-paint
    script for exactly this images-only case; every COLOUR stays on the
-   light-dark() axis. */
+   light-dark() axis. Remove once iOS 26 leaves support (see @supports below). */
 html[data-mode="dark"] .forge-page {
   background-image:
     url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20baseFrequency='.9'%20numOctaves='3'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='120'%20height='120'%20filter='url%28%23n%29'%20opacity='.025'/%3E%3C/svg%3E"),

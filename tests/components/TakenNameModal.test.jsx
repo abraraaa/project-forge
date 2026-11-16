@@ -46,6 +46,15 @@ describe("taken-name passkey sign-in", () => {
     expect(document.body.textContent).not.toContain("Passkey authentication failed");
   });
 
+  it("a cancelled prompt says the house line", async () => {
+    authenticatePasskey.mockResolvedValueOnce(null);
+    render(<Harness />);
+    const btn = await screen.findByRole("button", { name: "Sign in with passkey" });
+    await act(async () => { fireEvent.click(btn); });
+    expect(screen.getByText("Face ID didn't go through. Try again.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Authentication cancelled");
+  });
+
   it("an unsupported browser says so", async () => {
     await signInThrowing(new Error("WebAuthn not supported"));
     expect(screen.getByText("This browser can't use passkeys.")).toBeTruthy();

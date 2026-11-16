@@ -285,7 +285,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         // Now retry the wipe with the token
         setConfirmWipe(needsPasskeyAuth);
       } else {
-        setPasskeyError("Authentication cancelled or failed");
+        setPasskeyError("Face ID didn't go through. Try again.");
       }
     } catch (e) {
       setPasskeyError(e?.message === "WebAuthn not supported" ? "This browser can't use passkeys." : "Face ID didn't go through. Try again.");
@@ -1106,7 +1106,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
       {/* Passkey auth required modal */}
       {needsPasskeyAuth && (
-        <div onKeyDown={authKeyDown} onClick={()=>setNeedsPasskeyAuth(null)} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div onKeyDown={authKeyDown} onClick={()=>{setNeedsPasskeyAuth(null);setPasskeyError(null);}} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <div ref={authRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-vellum" style={{borderRadius:T.r,padding:"32px 28px",width:"90%",maxWidth:340,textAlign:"center",outline:"none",boxShadow:"0 10px 24px -14px rgba(36,28,25,0.35)"}}>
             <div style={{fontSize:13,color:T.ink2,marginBottom:10}}>
               Authentication required
@@ -1237,7 +1237,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         <TakenNameModal
           name={name.trim()}
           webAuthnSupported={webAuthnSupported}
-          onClose={() => setShowTakenHelp(false)}
+          onClose={() => { setShowTakenHelp(false); setPasskeyError(null); }}
           onActivate={onActivate}
           passkeyBusy={passkeyBusy}
           setPasskeyBusy={setPasskeyBusy}
