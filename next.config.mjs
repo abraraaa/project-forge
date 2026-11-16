@@ -36,17 +36,13 @@ const nextConfig = {
     // a first paint on slow 4G.
     inlineCss: true,
   },
-  // ── THE FLIP ─────────────────────────────────────────────────────────────
-  // The 2026-07-22 freeze (heatwayve→theforged 307) is DELETED; the reverse
-  // PERMANENT 301 below sends theforged.fit → heatwayve.app, with two
-  // carve-outs that must keep serving on the OLD origin:
-  //   /.well-known/webauthn — the ROR document must stay fetchable at the
-  //     rpId origin, or cross-origin passkey ceremonies break;
-  //   /api/auth/*           — ceremonies are negotiated against the rpId
-  //     origin. Everything else follows the redirect (clients re-request).
-  // Bonus TLDs (.fit/.space/.life → .app) stay at the Vercel dashboard.
-  // THIS PR MERGES ON FLIP DAY ONLY — the 301 is cached aggressively by
-  // design; merging early strands users before DNS is ready.
+  // theforged.fit answers with a permanent 301 to heatwayve.app, with two
+  // carve-outs that keep serving on the old origin:
+  //   /.well-known/webauthn: the Related Origin Requests document;
+  //   /api/auth/*: ceremonies started on the old origin, which declare rpId
+  //     heatwayve.app (credentials bound to the old rpId are refused).
+  // Everything else follows the redirect. Bonus TLDs (.fit/.space/.life to
+  // .app) stay at the Vercel dashboard.
   // Security headers. The CSP was previously three directives with no
   // default-src and no script-src, which meant scripts were entirely
   // unconstrained — it framed-blocked and nothing else (deep audit
@@ -141,8 +137,8 @@ const nextConfig = {
     }];
   },
   async redirects() {
-    // Carve-out via negative lookahead in the path matcher: auth ceremony
-    // routes + the ROR document never leave the rpId origin.
+    // Carve-out via negative lookahead in the path matcher: the auth routes
+    // and the Related Origin Requests document stay on the old origin.
     const CARVE_OUT = "/:path((?!api/auth/|\\.well-known/webauthn).*)";
     return [
       {

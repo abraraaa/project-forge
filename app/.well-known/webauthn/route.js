@@ -3,15 +3,11 @@ import { NextResponse } from "next/server";
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
 
-// WebAuthn Related Origin Requests (migration challenge 1, 2026-07-22).
-// Served for theforged.fit (the rpId domain): browsers consult
-// https://theforged.fit/.well-known/webauthn before allowing a ceremony for
-// an rpId="theforged.fit" credential from a DIFFERENT origin. Listing the
-// heatwayve origins here is what lets existing passkeys keep working after
-// the domain flip — and lets new ones be minted from heatwayve.app under
-// the same rpId (single lock, two doors). Safari 18+/Chrome 128+.
-// AT FLIP: this path must stay served on theforged.fit (carve-out from the
-// reverse 301), or every legacy passkey breaks mid-ceremony.
+// WebAuthn Related Origin Requests: an origin listed here may run a ceremony
+// that declares rpId heatwayve.app (Safari 18+, Chrome 128+). Credentials
+// minted under rpId theforged.fit are no longer accepted, so the old-domain
+// entries matter only while that host still serves the auth routes (the
+// redirect carve-out in next.config.mjs).
 export async function GET() {
   return NextResponse.json(
     {
