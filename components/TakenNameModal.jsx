@@ -9,7 +9,7 @@
 // behaviour-preserving. `slideUp` is a CSS keyframe in globals.css.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useModalA11y } from "@/lib/a11y";
 import { T, DISPLAY } from "@/lib/tokens";
 import Glyph from "@/components/Glyph";
@@ -20,6 +20,12 @@ import { cacheAuthToken } from "@/lib/auth-session";
 export default function TakenNameModal({ name, webAuthnSupported, onClose, onActivate, passkeyBusy, setPasskeyBusy, passkeyError, setPasskeyError }) {
   const [hasProfilePasskey, setHasProfilePasskey] = useState(null); // null = checking
   const [authSuccess, setAuthSuccess] = useState(false);
+  // True once the sheet has closed: a ceremony still in flight then changes nothing.
+  const closedRef = useRef(false);
+  useEffect(() => {
+    closedRef.current = false;
+    return () => { closedRef.current = true; };
+  }, []);
 
   // Check if this profile has a passkey + warm the sign-in path. Two
   // network calls fired in sequence on modal mount: hasPasskey() reveals
@@ -51,7 +57,9 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
     setPasskeyError(null);
     try {
       const result = await authenticatePasskey(name);
-      if (result?.verified) {
+      if (closedRef.current) {
+        // A closed sheet takes no result; only busy clears.
+      } else if (result?.verified) {
         // Seed the in-memory auth session so photo flows don't re-prompt
         // Face ID within the token's lifetime (one ceremony per visit).
         if (result.authToken) cacheAuthToken(name, result.authToken, { admin: !!result.admin });
@@ -67,7 +75,7 @@ export default function TakenNameModal({ name, webAuthnSupported, onClose, onAct
         setPasskeyError("Face ID didn't go through. Try again.");
       }
     } catch (e) {
-      setPasskeyError(e?.message === "WebAuthn not supported" ? "This browser can't use passkeys." : "Face ID didn't go through. Try again.");
+      if (!closedRef.current) setPasskeyError(e?.message === "WebAuthn not supported" ? "This browser can't use passkeys." : "Face ID didn't go through. Try again.");
     }
     setPasskeyBusy(false);
   };

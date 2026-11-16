@@ -55,6 +55,36 @@ describe("taken-name passkey sign-in", () => {
     expect(document.body.textContent).not.toContain("Authentication cancelled");
   });
 
+  it.each([
+    ["fails", (d) => d.resolve(null)],
+    ["throws", (d) => d.reject(new Error("timeout"))],
+  ])("a sign-in that %s after Cancel leaves no error behind", async (_, settle) => {
+    const d = {};
+    authenticatePasskey.mockReturnValueOnce(new Promise((res, rej) => { d.resolve = res; d.reject = rej; }));
+    function Closable() {
+      const [open, setOpen] = useState(true);
+      const [busy, setBusy] = useState(false);
+      const [error, setError] = useState(null);
+      return (
+        <>
+          <output data-testid="state" data-busy={String(busy)}>{error ?? ""}</output>
+          {open && (
+            <TakenNameModal name="sam" webAuthnSupported onClose={() => { setOpen(false); setError(null); }} onActivate={() => {}}
+              passkeyBusy={busy} setPasskeyBusy={setBusy} passkeyError={error} setPasskeyError={setError} />
+          )}
+        </>
+      );
+    }
+    render(<Closable />);
+    const btn = await screen.findByRole("button", { name: "Sign in with passkey" });
+    await act(async () => { fireEvent.click(btn); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Cancel" })); });
+    await act(async () => { settle(d); });
+    const out = screen.getByTestId("state");
+    expect(out.textContent).toBe("");
+    expect(out.dataset.busy).toBe("false");
+  });
+
   it("an unsupported browser says so", async () => {
     await signInThrowing(new Error("WebAuthn not supported"));
     expect(screen.getByText("This browser can't use passkeys.")).toBeTruthy();
