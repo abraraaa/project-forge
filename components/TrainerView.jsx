@@ -722,7 +722,8 @@ export default function TrainerView() {
             onChanged={shown.self ? undefined : () => refreshPane(shown.ref)}
             clientRef={shown.self ? null : shown.ref} onExport={exportCsv}
             onRunSession={shown.self ? undefined : (letter) => runSession(shown.ref, letter)}
-            unsent={!shown.self && unsent?.ref === shown.ref ? unsent.draft : null}/>
+            unsent={!shown.self && unsent?.ref === shown.ref ? unsent.draft : null}
+            signal={!shown.self && selected >= 0 ? clients[selected].signal ?? null : null} onClose={closeClient}/>
         )}
       </div>
 

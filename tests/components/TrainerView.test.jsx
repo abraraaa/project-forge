@@ -1089,8 +1089,9 @@ describe("TrainerView: changing a client's plan", () => {
     const push = vi.spyOn(nav, "push");
     await openAlex();
     const before = server.calls.length;
-    await act(async () => { fireEvent.click(screen.getByRole("radio", { name: "Strength C" })); });
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Run a session with Alex" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Different session" })); });
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("radio", { name: "Strength C" })); });
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Run Strength C with Alex" })); });
     await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
     const [to] = push.mock.calls[0];
     expect(to).toBe("/trainer/coach#ref=hwg_a&letter=C");
@@ -1139,7 +1140,7 @@ describe("TrainerView: changing a client's plan", () => {
   it("back from the coach page (Send, or its back row), /trainer opens that client's pane again, once", async () => {
     const push = vi.spyOn(nav, "push");
     await openAlex();
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Run a session with Alex" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /^Run Strength [ABC] with Alex$/ })); });
     await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
     // The coach page replaces itself with /trainer: a fresh mount.
     cleanup();
@@ -1282,6 +1283,36 @@ describe("TrainerView: one way back at each level", () => {
     await act(async () => { window.dispatchEvent(new PopStateEvent("popstate", { state: null })); });
     expect(container.firstChild.getAttribute("data-view")).toBe("roster");
     expect(screen.queryByRole("button", { name: "Clients" })).toBeNull();
+  });
+
+  it("client pane: from 640 the pane's own Close goes the same way, keyboard reachable", async () => {
+    signedIn();
+    const { container } = await mount();
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    const close = screen.getByRole("button", { name: "Close" });
+    expect(close.tagName).toBe("BUTTON");
+    expect(close.parentElement.className).toBe("forge-wide-mw-only");
+    expect(close.getAttribute("tabindex")).toBeNull();
+    const hb = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    fireEvent.click(close);
+    expect(hb).toHaveBeenCalledTimes(1);
+    await act(async () => { window.dispatchEvent(new PopStateEvent("popstate", { state: null })); });
+    expect(container.firstChild.getAttribute("data-view")).toBe("roster");
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+  });
+
+  it("the open client's roster signal reaches the pane's glance strip; your own training has none", async () => {
+    signedIn();
+    await mount();
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    expect(panes.props.at(-1).signal).toEqual(SIGNALS[0].signal);
+    expect(document.querySelector("[data-glance]").textContent).toBe("2 of 3 this weekrhythm 86%last trained 2 days ago");
+    fireEvent.click(screen.getByText("Your training"));
+    await flush();
+    expect(panes.props.at(-1).signal).toBeNull();
+    expect(document.querySelector("[data-glance]")).toBeNull();
   });
 
   it("the invite sheet closes from Done, Escape and the scrim", async () => {

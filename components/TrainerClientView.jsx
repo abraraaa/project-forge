@@ -18,7 +18,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Fragment, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { T, DISPLAY } from "@/lib/tokens";
+import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
+import { pressLiftHandlers } from "@/lib/press-lift";
 import { useInlineModalA11y } from "@/lib/a11y";
 import Glyph from "@/components/Glyph";
 import { BTN, Tag } from "@/components/ui";
@@ -156,7 +157,11 @@ const section = { marginTop: 32 };
  *   onExport?: (body: { ref: string, today: string }) => Promise<Response | null | undefined>,
  *   onRunSession?: (letter: "A" | "B" | "C") => void,
  *   unsent?: { letter: "A" | "B" | "C", date: string | null, sets: number } | null,
+ *   signal?: { lastTrainedDaysAgo: number | null, weekDone: number, weekPlanned: number, rhythmPct: number | null, paused: boolean } | null,
+ *   onClose?: () => void,
  * }} props
+ * signal: this client's roster signal (lib/trainer-view.js rosterSignal),
+ * for the glance strip; none for your own training. onClose closes the pane.
  * unsent: a session with this client run on this device and not sent yet
  * (lib/session-source.js unsentDraft, read by the parent).
  * clientRef is the ref the parent opened this pane by (a client's; your own
@@ -169,7 +174,7 @@ const section = { marginTop: 32 };
  * answers false when the reload didn't land. onRunSession opens a session
  * with this client on the trainer's device, at the letter picked.
  */
-export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false, onChange, onFaceId, onChanged, clientRef = null, onExport, onRunSession, unsent: unsentProp = null }) {
+export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false, onChange, onFaceId, onChanged, clientRef = null, onExport, onRunSession, unsent: unsentProp = null, signal = null, onClose }) {
   const name = client?.name || null;
   const title = self ? "You" : name || "Your client";
   const they = self ? "you" : "they";
@@ -226,6 +231,19 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   const ranRows = useMemo(() => (Array.isArray(ran?.changes) ? ran.changes.filter((c) => c?.kind === SESSION_KIND) : []), [ran]);
   // A session run on this device and not sent yet (the parent reads it).
   const unsent = !self && unsentProp && LETTERS.includes(unsentProp.letter) ? unsentProp : null;
+  // What the summary needs of the sessions sent: the plan's, or view.ran's once changes stopped.
+  const planAll = useMemo(() => (Array.isArray(plan?.changes) ? plan.changes : []), [plan]);
+  const sentSessions = useMemo(() => (plan ? planAll.filter((c) => c?.kind === SESSION_KIND) : ranRows), [plan, planAll, ranRows]);
+  const waitingChanges = planAll.filter((c) => c?.kind !== SESSION_KIND && c?.status === "waiting").length;
+  const onPhone = sentSessions.filter((c) => c?.status === "seen").length;
+  const runBudget = plan ? plan.budget?.sessions : null;
+  const runUsed = Number.isFinite(runBudget?.used) ? Number(runBudget.used) : 0;
+  const runOf = Number.isFinite(runBudget?.of) ? Number(runBudget.of) : SESSIONS_PER_WEEK;
+  // A new session needs the plan's programme; a read-only grant has none.
+  const runState = !self && plan?.programme && onRunSession ? {
+    next: nextLetter(sentSessions, sessions), full: runUsed >= runOf, used: runUsed, of: runOf,
+    freeAt: typeof runBudget?.freeAt === "number" ? runBudget.freeAt : null,
+  } : null;
   // Where their changes stand (view.edits); "on" without a plan means it couldn't be read.
   const edits = plan ? "on" : view?.edits === "on" ? "unavailable" : view?.edits;
   const lead = self ? "Read only." : leadLine(edits, name);
@@ -254,11 +272,20 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   return (
     <div style={{ fontFamily: T.text, color: T.ink }}>
       {/* 1. Header */}
-      <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>{self ? "Your training" : "Shared with you"}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.ink2 }}>{self ? "Your training" : "Shared with you"}</div>
+        {/* From 640 the roster stays beside the pane, so the pane closes itself. */}
+        {onClose && (
+          <span className="forge-wide-mw-only" style={{ flexShrink: 0 }}>
+            <button type="button" onClick={onClose} data-close-pane=""
+              style={{ ...BTN.text, color: T.ink2, minHeight: 44, margin: "-12px 0", padding: "0 0 0 12px" }}>
+              Close <Glyph name="cross" size={11} color={T.ink3}/>
+            </button>
+          </span>
+        )}
+      </div>
       <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" }}>{title}</h1>
-      <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>
-        {lead} Sessions from the last 24 weeks; main lifts over 12 months.
-      </p>
+      <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>{lead}</p>
       {edits === "unavailable" && onChanged && (
         <div data-plan-retry="">
           <button type="button" onClick={onPlanRetry} aria-disabled={planRetrying}
@@ -268,7 +295,12 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
           <div role="status" aria-live="polite" style={statusLine}>{planRetryFailed ? NOT_LATEST : ""}</div>
         </div>
       )}
-      <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "6px 0 0" }}>
+
+      <ClientSummary signal={self ? null : signal} weeks={weeks} felt={felt} they={they} lifts={lifts} line={line} all={all}
+        todayIso={todayIso} under={under} waiting={waitingChanges} onPhone={onPhone}
+        name={name} run={runState} unsent={unsent} onRunSession={onRunSession}/>
+
+      <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "20px 0 0" }}>
         {since ? <>Sharing since <Nums text={msDayMonth(since)}/></> : null}
         {since && looked ? " · " : null}
         {looked ? <>You last looked <Nums text={looked}/></> : null}
@@ -317,13 +349,13 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
           </div>
 
           {/* 3b. Plan: only when the client has the trainer's changes on */}
-          {plan && <PlanSection plan={plan} name={name} sessions={sessions} todayIso={todayIso} unsent={unsent}
-            onChange={onChange} onFaceId={onFaceId} onChanged={onChanged} onRunSession={onRunSession}/>}
+          {plan && <PlanSection plan={plan} name={name} todayIso={todayIso} unsent={unsent}
+            onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>}
           {/* 3c. Changes not on: the sessions you ran, and nothing of the plan */}
           {!plan && !self && (ranRows.length > 0 || unsent) && (
             <div style={section} data-section="ran">
-              <SessionsYouRan ran={ranRows} name={name} budget={ran?.budget} programme={false} sessions={sessions} todayIso={todayIso}
-                unsent={unsent} onRunSession={onRunSession} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
+              <SessionsYouRan ran={ranRows} name={name} budget={ran?.budget} todayIso={todayIso}
+                unsent={unsent} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
             </div>
           )}
 
@@ -341,18 +373,6 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
         </div>
 
         <div>
-          {/* 5. How they felt: always shown */}
-          <div style={section} data-section="felt">
-            <div style={kicker}>How {they} felt</div>
-            {felt.total > 0 ? (
-              <div style={{ fontSize: 14, color: T.ink }}>
-                <Nums text={`Fresh ${felt.fresh} · Normal ${felt.normal} · Cooked ${felt.cooked}`}/>
-              </div>
-            ) : (
-              <div style={{ fontSize: 13, color: T.ink2 }}>Nothing logged in the last 24 weeks.</div>
-            )}
-          </div>
-
           {/* 6. Under minimum: only when flagged */}
           {under.length > 0 && (
             <div style={section} data-section="under">
@@ -366,6 +386,9 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
           {/* 7. Sessions: the 24-week detail tier, newest first */}
           <div style={section} data-section="sessions">
             <div style={kicker}>Sessions</div>
+            <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 4px" }}>
+              Sessions from the last <Nums text="24"/> weeks; main lifts over <Nums text="12"/> months.
+            </p>
             {newestFirst.length === 0 && (
               <div style={{ fontSize: 13, color: T.ink2 }}>No sessions in the last 24 weeks.</div>
             )}
@@ -452,6 +475,191 @@ function RhythmCell({ week, early }) {
         {note && <span style={{ display: "block", fontSize: 10, marginTop: figure ? 2 : 0 }}>{note}</span>}
       </span>
     </li>
+  );
+}
+
+// ── The summary: the client at a glance, then the one commit ───────────────
+
+/**
+ * The glance strip's parts, from the roster signal: "2 of 3 this week",
+ * "rhythm 86%", "last trained yesterday". Paused reads "Paused" and the
+ * last session only. None without a signal.
+ * @param {any} signal
+ * @returns {string[]}
+ */
+export function glanceParts(signal) {
+  if (!signal || typeof signal !== "object") return [];
+  const d = signal.lastTrainedDaysAgo;
+  const last = d == null ? "no sessions in the last year"
+    : d === 0 ? "trained today"
+    : d === 1 ? "last trained yesterday"
+    : `last trained ${d} days ago`;
+  if (signal.paused) return ["Paused", last];
+  const parts = [];
+  if (signal.weekPlanned > 0) parts.push(`${signal.weekDone} of ${signal.weekPlanned} this week`);
+  if (signal.rhythmPct != null) parts.push(`rhythm ${signal.rhythmPct}%`);
+  parts.push(last);
+  return parts;
+}
+
+/**
+ * A main lift's e1RM now against the first point in the last 28 days, as
+ * the Lab's strength row reads it: "+2.5", "-5" or "level".
+ * @param {Array<{ date: string, est1RM: number }>} series
+ * @param {string | undefined} todayIso
+ */
+export function liftDelta(series, todayIso) {
+  const cur = series[series.length - 1];
+  if (!cur) return null;
+  const cut = todayIso ? addDaysIso(todayIso, -28) : null;
+  const base = (cut && series.find((p) => p.date >= cut)) || series[0];
+  const delta = Math.round((cur.est1RM - base.est1RM) * 10) / 10;
+  return { now: cur.est1RM, delta, text: delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : "level" };
+}
+
+/** The readiness bands on the effort scale: cool, middle and hot. */
+const FELT_MARKS = /** @type {const} */ ([["fresh", "Fresh", 6], ["normal", "Normal", 8], ["cooked", "Cooked", 10]]);
+
+/** @type {import("react").CSSProperties} */
+const summaryRow = { marginTop: 14 };
+/** The commit stays a button's width beside the wide pane. */
+const RUN_MAX = 440;
+
+/**
+ * Above the sections: the glance strip (the roster signal), the latest eight
+ * weeks, how they felt as heat marks with their counts, a row per main lift,
+ * what is waiting, then the pane's one commit. Every part drops out when it
+ * has nothing to say; the commit shows only when a session can run.
+ */
+function ClientSummary({ signal, weeks, felt, they, lifts, line, all, todayIso, under, waiting, onPhone, name, run, unsent, onRunSession }) {
+  const glance = glanceParts(signal);
+  const recent = weeks.slice(-8);
+  const [choosing, setChoosing] = useState(false);
+  const canContinue = !!onRunSession && !!unsent;
+  const tags = [
+    waiting > 0 && { key: "changes", color: T.ink3, text: `${waiting} change${waiting === 1 ? "" : "s"} waiting` },
+    onPhone > 0 && { key: "phone", color: T.ink3, text: `${onPhone} session${onPhone === 1 ? "" : "s"} on their phone` },
+    under.length > 0 && { key: "under", color: T.under, text: "Under minimum" },
+  ].filter(Boolean);
+  const runLabel = (letter) => `Run ${sessionName(letter)}${name ? ` with ${name}` : ""}`;
+
+  return (
+    <div data-summary="">
+      {glance.length > 0 && (
+        <div data-glance="" style={{ marginTop: 16, borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}`, padding: "10px 0", fontSize: 13, color: T.ink2, display: "flex", gap: "4px 14px", flexWrap: "wrap" }}>
+          {glance.map((g) => <span key={g}><Nums text={g}/></span>)}
+        </div>
+      )}
+
+      {recent.length > 0 && (
+        <ol data-summary-rhythm="" aria-label="Weekly sessions against plan, the latest 8 weeks, oldest first"
+          style={{ ...summaryRow, display: "grid", gridTemplateColumns: "repeat(8, minmax(0, 1fr))", gap: 4, listStyle: "none", padding: 0, marginBottom: 0 }}>
+          {recent.map((w) => <RhythmCell key={w.mondayIso} week={w} early={false}/>)}
+        </ol>
+      )}
+
+      {felt.total > 0 && (
+        <div data-felt="" role="group" aria-label={`How ${they} felt, last 24 weeks`}
+          style={{ ...summaryRow, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 18px" }}>
+          {FELT_MARKS.map(([key, word, rpe]) => (
+            <span key={key} data-felt-band={key} style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: T.ink2 }}>
+              <span aria-hidden="true" style={{ width: 24, height: heatMarkHeight(rpe), background: heatForRpe(rpe), borderRadius: T.rMark, flexShrink: 0 }}/>
+              <span>{word} <span style={{ fontFamily: T.measured, color: T.ink }}>{felt[key]}</span></span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {lifts.length > 0 && (
+        <div data-summary-lifts="" style={summaryRow}>
+          <div style={{ fontSize: 12, color: T.ink2, paddingBottom: 6 }}>Main lifts · e1RM vs <Nums text="28"/> days</div>
+          {lifts.map((lift) => {
+            const series = (line[lift] && line[lift].length ? line[lift] : all[lift]) || [];
+            const d = liftDelta(series, todayIso);
+            if (!d) return null;
+            return (
+              <div key={lift} data-summary-lift={lift} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 15, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lift}</span>
+                <InkSpark values={series.slice(-8).map((p) => p.est1RM)}/>
+                <span style={{ fontFamily: T.measured, fontSize: 15, color: T.ink, flexShrink: 0 }}>{d.now}<span style={{ fontFamily: T.text, fontSize: 11, color: T.ink3 }}> kg</span></span>
+                <span style={{ width: 58, textAlign: "right", fontSize: 11, color: T.ink2, flexShrink: 0 }}>
+                  {d.delta !== 0 ? <><span style={{ fontFamily: T.measured }}>{d.text}</span> kg</> : "level"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {tags.length > 0 && (
+        <div data-pending="" style={{ ...summaryRow, display: "flex", flexWrap: "wrap", gap: "6px 16px" }}>
+          {tags.map((t) => (
+            <Tag key={t.key} color={t.color}><span data-tag={t.key}><Nums text={t.text}/></span></Tag>
+          ))}
+        </div>
+      )}
+
+      {canContinue ? (
+        <div data-run="" style={{ marginTop: 20 }}>
+          {/* The draft on this device opens as it is: its own letter. */}
+          <button type="button" onClick={() => onRunSession?.(unsent.letter)}
+            className="forge-press forge-lift" {...pressLiftHandlers} style={{ ...BTN.commit, maxWidth: RUN_MAX }}>
+            Continue
+          </button>
+        </div>
+      ) : run && (
+        <div data-run="" style={{ marginTop: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px 16px" }}>
+            <button type="button" onClick={() => { if (!run.full) onRunSession?.(run.next); }} disabled={run.full}
+              className="forge-press forge-lift" {...pressLiftHandlers}
+              style={{ ...BTN.commit, flex: "1 1 220px", width: "auto", minWidth: 0, maxWidth: RUN_MAX, padding: "0 16px", lineHeight: 1.2, opacity: run.full ? 0.6 : 1, cursor: run.full ? "default" : "pointer" }}>
+              {runLabel(run.next)}
+            </button>
+            {!run.full && (
+              <button type="button" onClick={() => setChoosing(true)} aria-haspopup="dialog"
+                style={{ ...BTN.text, color: T.ink2, minHeight: 44, flexShrink: 0 }}>
+                Different session
+              </button>
+            )}
+          </div>
+          {run.full && (
+            <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 6 }}>
+              <Nums text={`${run.used} of ${run.of} sessions this week`}/>
+              {run.freeAt ? <> · <Nums text={`more from ${msDayLabel(run.freeAt)}`}/></> : null}
+            </div>
+          )}
+        </div>
+      )}
+
+      {choosing && run && !run.full && (
+        <LetterSheet next={run.next} name={name} runLabel={runLabel}
+          onRun={(letter) => { setChoosing(false); onRunSession?.(letter); }} onClose={() => setChoosing(false)}/>
+      )}
+    </div>
+  );
+}
+
+/** The letter choice: the next in their rotation first, any of the three to run. */
+function LetterSheet({ next, name, runLabel, onRun, onClose }) {
+  const { containerRef, onKeyDown } = useInlineModalA11y(true, onClose);
+  const [pick, setPick] = useState(/** @type {"A" | "B" | "C"} */ (next));
+  return (
+    <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{ overscrollBehavior: "contain", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="trainer-letter-title" tabIndex={-1}
+        onClick={(e) => e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={sheetStyle}>
+        <div id="trainer-letter-title" style={{ fontSize: 18, fontWeight: 500, color: T.ink, lineHeight: 1.3, marginBottom: 6 }}>A different session</div>
+        <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5, margin: "0 0 14px" }}>{sessionName(next)} is next for {name || "them"}.</p>
+        <div role="radiogroup" aria-label="Session to run" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+          {LETTERS.map((l) => (
+            <button key={l} type="button" role="radio" aria-checked={pick === l} onClick={() => setPick(l)} style={{ ...BTN.chip(pick === l), minHeight: 44 }}>
+              {sessionName(l)}
+            </button>
+          ))}
+        </div>
+        <button type="button" onClick={() => onRun(pick)} style={{ ...BTN.commit, padding: "0 16px" }}>{runLabel(pick)}</button>
+        <button type="button" onClick={onClose} style={{ ...BTN.text, width: "100%", justifyContent: "center", padding: 12, marginTop: 4 }}>Cancel</button>
+      </div>
+    </div>
   );
 }
 
@@ -1072,15 +1280,14 @@ const NOT_LATEST = "Couldn't get their latest just now. Try again.";
  * The plan section and its sheets. Every request goes through onChange
  * (POST /api/trainer/change, the parent adds the grant and the date).
  * @param {{
- *   plan: any, name: string | null, sessions: any[], todayIso: string | undefined,
+ *   plan: any, name: string | null, todayIso: string | undefined,
  *   unsent?: { letter: "A" | "B" | "C", date: string | null, sets: number } | null,
  *   onChange?: (body: any) => Promise<{ status: number, body: any }>,
  *   onFaceId?: () => Promise<boolean>,
  *   onChanged?: () => Promise<unknown> | unknown,
- *   onRunSession?: (letter: "A" | "B" | "C") => void,
  * }} props
  */
-function PlanSection({ plan, name, sessions, todayIso, unsent = null, onChange, onFaceId, onChanged, onRunSession }) {
+function PlanSection({ plan, name, todayIso, unsent = null, onChange, onFaceId, onChanged }) {
   const lifts = useMemo(() => (Array.isArray(plan?.lifts) ? plan.lifts : []), [plan]);
   const mains = useMemo(() => (Array.isArray(plan?.mains) ? plan.mains : []), [plan]);
   // Sessions the trainer ran list apart from plan changes: they spend their own budget.
@@ -1190,8 +1397,8 @@ function PlanSection({ plan, name, sessions, todayIso, unsent = null, onChange, 
       </div>
       <div role="status" aria-live="polite" style={{ ...statusLine, marginTop: 8 }}>{status}</div>
 
-      <SessionsYouRan ran={ran} name={name} budget={budget.sessions} programme={!!plan?.programme} sessions={sessions} todayIso={todayIso}
-        unsent={unsent} onRunSession={onRunSession} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
+      <SessionsYouRan ran={ran} name={name} budget={budget.sessions} todayIso={todayIso}
+        unsent={unsent} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
 
       <YourChanges changes={changes} lifts={lifts} name={name} budget={budget}
         onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
@@ -1690,39 +1897,37 @@ function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChang
 }
 
 /**
+ * The letter next in their rotation, counting sessions sent and not yet
+ * decided, so a phone left in a locker doesn't get the same letter twice.
+ * @param {any[]} ran  the plan's session rows
+ * @param {any[]} sessions  their history
+ * @returns {"A" | "B" | "C"}
+ */
+export function nextLetter(ran, sessions) {
+  const pending = ran.filter((c) => c?.status === "waiting" || c?.status === "seen")
+    .map((c) => ({ id: String(c.id ?? ""), date: c.after?.date, scheduledLetter: c.after?.letter }));
+  return LETTERS[nextStrengthIdx([...sessions, ...pending])] ?? "A";
+}
+
+/**
  * Sessions the trainer ran with this client: the week's count against its
- * own cap, the way to run one (the letter, defaulting to the next in their
- * rotation), and each one sent, newest first, with what became of it.
+ * own cap and each one sent, newest first, with what became of it.
  * Withdraw shows only before it reaches their phone; after that the
- * decision is theirs. Running one is the parent's (onRunSession): nothing
- * here writes to the device. A session run on this device and not sent yet
- * (unsent) lists first, and the run control continues it, whatever letter
- * is picked; it is there even when no new one can start, so it can still be
- * sent or discarded.
+ * decision is theirs. A session run on this device and not sent yet
+ * (unsent) lists first. Running one is the summary's commit.
  * @param {{
  *   ran: any[], name: string | null, unsent?: { letter: "A" | "B" | "C", date: string | null, sets: number } | null,
  *   budget: { used?: number, of?: number, freeAt?: number | null } | null | undefined,
- *   programme: boolean, sessions: any[], todayIso: string | undefined,
- *   onRunSession?: (letter: "A" | "B" | "C") => void,
+ *   todayIso: string | undefined,
  *   onChange?: (body: any) => Promise<{ status: number, body: any }>,
  *   onFaceId?: () => Promise<boolean>,
  *   onChanged?: () => Promise<unknown> | unknown,
  * }} props
  */
-function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unsent = null, onRunSession, onChange, onFaceId, onChanged }) {
+function SessionsYouRan({ ran, name, budget, todayIso, unsent = null, onChange, onFaceId, onChanged }) {
   const used = Number.isFinite(budget?.used) ? Number(budget?.used) : 0;
   const of = Number.isFinite(budget?.of) ? Number(budget?.of) : SESSIONS_PER_WEEK;
   const full = used >= of;
-  // Next in their rotation, counting sessions sent and not yet decided, so a
-  // phone left in a locker doesn't get the same letter twice.
-  const next = useMemo(() => {
-    const pending = ran.filter((c) => c?.status === "waiting" || c?.status === "seen")
-      .map((c) => ({ id: String(c.id ?? ""), date: c.after?.date, scheduledLetter: c.after?.letter }));
-    return LETTERS[nextStrengthIdx([...sessions, ...pending])] ?? "A";
-  }, [ran, sessions]);
-  // The trainer's pick; until they pick, the next one (it follows a reload).
-  const [picked, setPick] = useState(/** @type {"A" | "B" | "C" | null} */ (null));
-  const pick = picked ?? next;
   const [shown, setShown] = useState(SETS_PAGE);
   // The viewer's now, for when a session on their phone will be kept: a
   // minute's tick, so a pane left open moves on past the five hours.
@@ -1740,9 +1945,6 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
       editsOff: `Changes are off for ${name || "them"} now, so it won't reach them.`,
     },
   });
-  const canRun = !!onRunSession && programme;
-  // The draft on this device opens as it is: its own letter, never the chips'.
-  const canContinue = !!onRunSession && !!unsent;
 
   return (
     <div data-section="coach" style={{ marginTop: 24 }}>
@@ -1751,38 +1953,6 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
         <Nums text={`${used} of ${of} this week`}/>
         {full && budget?.freeAt ? <> · <Nums text={`more from ${msDayLabel(budget.freeAt)}`}/></> : null}
       </div>
-
-      {canContinue ? (
-        <div data-run="" style={{ marginBottom: 12 }}>
-          <button type="button" onClick={() => onRunSession?.(unsent.letter)}
-            className="forge-press forge-tint" style={{ ...BTN.quiet, width: "100%" }}>
-            Continue
-          </button>
-          <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 6 }}>
-            Opens where you left it on this device.
-          </div>
-        </div>
-      ) : canRun && (
-        <div data-run="" style={{ marginBottom: 12 }}>
-          <div role="radiogroup" aria-label="Session to run" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {LETTERS.map((l) => (
-              <button key={l} type="button" role="radio" aria-checked={pick === l} onClick={() => setPick(l)} className="forge-press forge-tint" style={BTN.chip(pick === l)}>
-                {sessionName(l)}
-              </button>
-            ))}
-          </div>
-          <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 6 }}>
-            {sessionName(next)} is next for {name || "them"}.
-          </div>
-          <button type="button" onClick={() => { if (!full) onRunSession?.(pick); }} disabled={full}
-            className="forge-press forge-tint" style={{ ...BTN.quiet, width: "100%", marginTop: 12, opacity: full ? 0.6 : 1, cursor: full ? "default" : "pointer" }}>
-            {name ? `Run a session with ${name}` : "Run a session"}
-          </button>
-          <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 6 }}>
-            A session you haven&apos;t sent yet opens where you left it on this device.
-          </div>
-        </div>
-      )}
 
       {unsent && (
         <div data-unsent="" style={{ padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>
