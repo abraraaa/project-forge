@@ -222,7 +222,7 @@ describe("lift profiles: each listed lift reads its own profile; a reference lif
     { name: "Hang Power Clean",       loadType: "barbell",           weight: 50, reps: 3,  want: { primaryMuscle: "Power",      category: "power",              factor: 0.9 } },
     { name: "Weighted Dips",          loadType: "loaded_bodyweight", weight: 10, reps: 8,  want: { primaryMuscle: "Chest",      category: "upper_push",         factor: 1.0 } },
     { name: "Incline BB Press",       loadType: "barbell",           weight: 50, reps: 8,  want: { primaryMuscle: "Chest",      category: "upper_push",         factor: 0.8 } },
-    { name: "Reverse Hyperextension", loadType: "machine",           weight: 25, reps: 12, want: { primaryMuscle: "Glutes",     category: "accessory_compound", factor: 0.35 } },
+    { name: "Reverse Hyperextension", loadType: "machine",           weight: 25, reps: 12, want: { primaryMuscle: "Glutes",     category: "accessory_compound", factor: 0.25 } },
   ];
   const BW = 80;
   const REFERENCE = new Set(Object.values(REFERENCE_LIFTS).flat());

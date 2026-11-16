@@ -623,7 +623,7 @@ describe("a trainer's device derives no anchor", () => {
 });
 
 describe("the owner's cold starts, from only the sets that anchor them", () => {
-  const STARTS = { "DB Step-Up": 21, "Landmine Squeeze Press": 23.75, "Reverse Hyperextension": 50, "Seal Row": 23, "Leg Press Calf Raise": 55 };
+  const STARTS = { "DB Step-Up": 21, "Landmine Squeeze Press": 23.75, "Reverse Hyperextension": 35, "Seal Row": 23, "Leg Press Calf Raise": 55 };
   // Where the stored anchor started them.
   const OLD = { "DB Step-Up": 31, "Landmine Squeeze Press": 80, "Reverse Hyperextension": 50, "Seal Row": 35, "Leg Press Calf Raise": 55 };
 
@@ -635,7 +635,7 @@ describe("the owner's cold starts, from only the sets that anchor them", () => {
     });
   });
 
-  it("the never-logged lifts start at 21 each, 23.75, 50, 23 each and 55, none above its old start", () => {
+  it("the never-logged lifts start at 21 each, 23.75, 35, 23 each and 55, none above its old start", () => {
     const anchors = deriveMuscleAnchors(OWNER);
     const got = Object.fromEntries(OWNER_SLOTS.map(([slot, name]) => [name, planStartWeight(pool(slot, name), { working: {}, bodyweight: BODY, anchors })]));
     expect(got).toEqual(STARTS);

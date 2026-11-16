@@ -419,7 +419,8 @@ describe("resolvedProgramme behind describeProgramme (E8)", () => {
   // re-captured for the same re-pair and its Day A drop moving to the lunge +
   // landmine superset (ass1), so Strong's Day A keeps the hip extension + row.
   // Re-captured 2026-11-03: the pool edits of that day moved the solved weeks.
-  const BEFORE = { undefined: "26919eb0de00f0dc", Forged: "5e50870ffc27efc5", Strong: "174a668f7f22f8b6", Sculpt: "6bdea838c026083e" };
+  // Re-captured 2026-11-16 for library data only (factors and templates).
+  const BEFORE = { undefined: "e6be242006081715", Forged: "bb5f91fea49c12e4", Strong: "6b6681b6b9cb691f", Sculpt: "80bc8c8a4d23d693" };
   const fixtures = e8Fixtures();
   const texts = fixtures.map((f) => [runTool("programme", {}, f, now).text, runTool("current_loads", {}, f, now).text]);
 
