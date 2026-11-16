@@ -1462,12 +1462,12 @@ describe("the plan: what a coached session is composed from", () => {
     const meta = coachMeta("Forged");
     const pick = (slot, name) => ({ ...EXERCISE_POOLS[slot].pool.find((e) => e.name === name) });
     meta.programmeBlock.config = {
-      "ass1-A": pick("ass1-A", "DB Split Squat"), "ass1-B": pick("ass2-B", "Incline DB Row"),
+      "ass1-A": pick("ass1-A", "DB Split Squat"), "ass1-B": pick("ass2-B", "Meadows Row"),
       "ass2-A": pick("ass2-A", "Barbell Glute Bridge"), "ass2-B": pick("ass1-B", "Landmine Press"),
     };
     const plan = projectPlan({ meta, history: [] }, { todayIso: TODAY });
     expect(Object.fromEntries(Object.entries(plan.programme.config).map(([k, v]) => [k, v.name]))).toEqual({
-      "ass1-A": "DB Split Squat", "ass1-B": "Landmine Press", "ass2-A": "Barbell Glute Bridge", "ass2-B": "Incline DB Row",
+      "ass1-A": "DB Split Squat", "ass1-B": "Landmine Press", "ass2-A": "Barbell Glute Bridge", "ass2-B": "Meadows Row",
     });
     expect(serverSays(ipadRecord(plan, 0), meta)).toBe("ok");
   });

@@ -58,12 +58,9 @@ describe("the ceiling on the default config", () => {
 });
 
 describe("the ceiling covers the partner side of a superset", () => {
-  // mulberry32, as in tests/rotation-solver.test.js — seed 5 lands css1 on
+  // mulberry32, as in tests/rotation-solver.test.js. Seed 7 lands css1 on
   // Cable Lateral Raise (aligned, Side Delts) beside Barbell Hip Thrust,
-  // which feeds the Glutes the raise does not. (Seed 1 and Curtsy Lunge until
-  // the band lifts left the pools on 2026-11-03.) (The old case, Single-Leg RDL beside
-  // a landmine press, went when Day A was re-paired: rotation no longer puts
-  // the RDL's dumbbells beside the row.)
+  // which feeds the Glutes the raise does not. Re-picked when the pools change.
   function mulberry(seed) {
     let a = seed >>> 0;
     return () => {
@@ -75,7 +72,7 @@ describe("the ceiling covers the partner side of a superset", () => {
   }
 
   it("a bump that would carry the partner's Glutes over MRV is withheld", () => {
-    const { config } = solveRotation({ focus: "Sculpt", rng: mulberry(5), history: {} });
+    const { config } = solveRotation({ focus: "Sculpt", rng: mulberry(7), history: {} });
     expect(config["css1-B"].name).toBe("Cable Lateral Raise");
     expect(config["css1-A"].name).toBe("Barbell Hip Thrust");
     // Default anchors: the thrust's Glutes alone hold the raise's set back.

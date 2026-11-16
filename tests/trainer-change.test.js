@@ -211,7 +211,7 @@ describe("W1: no weight change where W is never read", () => {
     const assisted = { programmeBlock: { config: { "bss1-B": pool("bss1-B", "Assisted Pull-Up") } } };
     expect(check({ kind: "weight", lift: "Assisted Pull-Up", kg: 20 }, assisted)).toMatchObject({ ok: true, code: null });
     const toes = { programmeBlock: { config: { "afin-A": pool("afin-A", "Toes-to-Bar") } } };
-    expect(code(check({ kind: "weight", lift: "Toes-to-Bar", kg: 5 }, toes))).toBe("not_by_load");
+    expect(code(check({ kind: "weight", lift: "Toes-to-Bar", kg: 5 }, toes))).toBe("bodyweight");
   });
   it("a loaded bodyweight lift takes added kg in the same band", () => {
     // 10 kg on the belt: two steps would be +2.5, but +15% a week holds it to one rung.

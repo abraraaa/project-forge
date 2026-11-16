@@ -147,8 +147,8 @@ describe("Day A: lunge + landmine press, hip extension + row", () => {
   });
 
   it("the pools moved with their blocks; pool[0] is the default", () => {
-    expect(LANDMINES).toEqual(["Landmine Press", "Single-Arm Landmine Press", "Incline Landmine Press", "Landmine Squeeze Press", "Kneeling Landmine Press"]);
-    expect(ROWS).toEqual(["Chest-Supported DB Row", "Single-Arm DB Row", "Dumbbell Bent-Over Row", "TRX Row", "Meadows Row", "Incline DB Row", "Seal Row"]);
+    expect(LANDMINES).toEqual(["Landmine Press", "Landmine Squeeze Press", "Kneeling Landmine Press"]);
+    expect(ROWS).toEqual(["Chest-Supported DB Row", "Single-Arm DB Row", "Dumbbell Bent-Over Row", "TRX Row", "Meadows Row", "Seal Row"]);
     expect(EXERCISE_POOLS["ass1-B"]).toMatchObject({ grip: "supported", zone: "rack" });
     expect(EXERCISE_POOLS["ass2-B"]).toMatchObject({ grip: "hang", zone: "db" });
     for (const id of ["ass1", "ass2"]) {
@@ -159,18 +159,18 @@ describe("Day A: lunge + landmine press, hip extension + row", () => {
 });
 
 describe("stored Day A picks read in place (no write)", () => {
-  // The owner's picks, stored before the re-pair.
+  // Picks stored before the re-pair, shaped as the owner's were.
   const OWNER = Object.freeze({
     "ass1-A": pick("ass1-A", "DB Split Squat"),
-    "ass1-B": pick("ass2-B", "Incline DB Row"),
+    "ass1-B": pick("ass2-B", "Meadows Row"),
     "ass2-A": pick("ass2-A", "Barbell Glute Bridge"),
     "ass2-B": pick("ass1-B", "Landmine Press"),
   });
   const dayA = (config) => applyRotationToSession(SESSIONS[0], config).blocks
     .filter((b) => b.id === "ass1" || b.id === "ass2").map((b) => `${b.exA.name} ↔ ${b.exB.name}`);
 
-  it("the owner's picks read as DB Split Squat ↔ Landmine Press and Barbell Glute Bridge ↔ Incline DB Row", () => {
-    expect(dayA(OWNER)).toEqual(["DB Split Squat ↔ Landmine Press", "Barbell Glute Bridge ↔ Incline DB Row"]);
+  it("the owner's picks read as DB Split Squat ↔ Landmine Press and Barbell Glute Bridge ↔ Meadows Row", () => {
+    expect(dayA(OWNER)).toEqual(["DB Split Squat ↔ Landmine Press", "Barbell Glute Bridge ↔ Meadows Row"]);
   });
 
   it("ass1-B: a row stored there reads as ass2-B's pick", () => {
@@ -186,8 +186,8 @@ describe("stored Day A picks read in place (no write)", () => {
   });
 
   it("a slot's own valid pick wins over a moved one", () => {
-    const config = { "ass1-B": pick("ass1-B", "Incline Landmine Press"), "ass2-B": pick("ass1-B", "Landmine Press") };
-    expect(readRotationConfig(config)["ass1-B"].name).toBe("Incline Landmine Press");
+    const config = { "ass1-B": pick("ass1-B", "Landmine Squeeze Press"), "ass2-B": pick("ass1-B", "Landmine Press") };
+    expect(readRotationConfig(config)["ass1-B"].name).toBe("Landmine Squeeze Press");
   });
 
   it("unrelated picks are untouched, and a config with nothing to move is returned as is", () => {
@@ -211,30 +211,30 @@ describe("stored Day A picks read in place (no write)", () => {
   it("the next rotation remembers each pick under the slot it was trained in", () => {
     const history = pushHistoryBlock({}, OWNER);
     expect(recentNamesFor(history["ass1-B"])).toEqual(["Landmine Press"]);
-    expect(recentNamesFor(history["ass2-B"])).toEqual(["Incline DB Row"]);
+    expect(recentNamesFor(history["ass2-B"])).toEqual(["Meadows Row"]);
     expect(recentNamesFor(history["ass1-A"])).toEqual(["DB Split Squat"]);
     expect(recentNamesFor(history["ass2-A"])).toEqual(["Barbell Glute Bridge"]);
   });
 
   it("the rotation summary reports each pick under the slot it was trained in", () => {
-    const next = { ...OWNER, "ass1-B": pick("ass1-B", "Landmine Press"), "ass2-B": pick("ass2-B", "Incline DB Row") };
+    const next = { ...OWNER, "ass1-B": pick("ass1-B", "Landmine Press"), "ass2-B": pick("ass2-B", "Meadows Row") };
     expect(rotationDiff(OWNER, next)).toEqual([]);
   });
 });
 
 describe("Day A memory stored before the re-pair reads in place (no write)", () => {
-  // Three blocks remembered under the old keys: rows in ass1-B, landmine
+  // Blocks remembered under the old keys: rows in ass1-B, landmine
   // presses in ass2-B.
   const at = (month) => `2026-${month}-20T08:00:00.000Z`;
   const OLD = Object.freeze({
     "ass1-A": { "DB Split Squat": at("10") },
-    "ass1-B": { "Chest-Supported DB Row": at("10"), "Seal Row": at("09"), "Incline DB Row": at("08") },
-    "ass2-B": { "Landmine Press": at("10"), "Single-Arm Landmine Press": at("09"), "Incline Landmine Press": at("08") },
+    "ass1-B": { "Chest-Supported DB Row": at("10"), "Seal Row": at("09"), "Meadows Row": at("08") },
+    "ass2-B": { "Landmine Press": at("10"), "Landmine Squeeze Press": at("09") },
   });
   // The same memory under the slots as they are now.
   const NOW = Object.freeze({ ...OLD, "ass1-B": OLD["ass2-B"], "ass2-B": OLD["ass1-B"] });
-  const PRESSED = ["Landmine Press", "Single-Arm Landmine Press", "Incline Landmine Press"];
-  const ROWED = ["Chest-Supported DB Row", "Seal Row", "Incline DB Row"];
+  const PRESSED = ["Landmine Press", "Landmine Squeeze Press"];
+  const ROWED = ["Chest-Supported DB Row", "Seal Row", "Meadows Row"];
 
   it("each B slot reads the names its pool holds, from both keys", () => {
     const read = readRotationHistory(OLD);
@@ -258,12 +258,12 @@ describe("Day A memory stored before the re-pair reads in place (no write)", () 
   it("after the first rotation since, each slot remembers its own pool's newest picks", () => {
     // The block just trained held the old-key picks; pushHistoryBlock files
     // them under their slots and keeps two of each old entry beside them.
-    const trained = { "ass1-B": pick("ass2-B", "Incline DB Row"), "ass2-B": pick("ass1-B", "Landmine Press") };
+    const trained = { "ass1-B": pick("ass2-B", "Meadows Row"), "ass2-B": pick("ass1-B", "Landmine Press") };
     const history = pushHistoryBlock(OLD, trained, "2026-10-28T08:00:00.000Z");
     expect(recentNamesFor(history["ass1-B"])).toEqual(["Landmine Press", "Chest-Supported DB Row", "Seal Row"]);
     const read = readRotationHistory(history);
-    expect(recentNamesFor(read["ass1-B"])).toEqual(["Landmine Press", "Single-Arm Landmine Press"]);
-    expect(recentNamesFor(read["ass2-B"])).toEqual(["Incline DB Row", "Chest-Supported DB Row", "Seal Row"]);
+    expect(recentNamesFor(read["ass1-B"])).toEqual(["Landmine Press", "Landmine Squeeze Press"]);
+    expect(recentNamesFor(read["ass2-B"])).toEqual(["Meadows Row", "Chest-Supported DB Row", "Seal Row"]);
   });
 
   it("a memory with nothing to move is returned as is", () => {
@@ -302,13 +302,13 @@ describe("Strong drops Day A's lunge superset and keeps the row", () => {
 
   it("the owner's stored picks under Strong", () => {
     const OWNER = {
-      "ass1-A": pick("ass1-A", "DB Split Squat"), "ass1-B": pick("ass2-B", "Incline DB Row"),
+      "ass1-A": pick("ass1-A", "DB Split Squat"), "ass1-B": pick("ass2-B", "Meadows Row"),
       "ass2-A": pick("ass2-A", "Barbell Glute Bridge"), "ass2-B": pick("ass1-B", "Landmine Press"),
     };
     const day = applyFocusToSession(applyRotationToSession(SESSIONS[0], OWNER), "Strong", OWNER);
     expect(names(day)).toEqual([
       "Barbell Back Squat", "Barbell Bench Press",
-      "Barbell Glute Bridge ↔ Incline DB Row", "Hanging Leg Raise ↔ Standing Calf Raise",
+      "Barbell Glute Bridge ↔ Meadows Row", "Hanging Leg Raise ↔ Standing Calf Raise",
     ]);
   });
 
