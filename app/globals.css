@@ -344,9 +344,11 @@ html[data-mode="dark"] .forge-page {
 
 /* What the wide shape folds at each tier. Under 640 one column shows at a
    time (data-view on the shell: the roster, or the open client). What is
-   open inside the pane is its own state, not a tier's. 640-1023: rhythm
-   rows of 12, roster lines on one line. 1024+: rhythm rows of 8. A solo panel
-   (signed out, the upgrade) keeps the phone column at every width. */
+   open inside the pane is its own state, not a tier's. 640-1023: roster
+   lines on one line. Rhythm rows of 8, of 6 under 375 and of 12 from 840 to
+   1023: every cell keeps "paused" at 11px inside its border (a cell needs
+   about 37px). A solo panel (signed out, the upgrade) keeps the phone column
+   at every width. */
 .forge-wide-solo { grid-column: 1 / -1; width: 100%; max-width: 430px; margin: 0 auto; }
 /* The roster's back row spans the columns, so both start level under it. */
 .forge-wide-back { grid-column: 1 / -1; }
@@ -358,6 +360,12 @@ html[data-mode="dark"] .forge-page {
   margin: 0;
   padding: 0;
 }
+/* The summary's latest 8 weeks: one row, two of 4 under 375. */
+.forge-summary-rhythm { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+@media (max-width: 374.98px) {
+  .forge-wide-rhythm { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .forge-summary-rhythm { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 @media (max-width: 639.98px) {
   .forge-wide[data-view="roster"] > .forge-wide-main,
   .forge-wide[data-view="client"] > .forge-wide-roster,
@@ -367,13 +375,12 @@ html[data-mode="dark"] .forge-page {
 @media (min-width: 640px) {
   .forge-wide-roster { padding-right: 24px; }
   .forge-wide-n-only { display: none; }
+}
+@media (min-width: 840px) and (max-width: 1023.98px) {
   .forge-wide-rhythm { grid-template-columns: repeat(12, minmax(0, 1fr)); }
 }
 @media (min-width: 640px) and (max-width: 1023.98px) {
   .forge-wide-signal { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-}
-@media (min-width: 1024px) {
-  .forge-wide-rhythm { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 }
 
 /* ─── Modal scrims (Safari 26 chrome-safe) ─────────────────────────────────

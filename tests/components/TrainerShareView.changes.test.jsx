@@ -96,6 +96,27 @@ describe("the list", () => {
     expect(document.body.textContent).not.toContain("nonsense");
   });
 
+  it("shows the latest three sets, then Show earlier reveals the rest", async () => {
+    const id = (n) => "hws_" + String.fromCharCode(99 + n).repeat(26);
+    // Newest first, as the route sends them: five sets a day apart.
+    server.status = status({ changes: [0, 1, 2, 3, 4].map((n) => change({ id: `${id(n)}.0`, set: id(n), at: NOW - (n + 1) * DAY, after: 105 + n * 2.5 })) });
+    await renderView();
+    const labels = () => screen.getAllByRole("region", { name: /^Sent/ }).map((s) => s.getAttribute("aria-label"));
+    expect(labels()).toEqual(["Sent 13 Oct", "Sent 12 Oct", "Sent 11 Oct"]);
+    const more = screen.getByRole("button", { name: "Show earlier changes" });
+    expect(more.textContent).toBe("Show earlier");
+    fireEvent.click(more);
+    expect(labels()).toEqual(["Sent 13 Oct", "Sent 12 Oct", "Sent 11 Oct", "Sent 10 Oct", "Sent 9 Oct"]);
+    expect(screen.queryByRole("button", { name: "Show earlier changes" })).toBeNull();
+  });
+
+  it("three sets or fewer show without Show earlier", async () => {
+    server.status = status({ changes: [change(), change({ id: `${S2}.0`, set: S2, at: NOW - 2 * DAY })] });
+    await renderView();
+    expect(screen.getAllByRole("region", { name: /^Sent/ })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Show earlier changes" })).toBeNull();
+  });
+
   it("a warning reads in ink2, never the under-minimum steel", async () => {
     server.status = status({ changes: [change({ warnings: ["big_drop"], before: 120, after: 100, target: "Barbell Deadlift" })] });
     await renderView();

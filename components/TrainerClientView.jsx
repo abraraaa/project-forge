@@ -501,8 +501,8 @@ function RhythmCell({ week }) {
   const step = paused || ratio === 0 ? null : ratio >= 1 ? 3 : ratio >= 0.5 ? 2 : 1;
   // "so far" and "part paused" don't fit a narrow cell at 12px: they live
   // in the screen-reader line, and the cell shows the figure alone. A paused
-  // week's only mark is its word, set at 10px with no side padding so it
-  // stays inside the cell's border (12px "paused" is ~39px; a 390 cell ~35).
+  // week's only mark is its word, at 11px with no side padding (about 35px);
+  // the grids' columns keep every cell at least 37px (app/globals.css).
   const [figure, note] = paused ? ["", "paused"]
     : week.partial ? [`${week.done}/${week.plannedSoFar}`, ""]
     : [`${week.done}/${week.planned}`, ""];
@@ -519,7 +519,7 @@ function RhythmCell({ week }) {
       <span aria-hidden="true" style={{ display: "block" }}>
         {figure && <span style={{ display: "block", fontFamily: T.measured, fontSize: 12 }}>{figure}</span>}
         {/* Breaks between words only: "paused" never splits. */}
-        {note && <span style={{ display: "block", fontSize: 10, marginTop: figure ? 2 : 0 }}>{note}</span>}
+        {note && <span style={{ display: "block", fontSize: 11, marginTop: figure ? 2 : 0 }}>{note}</span>}
       </span>
     </li>
   );
@@ -599,8 +599,8 @@ function ClientSummary({ signal, weeks, felt, they, lifts, line, all, todayIso, 
       )}
 
       {recent.length > 0 && (
-        <ol data-summary-rhythm="" aria-label="Weekly sessions against plan, the latest 8 weeks, oldest first"
-          style={{ ...summaryRow, display: "grid", gridTemplateColumns: "repeat(8, minmax(0, 1fr))", gap: 4, listStyle: "none", padding: 0, marginBottom: 0 }}>
+        <ol data-summary-rhythm="" className="forge-summary-rhythm" aria-label="Weekly sessions against plan, the latest 8 weeks, oldest first"
+          style={{ ...summaryRow, display: "grid", gap: 4, listStyle: "none", padding: 0, marginBottom: 0 }}>
           {recent.map((w) => <RhythmCell key={w.mondayIso} week={w}/>)}
         </ol>
       )}
@@ -1176,13 +1176,13 @@ const NOT_APPLIED = {
   stopped: "Stopped before it arrived",
 };
 
-/** A change's status, in the trainer's words (lib/trainer-change.js changeStatus). */
+/** A change's status, in the trainer's words (lib/trainer-change.js changeStatus). A data line: parts join with a middle dot, no full stop. */
 export function trainerStatusText(c, name) {
   if (c?.kind === SESSION_KIND) return sessionStatusText(c, name);
   switch (c.status) {
     case "waiting": return c.from ? `From ${isoDayLabel(c.from)}` : `Waiting for ${name ? `${name}'s` : "their"} app`;
     case "in_force": return "In their plan";
-    case "trained_yours": return `Done at your number${c.date ? `, ${isoDayMonth(c.date)}` : ""}${c.cooked ? " · cooked day" : ""}`;
+    case "trained_yours": return `Done at your number${c.date ? ` · ${isoDayMonth(c.date)}` : ""}${c.cooked ? " · cooked day" : ""}`;
     case "changed_since": return "They changed it since";
     case "undone": return `Undone by ${name || "them"}`;
     case "withdrawn": return "Withdrawn";
@@ -1415,7 +1415,7 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
           {count ? <Nums text={`${count} change${count === 1 ? "" : "s"} · Review`}/> : "No changes yet"}
         </button>
         {count > 0 && (
-          <button type="button" onClick={() => { setDrafts(EMPTY_DRAFTS); setStatus("Cleared"); }} style={{ ...BTN.text, minHeight: 44, padding: "0 4px" }}>
+          <button type="button" onClick={() => { setDrafts(EMPTY_DRAFTS); setStatus("Cleared."); }} style={{ ...BTN.text, minHeight: 44, padding: "0 4px" }}>
             Clear
           </button>
         )}

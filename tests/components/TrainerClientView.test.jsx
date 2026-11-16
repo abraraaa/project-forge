@@ -233,6 +233,17 @@ describe("TrainerClientView", () => {
     expect(rhythmCellText({ ...w, planned: 1, plannedResting: 2, done: 1 })).toBe("1/1 · part paused");
   });
 
+  it("the rhythm grids keep a paused cell wide enough for 11px: 6 a row under 375, 12 only from 840, the summary two rows of 4 under 375", () => {
+    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../app/globals.css"), "utf8").replace(/\s+/g, " ");
+    expect(css).toContain("@media (max-width: 374.98px) { .forge-wide-rhythm { grid-template-columns: repeat(6, minmax(0, 1fr)); } .forge-summary-rhythm { grid-template-columns: repeat(4, minmax(0, 1fr)); } }");
+    expect(css).toContain("@media (min-width: 840px) and (max-width: 1023.98px) { .forge-wide-rhythm { grid-template-columns: repeat(12, minmax(0, 1fr)); } }");
+    expect(css.match(/repeat\(12,/g)).toHaveLength(1);
+    render(<TrainerClientView client={client} view={view()}/>);
+    const strip = /** @type {HTMLElement} */ (document.querySelector("[data-summary-rhythm]"));
+    expect(strip.className).toBe("forge-summary-rhythm");
+    expect(strip.style.gridTemplateColumns).toBe("");
+  });
+
   it("a rhythm cell shows only the paused note; so far and part paused are screen-reader words", () => {
     const meta = { breaks: [{ id: "b1", start: "2026-08-31", endedAt: "2026-09-14", reason: "injured" }] };
     render(<TrainerClientView client={client} view={projectForTrainer({ meta, history: history() }, { todayIso: MIDWEEK })}/>);
@@ -243,7 +254,7 @@ describe("TrainerClientView", () => {
     expect(new Set(notes.map((n) => n.textContent))).toEqual(new Set(["paused"]));
     expect(document.querySelector("ol.forge-wide-rhythm").textContent).toMatch(/\d+ of \d+ so far/);
     for (const n of notes) {
-      expect(n.style.fontSize).toBe("10px");
+      expect(n.style.fontSize).toBe("11px");
       expect(n.parentElement.parentElement.style.padding).toBe("8px 0px");
       expect(n.style.overflowWrap).toBe("");
       expect(n.getAttribute("style")).not.toMatch(/overflow-wrap|word-break/);
@@ -841,7 +852,7 @@ describe("TrainerClientView: the plan", () => {
     const row = (id) => box.querySelector(`[data-change="${id}"]`);
     expect(row("s1.0").textContent).toBe("Barbell Back Squat · 105 kg, was 102.5Waiting for Sam's appWithdraw");
     expect(row("s1.1").textContent).toBe("Barbell Bench Press · 8 reps, was 5In their planOutside the programme's usual reps for this lift.Withdraw");
-    expect(row("s0.0").textContent).toBe(`Barbell Bench Press · 60 kg, was 57.5Done at your number, ${isoDayMonthOf(ago(3))} · cooked day`);
+    expect(row("s0.0").textContent).toBe(`Barbell Bench Press · 60 kg, was 57.5Done at your number · ${isoDayMonthOf(ago(3))} · cooked day`);
     expect(row("s0.1").textContent).toBe("Main lift · Front Squat, was Barbell Back SquatThey trained before it arrived");
     expect(row("s0.2").textContent).toBe("Barbell Back Squat · 6 reps, was 5Withdrawn");
     expect(within(box.querySelector('[data-set="s1"]')).getByRole("button", { name: "Withdraw all" })).toBeTruthy();
@@ -1832,6 +1843,17 @@ describe("TrainerClientView: the house buttons", () => {
     draft();
     expect(tray().textContent).toBe("1 change · Review");
     expect(look(tray())).toEqual([true, "var(--ink)", "0.6"]);
+  });
+
+  it("plan status punctuation: a sentence ends with a full stop; a data line joins with a middle dot and takes none", () => {
+    render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()} onRunSession={vi.fn()}/>);
+    openLift("Barbell Back Squat"); tap("More weight"); tap("Add to changes");
+    const status = () => /** @type {HTMLElement} */ (tab("Plan").querySelector('[role="status"]')).textContent;
+    expect(status()).toBe("1 change to review");
+    fireEvent.click(within(tab("Plan")).getByRole("button", { name: "Clear" }));
+    expect(status()).toBe("Cleared.");
+    expect(trainerStatusText({ status: "trained_yours", date: "2026-10-12" }, "Sam")).toBe(`Done at your number · ${isoDayMonthOf("2026-10-12")}`);
+    expect(trainerStatusText({ status: "trained_yours", date: null, cooked: true }, "Sam")).toBe("Done at your number · cooked day");
   });
 
   it("validator warnings read in ink2; under minimum keeps the steel, on its flag and in the review", async () => {
