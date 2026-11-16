@@ -84,7 +84,6 @@ describe("PR C code shapes", () => {
 });
 
 describe("Rec 11b — auth tokens live in the DB (code shape)", () => {
-  const authServer = readFileSync(resolve(root, "lib/auth-server.js"), "utf8");
   const db = readFileSync(resolve(root, "lib/db.js"), "utf8");
 
   it("ONE mint path: every route mints through mintAuthToken", () => {

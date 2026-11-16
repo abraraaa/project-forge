@@ -3,6 +3,8 @@
 // ────────────────────────────────────────────────────────────────────────────
 // Print the weekly weighted-set volume the live programme delivers per muscle,
 // banded against MEV/MAV/MRV. Run: `npm run audit:volume`.
+// Default template week only: Forged focus, no rotation, no main-lift swaps.
+// A rotated week can differ; the solver's band checks cover those.
 // ────────────────────────────────────────────────────────────────────────────
 
 import { auditVolume } from "../lib/volume-audit.js";
@@ -20,7 +22,8 @@ const { perMuscle, flags } = auditVolume();
 const col = (s, w) => String(s).padEnd(w);
 const num = (s, w) => String(s).padStart(w);
 
-console.log("\nWeekly volume audit — default programme (A + B + C, 3 days/week)\n");
+console.log("\nWeekly volume audit — default programme (A + B + C, 3 days/week)");
+console.log("Default template week only: Forged focus, no rotation, no main-lift swaps.\n");
 console.log(
   col("Muscle", 14) + num("Sets", 6) + "   " +
   num("MEV", 4) + num("MAV", 5) + num("MRV", 5) + "   Band",

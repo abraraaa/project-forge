@@ -25,7 +25,6 @@ describe("image loading never gates on a truthy token (cookie-path bug, 2026-08-
   // GET); loading must proceed regardless of token.
   it("the window sync guards on the list, not the token", () => {
     const fn = pageSrc.slice(pageSrc.indexOf("const syncWindow = useCallback"));
-    const guard = fn.slice(0, fn.indexOf("\n"));
     expect(pageSrc).toMatch(/if \(!list\?\.length\) return;/);
     expect(fn.slice(0, 400)).not.toMatch(/if \(!tok \|\| !list/);
   });

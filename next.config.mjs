@@ -36,7 +36,7 @@ const nextConfig = {
     // a first paint on slow 4G.
     inlineCss: true,
   },
-  // ── THE FLIP (docs/heatwayve-flip.md, step 3) ────────────────────────────
+  // ── THE FLIP ─────────────────────────────────────────────────────────────
   // The 2026-07-22 freeze (heatwayve→theforged 307) is DELETED; the reverse
   // PERMANENT 301 below sends theforged.fit → heatwayve.app, with two
   // carve-outs that must keep serving on the OLD origin:

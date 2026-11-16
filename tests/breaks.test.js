@@ -86,7 +86,7 @@ describe("makeBreak", () => {
 
 // ── Store + sync ────────────────────────────────────────────────────────────
 describe("Bk store + sync round-trip", () => {
-  let Bk, getLocalProfile, backgroundSync;
+  let Bk, getLocalProfile;
   const PROFILE = "breaktest";
 
   beforeEach(async () => {

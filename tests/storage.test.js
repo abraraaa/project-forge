@@ -30,7 +30,6 @@ import { DeltaSync } from "../lib/sync-delta.js";
 
 const __dirname  = dirname(fileURLToPath(import.meta.url));
 const storageSrc = readFileSync(resolve(__dirname, "../lib/storage.js"), "utf8");
-const forgeAppSrc = readFileSync(resolve(__dirname, "../components/ForgeApp.jsx"), "utf8");
 
 // Authoritative inventory of every store that ships persistence. If you add
 // a store and don't update this list, the "no orphan stores" test fails —
@@ -62,12 +61,6 @@ const INVENTORY = {
 };
 
 const UTILITIES = new Set(["LS", "SyncStatus"]);
-
-// Stores whose data flows via blob meta (excludes H — own blob).
-const META_SYNCED = Object.entries(INVENTORY)
-  .filter(([, v]) => v.disposition === "synced")
-  .map(([k]) => k)
-  .filter((k) => k !== "H");
 
 describe("storage durability contract", () => {
   it("every exported store is accounted for in INVENTORY", () => {

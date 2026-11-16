@@ -50,7 +50,7 @@ describe("Strong sweep: every solved week in band and inside its CNS budget", ()
           for (const b of breaches(config, report.volume)) bad.push(`seed ${s}: ${b}`);
         }
         expect(bad).toEqual([]);
-      }, 20_000);
+      });
     }
   }
 });
