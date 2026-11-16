@@ -461,6 +461,17 @@ describe("trainerGate", () => {
     expect(await g.fail.json()).toEqual(SIGN_IN);
   });
 
+  it("fails closed with TRAINER_LIVE off: a signed-in trainer other than the admin gets the sign-in reply, the admin passes", async () => {
+    switchLive.value = false;
+    const nia = await trainerGate(gateReq(withCookie(session(N, { cred: "cN" }))));
+    expect(nia.fail.status).toBe(401);
+    expect(await nia.fail.json()).toEqual(SIGN_IN);
+    expect(nia.fail.headers.get("set-cookie")).toBeNull();
+    expect(await trainerGate(gateReq(withCookie(session(T))))).toMatchObject({ identity: { accountId: T } });
+    switchLive.value = true;
+    expect(await trainerGate(gateReq(withCookie(session(N, { cred: "cN" }))))).toMatchObject({ identity: { accountId: N } });
+  });
+
   it("never reads x-hw-auth: a valid session in the header, with no cookie, is refused", async () => {
     for (const t of [session(T), mint(T, { cred: "cT" })]) {
       expect((await trainerGate(gateReq({ "x-hw-auth": t }))).fail.status).toBe(401);

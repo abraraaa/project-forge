@@ -245,6 +245,12 @@ vi.mock("@neondatabase/serverless", () => ({
   },
 }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(() => null), rateLimitShared: vi.fn(async () => null) }));
+// TRAINER_LIVE as shipped unless a test closes it.
+const switchLive = vi.hoisted(() => ({ value: true }));
+vi.mock("@/lib/trainer-terms", async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, get TRAINER_LIVE() { return switchLive.value; } };
+});
 // Real implementations, wrapped so one test can make a store answer null or a
 // closed account (branches the fake tables can't reach).
 vi.mock("@/lib/trainer-changes-store", async (importOriginal) => {
@@ -354,6 +360,28 @@ beforeEach(() => {
 });
 afterEach(() => {
   delete process.env.DATABASE_URL;
+  delete process.env.ADMIN_ACCOUNT_ID;
+  switchLive.value = true;
+});
+
+describe("TRAINER_LIVE off: the change route fails closed", () => {
+  it("a signed-in trainer other than the admin gets the sign-in reply, dry run and send alike, nothing read or written", async () => {
+    switchLive.value = false;
+    for (const b of [body(S1, 105, { dryRun: true }), body()]) {
+      const res = await post(tia, b);
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: "Sign in to see your clients", requiresAuth: true });
+    }
+    expect(grantReads()).toEqual([]);
+    expect(dataReads()).toEqual([]);
+    expect(writes()).toEqual([]);
+  });
+
+  it("the admin still sends", async () => {
+    switchLive.value = false;
+    process.env.ADMIN_ACCOUNT_ID = T;
+    expect((await post(tia, body())).status).toBe(200);
+  });
 });
 
 describe("faceIdFresh", () => {

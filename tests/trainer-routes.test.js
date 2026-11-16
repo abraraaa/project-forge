@@ -150,6 +150,12 @@ vi.mock("@neondatabase/serverless", () => ({
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(() => null), rateLimitShared: vi.fn(async () => null) }));
 // The roster's log and read have their own fake and tests (tests/trainer-roster.test.js).
 vi.mock("@/lib/trainer-store", async (importOriginal) => ({ ...(await importOriginal()), dbRosterSignals: vi.fn(async () => null) }));
+// TRAINER_LIVE as shipped unless a test closes it.
+const switchLive = vi.hoisted(() => ({ value: true }));
+vi.mock("@/lib/trainer-terms", async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, get TRAINER_LIVE() { return switchLive.value; } };
+});
 
 const { POST: clientPOST } = await import("@/app/api/trainer/client/route");
 const { POST: clientsPOST } = await import("@/app/api/trainer/clients/route");
@@ -277,6 +283,32 @@ beforeEach(() => {
 });
 afterEach(() => {
   delete process.env.DATABASE_URL;
+  delete process.env.ADMIN_ACCOUNT_ID;
+  switchLive.value = true;
+});
+
+describe("TRAINER_LIVE off: the client and roster routes fail closed", () => {
+  const SIGN_IN = { error: "Sign in to see your clients", requiresAuth: true };
+  it("a signed-in trainer other than the admin gets the sign-in reply, nothing read or written", async () => {
+    switchLive.value = false;
+    const t = session(T, "cT");
+    for (const res of [await view(t, { ref: "hwg_cara", today: TODAY }), await view(t, { ref: "me" }), await list(t)]) {
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual(SIGN_IN);
+      expect(res.headers.get("set-cookie")).toBeNull();
+    }
+    expect(writes()).toEqual([]);
+    expect(dataReads()).toEqual([]);
+    expect(calls.filter((c) => /FROM oauth_grants\b/.test(c.q))).toEqual([]);
+  });
+
+  it("the admin still reaches both", async () => {
+    switchLive.value = false;
+    process.env.ADMIN_ACCOUNT_ID = T;
+    const t = session(T, "cT");
+    expect((await view(t, { ref: "hwg_cara", today: TODAY })).status).toBe(200);
+    expect((await list(t)).status).toBe(200);
+  });
 });
 
 describe("POST /api/trainer/client", () => {

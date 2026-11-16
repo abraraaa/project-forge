@@ -248,15 +248,23 @@ describe("POST /api/trainer/invite: gates", () => {
     expect((await post(t, { action: "cancel" })).status).toBe(200);
   });
 
-  it("with the switch closed, a trainer other than the admin gets 503, for issue and cancel alike", async () => {
+  it("with the switch closed, a signed-in trainer other than the admin gets the sign-in reply, for status, issue and cancel alike", async () => {
     switchLive.value = false;
     const t = session(N, "cN");
     for (const action of ["issue", "cancel"]) {
       const res = await post(t, { action });
-      expect(res.status).toBe(503);
-      expect(await res.json()).toEqual({ error: "Not open yet." });
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: "Sign in to see your clients", requiresAuth: true });
     }
+    const status = await get(t);
+    expect(status.status).toBe(401);
+    expect(await status.json()).toEqual({ error: "Sign in to see your clients", requiresAuth: true });
     expect(writes()).toEqual([]);
+  });
+
+  it("with the switch closed, the admin still issues", async () => {
+    switchLive.value = false;
+    expect((await post(session(T, "cT"), { action: "issue" })).status).toBe(200);
   });
 
   it("an unknown action is 400 and writes nothing", async () => {
