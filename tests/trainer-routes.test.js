@@ -113,6 +113,24 @@ vi.mock("@neondatabase/serverless", () => ({
           return { ...c, created_at: String(c.created_at), edits_live: live };
         });
     }
+    // The roster's waiting counts (dbRosterWaiting), by hand from its SQL.
+    if (/^\s*SELECT c\.grant_id AS ref,\s+count\(\*\) FILTER/.test(q)) {
+      const [refs, t, author, kinds] = v;
+      expect(author).toBe(t);
+      const out = new Map();
+      for (const c of db.changes) {
+        const g = db.grants.find((x) => x.id === c.grant_id);
+        if (!refs.includes(c.grant_id) || !g || g.kind !== "trainer" || g.trainer_account_id !== t || g.revoked_at != null) continue;
+        if (g.edits_at == null || !(g.edits_off_at == null || g.edits_off_at < g.edits_at)) continue;
+        if (c.author_account_id !== t || c.source !== "trainer" || c.status !== "sent" || !kinds.includes(c.kind)) continue;
+        if (c.outcome != null || c.undone_at != null) continue;
+        const row = out.get(c.grant_id) ?? { ref: c.grant_id, changes: 0, sessions: 0 };
+        if (c.kind !== "session" && c.created_at > g.edits_at) row.changes++;
+        if (c.kind === "session" && c.delivered_at != null) row.sessions++;
+        out.set(c.grant_id, row);
+      }
+      return [...out.values()];
+    }
     if (/^\s*SELECT count\(DISTINCT set_id\)::int AS used, min\(created_at\) AS oldest FROM trainer_changes/.test(q)) {
       const [ref, since] = v;
       // The plan-set count, or the session count apart.
@@ -746,8 +764,8 @@ describe("POST /api/trainer/clients: list", () => {
     expect(body).toEqual({
       me: { name: "Tia" },
       clients: [
-        { ref: "hwg_abe", name: "Abe", since: 1_790_100_000_000, lastLooked: 1_790_200_000_000, signal: null },
-        { ref: "hwg_cara", name: "Cara", since: 1_790_000_000_000, lastLooked: null, signal: null },
+        { ref: "hwg_abe", name: "Abe", since: 1_790_100_000_000, lastLooked: 1_790_200_000_000, signal: null, waiting: null },
+        { ref: "hwg_cara", name: "Cara", since: 1_790_000_000_000, lastLooked: null, signal: null, waiting: null },
       ],
     });
     expect(writes()).toEqual([]);
@@ -802,6 +820,114 @@ describe("POST /api/trainer/clients: the clients notice", () => {
     const res = await list(session(T, "cT"));
     expect(res.status).toBe(200);
     expect((await res.json()).clients.map((c) => c.ref)).toEqual(["hwg_abe", "hwg_cara"]);
+    expect(console.error).toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/trainer/clients: what is waiting on each client", () => {
+  const EDITS_AT = Date.now() - 3 * DAY;
+  const signalRow = { recent: [], lastDate: null, userWeek: null, breaks: null };
+  const logged = () => vi.mocked(dbRosterSignals).mockResolvedValueOnce(new Map([["hwg_abe", signalRow], ["hwg_cara", signalRow]]));
+  const waitingReads = () => calls.filter((c) => /^\s*SELECT c\.grant_id AS ref,/.test(c.q));
+  let n = 0;
+  const row = (over = {}) => {
+    const set = "hws_" + String(++n).padStart(26, "w");
+    return {
+      id: `${set}.00`, set_id: set, grant_id: "hwg_cara", profile: "sk-cara", client_account_id: C, author_account_id: T,
+      source: "trainer", status: "sent", kind: "weight", target: "Barbell Back Squat", old_value: 100, new_value: 105,
+      basis: null, warnings: null, effective_from: null, created_at: Date.now() - DAY, applied_at: null, outcome: null,
+      undone_at: null, undone_by: null, reverted_at: null, cleared_at: null, delivered_at: null, ...over,
+    };
+  };
+  const day = daysAgo(0);
+  const record = { id: `${day}T08:15:16.000Z`, date: day, session: "strength-b", scheduledLetter: "B",
+    blocks: [{ type: "main", exercises: [{ name: "Barbell Back Squat", sets: [{ weight: 100, reps: 5 }] }] }] };
+  const delivered = new Date(Date.now() - DAY / 24).toISOString();
+  const sessionRow = (over = {}) => row({ kind: "session", target: `${day}:B`, old_value: null, new_value: { record, drum: {} },
+    effective_from: day, ...over });
+  const at = new Date(Date.now() - DAY / 2).toISOString();
+  // One row per status the pane reads; only "waiting" changes and "seen" sessions count.
+  const everyStatus = () => [
+    row(), row(), // waiting
+    row({ undone_at: Date.now() - 1000, undone_by: "trainer" }), // withdrawn
+    row({ undone_at: Date.now() - 1000, undone_by: "client" }), // undone
+    row({ outcome: "applied", applied_at: at }), // landed
+    row({ outcome: "limits" }), // not applied
+    row({ created_at: EDITS_AT - DAY }), // sent before changes were last turned on: stopped
+    row({ author_account_id: N }), // another trainer's
+    row({ grant_id: "hwg_abe", profile: "sk-abe", client_account_id: A }), // the read-only client's
+    sessionRow({ delivered_at: delivered }), // seen: on their phone
+    sessionRow({ delivered_at: delivered, created_at: EDITS_AT - DAY }), // seen, sent before changes were last turned on
+    sessionRow(), // waiting: not on their phone yet
+    sessionRow({ delivered_at: delivered, outcome: "kept", applied_at: at }),
+    sessionRow({ delivered_at: delivered, outcome: "auto_kept", applied_at: at }),
+    sessionRow({ delivered_at: delivered, outcome: "discarded" }),
+    sessionRow({ delivered_at: delivered, outcome: "superseded" }),
+    sessionRow({ delivered_at: delivered, undone_at: Date.now() - 1000, undone_by: "trainer" }), // withdrawn
+  ];
+  const editsOn = (ref) => Object.assign(db.grants.find((g) => g.id === ref), { edits_at: EDITS_AT });
+
+  it("counts the changes the pane lists as waiting and the sessions on their phone, for each status, in one read", async () => {
+    editsOn("hwg_cara");
+    db.changes = everyStatus();
+    logged();
+    const body = await (await list(session(T, "cT"))).json();
+    expect(body.clients.map((c) => [c.ref, c.waiting])).toEqual([
+      ["hwg_abe", null], // read only: no waiting at all
+      ["hwg_cara", { changes: 2, sessions: 2 }],
+    ]);
+    const reads = waitingReads();
+    expect(reads).toHaveLength(1);
+    expect(reads[0].v.slice(0, 3)).toEqual([["hwg_cara"], T, T]);
+    // Read only: the one write is the clients notice mark.
+    expect(writes().map((w) => w.q.trim().split(/\s+/).slice(0, 3).join(" "))).toEqual(["INSERT INTO notice_marks"]);
+  });
+
+  it("the counts match what the client's pane shows the trainer", async () => {
+    editsOn("hwg_cara");
+    db.changes = everyStatus();
+    logged();
+    const t = session(T, "cT");
+    const { waiting } = (await (await list(t)).json()).clients.find((c) => c.ref === "hwg_cara");
+    const { plan } = (await (await view(t, { ref: "hwg_cara", today: TODAY })).json()).view;
+    expect(waiting).toEqual({
+      changes: plan.changes.filter((c) => c.kind !== "session" && c.status === "waiting").length,
+      sessions: plan.changes.filter((c) => c.kind === "session" && c.status === "seen").length,
+    });
+  });
+
+  it("a client with changes on and nothing waiting reads zeros, one read for every such client", async () => {
+    editsOn("hwg_cara");
+    editsOn("hwg_abe");
+    logged();
+    const body = await (await list(session(T, "cT"))).json();
+    expect(body.clients.map((c) => c.waiting)).toEqual([{ changes: 0, sessions: 0 }, { changes: 0, sessions: 0 }]);
+    expect(waitingReads()).toHaveLength(1);
+    expect([...waitingReads()[0].v[0]].sort()).toEqual(["hwg_abe", "hwg_cara"]);
+  });
+
+  it("read-only grants (never on, or turned off) report no waiting and run no read", async () => {
+    Object.assign(db.grants.find((g) => g.id === "hwg_cara"), { edits_at: EDITS_AT, edits_off_at: EDITS_AT + 1 });
+    db.changes = everyStatus();
+    logged();
+    const body = await (await list(session(T, "cT"))).json();
+    expect(body.clients.map((c) => c.waiting)).toEqual([null, null]);
+    expect(waitingReads()).toEqual([]);
+  });
+
+  it("nothing waiting is read before the roster look is logged, and a failed read never fails the list", async () => {
+    editsOn("hwg_cara");
+    db.changes = everyStatus();
+    const t = session(T, "cT");
+    expect((await (await list(t)).json()).clients.map((c) => c.waiting)).toEqual([null, null]); // the log failed
+    expect(waitingReads()).toEqual([]);
+    logged();
+    failOn = /^\s*SELECT c\.grant_id AS ref,/;
+    const res = await list(t);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.clients.map((c) => c.waiting)).toEqual([null, null]);
+    expect(body.clients.every((c) => c.signal !== null)).toBe(true);
     expect(console.error).toHaveBeenCalled();
   });
 });
