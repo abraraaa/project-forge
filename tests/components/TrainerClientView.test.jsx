@@ -9,7 +9,8 @@
 //   - a record from the trend tier (day 200) is never listed as a session;
 //   - set lines: "100 × 5, 5, 5 · RPE 8, 8, 8.5", RIR when RPE is missing,
 //     bodyweight as reps or proven added kg;
-//   - 24 rhythm cells, the oldest 16 behind the narrow disclosure;
+//   - 24 rhythm cells, all in the Sessions tab with no disclosure; the
+//     summary shows the latest 8;
 //   - a breather shows as paused, never its reason; a cell's note never
 //     breaks inside a word; a travel session says so, and "Away" never shows;
 //   - "Stop seeing" asks first, then hands back to the dashboard;
@@ -36,8 +37,9 @@
 //     from "Your changes", newest first, titled with the record's own day
 //     words (today, yesterday, a weekday), each status in the trainer's
 //     words, Withdraw only while it hasn't reached their phone; the week's
-//     count of 7; Run a session hands the parent the letter picked (the next
-//     in their rotation by default) and nothing else, and is off at the cap;
+//     count of 7; the summary's Run commit ("Run Strength X with <name>")
+//     hands the parent the next letter in their rotation and nothing else;
+//     Different session opens the letters in a sheet; both are off at the cap;
 //   - a session or ledger row a trainer logged reads Coached;
 //   - the house buttons: no press visual inside a bottom sheet, a press on
 //     the page's chips, letters and Withdraw, a chip on raised on the
