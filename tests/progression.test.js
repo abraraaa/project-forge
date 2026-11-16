@@ -2130,3 +2130,41 @@ describe("reconcile on an assisted lift honours the reach contract", () => {
     expect(out.currentWeight).toBe(15);
   });
 });
+
+describe("stored lift state follows the earned top set", () => {
+  const squat = (sets) => buildExercise({ sets, prescribed: { sets: 3, reps: 5, weight: 100 } });
+  const withMissedReach = () => squat([
+    buildSet({ weight: 100 }), buildSet({ weight: 100 }),
+    { ...buildSet({ weight: 110, reps: 3, rir: 0 }), est1rm: 120, reach: true },
+  ]);
+  const state = { currentWeight: 100, nextPrescribed: 100, sessionsCount: 4, history: [] };
+  const hold = { decision: "HOLD", weight: 100, rationale: [] };
+
+  it("reconcile keeps a loaded lift at 100 when the 110 reach missed", () => {
+    expect(reconcileLiftStateWithSession(state, withMissedReach()).currentWeight).toBe(100);
+  });
+
+  it("reconcile keeps a belted lift at its earned added load", () => {
+    const sets = [
+      { ...buildSet({ weight: 10 }), loadType: "loaded_bodyweight" },
+      { ...buildSet({ weight: 20, reps: 2 }), loadType: "loaded_bodyweight", reach: true },
+    ];
+    const ex = { ...buildExercise({ name: "Weighted Pull-Up", sets, prescribed: { sets: 2, reps: 5, weight: 10 } }), loadType: "loaded_bodyweight" };
+    expect(reconcileLiftStateWithSession({ currentWeight: 10 }, ex).currentWeight).toBe(10);
+  });
+
+  it("a reach that met its target still sets the weight", () => {
+    const ex = squat([buildSet({ weight: 100 }), { ...buildSet({ weight: 110, reps: 5 }), reach: true }]);
+    expect(reconcileLiftStateWithSession(state, ex).currentWeight).toBe(110);
+  });
+
+  it("finalise stores 100, and the pre-deload snapshot reads 100", () => {
+    const ex = withMissedReach();
+    ex.sets = ex.sets.map((s) => ({ est1rm: s.weight * 1.17, ...s }));
+    const session = buildSession({ exercises: [ex] });
+    const next = updateLiftStateFromSession(state, session, ex, hold);
+    expect(next.currentWeight).toBe(100);
+    const ts = startDeload({ lifts: { "Barbell Back Squat": next }, mesocycle: {} }, { type: "test" });
+    expect(ts.mesocycle.activeDeload.preDeloadWeights["Barbell Back Squat"]).toBe(100);
+  });
+});
