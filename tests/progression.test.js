@@ -1486,22 +1486,21 @@ describe("startingWeightForLift — BW% seeded starts", () => {
 // producing absurd cold-start recommendations.
 describe("coldStartFromAnchor — sanity cap", () => {
   it("clamps absurd anchor-derived cold-start to the category cap", () => {
-    // Construct a shoulder anchor that would translate to ~108kg cold-start
-    // for Leaning Lateral Raise (factor 0.12): 1200 × 0.75 × 0.12 = 108.
-    // The accessory_isolation cap is 25kg, so output should be ≤25.
+    // A shoulder anchor that would translate to 72kg cold-start for Prone Y
+    // Raise (factor 0.08): 1200 × 0.75 × 0.08 = 72. The accessory_isolation
+    // cap is 25kg, so output should be ≤25.
     const inflatedAnchor = { bestE1RM: 1200, bestE1RMLift: "Phantom", bestE1RMDate: null };
-    const out = coldStartFromAnchor("Leaning Lateral Raise", inflatedAnchor);
+    const out = coldStartFromAnchor("Prone Y Raise", inflatedAnchor);
     expect(out).toBeLessThanOrEqual(CATEGORY_COLD_START_MAX_KG.accessory_isolation);
     expect(out).toBeGreaterThan(0);
   });
 
   it("leaves a realistic cold-start untouched", () => {
-    // OHP at 60kg × 5 → e1RM 70 → for Leaning Lateral Raise (factor 0.12)
-    // gives 70 × 0.75 × 0.12 = 6.3 → rounds to 6.5kg. Well under cap.
+    // OHP at 60kg × 5 → e1RM 70 → for Rear Delt Fly (factor 0.25)
+    // gives 70 × 0.75 × 0.25 = 13.1 → rounds to 13kg. Under the cap.
     const realisticAnchor = { bestE1RM: 70, bestE1RMLift: "Barbell Overhead Press" };
-    const out = coldStartFromAnchor("Leaning Lateral Raise", realisticAnchor);
-    expect(out).toBeGreaterThanOrEqual(5);
-    expect(out).toBeLessThanOrEqual(10);
+    const out = coldStartFromAnchor("Rear Delt Fly", realisticAnchor);
+    expect(out).toBe(13);
   });
 
   it("returns null for BW-progression lifts (no anchor weight)", () => {
