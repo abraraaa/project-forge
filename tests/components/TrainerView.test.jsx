@@ -87,6 +87,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const today = todayLocalIso();
 const flush = () => act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); });
 
+/** Stop seeing a client: the Sharing row opens the sheet, whose first step offers it. */
+const stopSeeing = (name) => {
+  fireEvent.click(screen.getByRole("button", { name: /^Sharing/ }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByText(`Stop seeing ${name}'s training`));
+};
 const posts = (url) => server.calls.filter((c) => c.url === url && c.method === "POST");
 const gets = (url) => server.calls.filter((c) => c.url === url && c.method === "GET");
 /** The controls in `el` with a press visual: a sheet's take none (app/globals.css). */
@@ -507,7 +512,7 @@ describe("TrainerView: a client", () => {
     await mount();
     fireEvent.click(screen.getByText("Alex"));
     await flush();
-    fireEvent.click(screen.getByText("Stop seeing Alex's training"));
+    stopSeeing("Alex");
     await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Stop")); });
     await flush();
     expect(posts("/api/trainer/clients").filter((c) => "remove" in c.body).map((c) => c.body)).toEqual([{ remove: "hwg_a" }]);
@@ -532,7 +537,7 @@ describe("TrainerView: a client", () => {
     expect(screen.getByText("Bea", { selector: "h1" })).toBeTruthy();
     expect(screen.queryByText("Alex", { selector: "h1" })).toBeNull();
     expect(screen.getByText("Bea", { selector: "span" }).closest("button").getAttribute("aria-current")).toBe("true");
-    fireEvent.click(screen.getByText("Stop seeing Bea's training"));
+    stopSeeing("Bea");
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Stop seeing Bea's training?")).toBeTruthy();
     await act(async () => { fireEvent.click(within(dialog).getByText("Stop")); });
@@ -549,7 +554,7 @@ describe("TrainerView: a client", () => {
     await mount();
     fireEvent.click(screen.getByText("Alex"));
     await flush();
-    fireEvent.click(screen.getByText("Stop seeing Alex's training"));
+    stopSeeing("Alex");
     await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Stop")); });
     await flush();
     const dialog = screen.getByRole("dialog");
@@ -572,7 +577,7 @@ describe("TrainerView: a client", () => {
     const rest = SIGNALS.slice(1);
     server.routes["POST /api/trainer/clients"] = (b) => ("remove" in b ? { status: 200, body: { ok: true } }
       : { status: 200, body: { me: { name: "Coach Kim" }, clients: rest } });
-    fireEvent.click(screen.getByText("Stop seeing Alex's training"));
+    stopSeeing("Alex");
     await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Stop")); });
     await flush();
     await act(async () => { window.dispatchEvent(new PopStateEvent("popstate", { state: null })); });
