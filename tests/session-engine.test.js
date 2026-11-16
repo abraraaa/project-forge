@@ -14,7 +14,9 @@ import { dirname, resolve } from "node:path";
 import { H, TS } from "../lib/storage.js";
 import { applySessionToEngine } from "../lib/session-engine.js";
 import { coldStartFromAnchor, deriveMuscleAnchors } from "../lib/lift-translations.js";
-import { lastSessionNote } from "../lib/progression.js";
+import {
+  lastSessionNote, startDeload, completeDeload, computeDeloadPrescription, computeRecoveryPrescription, detectDeloadSignals,
+} from "../lib/progression.js";
 import { SESSION_COPY } from "../lib/session-copy.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -408,33 +410,47 @@ describe("a lift's first logged session progresses from what was lifted", () => 
     }
   });
 
-  it("a cooked first session holds 26 kg, never the anchor's 62.5", () => {
+  it("a cooked first session seeds 26 kg, never the anchor's 62.5, and prescribes nothing else", () => {
     const rec = { ...firstRecord("Face-Away Cable Row", "cable", 26, [10, 10, 10, 10], 1), readiness: "cooked" };
     const out = apply(rec, BACK);
     expect(out.wwUpdates["Face-Away Cable Row"]).toBe(26);
+    expect(out.wrUpdates).toEqual({});
     const lift = TS.get("p").lifts["Face-Away Cable Row"];
-    expect(lift.nextPrescribed).toBe(26);
-    expect(lift.history.at(-1).decision).toBe("HOLD");
+    expect(lift).toMatchObject({ currentWeight: 26, nextPrescribed: 26, sessionsCount: 1, currentRepRange: null });
+    expect(lift.history).toEqual([]);
   });
 
-  it("a second cooked session, still with no counted one, holds 26 kg, never the anchor's 62.5", () => {
+  it("a second cooked session, still with no counted one, keeps the 26 kg seed", () => {
     const cooked = (id) => ({ ...firstRecord("Face-Away Cable Row", "cable", 26, [10, 10, 10, 10], 1), id, date: id.slice(0, 10), readiness: "cooked" });
     expect(apply(cooked("2026-10-11T10:00:00.000Z"), BACK).wwUpdates["Face-Away Cable Row"]).toBe(26);
-    expect(TS.get("p").lifts["Face-Away Cable Row"].currentRepRange).toMatchObject({ reps: 10, sets: 4 });
     const out = apply(cooked("2026-10-13T10:00:00.000Z"), BACK);
-    expect(out.wwUpdates["Face-Away Cable Row"]).toBe(26);
+    expect(out.wwUpdates).not.toHaveProperty("Face-Away Cable Row");
     const lift = TS.get("p").lifts["Face-Away Cable Row"];
-    expect(lift.history.at(-1).decision).toBe("HOLD");
-    expect(lift.sessionsCount).toBe(2);
+    expect(lift).toMatchObject({ currentWeight: 26, nextPrescribed: 26, sessionsCount: 2, currentRepRange: null });
+    expect(lift.history).toEqual([]);
   });
 
+  // The seed is the lift's working weight from then on: a later cooked day
+  // carries it forward, lighter or heavier.
   for (const kg of [20, 30]) {
-    it(`a later cooked session, still with no counted one, takes its own top set: 26 then ${kg} holds ${kg}`, () => {
+    it(`a later cooked session, still with no counted one, keeps the seed: 26 then ${kg} keeps 26`, () => {
       const cooked = (id, weight) => ({ ...firstRecord("Face-Away Cable Row", "cable", weight, [10, 10, 10, 10], 1), id, date: id.slice(0, 10), readiness: "cooked" });
       expect(apply(cooked("2026-10-11T10:00:00.000Z", 26), BACK).wwUpdates["Face-Away Cable Row"]).toBe(26);
-      expect(apply(cooked("2026-10-13T10:00:00.000Z", kg), BACK).wwUpdates["Face-Away Cable Row"]).toBe(kg);
+      expect(apply(cooked("2026-10-13T10:00:00.000Z", kg), BACK).wwUpdates).not.toHaveProperty("Face-Away Cable Row");
+      expect(TS.get("p").lifts["Face-Away Cable Row"].currentWeight).toBe(26);
     });
   }
+
+  // The only evidence there is: a failed top set seeds as it was lifted.
+  it("a cooked first session seeds from its top set even when that set failed", () => {
+    const rec = { ...firstRecord("Face-Away Cable Row", "cable", 26, [10, 10, 10], 1), readiness: "cooked" };
+    const ex = rec.blocks[0].exercises[0];
+    ex.prescribed = { sets: 3, reps: 10 };
+    ex.sets[0] = { ...ex.sets[0], weight: 30, effectiveLoad: 30, reps: 4, rir: 0, est1rm: 34 };
+    const out = apply(rec, BACK);
+    expect(out.wwUpdates["Face-Away Cable Row"]).toBe(30);
+    expect(TS.get("p").lifts["Face-Away Cable Row"].currentWeight).toBe(30);
+  });
 
   it("a 6 kg Lu raise adds a kilo, never the anchor's 16", () => {
     const out = apply(firstRecord("DB Lu Raise", "per_db", 6, [10, 10, 10], 2), SHOULDERS);
@@ -577,10 +593,10 @@ describe("a lift's first logged session progresses from what was lifted", () => 
     expect(deriveMuscleAnchors(H.get("p")).Back).toEqual(backAnchor);
   });
 
-  it("a cooked first belted pull-up holds 10 kg", () => {
+  it("a cooked first belted pull-up seeds 10 kg", () => {
     const out = apply({ ...pullUp(10, 1), readiness: "cooked" }, BACK);
     expect(out.wwUpdates["Pull-Up"]).toBe(10);
-    expect(TS.get("p").lifts["Pull-Up"].history.at(-1).decision).toBe("HOLD");
+    expect(TS.get("p").lifts["Pull-Up"]).toMatchObject({ currentWeight: 10, sessionsCount: 1, history: [] });
   });
 
   // As their first sessions do, a lift moving by reps or by assistance keeps
@@ -592,10 +608,10 @@ describe("a lift's first logged session progresses from what was lifted", () => 
   });
 
   it("an assisted lift whose sessions are all cooked keeps the cold start", () => {
-    apply({ ...assisted("Assisted Pull-Up", 20, [8, 8, 8], 1), readiness: "cooked" }, BACK);
+    expect(apply({ ...assisted("Assisted Pull-Up", 20, [8, 8, 8], 1), readiness: "cooked" }, BACK).wwUpdates).toEqual({});
     const out = apply({ ...assisted("Assisted Pull-Up", 15, [8, 8, 8], 1, "2026-10-13T10:00:00.000Z"), readiness: "cooked" }, BACK);
-    expect(out.wwUpdates["Assisted Pull-Up"]).toBe(15);
-    expect(TS.get("p").lifts["Assisted Pull-Up"].history.at(-1).decision).toBe("COLD_START");
+    expect(out.wwUpdates).toEqual({});
+    expect(TS.get("p").lifts["Assisted Pull-Up"]).toMatchObject({ currentWeight: null, sessionsCount: 2, history: [] });
   });
 });
 
@@ -682,21 +698,29 @@ describe("a cooked session never moves an earned weight", () => {
     return apply(squat("2026-10-20T10:00:00.000Z", atKg(100, 3), 100));
   };
   const cookedAfterAdd = (sets) => apply(squat("2026-10-27T10:00:00.000Z", sets, 102.5, "cooked"));
+  // W is written by the counted session only; the cooked one writes nothing.
+  const leavesW = (out, lift = SQUAT) => {
+    expect(out.wwUpdates).not.toHaveProperty(lift);
+    expect(out.wrUpdates).not.toHaveProperty(lift);
+  };
 
   it("an add earned before a cooked session survives it", () => {
     expect(earnAdd().wwUpdates[SQUAT]).toBe(102.5);
-    expect(cookedAfterAdd(atKg(102.5, 2)).wwUpdates[SQUAT]).toBe(102.5);
-    expect(TS.get("p").lifts[SQUAT].history.at(-1).decision).toBe("HOLD");
+    leavesW(cookedAfterAdd(atKg(102.5, 2)));
+    expect(TS.get("p").lifts[SQUAT]).toMatchObject({ currentWeight: 100, nextPrescribed: 102.5 });
+    expect(TS.get("p").lifts[SQUAT].history.at(-1).decision).toBe("ADD");
   });
 
   it("a cooked session dialled down leaves W", () => {
     expect(earnAdd().wwUpdates[SQUAT]).toBe(102.5);
-    expect(cookedAfterAdd(atKg(97.5, 2)).wwUpdates[SQUAT]).toBe(102.5);
+    leavesW(cookedAfterAdd(atKg(97.5, 2)));
+    expect(TS.get("p").lifts[SQUAT]).toMatchObject({ currentWeight: 100, nextPrescribed: 102.5 });
   });
 
   it("a failed heavier single on a cooked day leaves W", () => {
     expect(earnAdd().wwUpdates[SQUAT]).toBe(102.5);
-    expect(cookedAfterAdd([set(107.5, 1, 0), set(95, 5, 2), set(95, 5, 2)]).wwUpdates[SQUAT]).toBe(102.5);
+    leavesW(cookedAfterAdd([set(107.5, 1, 0), set(95, 5, 2), set(95, 5, 2)]));
+    expect(TS.get("p").lifts[SQUAT]).toMatchObject({ currentWeight: 100, nextPrescribed: 102.5 });
   });
 
   it("an assisted cooked session with more help leaves the help in force", () => {
@@ -712,7 +736,8 @@ describe("a cooked session never moves an earned weight", () => {
     } } });
     expect(apply(pullUp("2026-10-20T10:00:00.000Z", [help(20, 6, 3), help(20, 6, 3), help(20, 6, 3)], 20)).wwUpdates[LIFT]).toBe(18.75);
     const cooked = pullUp("2026-10-27T10:00:00.000Z", [help(25, 6, 2), help(25, 6, 2), help(25, 6, 2)], 18.75, "cooked");
-    expect(apply(cooked).wwUpdates[LIFT]).toBe(18.75);
+    leavesW(apply(cooked), LIFT);
+    expect(TS.get("p").lifts[LIFT]).toMatchObject({ currentWeight: 20, nextPrescribed: 18.75 });
   });
 
   // A Pull-Up logs the added kg on every set; effectiveLoad carries bodyweight.
@@ -730,7 +755,8 @@ describe("a cooked session never moves an earned weight", () => {
   it("a belted Pull-Up keeps its added kg through an unbelted cooked day", () => {
     seedPullUp(10);
     expect(apply(pullUp("2026-10-20T10:00:00.000Z", 10, 3, 10)).wwUpdates[PULL_UP]).toBe(11.25);
-    expect(apply(pullUp("2026-10-27T10:00:00.000Z", 0, 2, 11.25, "cooked")).wwUpdates[PULL_UP]).toBe(11.25);
+    leavesW(apply(pullUp("2026-10-27T10:00:00.000Z", 0, 2, 11.25, "cooked")), PULL_UP);
+    expect(TS.get("p").lifts[PULL_UP]).toMatchObject({ currentWeight: 10, nextPrescribed: 11.25 });
   });
 
   // An unbelted counted session prescribes 0 kg; 5 kg was set outside the
@@ -740,7 +766,8 @@ describe("a cooked session never moves an earned weight", () => {
       localStorage.clear();
       seedPullUp(0);
       expect(apply(pullUp("2026-10-20T10:00:00.000Z", 0, 2, 0)).wwUpdates[PULL_UP]).toBe(0);
-      expect(apply(pullUp("2026-10-27T10:00:00.000Z", kg, 2, 5, "cooked")).wwUpdates[PULL_UP], `${kg} kg`).toBe(5);
+      leavesW(apply(pullUp("2026-10-27T10:00:00.000Z", kg, 2, 5, "cooked")), PULL_UP);
+      expect(TS.get("p").lifts[PULL_UP].currentWeight, `${kg} kg`).toBe(0);
     }
   });
 
@@ -793,7 +820,7 @@ describe("a cooked day holds the rep target on the rep paths", () => {
       const before = kept(lift("p"));
       expect(apply("p", rec(23, 11, "cooked")).wrUpdates).not.toHaveProperty(name);
       expect(kept(lift("p"))).toEqual(before);
-      expect(lift("p").history.at(-1).decision).toBe("HOLD");
+      expect(lift("p").history.at(-1).decision).toBe("ADD");
     });
 
     it(`${name}: the next counted session carries on as if the cooked day had not happened`, () => {
@@ -808,4 +835,119 @@ describe("a cooked day holds the rep target on the rep paths", () => {
       expect(kept(lift("b"))).toEqual(kept(lift("a")));
     });
   }
+});
+
+// A cooked record is history only: it joins history, records its e1RM and
+// counts as a session. Everything else in the lift state carries forward.
+describe("a cooked record is history only", () => {
+  beforeEach(() => localStorage.clear());
+  const apply = (rec) => { H.append("p", rec); return applySessionToEngine("p", rec); };
+  const COUNTED = new Set(["sessionsCount", "e1RM", "e1RMDate", "sessionsSinceLastPR"]);
+  const rest = (s) => Object.fromEntries(Object.entries(s).filter(([k]) => !COUNTED.has(k)));
+  const rec = (id, name, loadType, sets, readiness, prescribed) => ({
+    v: 2, id, date: id.slice(0, 10), readiness, session: "strength-b",
+    blocks: [{ id: "b1", type: "main", exercises: [{ name, loadType, ...(prescribed ? { prescribed } : {}), sets }] }],
+  });
+  const state = (over) => ({
+    sessionsCount: 6, sessionsSinceLastPR: 2, e1RM: 50, e1RMDate: "2026-10-01",
+    consecutiveAdds: 1, consecutiveHolds: 2, consecutiveLightMisses: 1, stallSignal: "mild",
+    nextPrescribed: null, currentRepRange: null,
+    history: [{ date: "2026-10-01", weight: null, reps: 8, rir: 2, est1rm: 50, decision: "HOLD", rationale: ["decision_reason=missed_light"] }],
+    ...over,
+  });
+  const paths = [
+    ["loaded", "Barbell Back Squat", "barbell",
+      state({ currentWeight: 100, nextPrescribed: 100, currentRepRange: { reps: 6, sets: 3, baseReps: 5 }, overrideStreak: 1, overrideFirstSets: [4], overrideTarget: 6 }),
+      [0, 1, 2].map(() => ({ weight: 120, reps: 6, rir: 3, loadType: "barbell", effectiveLoad: 120, est1rm: 144 })),
+      { sets: 3, reps: 6, weight: 100 }],
+    ["belted", "Pull-Up", "loaded_bodyweight",
+      state({ currentWeight: 10, nextPrescribed: 11.25, currentRepRange: { reps: 8, sets: 3, baseReps: 8 } }),
+      [0, 1, 2].map(() => ({ weight: 5, reps: 8, rir: 4, loadType: "loaded_bodyweight", bodyweightUsed: 80, effectiveLoad: 85, est1rm: 107.7 })),
+      { sets: 3, reps: 8, weight: 11.25 }],
+    ["bodyweight climb", "Pull-Up", "loaded_bodyweight",
+      state({ currentWeight: 0, nextPrescribed: 0, currentRepRange: { reps: 10, sets: 3, baseReps: 9, bwClimb: true } }),
+      [0, 1, 2].map(() => ({ weight: 0, reps: 11, rir: 3, loadType: "loaded_bodyweight", bodyweightUsed: 80, effectiveLoad: 80, est1rm: 109.3 })),
+      null],
+    ["assisted", "Assisted Pull-Up", "assisted_bodyweight",
+      state({ currentWeight: 20, nextPrescribed: 18.75, currentRepRange: { reps: 6, sets: 3, baseReps: 6 }, inRecoveryUntil: 2, preDeloadWeight: 20 }),
+      [0, 1, 2].map(() => ({ weight: 25, reps: 6, rir: 2, loadType: "assisted_bodyweight", bodyweightUsed: 80, effectiveLoad: 55, est1rm: 66 })),
+      { sets: 3, reps: 6, weight: 18.75 }],
+    ["rep-only", "Push-Up", "bodyweight",
+      state({ currentWeight: null, currentRepRange: { reps: 12, sets: 3, baseReps: 10, bwClimb: true } }),
+      [0, 1, 2].map(() => ({ weight: null, reps: 14, rir: 4, loadType: "bodyweight" })),
+      null],
+  ];
+  for (const [path, name, loadType, before, sets, prescribed] of paths) {
+    it(`${path}: only history, e1RM and the session count move`, () => {
+      TS.save("p", { lifts: { [name]: before } });
+      const out = apply(rec("2026-10-27T10:00:00.000Z", name, loadType, sets, "cooked", prescribed));
+      expect(out.wwUpdates).toEqual({});
+      expect(out.wrUpdates).toEqual({});
+      const after = TS.get("p").lifts[name];
+      expect(rest(after)).toEqual(rest(before));
+      expect(after.sessionsCount).toBe(7);
+      expect(H.get("p").map((r) => r.id)).toContain("2026-10-27T10:00:00.000Z");
+      const e1rm = sets[0].est1rm;
+      if (loadType !== "bodyweight" && e1rm > 50) {
+        expect(after).toMatchObject({ e1RM: e1rm, e1RMDate: "2026-10-27", sessionsSinceLastPR: 0 });
+      } else {
+        expect(after).toMatchObject({ e1RM: 50, e1RMDate: "2026-10-01", sessionsSinceLastPR: 3 });
+      }
+    });
+  }
+
+  it("a repaired rep target is not written on a cooked day", () => {
+    const [, name, loadType, before, sets, prescribed] = paths[0];
+    TS.save("p", { lifts: { [name]: before } });
+    H.append("p", rec("2026-10-27T10:00:00.000Z", name, loadType, sets, "cooked", prescribed));
+    const out = applySessionToEngine("p", rec("2026-10-27T10:00:00.000Z", name, loadType, sets, "cooked", prescribed), { repairedReps: { [name]: 5 } });
+    expect(out.wrUpdates).toEqual({});
+  });
+
+  const SQUAT = "Barbell Back Squat";
+  const squat = (id, kg, readiness = "normal", rir = 2) => rec(id, SQUAT, "barbell",
+    [0, 1, 2].map(() => ({ weight: kg, reps: 5, rir, loadType: "barbell", effectiveLoad: kg, est1rm: kg * (1 + 5 / 30) })),
+    readiness, { sets: 3, reps: 5, weight: kg });
+  const seedSquat = (currentWeight) => TS.save("p", { lifts: { [SQUAT]: {
+    currentWeight, nextPrescribed: currentWeight, sessionsCount: 8, consecutiveAdds: 0, consecutiveHolds: 0, consecutiveLightMisses: 0,
+    stallSignal: null, history: [], currentRepRange: { reps: 5, sets: 3, baseReps: 5 },
+  } } });
+
+  it("an earned 102.5 then a cooked day at 87.5 deloads at 65 and re-enters at 90", () => {
+    seedSquat(100);
+    expect(apply(squat("2026-10-20T10:00:00.000Z", 100, "normal", 3)).wwUpdates[SQUAT]).toBe(102.5);
+    apply(squat("2026-10-23T10:00:00.000Z", 87.5, "cooked"));
+    expect(TS.get("p").lifts[SQUAT].currentWeight).toBe(100);
+    const deloading = startDeload(TS.get("p"), { type: "stall_convergence", lifts: [SQUAT] });
+    expect(deloading.mesocycle.activeDeload.preDeloadWeights[SQUAT]).toBe(100);
+    expect(computeDeloadPrescription(SQUAT, deloading.lifts[SQUAT], { loadType: "barbell" }).weight).toBe(65);
+    const recovering = completeDeload(deloading);
+    expect(computeRecoveryPrescription(SQUAT, recovering.lifts[SQUAT], H.get("p"), { loadType: "barbell" }).weight).toBe(90);
+  });
+
+  it("a counted 100 then cooked days at 92.5 and 85 report no regression", () => {
+    seedSquat(100);
+    apply(squat("2026-10-20T10:00:00.000Z", 100));
+    apply(squat("2026-10-23T10:00:00.000Z", 92.5, "cooked"));
+    apply(squat("2026-10-26T10:00:00.000Z", 85, "cooked"));
+    expect(TS.get("p").lifts[SQUAT].history).toHaveLength(1);
+    expect(detectDeloadSignals(TS.get("p"), H.get("p")).map((s) => s.type)).not.toContain("regression");
+  });
+
+  it("a cooked day in recovery leaves the recovery count", () => {
+    seedSquat(100);
+    TS.save("p", { ...TS.get("p"), lifts: { [SQUAT]: { ...TS.get("p").lifts[SQUAT], inRecoveryUntil: 2, preDeloadWeight: 100 } } });
+    apply(squat("2026-10-23T10:00:00.000Z", 90, "cooked"));
+    expect(TS.get("p").lifts[SQUAT]).toMatchObject({ inRecoveryUntil: 2, currentWeight: 100 });
+  });
+
+  it("a cooked day in a deload writes no W and leaves the lift state", () => {
+    seedSquat(100);
+    TS.save("p", { ...TS.get("p"), mesocycle: { currentPhase: "deload", activeDeload: { startedAt: "2026-10-22T12:00:00.000Z", plannedDays: 7, preDeloadWeights: { [SQUAT]: 100 } } } });
+    const before = TS.get("p").lifts[SQUAT];
+    const out = apply(squat("2026-10-23T10:00:00.000Z", 60, "cooked"));
+    expect(out.stillInDeload).toBe(true);
+    expect(out.wwUpdates).toEqual({});
+    expect(rest(TS.get("p").lifts[SQUAT])).toEqual(rest(before));
+  });
 });

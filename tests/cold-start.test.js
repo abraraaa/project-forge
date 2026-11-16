@@ -296,10 +296,10 @@ describe("the engine's cold start lands on the implement's grid", () => {
     expect(TS.get("p").lifts["Incline DB Curl"].history.at(-1).decision).toBe("COLD_START");
   });
 
-  it("a cooked first session holds what was lifted, not the anchor", () => {
+  it("a cooked first session seeds what was lifted, not the anchor", () => {
     const out = firstSession(15, "cooked");
     expect(out.wwUpdates["Incline DB Curl"]).toBe(15);
-    expect(TS.get("p").lifts["Incline DB Curl"].history.at(-1).decision).toBe("HOLD");
+    expect(TS.get("p").lifts["Incline DB Curl"]).toMatchObject({ currentWeight: 15, history: [] });
   });
 });
 
