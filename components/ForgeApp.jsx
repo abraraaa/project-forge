@@ -994,9 +994,7 @@ export default function ForgeApp(){
     const updatedHistory = pushHistoryBlock(programmeBlock.history, oldConfig);
     // Volume-solving rotation (lib/rotation-solver.js): the focus's target
     // volume shape is the objective, bands are hard constraints, and the
-    // temperature keeps picks varied inside the good region. Replaces the
-    // legacy dice (rotateAccessories), which walked 65–71% of rotations out
-    // of at least one MEV..MRV band — measured, 2026-07-13 audit.
+    // temperature keeps picks varied inside the good region.
     const { config: newConfig, report } = solveRotation({
       history: updatedHistory,
       focus: userFocus,

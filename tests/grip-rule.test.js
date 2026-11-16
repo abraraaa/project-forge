@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import {
   SESSIONS, EXERCISE_POOLS, SS_PAIRS, PAIRED_SLOTS, GRIP_LOADED, ENTRY_GRIP,
-  gripRuleBreaches, gripAllows, assertGripRule, rotateAccessories,
+  gripRuleBreaches, gripAllows, assertGripRule,
   readRotationConfig, pruneStaleRotationConfig, applyRotationToSession,
   applyFocusToSession, rotationDiff, FOCUS_OPTIONS, pushHistoryBlock, recentNamesFor,
   STRONG_DROP_BLOCK_IDS, readRotationHistory,
@@ -126,21 +126,12 @@ describe("rotation never emits a pair of carry-or-hang lifts", () => {
     expect(seen.has("Single-Leg RDL")).toBe(false);
   });
 
-  it("rotateAccessories", () => {
-    for (let i = 0; i < 60; i++) {
-      const config = rotateAccessories({});
-      expect(loadedPairs(SESSIONS.map((s) => applyRotationToSession(s, config)))).toEqual([]);
-      expect(config["ass2-A"].name).not.toBe("Single-Leg RDL");
-    }
-  });
-
   it("a pool edit that pairs two carry-or-hang slots throws rather than rotate", () => {
     const slot = EXERCISE_POOLS["ass1-B"];
     const was = slot.grip;
     slot.grip = "hang";
     try {
       expect(() => solveRotation({ rng: seeded(1) })).toThrow(/Grip rule: ass1-A \+ ass1-B/);
-      expect(() => rotateAccessories({})).toThrow(/Grip rule/);
     } finally {
       slot.grip = was;
     }
