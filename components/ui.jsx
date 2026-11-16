@@ -8,7 +8,8 @@
 // Surface doctrine: measured data gets NO containers — numbers sit on the
 // ground between hairlines. Only documents and commit actions get surfaces.
 // Card is therefore for document-like content (session overviews, notes,
-// photographs), not a default wrapper for everything.
+// photographs, a trainer's client records), not a default wrapper for
+// everything.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";

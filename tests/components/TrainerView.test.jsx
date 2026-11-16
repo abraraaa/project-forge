@@ -50,6 +50,7 @@ import { projectForTrainer } from "../../lib/trainer-plan.js";
 import { todayLocalIso, addDaysIso } from "../../lib/dates.js";
 import { TRAINER_TERMS_VERSION } from "../../lib/trainer-terms.js";
 import { encodeQr, qrToSvgPath } from "../../lib/qr.js";
+import { T } from "../../lib/tokens.js";
 
 const { server, auth, panes, nav } = vi.hoisted(() => ({
   server: { calls: [], routes: {} },
@@ -272,24 +273,51 @@ describe("TrainerView: signing in", () => {
 });
 
 describe("TrainerView: the roster", () => {
-  it("renders each signal variant, numbers in the measured face", async () => {
+  it("renders each signal variant, numbers in the measured face; the rhythm moves to the card's mark", async () => {
     signedIn();
     await mount();
     const rows = [...screen.getByRole("list", { name: "Clients" }).querySelectorAll("li")].map((li) => li.textContent);
     expect(rows).toEqual([
-      "AlexLast trained 2 days ago · 2 of 3 this week · rhythm 86%",
-      "BeaTrained today · 1 of 3 this week · rhythm 100%",
-      "CalLast trained yesterday · 1 of 3 this week · rhythm 50%",
-      "DeeLast trained 9 days ago · paused",
-      "EveNo sessions in the last year",
+      "AlexLast trained 2 days ago · 2 of 3 this weekrhythm 86%",
+      "BeaTrained today · 1 of 3 this weekrhythm 100%",
+      "CalLast trained yesterday · 1 of 3 this weekrhythm 50%",
+      "DeePaused · last trained 9 days ago",
+      "EveNo sessions in the last yearrhythm 0%",
       "FinLast trained 4 days ago · 1 of 2 this week",
       "GusSharing since 3 Oct",
-      "Your clientLast trained 3 days ago · 2 of 3 this week · rhythm 75%",
+      "Your clientLast trained 3 days ago · 2 of 3 this weekrhythm 75%",
     ]);
-    const line = screen.getByTitle("Last trained 2 days ago · 2 of 3 this week · rhythm 86%");
+    const line = screen.getByTitle("Last trained 2 days ago · 2 of 3 this week");
     expect(line.className).toBe("forge-wide-signal");
-    expect([...line.querySelectorAll("span")].map((s) => s.textContent)).toEqual(["2", "2", "3", "86"]);
+    expect([...line.querySelectorAll("span")].map((s) => s.textContent)).toEqual(["2", "2", "3"]);
     expect(screen.getByText("Signed in as Coach Kim")).toBeTruthy();
+  });
+
+  it("each client is a card: the name at 17/500, a 24 px rhythm mark with its number printed in the measured face", async () => {
+    signedIn();
+    await mount();
+    const card = (name) => screen.getByText(name, { selector: "span" }).closest("li");
+    const name = screen.getByText("Alex", { selector: "span" });
+    expect([name.style.fontSize, name.style.fontWeight]).toEqual(["17px", "500"]);
+    const surface = card("Alex").firstElementChild;
+    expect(surface.style.background).toBe("var(--surface)");
+    expect(surface.style.boxShadow).toBe("var(--elev)");
+    expect(surface.style.overflow).toBe("hidden");
+    const markOf = (n) => card(n).querySelector("[data-rhythm-mark]");
+    const bar = (n) => markOf(n).firstElementChild;
+    const printed = (n) => markOf(n).lastElementChild;
+    for (const [n, pct, height, heat] of [["Alex", "86", "8px", 2], ["Bea", "100", "11px", 3], ["Cal", "50", "8px", 2]]) {
+      expect(bar(n).style.width, n).toBe("24px");
+      expect(bar(n).style.height, n).toBe(height);
+      expect(bar(n).style.background, n).toBe(`var(--heat-${heat})`);
+      expect(bar(n).getAttribute("aria-hidden"), n).toBe("true");
+      // Never colour alone: the number prints in the measured face, the unit beside it.
+      expect(printed(n).style.fontFamily, n).toBe(T.measured);
+      expect(printed(n).textContent, n).toBe(`rhythm ${pct}%`);
+    }
+    // Nothing logged: an outline with 0 printed. Paused, no plan, or no signal: no mark.
+    expect([bar("Eve").style.height, bar("Eve").style.background, printed("Eve").textContent]).toEqual(["3px", "transparent", "rhythm 0%"]);
+    for (const n of ["Dee", "Fin", "Gus"]) expect(markOf(n), n).toBeNull();
   });
 
   it("pins your own training first, a hairline apart from the clients", async () => {
@@ -338,14 +366,15 @@ describe("TrainerView: the roster", () => {
     expect(src).not.toMatch(/lib\/storage|getActive\(|localStorage|sessionStorage|indexedDB|dangerouslySetInnerHTML/);
   });
 
-  it("rows are hairlines with no radius and no resting fill; the open one carries aria-current and a 3 px ink mark", async () => {
+  it("your row is a hairline, clients are cards; none has a resting fill, the open one carries aria-current and a 3 px ink bar", async () => {
     signedIn();
     await mount();
     const row = (name) => screen.getByText(name, { selector: "span" }).closest("button");
     const mark = (btn) => [...btn.children].find((c) => c.style.width === "3px") ?? null;
+    expect(row("Your training").style.borderRadius).toBe("");
+    for (const name of ["Alex", "Bea"]) expect(row(name).style.borderRadius, name).toBe("12px");
     for (const name of ["Your training", "Alex", "Bea"]) {
       const btn = row(name);
-      expect(btn.style.borderRadius, name).toBe("");
       expect(btn.style.background, name).toBe("none");
       expect(btn.className, name).toBe("forge-press forge-tint");
       expect(btn.getAttribute("aria-current"), name).toBeNull();
@@ -355,7 +384,7 @@ describe("TrainerView: the roster", () => {
     await flush();
     const alex = row("Alex");
     expect(alex.getAttribute("aria-current")).toBe("true");
-    // Open is a mark, not a fill: --press is the press itself.
+    // Open is a bar, not a fill: --press is the press itself.
     expect(alex.style.background).toBe("none");
     expect(alex.style.position).toBe("relative");
     const bar = mark(alex);
@@ -364,6 +393,27 @@ describe("TrainerView: the roster", () => {
     expect([bar.style.left, bar.style.top, bar.style.bottom].map(parseFloat)).toEqual([0, 0, 0]);
     expect(mark(row("Bea"))).toBeNull();
     expect(mark(row("Your training"))).toBeNull();
+  });
+
+  it("a card's line by priority: paused, then what is waiting on them, then the signal", async () => {
+    const week = { lastTrainedDaysAgo: 2, weekDone: 2, weekPlanned: 3, rhythmPct: 86, paused: false };
+    const paused = { lastTrainedDaysAgo: 9, weekDone: 0, weekPlanned: 0, rhythmPct: null, paused: true };
+    signedIn([
+      { ref: "hwg_p", name: "Pat", since: Date.UTC(2026, 8, 1), lastLooked: null, signal: paused, waiting: { changes: 2, sessions: 1 } },
+      { ref: "hwg_q", name: "Quin", since: Date.UTC(2026, 8, 1), lastLooked: null, signal: week, waiting: { changes: 0, sessions: 1 } },
+      { ref: "hwg_r", name: "Ros", since: Date.UTC(2026, 8, 1), lastLooked: null, signal: week, waiting: { changes: 1, sessions: 0 } },
+      { ref: "hwg_s", name: "Sol", since: Date.UTC(2026, 8, 1), lastLooked: null, signal: week, waiting: { changes: 3, sessions: 2 } },
+      { ref: "hwg_t", name: "Tam", since: Date.UTC(2026, 8, 1), lastLooked: null, signal: week, waiting: { changes: 0, sessions: 0 } },
+      { ref: "hwg_u", name: "Una", since: Date.UTC(2026, 8, 1), lastLooked: null, signal: week, waiting: null },
+    ]);
+    await mount();
+    const lineOf = (n) => screen.getByText(n, { selector: "span" }).closest("button").querySelector(".forge-wide-signal").textContent;
+    expect(lineOf("Pat")).toBe("Paused · last trained 9 days ago");
+    expect(lineOf("Quin")).toBe("1 session on their phone · 2 of 3 this week");
+    expect(lineOf("Ros")).toBe("1 change waiting · 2 of 3 this week");
+    expect(lineOf("Sol")).toBe("2 sessions on their phone · 3 changes waiting · 2 of 3 this week");
+    expect(lineOf("Tam")).toBe("Last trained 2 days ago · 2 of 3 this week");
+    expect(lineOf("Una")).toBe("Last trained 2 days ago · 2 of 3 this week");
   });
 
   it("its buttons are the house set: commits 56 at 17/500, quiet 46 at 14/500 in ink, links 13 in ink3", async () => {

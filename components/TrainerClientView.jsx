@@ -46,7 +46,7 @@ const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct
 const BAND = { fresh: "Fresh", normal: "Normal", cooked: "Cooked" };
 
 /** Screen-reader-only text. */
-const SR_ONLY = /** @type {import("react").CSSProperties} */ ({
+export const SR_ONLY = /** @type {import("react").CSSProperties} */ ({
   position: "absolute", width: 1, height: 1, padding: 0, margin: -1,
   overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0,
 });
