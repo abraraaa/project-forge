@@ -39,11 +39,12 @@ describe("rp config — which rpId a NEW credential is minted under", () => {
     }
   });
 
-  it("never mints legacy, even from the old origin", () => {
+  it("never mints legacy, and never admits the old origin", () => {
     for (const host of [LEGACY_RP_ID, `www.${LEGACY_RP_ID}`]) {
       const c = rpConfigFromRequest(req(host));
       expect(c.rpId).toBe(NATIVE_RP_ID);
       expect(c.acceptedRpIds).toEqual([NATIVE_RP_ID]);
+      expect(c.expectedOrigin).toBe(`https://${NATIVE_RP_ID}`);
     }
   });
 

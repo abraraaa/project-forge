@@ -16,10 +16,11 @@ describe("rpConfigFromRequest", () => {
   // The rpId is native on every host. The security properties hold: localhost
   // stays isolated, preview hosts get no rpId of their own, and an
   // unrecognised host is handed an origin it cannot match.
-  it("the old origin keeps its exact origin but never its own rpId", () => {
-    expect(rpConfigFromRequest(reqWithHost("theforged.fit")))
-      .toEqual({ rpId: "heatwayve.app", expectedOrigin: "https://theforged.fit", acceptedRpIds: ["heatwayve.app"] });
-    expect(rpConfigFromRequest(reqWithHost("www.theforged.fit")).rpId).toBe("heatwayve.app");
+  it("the old origin is an unknown host: no origin or rpId of its own", () => {
+    for (const host of ["theforged.fit", "www.theforged.fit"]) {
+      expect(rpConfigFromRequest(reqWithHost(host)))
+        .toEqual({ rpId: "heatwayve.app", expectedOrigin: "https://heatwayve.app", acceptedRpIds: ["heatwayve.app"] });
+    }
   });
 
   it("localhost keeps its port and uses http", () => {
@@ -122,7 +123,7 @@ describe("stateless challenges (signed, no blob round-trip)", () => {
   });
 });
 
-describe("two origins, one rpId", () => {
+describe("native origins, one rpId", () => {
   const req = (host) => ({ headers: { get: (k) => (k === "host" ? host : null) } });
   it("a heatwayve origin now mints a NATIVE credential", () => {
     expect(rpConfigFromRequest(req("heatwayve.app")))
@@ -138,14 +139,5 @@ describe("two origins, one rpId", () => {
       expect(expectedOrigin).toBe("https://heatwayve.app");
       expect(expectedOrigin).not.toBe(`https://${host}`);
     }
-  });
-  it("the ROR well-known lists both domains and stays a static literal", async () => {
-    const { readFileSync } = await import("node:fs");
-    const { resolve, dirname } = await import("node:path");
-    const { fileURLToPath } = await import("node:url");
-    const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../app/.well-known/webauthn/route.js"), "utf8");
-    expect(src).toContain('"https://theforged.fit"');
-    expect(src).toContain('"https://heatwayve.app"');
-    expect(src).not.toMatch(/request|headers\.get/); // never reflected from input
   });
 });

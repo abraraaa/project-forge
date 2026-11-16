@@ -36,13 +36,6 @@ const nextConfig = {
     // a first paint on slow 4G.
     inlineCss: true,
   },
-  // theforged.fit answers with a permanent 301 to heatwayve.app, with two
-  // carve-outs that keep serving on the old origin:
-  //   /.well-known/webauthn: the Related Origin Requests document;
-  //   /api/auth/*: ceremonies started on the old origin, which declare rpId
-  //     heatwayve.app (credentials bound to the old rpId are refused).
-  // Everything else follows the redirect. Bonus TLDs (.fit/.space/.life to
-  // .app) stay at the Vercel dashboard.
   // Security headers. The CSP was previously three directives with no
   // default-src and no script-src, which meant scripts were entirely
   // unconstrained — it framed-blocked and nothing else (deep audit
@@ -89,8 +82,8 @@ const nextConfig = {
         { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         // Asserted in-repo rather than relying on an unstated platform
         // default. Two years, subdomains included. NOT preloaded: preload is
-        // effectively irreversible and both domains would need every
-        // subdomain HTTPS-only forever.
+        // effectively irreversible and would need every subdomain
+        // HTTPS-only forever.
         { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
       ],
     }, {
@@ -135,25 +128,6 @@ const nextConfig = {
         { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
       ],
     }];
-  },
-  async redirects() {
-    // Carve-out via negative lookahead in the path matcher: the auth routes
-    // and the Related Origin Requests document stay on the old origin.
-    const CARVE_OUT = "/:path((?!api/auth/|\\.well-known/webauthn).*)";
-    return [
-      {
-        source: CARVE_OUT,
-        has: [{ type: "host", value: "theforged.fit" }],
-        destination: "https://heatwayve.app/:path",
-        permanent: true, // 301 — the move is forever
-      },
-      {
-        source: CARVE_OUT,
-        has: [{ type: "host", value: "www.theforged.fit" }],
-        destination: "https://heatwayve.app/:path",
-        permanent: true,
-      },
-    ];
   },
 };
 
