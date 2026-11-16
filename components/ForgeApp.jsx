@@ -543,15 +543,9 @@ export default function ForgeApp(){
     // Hydrating React state from the localStorage cache on profile change —
     // synchronising with an external store, which is exactly what effects are
     // for. The seed runs once per profile, no cascade. Intentional.
-    // Sanity bound on workingWeights at load: only a corrupt value (not a
-    // finite number, or over WORKING_WEIGHT_MAX_KG) is rewritten; real
-    // progression past the cold-start cap is kept. See sanitiseWorkingWeights.
-    const rawWeights = local.meta.weights || {};
-    const sanitisedWeights = sanitiseWorkingWeights(rawWeights);
-    if (sanitisedWeights !== rawWeights) {
-      P.saveWeights(activeProfile, sanitisedWeights);
-    }
-    setWWState(sanitisedWeights);
+    // A corrupt stored weight reads as absent and is never written back
+    // here; see sanitiseWorkingWeights.
+    setWWState(sanitiseWorkingWeights(local.meta.weights || {}));
     setWRState(local.meta.reps || {});
     setStreak(local.meta.streak?.count || 0);
     setProgrammeBlock(local.meta.programmeBlock || PB.get());
@@ -592,18 +586,14 @@ export default function ForgeApp(){
     // BACKGROUND: Sync from blob, update state if remote has newer data
     const onSyncUpdate = ({ meta, history: remoteHistory }) => {
       if (cancelled) return;
-      // Blob had newer data — update React state silently (rewriting only a
-      // corrupt weight along the way; see sanitiseWorkingWeights).
+      // Blob had newer data — update React state silently (a corrupt weight
+      // reads as absent; see sanitiseWorkingWeights).
       // EVERY synced field refreshes, not just the original four: the old
       // callback ignored days/breaks/focus/schedule/bodyweight, so a pull
       // landed those in localStorage while the screen kept stale state
       // until remount (sync audit S4). persistToLocal already wrote LS —
       // this only mirrors the canonical local stores into React.
-      if (meta.weights) {
-        const sanitised = sanitiseWorkingWeights(meta.weights);
-        if (sanitised !== meta.weights) P.saveWeights(activeProfile, sanitised);
-        setWWState(sanitised);
-      }
+      if (meta.weights) setWWState(sanitiseWorkingWeights(meta.weights));
       if (meta.reps) setWRState(meta.reps);
       // PRESENCE-gated, not truthiness-gated (audit #54): a remote streak
       // reset to 0 and a legitimately-emptied history are real states that

@@ -251,6 +251,13 @@ describe("W3: no ceiling past the cold-start cap; MAX_KG is the app's sanity bou
     expect(sanitiseWorkingWeights({ [CALF]: MAX_KG })).toEqual({ [CALF]: MAX_KG });
   });
 
+  it("the trainer's basis reads a corrupt stored W as no W", () => {
+    for (const bad of [MAX_KG + 1, -1]) {
+      expect(liftBasis(CALF, { meta: { weights: { [CALF]: bad } }, history: [] }).w, `${bad}`).toBe(null);
+    }
+    expect(liftBasis(CALF, { meta: { weights: { [CALF]: 0 } }, history: [] }).w).toBe(0);
+  });
+
   it("a Standing Calf Raise anchored at 100 kg gives 70 to 110, and both ends are accepted", () => {
     const c = calfAt(100);
     const b = boundsFor(CALF, c);

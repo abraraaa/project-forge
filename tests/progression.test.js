@@ -1519,11 +1519,12 @@ describe("sanitiseWorkingWeights", () => {
     expect(sanitiseWorkingWeights(weights)).toBe(weights);
   });
 
-  it("rewrites a corrupt weight (over 400 kg) back to the cap", () => {
-    const weights = { "Leaning Lateral Raise": 1100 };
+  it("drops a corrupt weight (over 400 kg) so it reads as absent", () => {
+    const weights = { "Leaning Lateral Raise": 1100, "Barbell Back Squat": 100 };
     const out = sanitiseWorkingWeights(weights);
     expect(out).not.toBe(weights);
-    expect(out["Leaning Lateral Raise"]).toBe(CATEGORY_COLD_START_MAX_KG.accessory_isolation);
+    expect(out).toEqual({ "Barbell Back Squat": 100 });
+    expect(weights["Leaning Lateral Raise"]).toBe(1100);
   });
 
   it("leaves above-cap values alone (real progression)", () => {
@@ -1534,15 +1535,21 @@ describe("sanitiseWorkingWeights", () => {
     }
   });
 
-  it("ignores BW-progression lifts (no weight cap applies)", () => {
-    const weights = { "Pike Push-Up": 999 };  // nonsensical but BW has no cap
-    expect(sanitiseWorkingWeights(weights)).toBe(weights);
+  it("drops a corrupt weight on a bodyweight-progression lift too", () => {
+    expect(sanitiseWorkingWeights({ "Pike Push-Up": 999 })).toEqual({});
   });
 
-  it("ignores non-numeric entries; a non-finite number goes to the cap", () => {
+  it("ignores non-numeric entries; a non-finite or negative number is dropped", () => {
     const weights = { "Bench Press": null, "Lateral Raise": "twenty" };
     expect(sanitiseWorkingWeights(weights)).toBe(weights);
-    expect(sanitiseWorkingWeights({ "Lateral Raise": Infinity })).toEqual({ "Lateral Raise": CATEGORY_COLD_START_MAX_KG.accessory_isolation });
+    for (const bad of [Infinity, NaN, -1, -0.5]) {
+      expect(sanitiseWorkingWeights({ "Lateral Raise": bad }), `${bad}`).toEqual({});
+    }
+  });
+
+  it("keeps 0, 400 and a real 300 kg", () => {
+    const weights = { "Assisted Pull-Up": 0, "Lateral Raise": 0, "Barbell Back Squat": 400, "Hex Bar Deadlift": 300 };
+    expect(sanitiseWorkingWeights(weights)).toBe(weights);
   });
 
   it("handles null/empty input safely", () => {

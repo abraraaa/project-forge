@@ -102,6 +102,10 @@ describe("tools", () => {
       "- Plank: bodyweight × 45s",
     ]);
   });
+  it("current_loads reads a corrupt stored W as no W", () => {
+    const d = { meta: { weights: { "Barbell Bench Press": 9000, "Barbell Hip Thrust": -5, "Hex Bar Deadlift": 300 } }, history: [] };
+    expect(runTool("current_loads", {}, d, now).text.split("\n")).toEqual(["- Hex Bar Deadlift: 300 kg"]);
+  });
   it("current_loads: pure-BW lifts show the added load, never a phantom W", () => {
     // "Barbell Glute Bridge" name-matches the bodyweight pattern but is a
     // barbell lift; "45-Degree Hip Extension" is bodyweight but unmatched.
