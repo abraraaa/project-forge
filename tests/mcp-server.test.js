@@ -420,8 +420,8 @@ describe("resolvedProgramme behind describeProgramme (E8)", () => {
   // landmine superset (ass1), so Strong's Day A keeps the hip extension + row.
   // Re-captured 2026-11-03: the pool edits of that day moved the solved weeks.
   // Re-captured 2026-11-16 for library data only (factors, templates, the
-  // Triceps reference and template starts).
-  const BEFORE = { undefined: "54777ef0b2dc2187", Forged: "e9ed5e95091332ec", Strong: "744ab02aadec61da", Sculpt: "5eb290a9d8326990" };
+  // Triceps reference, template starts and the machine isolation ceiling).
+  const BEFORE = { undefined: "93a6b07c9ddd40b8", Forged: "7d2b6435fab04334", Strong: "959bbd7c1b8bf828", Sculpt: "cd90ed724dd138c5" };
   const fixtures = e8Fixtures();
   const texts = fixtures.map((f) => [runTool("programme", {}, f, now).text, runTool("current_loads", {}, f, now).text]);
 

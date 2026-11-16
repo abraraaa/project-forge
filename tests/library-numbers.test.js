@@ -1,7 +1,7 @@
 // Library numbers: lift factors, slot templates and the cold-start ceilings
 // that size a first suggestion for a lift the lifter has never logged.
 import { describe, it, expect } from "vitest";
-import { getLiftProfile, coldStartFromAnchor, startWeightFor, deriveMuscleAnchors, snapToImplement, REFERENCE_LIFTS, __test__ } from "../lib/lift-translations.js";
+import { getLiftProfile, coldStartFromAnchor, startWeightFor, deriveMuscleAnchors, snapToImplement, sanitiseWorkingWeights, REFERENCE_LIFTS, CATEGORY_COLD_START_MAX_KG, __test__ } from "../lib/lift-translations.js";
 import { computeNextPrescription } from "../lib/progression.js";
 import { SESSIONS, EXERCISE_POOLS, SWAP_DB } from "../lib/programme.js";
 
@@ -172,5 +172,59 @@ describe("Triceps: Tricep Pushdown is the reference lift", () => {
       const t = template(name);
       expect(startWeightFor({ name, weight: t }, { anchors }), name).toBe(t);
     }
+  });
+});
+
+describe("cold-start ceilings: machine isolation lifts start up to 120 kg", () => {
+  /** The load types the programme gives a lift, from its sessions and pools. */
+  const loadTypes = (name) => {
+    const out = new Set();
+    for (const s of SESSIONS) for (const b of s.blocks || []) for (const v of Object.values(b)) if (v && typeof v === "object" && v.name === name && v.loadType) out.add(v.loadType);
+    for (const slot of Object.values(EXERCISE_POOLS)) for (const ex of slot.pool) if (ex.name === name && ex.loadType) out.add(ex.loadType);
+    return out;
+  };
+
+  it("the table", () => {
+    expect(CATEGORY_COLD_START_MAX_KG).toEqual({
+      lower_compound: 250, upper_push: 120, upper_pull: 120, power: 150,
+      accessory_compound: 80, accessory_arm: 40, accessory_isolation: 25, machine_isolation: 120,
+      bw_progression: 0,
+    });
+  });
+
+  it("every machine isolation lift in the catalogue is marked machine, and only those", () => {
+    const iso = catalogue().filter((n) => Object.hasOwn(__test__.PROFILES, n) && getLiftProfile(n).category === "accessory_isolation");
+    const onMachine = iso.filter((n) => loadTypes(n).has("machine")).sort();
+    expect(onMachine).toEqual(["Leg Extension", "Leg Press Calf Raise", "Machine Hamstring Curl", "Pec Deck", "Reverse Pec Deck", "Seated Calf Raise", "Seated Leg Curl", "Standing Calf Raise"]);
+    for (const n of onMachine) expect(getLiftProfile(n).machine, n).toBe(true);
+    const marked = Object.keys(__test__.PROFILES).filter((n) => getLiftProfile(n).machine === true).sort();
+    expect(marked).toEqual(onMachine);
+  });
+
+  it("Leg Extension and Pec Deck start above 25, up to 120", () => {
+    expect(coldStartFromAnchor("Leg Extension", { bestE1RM: 151.7 })).toBe(34);
+    expect(coldStartFromAnchor("Leg Extension", HUGE)).toBe(120);
+    expect(coldStartFromAnchor("Pec Deck", HUGE)).toBe(120);
+    expect(coldStartFromAnchor("Reverse Pec Deck", { bestE1RM: 71.5 })).toBe(32);
+  });
+
+  it("free-weight and cable isolation lifts keep 25", () => {
+    for (const name of ["Face Pull", "Rear Delt Fly", "Cable Chest Fly", "DB Chest Fly", "Cable Rear Delt Fly", "Prone Y Raise"]) {
+      expect(coldStartFromAnchor(name, HUGE), name).toBe(25);
+    }
+  });
+
+  it("Leg Press stays a lower compound under 250", () => {
+    expect(getLiftProfile("Leg Press").category).toBe("lower_compound");
+    expect(coldStartFromAnchor("Leg Press", HUGE)).toBe(250);
+  });
+
+  it("the progression category is unchanged, and nothing caps an earned working weight", () => {
+    for (const n of ["Leg Extension", "Pec Deck", "Reverse Pec Deck", "Machine Hamstring Curl", "Seated Leg Curl"]) {
+      expect(getLiftProfile(n).category, n).toBe("accessory_isolation");
+    }
+    expect(startWeightFor({ name: "Leg Extension", weight: 45 }, { working: { "Leg Extension": 150 }, anchors: { Quadriceps: HUGE } })).toBe(150);
+    const ww = { "Leg Extension": 150, "Pec Deck": 130 };
+    expect(sanitiseWorkingWeights(ww)).toBe(ww);
   });
 });
