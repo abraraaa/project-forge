@@ -224,7 +224,7 @@ export default function PerformanceLab({ history, onBack, resting = false, break
             )}
             {mainLifts.map(lift => (
               <StrengthRow key={lift} lift={lift} series={trends[lift] || []}
-                best={bests[lift]} todayIso={todayIso}
+                best={bests[lift]?.loadType === "assisted_bodyweight" ? undefined : bests[lift]} todayIso={todayIso}
                 expanded={expandedLift === lift}
                 onToggle={() => setExpandedLift(expandedLift === lift ? null : lift)}/>
             ))}
@@ -421,7 +421,8 @@ function StrengthRow({ lift, series, best = null, todayIso, expanded = false, on
 // ─── Personal best — one quiet line under the trend ──────────────────────────
 // The chart tells the recent story; this line keeps the all-time best in
 // view (liftBests reads all history, not the trend window). Stated, not
-// celebrated: a best inside the last four weeks just says so.
+// celebrated: a best inside the last four weeks just says so. An assisted
+// lift's best has no line yet: its wording is not settled.
 const bestDay = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
 function BestLine({ best, todayIso }) {
   const d = parseLocalDate(best.date);

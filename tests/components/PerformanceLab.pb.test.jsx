@@ -102,6 +102,14 @@ describe("PerformanceLab — personal best line", () => {
     expect(screen.getByTestId("lift-best").textContent).toMatch(/^Best: 20 reps · /);
   });
 
+  it("prints no best line for an assisted lift", () => {
+    const history = [session(daysAgo(10), [{ name: "Assisted Pull-Up", muscle: "Lats", loadType: "assisted_bodyweight",
+      sets: [{ weight: 20, reps: 8, loadType: "assisted_bodyweight", bodyweightUsed: 80, effectiveLoad: 60 }] }])];
+    render(<PerformanceLab history={history} onBack={() => {}} />);
+    open("Assisted Pull-Up");
+    expect(screen.queryByTestId("lift-best")).toBeNull();
+  });
+
   it("prints no best line for a lift with no logged sets", () => {
     const history = [
       session(daysAgo(3), [squat(100, 5), { name: "Romanian Deadlift", muscle: "Hamstrings", loadType: "barbell",
