@@ -73,3 +73,56 @@ describe("exercise tempo dataset", () => {
     expect(decodeTempo("X-0-X-0")[0].label).toBe("drop fast");
   });
 });
+
+describe("tempo copy matches the digits and the coaching", () => {
+  const text = (name) => `${EXERCISE_TEMPO[name].principle} ${EXERCISE_TEMPO[name].note ?? ""}`;
+
+  it("Hack Squat and Leg Press put the feet low for quads", () => {
+    for (const name of ["Hack Squat", "Leg Press"]) {
+      expect(text(name), name).toMatch(/feet low/i);
+      expect(text(name), name).not.toMatch(/feet high and narrow/i);
+    }
+    expect(text("Leg Press")).toMatch(/high and wide to work your glutes/);
+  });
+
+  it("lifts with no top pause in their digits never prescribe one", () => {
+    const lifts = [
+      "Seated Calf Raise", "Standing Calf Raise", "Single-Leg Calf Raise",
+      "45-Degree Hip Extension", "Single-Arm High Cable Row",
+    ];
+    for (const name of lifts) {
+      expect(EXERCISE_TEMPO[name].tempo, name).toBe("3-1-2-0");
+      expect(text(name), name).not.toMatch(/pause at (the )?top|pause at the squeeze/i);
+      expect(text(name), name).toMatch(/without hold/i);
+    }
+  });
+
+  it("the pushdowns make no long-head claim", () => {
+    for (const name of ["Tricep Pushdown", "Resistance Band Pushdown"]) {
+      expect(text(name), name).not.toMatch(/long head/i);
+    }
+  });
+
+  it("a lift with a counted lifting digit says press hard, not explosive", () => {
+    for (const name of ["Barbell Overhead Press", "Incline Landmine Press"]) {
+      expect(EXERCISE_TEMPO[name].tempo.split("-")[2], name).toBe("1");
+      expect(text(name), name).not.toMatch(/explosive|with intent/i);
+    }
+  });
+
+  it("the strings touched read as plain sentences", () => {
+    const touched = [
+      ["Hack Squat", "note"], ["Leg Press", "note"],
+      ["Seated Calf Raise", "note"], ["Standing Calf Raise", "note"],
+      ["Single-Leg Calf Raise", "note"],
+      ["45-Degree Hip Extension", "principle"], ["45-Degree Hip Extension", "note"],
+      ["Single-Arm High Cable Row", "principle"], ["Tricep Pushdown", "principle"],
+      ["Resistance Band Pushdown", "principle"], ["Incline Landmine Press", "principle"],
+    ];
+    for (const [name, field] of touched) {
+      const s = EXERCISE_TEMPO[name][field];
+      expect(s, name).not.toMatch(/[;—]/);
+      expect(s, name).toMatch(/^[A-Z].*\.$/);
+    }
+  });
+});
