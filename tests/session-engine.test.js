@@ -335,6 +335,21 @@ describe("loaded rep climb reaches the session", () => {
     expect(lift().nextPrescribed).toBe(167.5);
   });
 
+  // Lift histories stored before cooked days became history only carry the
+  // cooked day's entry; it still reads past to the failure before it.
+  it("a stored cooked entry after failure keeps the failure note and the add after it", () => {
+    seed({ currentWeight: 165 });
+    apply(squat(165, 5, 0));
+    const stored = lift();
+    TS.updateLift("p", SQUAT, { ...stored, history: [...stored.history, {
+      date: "2026-10-30", weight: 165, reps: 5, rir: 1, est1rm: 192.5, decision: "HOLD",
+      rationale: ["last_performance=PERFORMED_FULL", "decision_reason=readiness_cooked"],
+    }] });
+    expect(lastSessionNote(lift())).toEqual({ kind: "failure" });
+    apply(squat(165, 5, 0.5));
+    expect(lift().nextPrescribed).toBe(167.5);
+  });
+
   it("a cooked day mid-climb keeps the climbed target and its base", () => {
     seed({ consecutiveHolds: 3, stallSignal: "stall" });
     expect(apply(squat(162.5, 5, 1)).wrUpdates[SQUAT]).toBe(6);
