@@ -5,7 +5,8 @@ import { dbPrimaryHandle } from "@/lib/identity-store";
 import { normaliseProfile } from "@/lib/profile-name";
 import { dbTrainerGrants, dbLogFullLook } from "@/lib/trainer-store";
 import { dbChangesForTrainer } from "@/lib/trainer-changes-store";
-import { trainerToday, publicName, SELF_REF } from "@/lib/trainer-view";
+import { publicName, SELF_REF } from "@/lib/trainer-view";
+import { durationMs, trainerDay } from "@/lib/server-time";
 import { projectForTrainer, editsStatus } from "@/lib/trainer-plan";
 import { csvFromView, exportFilename } from "@/lib/trainer-export";
 import { trainerGate, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
@@ -15,7 +16,7 @@ import { serverError } from "@/lib/api-errors";
 export const preferredRegion = "lhr1";
 export const dynamic = "force-dynamic";
 
-const DAY_MS = 86_400_000;
+const DAY_MS = durationMs({ days: 1 });
 const LABEL = "trainer-export";
 /** Downloads per grant (or per trainer, for their own) per UTC day. */
 export const EXPORTS_PER_DAY = 10;
@@ -102,7 +103,7 @@ export async function POST(request) {
       }
     }
     const status = grant ? editsStatus(grant, changes) : null;
-    const todayIso = trainerToday(body.today, now);
+    const todayIso = trainerDay(body.today, now);
     const view = projectForTrainer(data, { todayIso, edits: changes, status });
     const csv = csvFromView(view, { name: clientName, trainer: self ? null : trainerName, date: todayIso });
 

@@ -2,7 +2,8 @@ import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { dbPrimaryHandle } from "@/lib/identity-store";
 import { dbTrainerGrants, dbRemoveByTrainer, dbRosterSignals } from "@/lib/trainer-store";
 import { dbRosterWaiting } from "@/lib/trainer-changes-store";
-import { publicName, rosterSignal, rosterDay, trainerToday } from "@/lib/trainer-view";
+import { publicName, rosterSignal } from "@/lib/trainer-view";
+import { durationMs, londonDay, trainerDay } from "@/lib/server-time";
 import { trainerGate, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { dbMarkSeen } from "@/lib/notices";
 import { serverError } from "@/lib/api-errors";
@@ -11,7 +12,7 @@ import { serverError } from "@/lib/api-errors";
 export const preferredRegion = "lhr1";
 export const dynamic = "force-dynamic";
 
-const DAY_MS = 86_400_000;
+const DAY_MS = durationMs({ days: 1 });
 const LABEL = "trainer-clients";
 
 /** Carry the gate's daily slide, if any, on whatever the route answers. */
@@ -27,9 +28,9 @@ const byName = (a, b) => (a.name === null ? 1 : b.name === null ? -1 : a.name.lo
  * @param {number} [now]
  */
 async function roster(me, refs, rawToday, now = Date.now()) {
-  const today = trainerToday(rawToday, now);
+  const today = trainerDay(rawToday, now);
   try {
-    const rows = await dbRosterSignals(me, refs, { day: rosterDay(now), today, now });
+    const rows = await dbRosterSignals(me, refs, { day: londonDay(now), today, now });
     if (!rows) return null;
     return new Map([...rows].map(([ref, row]) => [ref, rosterSignal(row, today)]));
   } catch (e) {
