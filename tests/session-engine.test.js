@@ -1117,7 +1117,8 @@ describe("a deload day's weight is the deload of the pre-deload weight", () => {
     const closing = apply(squat(25, 65));
     expect(closing.justCompletedDeload).toBe(true);
     expect(written(closing)).toBe(90);
-    expect(written(apply(squat(27, 90)))).toBe(90);
-    expect(written(apply(squat(29, 90)))).toBe(92.5);
+    // The re-entry session itself (its card shows 90) climbs as an ordinary one.
+    expect(written(apply(squat(27, 90)))).toBe(92.5);
+    expect(written(apply(squat(29, 92.5)))).toBe(95);
   });
 });
