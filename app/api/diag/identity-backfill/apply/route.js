@@ -4,6 +4,7 @@ import { sql } from "@/lib/db";
 import { newAccountId, newWebauthnUserId } from "@/lib/identity";
 import { buildIdentityBackfill } from "@/lib/identity-backfill";
 import { gatherBackfillInputs, backfillLogLine, requireAdminCeremony, BACKFILL_FRESH_MS } from "@/lib/identity-backfill-inputs";
+import { isoInstant } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -45,7 +46,7 @@ export async function POST(request) {
 
   let built;
   try {
-    built = buildIdentityBackfill((await gatherBackfillInputs(new Date().toISOString())).input);
+    built = buildIdentityBackfill((await gatherBackfillInputs(isoInstant())).input);
   } catch (e) {
     return NextResponse.json({ error: `backfill plan failed: ${e.message}` }, { status: 500 });
   }

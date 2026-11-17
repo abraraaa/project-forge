@@ -175,7 +175,7 @@ export async function POST(request) {
 
     // Mint the short-lived ceremony token (Rec 11b: DB row; blob only as
     // the no-DB dev fallback — see mintAuthToken).
-    const authToken = await mintAuthToken({ identity, ttlMs: 3600000, credentialId: matchingCred.id }); // 1 hour
+    const authToken = await mintAuthToken({ identity, ttlMs: durationMs({ hours: 1 }), credentialId: matchingCred.id });
 
     // Consume the challenge (blob mode only — stateless challenges are not
     // stored, and expire on their own).
