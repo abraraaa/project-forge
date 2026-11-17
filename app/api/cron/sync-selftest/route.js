@@ -24,6 +24,7 @@
 import { NextResponse } from "next/server";
 import { GET as syncGET, PUT as syncPUT, POST as syncPOST, DELETE as syncDELETE } from "@/app/api/sync/route";
 import { mintAuthToken } from "@/lib/auth-server";
+import { isoInstant } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -111,7 +112,7 @@ export async function GET(request) {
     const dayKey = "2026-07-02";
     await syncPUT(jsonReq("PUT", { profile, data: { meta: {
       ...meta,
-      days: { [dayKey]: { date: dayKey, scheduledType: "cardio", completedType: "cardio", sessionId: null, marks: {}, updatedAt: new Date().toISOString() } },
+      days: { [dayKey]: { date: dayKey, scheduledType: "cardio", completedType: "cardio", sessionId: null, marks: {}, updatedAt: isoInstant() } },
     } } }));
     await syncPUT(jsonReq("PUT", { profile, data: { meta: { weights: { "Hex Bar Deadlift": 112.5 }, reps: {}, streak: { count: 3, lastDate: "2026-07-04" }, programmeBlock: { number: 1 } } } }));
     const afterPartial = await (await syncGET(getReq({ profile }))).json();
