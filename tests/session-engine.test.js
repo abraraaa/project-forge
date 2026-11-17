@@ -966,13 +966,60 @@ describe("a cooked record is history only", () => {
     expect(TS.get("p").lifts[SQUAT]).toMatchObject({ inRecoveryUntil: 2, currentWeight: 100 });
   });
 
-  it("a cooked day in a deload writes no W and leaves the lift state", () => {
+  it("a cooked day in a deload writes the deload of the pre-deload weight and leaves the lift state", () => {
     seedSquat(100);
     TS.save("p", { ...TS.get("p"), mesocycle: { currentPhase: "deload", activeDeload: { startedAt: "2026-10-22T12:00:00.000Z", plannedDays: 7, preDeloadWeights: { [SQUAT]: 100 } } } });
     const before = TS.get("p").lifts[SQUAT];
-    const out = apply(squat("2026-10-23T10:00:00.000Z", 60, "cooked"));
+    const out = apply(squat("2026-10-23T10:00:00.000Z", 50, "cooked"));
     expect(out.stillInDeload).toBe(true);
-    expect(out.wwUpdates).toEqual({});
+    expect(out.wwUpdates).toEqual({ [SQUAT]: 65 });
+    expect(out.wrUpdates).toEqual({});
     expect(rest(TS.get("p").lifts[SQUAT])).toEqual(rest(before));
+  });
+
+  // The design note's numbers: an earned 102.5, a deload at 65, re-entry at 90.
+  const deloadFrom102 = () => {
+    seedSquat(100);
+    expect(apply(squat("2026-10-20T10:00:00.000Z", 100, "normal", 3)).wwUpdates[SQUAT]).toBe(102.5);
+    const ts = startDeload(TS.get("p"), { type: "stall_convergence", lifts: [SQUAT] });
+    TS.replaceState("p", { ...ts, mesocycle: { ...ts.mesocycle, activeDeload: { ...ts.mesocycle.activeDeload, startedAt: "2026-10-21T12:00:00.000Z" } } });
+  };
+
+  it("a cooked session inside a deload shows the deload weight next, not one from its sets", () => {
+    deloadFrom102();
+    const before = TS.get("p").lifts[SQUAT];
+    const out = apply(squat("2026-10-22T10:00:00.000Z", 40, "cooked"));
+    expect(out.stillInDeload).toBe(true);
+    expect(out.wwUpdates).toEqual({ [SQUAT]: 65 });
+    expect(rest(TS.get("p").lifts[SQUAT])).toEqual(rest(before));
+  });
+
+  it("a cooked session that closes the deload leaves the next prescription at the re-entry weight", () => {
+    deloadFrom102();
+    apply(squat("2026-10-22T10:00:00.000Z", 65));
+    const before = TS.get("p").lifts[SQUAT];
+    const out = apply(squat("2026-10-27T10:00:00.000Z", 40, "cooked"));
+    expect(out.justCompletedDeload).toBe(true);
+    expect(out.wwUpdates).toEqual({ [SQUAT]: 90 });
+    expect(out.wrUpdates).toEqual({});
+    const after = TS.get("p").lifts[SQUAT];
+    expect(after).toMatchObject({ inRecoveryUntil: 3, preDeloadWeight: 100 });
+    const unscheduled = (s) => rest({ ...s, inRecoveryUntil: undefined, preDeloadWeight: undefined });
+    expect(unscheduled(after)).toEqual(unscheduled(before));
+  });
+
+  it("a cooked first session after the deload closed elsewhere writes the re-entry and keeps the count", () => {
+    seedSquat(65);
+    TS.save("p", { ...TS.get("p"), lifts: { [SQUAT]: { ...TS.get("p").lifts[SQUAT], inRecoveryUntil: 3, preDeloadWeight: 100 } } });
+    const out = apply(squat("2026-10-23T10:00:00.000Z", 40, "cooked"));
+    expect(out.wwUpdates).toEqual({ [SQUAT]: 90 });
+    expect(TS.get("p").lifts[SQUAT]).toMatchObject({ inRecoveryUntil: 3, preDeloadWeight: 100, currentWeight: 65 });
+  });
+
+  it("a cooked session in an ordinary week still writes nothing", () => {
+    seedSquat(100);
+    apply(squat("2026-10-20T10:00:00.000Z", 100, "normal", 3));
+    const out = apply(squat("2026-10-23T10:00:00.000Z", 40, "cooked"));
+    expect(out).toMatchObject({ wwUpdates: {}, wrUpdates: {}, justCompletedDeload: false, stillInDeload: false });
   });
 });
