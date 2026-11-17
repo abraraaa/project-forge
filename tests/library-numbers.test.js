@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import { getLiftProfile, coldStartFromAnchor, startWeightFor, deriveMuscleAnchors, snapToImplement, sanitiseWorkingWeights, REFERENCE_LIFTS, CATEGORY_COLD_START_MAX_KG, __test__ } from "../lib/lift-translations.js";
 import { computeNextPrescription } from "../lib/progression.js";
 import { SESSIONS, EXERCISE_POOLS, SWAP_DB } from "../lib/programme.js";
+import { loadTypeOfName } from "../lib/programme-resolve.js";
 
 /** Every lift the programme lists: sessions, pools, swap keys and options. */
 function catalogue() {
@@ -193,9 +194,10 @@ describe("cold-start ceilings: machine isolation lifts start up to 120 kg", () =
   });
 
   it("every machine isolation lift in the catalogue is marked machine, and only those", () => {
-    const iso = catalogue().filter((n) => Object.hasOwn(__test__.PROFILES, n) && getLiftProfile(n).category === "accessory_isolation");
-    const onMachine = iso.filter((n) => loadTypes(n).has("machine")).sort();
-    expect(onMachine).toEqual(["Leg Extension", "Leg Press Calf Raise", "Machine Hamstring Curl", "Pec Deck", "Reverse Pec Deck", "Seated Calf Raise", "Seated Leg Curl", "Standing Calf Raise"]);
+    // Swap options and pattern-inferred profiles included: a lift typed machine anywhere is on a stack.
+    const iso = catalogue().filter((n) => getLiftProfile(n).category === "accessory_isolation");
+    const onMachine = iso.filter((n) => loadTypes(n).has("machine") || loadTypeOfName(n) === "machine").sort();
+    expect(onMachine).toEqual(["Hip Adduction", "Leg Extension", "Leg Press Calf Raise", "Machine Hamstring Curl", "Pec Deck", "Reverse Pec Deck", "Seated Calf Raise", "Seated Leg Curl", "Smith Calf Raise", "Standing Calf Raise"]);
     for (const n of onMachine) expect(getLiftProfile(n).machine, n).toBe(true);
     const marked = Object.keys(__test__.PROFILES).filter((n) => getLiftProfile(n).machine === true).sort();
     expect(marked).toEqual(onMachine);

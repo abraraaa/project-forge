@@ -1472,6 +1472,13 @@ describe("the plan: what a coached session is composed from", () => {
     expect(serverSays(ipadRecord(plan, 0), meta)).toBe("ok");
   });
 
+  it("a stored pick reads as its pool holds it now: the current load type and template", () => {
+    const meta = coachMeta("Forged");
+    meta.programmeBlock.config = { ...meta.programmeBlock.config, "ass2-A": { ...EXERCISE_POOLS["ass2-A"].pool.find((e) => e.name === "Single-Leg Hip Thrust"), loadType: "barbell", weight: 45 } };
+    const plan = projectPlan({ meta, history: [] }, { todayIso: TODAY });
+    expect(plan.programme.config["ass2-A"]).toMatchObject({ name: "Single-Leg Hip Thrust", loadType: "bodyweight", weight: null });
+  });
+
   it("only programme data leaves: a pool slot holding a lift of its pool, plain values; the block's other fields never", () => {
     const meta = coachMeta("CANARY-focus");
     const [slot, pick] = Object.entries(PICKS)[0];
@@ -1490,8 +1497,8 @@ describe("the plan: what a coached session is composed from", () => {
     const p = projectPlan({ meta, history: [] }, { todayIso: TODAY }).programme;
     expect(p.number).toBe(4);
     expect(p.focus).toBe("Forged");
-    const { weight, ...rest } = pick;
-    expect(p.config).toEqual({ [slot]: rest });
+    // The stored pick's fields give way to its pool entry's: the malformed weight never reads.
+    expect(p.config).toEqual({ [slot]: pick });
     expect(p.mainLifts).toEqual({ [BENCH]: MAIN_LIFT_FUNCTIONAL_EQUIVALENTS[BENCH][0] });
     expect(p.reps).toEqual({ [SQUAT]: 6 });
     expect(JSON.stringify(p)).not.toMatch(/CANARY|7004/);

@@ -4,7 +4,7 @@
 // band and one-a-day sweeps elsewhere hold the weeks these pools solve.
 import { describe, it, expect } from "vitest";
 import {
-  SESSIONS, EXERCISE_POOLS, SWAP_DB, RETIRED_EXERCISES, RETIRED_LOAD_TYPES, ROTATION_REVISED,
+  SESSIONS, EXERCISE_POOLS, SWAP_DB, RETIRED_EXERCISES, RETIRED_LOAD_TYPES, FORMER_LOAD_TYPES, ROTATION_REVISED,
   applyRotationToSession, readRotationConfig,
 } from "../lib/programme.js";
 import { getLiftProfile, inferLoadType, swapLoadType, __test__ } from "../lib/lift-translations.js";
@@ -178,4 +178,38 @@ describe("revision stamps", () => {
     expect(ROTATION_REVISED).toBe("2026-11-16");
     expect(LIBRARY_REVISED).toBe("2026-11-16");
   });
+});
+
+describe("stored rotation picks", () => {
+  // A pick the solver stored before these corrections, as it reads back from storage.
+  const stored = (pick) => JSON.parse(JSON.stringify(pick));
+  const slotOf = (key) => {
+    const [id, side] = key.split("-");
+    for (const s of SESSIONS) for (const b of s.blocks) if (b.id === id) return { session: s, field: side ? `ex${side}` : "ex" };
+    return null;
+  };
+  for (const [key, old, want] of /** @type {const} */ ([
+    ["ass2-A", { name: "Single-Leg Hip Thrust", reps: 10, weight: 45, muscle: "Glutes", vid: "4ilXaDauMnE", loadType: "barbell", loadProfile: "moderate_mid_rep" }, { loadType: "bodyweight", weight: null }],
+    ["ass1-B", { name: "Landmine Press", reps: 10, weight: 28, muscle: "Upper chest", vid: "gH7PDepHNck", loadType: "barbell", loadProfile: "moderate_mid_rep" }, { loadType: "barbell", weight: 20 }],
+  ])) {
+    it(`a stored ${old.name} pick takes the pool's current load type and template`, () => {
+      const { session, field } = /** @type {any} */ (slotOf(key));
+      const block = applyRotationToSession(session, { [key]: stored(old) }).blocks.find((b) => b.id === key.split("-")[0]);
+      expect(block[field]).toMatchObject({ name: old.name, ...want });
+    });
+  }
+});
+
+describe("lifts taken out of the pools and swaps", () => {
+  for (const [name, lt] of /** @type {const} */ ([
+    ["Incline DB Row", "per_db"], ["Single-Arm Landmine Press", "barbell"],
+    ["Low-to-High Cable Fly", "total"], ["Cable Chest Fly", "total"],
+  ])) {
+    it(`${name} keeps the load type its sets were logged under, and its library page`, () => {
+      expect(FORMER_LOAD_TYPES[name]).toBe(lt);
+      expect(loadTypeOfName(name)).toBe(lt);
+      expect(RETIRED_EXERCISES.has(name)).toBe(false);
+      expect(LIBRARY.some((e) => e.name === name)).toBe(true);
+    });
+  }
 });

@@ -175,12 +175,21 @@ describe("MCP tools read the same start", () => {
   });
   it("current_loads words a suggested start by load type, as programme does", () => {
     const pool = EXERCISE_POOLS["bss1-B"].pool;
-    for (const [name, want] of [["Weighted Pull-Up", "bodyweight + 8 kg (suggested start)"], ["Assisted Pull-Up", null]]) {
-      const ex = { ...pool.find((p) => p.name === name), ...(want ? {} : { weight: 20 }) };
-      const read = want ?? "20 kg assistance (suggested start)";
-      const d = { meta: { bodyweight: { kg: 80 }, reps: { [name]: ex.reps }, programmeBlock: { number: 1, config: { "bss1-B": ex } } }, history: [] };
-      expect(runTool("current_loads", {}, d, now).text).toBe(`- ${name}: ${read} × ${ex.reps}`);
-      expect(runTool("programme", {}, d, now).text).toContain(`${name} 3 × ${ex.reps} @ ${read}`);
+    // A stored pick reads its template from the pool, so the assisted case
+    // gives the pool entry a 20 kg template for the length of the test.
+    const assisted = pool.find((p) => p.name === "Assisted Pull-Up");
+    const template = assisted.weight;
+    assisted.weight = 20;
+    try {
+      for (const [name, want] of [["Weighted Pull-Up", "bodyweight + 8 kg (suggested start)"], ["Assisted Pull-Up", null]]) {
+        const ex = { ...pool.find((p) => p.name === name) };
+        const read = want ?? "20 kg assistance (suggested start)";
+        const d = { meta: { bodyweight: { kg: 80 }, reps: { [name]: ex.reps }, programmeBlock: { number: 1, config: { "bss1-B": ex } } }, history: [] };
+        expect(runTool("current_loads", {}, d, now).text).toBe(`- ${name}: ${read} × ${ex.reps}`);
+        expect(runTool("programme", {}, d, now).text).toContain(`${name} 3 × ${ex.reps} @ ${read}`);
+      }
+    } finally {
+      assisted.weight = template;
     }
   });
   it("a stored null reads as no working weight in both tools, as the resolver reads it", () => {
