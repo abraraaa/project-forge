@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { H, TS } from "../lib/storage.js";
+import { H, TS, P } from "../lib/storage.js";
 import { applySessionToEngine } from "../lib/session-engine.js";
 import { coldStartFromAnchor, deriveMuscleAnchors } from "../lib/lift-translations.js";
 import {
@@ -465,6 +465,16 @@ describe("a lift's first logged session progresses from what was lifted", () => 
     const out = apply(rec, BACK);
     expect(out.wwUpdates["Face-Away Cable Row"]).toBe(30);
     expect(TS.get("p").lifts["Face-Away Cable Row"].currentWeight).toBe(30);
+  });
+
+  // A working weight with no lift state yet (a trainer-set or typed W) is
+  // prescribed state: a cooked first session carries it forward unchanged.
+  it("a cooked first session leaves a stored working weight alone", () => {
+    P.saveWeights("p", { "Face-Away Cable Row": 40 });
+    const rec = { ...firstRecord("Face-Away Cable Row", "cable", 26, [10, 10, 10, 10], 1), readiness: "cooked" };
+    const out = apply(rec, BACK);
+    expect(out.wwUpdates).toEqual({});
+    expect(P.getWeights("p")["Face-Away Cable Row"]).toBe(40);
   });
 
   it("a 6 kg Lu raise adds a kilo, never the anchor's 16", () => {
