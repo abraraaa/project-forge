@@ -959,10 +959,13 @@ describe("a cooked record is history only", () => {
     expect(detectDeloadSignals(TS.get("p"), H.get("p")).map((s) => s.type)).not.toContain("regression");
   });
 
-  it("a cooked day in recovery leaves the recovery count", () => {
+  it("a cooked day in recovery leaves the recovery count and writes no weight", () => {
     seedSquat(100);
+    apply(squat("2026-10-20T10:00:00.000Z", 100, "normal", 3));
     TS.save("p", { ...TS.get("p"), lifts: { [SQUAT]: { ...TS.get("p").lifts[SQUAT], inRecoveryUntil: 2, preDeloadWeight: 100 } } });
-    apply(squat("2026-10-23T10:00:00.000Z", 90, "cooked"));
+    const out = apply(squat("2026-10-23T10:00:00.000Z", 60, "cooked"));
+    expect(out.wwUpdates).toEqual({});
+    expect(out.wrUpdates).toEqual({});
     expect(TS.get("p").lifts[SQUAT]).toMatchObject({ inRecoveryUntil: 2, currentWeight: 100 });
   });
 
