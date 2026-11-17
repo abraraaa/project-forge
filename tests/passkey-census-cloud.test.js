@@ -98,7 +98,8 @@ const dbState = { on: true, fail: false };
 vi.mock("@vercel/blob", () => ({ list: vi.fn(async () => ({ blobs: blobs.list, cursor: undefined })) }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: () => null }));
 vi.mock("@/lib/blob-utils", () => ({
-  readJsonDirect: vi.fn(async (p) => (p.includes("/lapsedname/") ? { credentials: [{ id: "x", publicKey: "k", rpId: LEGACY_RP_ID }] } : null)),
+  readJsonDirect: vi.fn(async (p) => (p.includes("/lapsedname/") ? { credentials: [{ id: "x", publicKey: "k", rpId: LEGACY_RP_ID }] }
+    : p.includes("/suffixed/") ? { credentials: [{ id: "y", rpId: NATIVE_RP_ID }] } : null)),
 }));
 vi.mock("@/lib/db", () => ({
   sql: () => {
@@ -148,6 +149,16 @@ describe("passkey census route — cloud exposure", () => {
     const line = log.mock.calls.map((c) => c[0]).find((l) => String(l).startsWith("[forge:passkey-census]"));
     expect(line).toContain("cloudNoUsable=3");
     for (const n of ["lapsedname", "bare", "safe", "rowonly"]) expect(line).not.toMatch(new RegExp(`\\b${n}\\b`));
+  });
+
+  it("counts a profile whose only sync data is the legacy suffixed blobs, without reading them", async () => {
+    const { readJsonDirect } = await import("@/lib/blob-utils");
+    blobs.list = [path("suffixed/meta-AbC123.json"), path("suffixed/history-XyZ789.json"), path("suffixed/credentials.json")];
+    dbState.on = false;
+    const body = await (await GET(req())).json();
+    expect(body.cloud).toMatchObject({ profilesWithCloudData: 1, noUsableCredential: 1, noUsableWithRecord: 1, noUsableNoRecord: 0 });
+    const read = vi.mocked(readJsonDirect).mock.calls.map((c) => c[0]);
+    expect(read.some((p) => /\/(meta|history)/.test(p))).toBe(false);
   });
 
   it("still reports the Blob count when Neon fails, marked db=0", async () => {

@@ -58,8 +58,9 @@ export async function GET(request) {
         // Photos, counted not read — this pass already walks the namespace.
         const ph = b.pathname.match(/^forge\/profiles\/([^/]+)\/photos\/[^/]+$/);
         if (ph) { photos.push({ profile: decode(ph[1]), pathname: b.pathname, size: b.size || 0 }); continue; }
-        // Sync blobs, counted not read.
-        const sy = b.pathname.match(/^forge\/profiles\/([^/]+)\/(?:meta|history)\.json$/);
+        // Sync blobs, the legacy suffixed ones included (the sync GET serves
+        // them when the plain file is absent), counted not read.
+        const sy = b.pathname.match(/^forge\/profiles\/([^/]+)\/(?:meta|history)(?:-[^/]+)?\.json$/);
         if (sy) syncKeys.add(decode(sy[1]));
       }
       cursor = page.cursor;
@@ -104,7 +105,7 @@ export async function GET(request) {
   return NextResponse.json({
     dryRun: true,
     writes: "none — enumeration and reads only",
-    scanned: { prefix: "forge/profiles/", matched: ["credentials*.json", "photos/*", "meta.json", "history.json"] },
+    scanned: { prefix: "forge/profiles/", matched: ["credentials*.json", "photos/*", "meta*.json", "history*.json"] },
     ...census,
     photoExposure,
     cloud,
