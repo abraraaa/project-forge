@@ -95,7 +95,7 @@ const SQL = {
   editsOff: "UPDATE oauth_grants SET edits_off_at = GREATEST(?::bigint, edits_at)"
     + " WHERE account_id = ? AND kind = 'trainer' AND revoked_at IS NULL AND edits_at IS NOT NULL RETURNING id",
   editsOn: "UPDATE oauth_grants SET edits_at = GREATEST(?::bigint, COALESCE(edits_off_at, 0) + 1)"
-    + " WHERE account_id = ? AND kind = 'trainer' AND revoked_at IS NULL AND consent_version = ?"
+    + " WHERE account_id = ? AND kind = 'trainer' AND revoked_at IS NULL AND consent_version = ANY(?)"
     + " AND NOT (edits_at IS NOT NULL AND (edits_off_at IS NULL OR edits_off_at < edits_at)) RETURNING id",
   editsState: "SELECT consent_version, edits_at, edits_off_at FROM oauth_grants WHERE account_id = ? AND kind = 'trainer' AND revoked_at IS NULL",
   deliver: "SELECT c.id, c.set_id, c.kind, c.target, c.effective_from, c.old_value, c.new_value, c.basis,"
@@ -261,8 +261,8 @@ const HANDLERS = {
   [flat(SQL.editsOff)]: ([now, me]) => db.grants
     .filter((g) => g.account_id === me && g.kind === "trainer" && g.revoked_at == null && g.edits_at != null)
     .map((g) => { g.edits_off_at = Math.max(now, g.edits_at); return { id: g.id }; }),
-  [flat(SQL.editsOn)]: ([now, me, version]) => db.grants
-    .filter((g) => g.account_id === me && g.kind === "trainer" && g.revoked_at == null && g.consent_version === version && !editsOn(g))
+  [flat(SQL.editsOn)]: ([now, me, versions]) => db.grants
+    .filter((g) => g.account_id === me && g.kind === "trainer" && g.revoked_at == null && versions.includes(g.consent_version) && !editsOn(g))
     .map((g) => { g.edits_at = Math.max(now, (g.edits_off_at ?? 0) + 1); return { id: g.id }; }),
   [flat(SQL.editsState)]: ([me]) => db.grants
     .filter((g) => g.account_id === me && g.kind === "trainer" && g.revoked_at == null)
@@ -320,7 +320,7 @@ vi.mock("@neondatabase/serverless", () => ({
 const store = await import("../lib/trainer-changes-store.js");
 const trainerStore = await import("../lib/trainer-store.js");
 const change = await import("../lib/trainer-change.js");
-const { TRAINER_TERMS_VERSION } = await import("../lib/trainer-terms.js");
+const { TRAINER_TERMS_VERSION, SHARE_CONSENT_VERSION, shareVersionsFor } = await import("../lib/trainer-terms.js");
 const {
   dbInsertChangeSet, dbWithdrawChanges, dbUndoChanges, dbAckChanges, cleanAcks, dbEditsOff, dbEditsOn,
   dbOpenChangesFor, dbOpenChangesForGrant, dbChangesForTrainer, dbChangesForClient, isIsoInstant, DELIVER_MAX,
@@ -380,7 +380,7 @@ describe("no database", () => {
     expect(await dbUndoChanges(A, S1, null, NOW)).toBeNull();
     expect(await dbAckChanges(A, { acks: [{ id: `${S1}.0`, outcome: "applied", at: AT }] })).toBeNull();
     expect(await dbEditsOff(A, NOW)).toBeNull();
-    expect(await dbEditsOn(A, "v1", NOW)).toBeNull();
+    expect(await dbEditsOn(A, ["v1"], NOW)).toBeNull();
     expect(await dbOpenChangesFor("sk-a")).toBeNull();
     expect(await dbOpenChangesForGrant("hwg_1", T, NOW)).toBeNull();
     expect(await dbChangesForTrainer("hwg_1", T, NOW)).toBeNull();
@@ -608,16 +608,33 @@ describe("the changes switch (the client's grant)", () => {
     expect(await dbEditsOff(B, NOW)).toBe(false);
   });
 
-  it("on: only while off and on the current consent; already on, an older consent and no grant say so", async () => {
-    expect(await dbEditsOn(A, "v1", NOW)).toBe("already");
+  it("on: only while off and on a consent that covers changes; already on, an uncovered consent and no grant say so", async () => {
+    expect(await dbEditsOn(A, ["v1"], NOW)).toBe("already");
     expect(calls.map((c) => c.q)).toEqual([flat(SQL.editsOn), flat(SQL.editsState)]);
-    expect(calls[0].v).toEqual([NOW, A, "v1"]);
+    expect(calls[0].v).toEqual([NOW, A, ["v1"]]);
     expect(db.grants[0].edits_at).toBe(GRANT.edits_at); // unchanged: turning on again must not cancel waiting changes
     await dbEditsOff(A, NOW);
-    expect(await dbEditsOn(A, "v2", NOW + 1)).toBe("fresh");
-    expect(await dbEditsOn(A, "v1", NOW)).toBe("on");
+    expect(await dbEditsOn(A, ["v2"], NOW + 1)).toBe("fresh");
+    expect(await dbEditsOn(A, [], NOW + 1)).toBe("fresh");
+    expect(await dbEditsOn(A, ["v0", "v1", "v2"], NOW)).toBe("on");
     expect(db.grants[0].edits_at).toBe(NOW + 1); // after the off, even at the same instant
-    expect(await dbEditsOn(B, "v1", NOW)).toBe("none");
+    expect(await dbEditsOn(B, ["v1"], NOW)).toBe("none");
+  });
+});
+
+describe("the changes switch, scoped to the consent that covers changes", () => {
+  it("a grant on an earlier consent that covers changes goes back on; one from before changes stays off", async () => {
+    const covers = shareVersionsFor("changes");
+    for (const v of ["2026-10-05", "2026-10-05b", SHARE_CONSENT_VERSION]) {
+      db.grants[0].consent_version = v;
+      await dbEditsOff(A, NOW);
+      expect(await dbEditsOn(A, covers, NOW), v).toBe("on");
+    }
+    for (const v of ["2026-10", "2026-10-04", null]) {
+      db.grants[0].consent_version = v;
+      await dbEditsOff(A, NOW);
+      expect(await dbEditsOn(A, covers, NOW), String(v)).toBe("fresh");
+    }
   });
 });
 

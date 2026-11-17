@@ -27,7 +27,7 @@ import { fetchWithTimeout } from "@/lib/net";
 import { authenticatePasskey } from "@/lib/webauthn";
 import { todayLocalIso } from "@/lib/dates";
 import { timedTargetFor } from "@/lib/programme";
-import { SHARE_CONSENT_VERSION, SHARE_COPY } from "@/lib/trainer-terms";
+import { SHARE_COPY, shareCovers } from "@/lib/trainer-terms";
 import { keepsAtWords } from "@/components/TrainerSessionSheet";
 
 const LOG_SHOWN = 20;
@@ -514,7 +514,7 @@ export default function TrainerShareView() {
               approved before changes were part of it needs a fresh code. */}
           {sharing.live && edits && (
             <div style={{ marginTop: 4 }}>
-              {edits.on || sharing.consentVersion === SHARE_CONSENT_VERSION ? (
+              {edits.on || shareCovers(sharing.consentVersion, "changes") ? (
                 <button type="button" onClick={() => onEdits(!edits.on)} aria-disabled={editsBusy} className="forge-press"
                   style={{ minHeight: 44, background: "none", border: "none", padding: "0 2px", cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2, opacity: editsBusy ? 0.6 : 1 }}>
                   {editsBusy ? "One moment" : edits.on ? `Stop ${who} changing your plan` : `Let ${who} change your plan`}

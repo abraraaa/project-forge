@@ -899,8 +899,8 @@ describe("coached sessions: sending one", () => {
     DAY0 = rec.date;
   });
 
-  it("needs the grant approved at the current share consent: an older one is 403 fresh, before the look and any read", async () => {
-    for (const v of ["2026-10-05b", null]) {
+  it("needs a share consent that covers sessions: an older or unknown one is 403 fresh, before the look and any read", async () => {
+    for (const v of ["2026-10", "2026-10-04", "2026-10-05", "2026-10-05b", "2026-10-11", "", null]) {
       db.grants[0].consent_version = v;
       calls.length = 0;
       for (const extra of [{}, { dryRun: true }]) {
@@ -916,6 +916,15 @@ describe("coached sessions: sending one", () => {
     }
     db.grants[0].consent_version = SHARE_CONSENT_VERSION;
     expect((await post(tia, sbody(rec))).status).toBe(200);
+  });
+
+  it("the client's off switch refuses a session whatever the grant's consent", async () => {
+    db.grants[0].edits_off_at = db.grants[0].edits_at + 1;
+    for (const v of ["2026-10", "2026-10-05", SHARE_CONSENT_VERSION]) {
+      db.grants[0].consent_version = v;
+      expect((await post(tia, sbody(rec))).status, v).toBeGreaterThanOrEqual(403);
+    }
+    expect(writes()).toEqual([]);
   });
 
   it("runs behind the route's gates: Face ID within the day, a real grant, changes on", async () => {
@@ -1146,7 +1155,7 @@ describe("source pins", () => {
     const send = post.slice(post.indexOf("await dbWithdrawChanges("));
     inOrder(send, ["await logLook(", "dbReadProfile(", "validateSessionSet(", "validateChangeSet(", "await dbInsertChangeSet("]);
     // A session's consent gate comes before the look, so an old grant reads nothing.
-    inOrder(send, ["grant.consentVersion !== SHARE_CONSENT_VERSION", "await logLook("]);
+    inOrder(send, ['!shareCovers(grant.consentVersion, "session")', "await logLook("]);
     // Exactly two reads of the profile, each straight after its look.
     expect(post.match(/dbReadProfile\(/g)).toHaveLength(2);
     expect(post.match(/await logLook\(ref, me, now\);\n\s+if \(failed\) return slid\(g, failed\);/g)).toHaveLength(2);

@@ -53,6 +53,7 @@ vi.mock("@/lib/auth-server", async (io) => ({
 
 const { GET, POST } = await import("@/app/api/sync/trainer/route");
 const { SHARE_CONSENT_VERSION } = await import("@/lib/trainer-terms");
+const COVERS_CHANGES = ["2026-10-05", "2026-10-05b", SHARE_CONSENT_VERSION];
 
 const URL_BASE = "https://heatwayve.app/api/sync/trainer";
 const get = (qs = "profile=abe") => GET(new NextRequest(`${URL_BASE}?${qs}`, { headers: { cookie: "hw_sync=tok-abe" } }));
@@ -259,10 +260,10 @@ describe("POST edits: the switch", () => {
     expect(store.on).not.toHaveBeenCalled();
   });
 
-  it("on: the grant on the current consent goes on, then the ceremony token expires; an older share asks for a fresh code", async () => {
+  it("on: a grant whose consent covers changes goes on, then the ceremony token expires; an older share asks for a fresh code", async () => {
     store.ceremony.mockImplementation(async () => ({ identity: { accountId: A }, credentialId: "c", authAt: null, account: {} }));
     expect((await post({ profile: "abe", edits: true, authToken: "cer" })).status).toBe(200);
-    expect(store.on.mock.calls.map((c) => c.slice(0, 2))).toEqual([[A, SHARE_CONSENT_VERSION]]);
+    expect(store.on.mock.calls.map((c) => c.slice(0, 2))).toEqual([[A, COVERS_CHANGES]]);
     expect(store.expire.mock.calls).toEqual([["cer"]]);
     store.on.mockImplementation(async () => "fresh");
     const res = await post({ profile: "abe", edits: true, authToken: "cer" });

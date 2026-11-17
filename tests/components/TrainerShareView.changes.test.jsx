@@ -366,10 +366,20 @@ describe("the changes switch", () => {
   });
 
   it("a share from before changes existed asks for a fresh code instead of offering the switch", async () => {
-    server.status = status({ sharing: sharing({ consentVersion: "2026-10" }), edits: { on: false, since: null } });
+    server.status = status({ sharing: sharing({ consentVersion: "2026-10-04" }), edits: { on: false, since: null } });
     await renderView();
     expect(screen.getByText("Ask Jo for a fresh code to let them change your plan.")).toBeTruthy();
     expect(screen.queryByText("Let Jo change your plan")).toBeNull();
+  });
+
+  it("a share approved on an earlier consent that covers changes offers the switch, not a fresh code", async () => {
+    for (const consentVersion of ["2026-10-05", "2026-10-05b"]) {
+      server.status = status({ sharing: sharing({ consentVersion }), edits: { on: false, since: null } });
+      await renderView();
+      expect(screen.getByText("Let Jo change your plan")).toBeTruthy();
+      expect(screen.queryByText("Ask Jo for a fresh code to let them change your plan.")).toBeNull();
+      cleanup();
+    }
   });
 
   it("the server says a fresh code is needed: says so", async () => {
