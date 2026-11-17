@@ -980,7 +980,7 @@ describe("a cooked record is history only", () => {
     expect(rest(TS.get("p").lifts[SQUAT])).toEqual(rest(before));
   });
 
-  // The design note's numbers: an earned 102.5, a deload at 65, re-entry at 90.
+  // Pre-deload 100 (102.5 earned): deload 65, re-entry 90.
   const deloadFrom102 = () => {
     seedSquat(100);
     expect(apply(squat("2026-10-20T10:00:00.000Z", 100, "normal", 3)).wwUpdates[SQUAT]).toBe(102.5);
