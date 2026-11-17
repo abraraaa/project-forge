@@ -24,7 +24,7 @@ import ConsentLine from "@/components/ConsentLine";
 import { TrainerSessionCard } from "@/components/TrainerSessionSheet";
 import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
-import { deloadCardCopy, repTargetRepairs } from "@/lib/progression";
+import { deloadCardCopy, deloadDayLabel, repTargetRepairs } from "@/lib/progression";
 import { planStartWeight, isWorkingWeight, scheduledPlan } from "@/lib/programme-resolve";
 import { getLoadType, parseTimedReps, usesOptionalChrome } from "@/lib/lift-translations";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
@@ -243,6 +243,8 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // session's card shows them (scheduledPlan).
   const due = scheduledPlan({ weights: workingWeights, reps: liveReps, trainingState: { lifts: liftStates, mesocycle: { activeDeload } }, history });
   const plan = { reps: due.reps, weights: due.weights, bodyweight, anchors: muscleAnchors };
+  // The session view's own tag, for the day in view; null outside a deload.
+  const deloadTag = deloadDayLabel(activeDeload, viewDateStr);
 
   // Guidance line under the display name. Strength days lead with the
   // session's own noun; non-strength days keep their modality detail.
@@ -330,9 +332,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             const isDone    = !!weekDone[i];
             // Made up later in the week: a muted tick, not a solid one.
             const isCovered = !isDone && status === "covered";
+            const inDeload  = deloadDayLabel(activeDeload, addDaysIso(new Date(nowMs), i - todayIdx)) !== null;
             return (
               <button key={i} onClick={()=>setViewIdx(i)} className="forge-press"
-                aria-label={`${DAY_NAMES[i]}${isToday ? " (today)" : ""}${isDone ? ", done" : isCovered ? ", made up" : isResting ? ", resting" : ""}`}
+                aria-label={`${DAY_NAMES[i]}${isToday ? " (today)" : ""}${isDone ? ", done" : isCovered ? ", made up" : isResting ? ", resting" : ""}${inDeload ? ", deload" : ""}`}
                 aria-current={isView ? "date" : undefined}
                 style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:7,cursor:"pointer",background:"none",border:"none",padding:"6px 0 4px"}}>
                 {/* Weekday glyph carries the day; the key tick below
@@ -381,6 +384,9 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
               <span style={{fontSize:12,color:T.ink3}}>
                 {viewDate.toLocaleDateString("en-GB",{day:"numeric",month:"short"})}
               </span>
+            )}
+            {deloadTag && (
+              <span style={{fontSize:13,color:T.ink2}}><MonoNums>{deloadTag}</MonoNums></span>
             )}
           </div>
           <h1 style={{...DISPLAY,fontSize:46,color:T.ink,margin:0}}>

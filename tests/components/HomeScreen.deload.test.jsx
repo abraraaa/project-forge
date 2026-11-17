@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-// Home during a deload: the session list shows the deload weight the card
-// will open with. None of it without one.
+// Home during a deload: the day in view carries the session view's own tag
+// (deloadDayLabel), the week strip names the deload days, and the session
+// list shows the deload weight the card will open with. None of it without one.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import HomeScreen from "../../components/HomeScreen.jsx";
 import { WEEK, SESSIONS } from "../../lib/programme.js";
 import { makeDayContext, resolveRange, sessionsFrom } from "../../lib/day-state.js";
@@ -39,10 +40,23 @@ const rowOf = (name) => flat(screen.getByText(name).parentElement.textContent);
 describe("Home inside a deload", () => {
   beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 8, 25, 9, 0)); });
 
-  it("today's card shows the deload weight", () => {
+  it("today's card carries the session view's tag and the deload weight", () => {
     const { main, ...p } = props(true);
-    render(<HomeScreen {...p} />);
+    const { container } = render(<HomeScreen {...p} />);
+    expect(flat(container.textContent)).toContain("deload · day 3 of 5");
     expect(rowOf(main)).toContain("at 65 kg");
+  });
+
+  it("the week names the deload days, and a day outside it carries no tag", () => {
+    const { main: _main, ...p } = props(true);
+    const { container } = render(<HomeScreen {...p} />);
+    expect(screen.getByRole("button", { name: "Wednesday, deload" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Saturday, deload" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Monday" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Monday" }));
+    expect(flat(container.textContent)).not.toContain("deload");
+    fireEvent.click(screen.getByRole("button", { name: "Wednesday, deload" }));
+    expect(flat(container.textContent)).toContain("deload · day 1 of 5");
   });
 });
 
