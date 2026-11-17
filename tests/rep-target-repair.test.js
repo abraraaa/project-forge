@@ -211,7 +211,8 @@ describe("the retro path repairs too", () => {
   it("ForgeApp hands the retro sheet repaired targets and tells the engine which it repaired", () => {
     const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../components/ForgeApp.jsx"), "utf8");
     expect(src).toMatch(/const retroRepairs = useMemo\(\(\) => repTargetRepairs\(\{ reps: workingReps, lifts: TS\.get\(activeProfile\)\?\.lifts \?\? \{\}, sessions: SESSIONS \}\)/);
-    expect(src).toContain("workingReps={retroReps}");
+    expect(src).toContain("reps: retroReps,");
+    expect(src).toContain("workingReps={retroPlan.reps}");
     expect(src).toContain("applySessionToEngine(activeProfile, sessionRecord, { currentWeights: workingWeights, repairedReps: retroRepairs })");
   });
 });
