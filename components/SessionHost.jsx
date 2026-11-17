@@ -46,7 +46,7 @@ import {
   CD, coachTrainer, letterIndex, letterOf, sessionNameOf, COACH_MAX_SETS,
 } from "@/lib/session-source";
 import { changeStatus, sessionDayWords } from "@/lib/trainer-change";
-import { catalogueTemplateWeight } from "@/lib/programme-resolve";
+import { catalogueTemplateWeight, scheduledPlan } from "@/lib/programme-resolve";
 import {
   SESSIONS, EXERCISE_POOLS,
   applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
@@ -141,7 +141,6 @@ export default function SessionHost({ mode = null } = {}) {
   // prescription. Lost with the session; a resume re-seeds it from the draft.
   const [sessionWeights, setSessionWeights] = useState({});
   const [sessionReps, setSessionReps]       = useState({});
-  const planWeights = useMemo(() => ({ ...workingWeights, ...sessionWeights }), [workingWeights, sessionWeights]);
   // Lift state as the session opened, for the card's note on last session.
   const [liftStates] = useState(() => source.liftStates());
   // Who set each lift's number, as the session opened (device-local marks a
@@ -393,7 +392,18 @@ export default function SessionHost({ mode = null } = {}) {
       exclude: Object.values(sessionSwaps).map((s) => s?.name).filter(Boolean),
     });
   }, [travel, programmeBlock, activeSessionIdx, mainLifts, userFocus, workingReps, liftStates, sessionSwaps]);
-  const prescribedReps = useMemo(() => ({ ...workingReps, ...repRepairs }), [workingReps, repRepairs]);
+  // The prescription as the card shows it: W and R (with repairs), the deload
+  // calendar's weight and reps in their place (scheduledPlan). Never written
+  // to W or R.
+  const scheduled = useMemo(() => scheduledPlan({
+    weights: workingWeights,
+    reps: { ...workingReps, ...repRepairs },
+    trainingState: { lifts: liftStates, mesocycle: { activeDeload } },
+    history,
+  }), [workingWeights, workingReps, repRepairs, liftStates, activeDeload, history]);
+  const prescribedWeights = scheduled.weights;
+  const prescribedReps = scheduled.reps;
+  const planWeights = useMemo(() => ({ ...prescribedWeights, ...sessionWeights }), [prescribedWeights, sessionWeights]);
   const planReps = useMemo(() => ({ ...prescribedReps, ...sessionReps }), [prescribedReps, sessionReps]);
   const block   = activeSession.blocks[blockIdx];
   const isSS    = block.type === "superset" || block.type === "finisher";
@@ -578,10 +588,11 @@ export default function SessionHost({ mode = null } = {}) {
     // when none, so a no-vest set is exactly what it always was. W is never
     // read for these lifts (the engine never prescribes one there).
     const resolvedWeight = savedKgFor(ex, { addedLoads, planWeight: getW });
-    // The prescription this set was measured against — W/R, never the drum —
-    // so the engine judges what was done against what was asked.
+    // The prescription this set was measured against — W/R as the card shows
+    // them, never the drum — so the engine judges what was done against what
+    // was asked.
     const prescribedWeight = loadType === "bodyweight" ? null
-      : planStartWeight(ex, { working: workingWeights, bodyweight, anchors: muscleAnchors });
+      : planStartWeight(ex, { working: prescribedWeights, bodyweight, anchors: muscleAnchors });
     logSet(draftLogRef.current, {
       blockId: block.id,
       blockType: block.type,
@@ -612,7 +623,7 @@ export default function SessionHost({ mode = null } = {}) {
       setBwPromptedThisSession(true);
       setTimeout(() => setBwEditOpen(true), 280);
     }
-  }, [getW, block, isSS, phase, sessionSwaps, sessionWeights, sessionReps, workingWeights, prescribedReps, planReps, addedLoads, muscleAnchors, resolveExFn, sinks, bodyweight, bwPromptedThisSession, reachArmed, coached]);
+  }, [getW, block, isSS, phase, sessionSwaps, sessionWeights, sessionReps, prescribedWeights, prescribedReps, planReps, addedLoads, muscleAnchors, resolveExFn, sinks, bodyweight, bwPromptedThisSession, reachArmed, coached]);
 
   // Final-set flash — one quiet line after rating the LAST set of an
   // exercise (lib/set-flash.js: no repeats this session, Easy falls back to
@@ -772,7 +783,7 @@ export default function SessionHost({ mode = null } = {}) {
 
   // Readiness "start" — initialise the draft and enter the session.
   const handleReadinessStart = () => {
-    setSessionStartWeights({ ...workingWeights });
+    setSessionStartWeights({ ...prescribedWeights });
     draftLogRef.current = newDraftLog({
       profileName: profile,
       session: SESSION_KEYS[activeSessionIdx],

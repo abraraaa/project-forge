@@ -719,7 +719,7 @@ describe("every reader plans a never-logged lift at the same start", () => {
     expect(app).toMatch(/<HomeScreen [^\n]*\bmuscleAnchors=\{homePlan\.anchors\}/);
     expect(app).toMatch(/<RetrospectiveSessionSheet [^\n]*\bmuscleAnchors=\{homePlan\.anchors\}/);
     // Each plans with the prop as it comes.
-    expect(code("components/HomeScreen.jsx")).toMatch(/\{ reps: liveReps, weights: workingWeights, bodyweight, anchors: muscleAnchors \};/);
+    expect(code("components/HomeScreen.jsx")).toMatch(/\{ reps: due\.reps, weights: due\.weights, bodyweight, anchors: muscleAnchors \};/);
     expect(app).toMatch(/planStartWeight\(ex, \{ working: workingWeights, bodyweight, anchors: muscleAnchors \}\)/);
   });
 });

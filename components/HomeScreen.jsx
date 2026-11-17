@@ -25,7 +25,7 @@ import { TrainerSessionCard } from "@/components/TrainerSessionSheet";
 import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
 import { deloadCardCopy, repTargetRepairs } from "@/lib/progression";
-import { planStartWeight, isWorkingWeight } from "@/lib/programme-resolve";
+import { planStartWeight, isWorkingWeight, scheduledPlan } from "@/lib/programme-resolve";
 import { getLoadType, parseTimedReps, usesOptionalChrome } from "@/lib/lift-translations";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
 import { fetchWithTimeout } from "@/lib/net";
@@ -101,7 +101,7 @@ const linkBtn = {
 };
 
 export default
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},dayStates=[],onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,mainLifts={},onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge,trainerSessions=[],onOpenTrainerSession,workingWeights={},workingReps={},liftStates={},muscleAnchors={},bodyweight=null}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},dayStates=[],onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,mainLifts={},onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge,trainerSessions=[],onOpenTrainerSession,workingWeights={},workingReps={},liftStates={},muscleAnchors={},bodyweight=null,activeDeload=null}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -239,7 +239,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const liveReps = viewSession
     ? { ...workingReps, ...repTargetRepairs({ reps: workingReps, lifts: liftStates, sessions: [viewSession] }) }
     : workingReps;
-  const plan = { reps: liveReps, weights: workingWeights, bodyweight, anchors: muscleAnchors };
+  // The deload calendar's weight and reps in place of W and R, as the
+  // session's card shows them (scheduledPlan).
+  const due = scheduledPlan({ weights: workingWeights, reps: liveReps, trainingState: { lifts: liftStates, mesocycle: { activeDeload } }, history });
+  const plan = { reps: due.reps, weights: due.weights, bodyweight, anchors: muscleAnchors };
 
   // Guidance line under the display name. Strength days lead with the
   // session's own noun; non-strength days keep their modality detail.
