@@ -1026,3 +1026,98 @@ describe("a cooked record is history only", () => {
     expect(out).toMatchObject({ wwUpdates: {}, wrUpdates: {}, justCompletedDeload: false, stillInDeload: false });
   });
 });
+
+// A deload day's weight is the deload multiplier of the pre-deload weight for
+// the whole deload, however often the lift is visited and whatever was lifted.
+describe("a deload day's weight is the deload of the pre-deload weight", () => {
+  beforeEach(() => localStorage.clear());
+  const apply = (rec) => { H.append("p", rec); return applySessionToEngine("p", rec); };
+  const rec = (id, name, loadType, sets, readiness = "normal", prescribed = null) => ({
+    v: 2, id, date: id.slice(0, 10), readiness, session: "strength-a",
+    blocks: [{ id: "a1", type: "main", exercises: [{ name, loadType, ...(prescribed ? { prescribed } : {}), sets }] }],
+  });
+  const SQUAT = "Barbell Back Squat";
+  const squat = (day, kg, readiness = "normal") => rec(`2026-10-${day}T10:00:00.000Z`, SQUAT, "barbell",
+    [0, 1, 2].map(() => ({ weight: kg, reps: 5, rir: 2, loadType: "barbell", effectiveLoad: kg, est1rm: kg * (1 + 5 / 30) })),
+    readiness, { sets: 3, reps: 5, weight: kg });
+  const state = (currentWeight, reps = 5) => ({
+    currentWeight, nextPrescribed: currentWeight, sessionsCount: 8, consecutiveAdds: 0, consecutiveHolds: 0, consecutiveLightMisses: 0,
+    stallSignal: null, history: [], currentRepRange: { reps, sets: 3, baseReps: reps },
+  });
+  // Deload started 2026-10-21: days 22-24 are inside it, the 25th closes it.
+  const deload = (lifts, preDeloadWeights) => TS.save("p", { lifts, mesocycle: {
+    currentPhase: "deload", activeDeload: { startedAt: "2026-10-21T12:00:00.000Z", plannedDays: 7, preDeloadWeights },
+  } });
+  const written = (out) => out.wwUpdates[SQUAT];
+
+  it("from a pre-deload 100, deload days logged at 65 write 65 each time", () => {
+    deload({ [SQUAT]: state(100) }, { [SQUAT]: 100 });
+    expect(written(apply(squat(22, 65)))).toBe(65);
+    expect(TS.get("p").lifts[SQUAT].currentWeight).toBe(65);
+    expect(written(apply(squat(23, 65)))).toBe(65);
+    expect(written(apply(squat(24, 65)))).toBe(65);
+  });
+
+  it("normal, cooked, normal write 65, 65, 65", () => {
+    deload({ [SQUAT]: state(100) }, { [SQUAT]: 100 });
+    expect([22, 23, 24].map((d, i) => written(apply(squat(d, 65, i === 1 ? "cooked" : "normal"))))).toEqual([65, 65, 65]);
+  });
+
+  it("a cooked day after a deload day at 65 writes 65, not the deload of the stored 65", () => {
+    deload({ [SQUAT]: state(100) }, { [SQUAT]: 100 });
+    apply(squat(22, 65));
+    expect(TS.get("p").lifts[SQUAT].currentWeight).toBe(65);
+    expect(written(apply(squat(23, 65, "cooked")))).toBe(65);
+  });
+
+  it("a deload day dialled to 60 or 70 still writes 65", () => {
+    for (const kg of [60, 70]) {
+      localStorage.clear();
+      deload({ [SQUAT]: state(100) }, { [SQUAT]: 100 });
+      expect(written(apply(squat(22, kg))), `${kg}`).toBe(65);
+      expect(written(apply(squat(23, kg))), `${kg}`).toBe(65);
+    }
+  });
+
+  it("a stored weight already compounded to 42.5 goes back to 65 on the next deload day", () => {
+    deload({ [SQUAT]: state(42.5) }, { [SQUAT]: 100 });
+    expect(written(apply(squat(23, 42.5)))).toBe(65);
+  });
+
+  it("a lift with no snapshot entry deloads from what was lifted", () => {
+    deload({ [SQUAT]: state(100) }, {});
+    expect(written(apply(squat(22, 80)))).toBe(52.5);
+  });
+
+  it("a belted lift deloads its added load from the snapshot: +10 writes 6.25 each day", () => {
+    const pullUp = (day, kg) => rec(`2026-10-${day}T10:00:00.000Z`, "Pull-Up", "loaded_bodyweight",
+      [0, 1, 2].map(() => ({ weight: kg, reps: 6, rir: 2, loadType: "loaded_bodyweight", bodyweightUsed: 80, effectiveLoad: 80 + kg, est1rm: (80 + kg) * 1.2 })),
+      "normal", { sets: 3, reps: 6, weight: kg });
+    deload({ "Pull-Up": state(10, 6) }, { "Pull-Up": 10 });
+    expect(apply(pullUp(22, 6.25)).wwUpdates["Pull-Up"]).toBe(6.25);
+    expect(apply(pullUp(23, 6.25)).wwUpdates["Pull-Up"]).toBe(6.25);
+  });
+
+  it("an assisted lift holds the help it used, and a bodyweight lift writes no weight", () => {
+    const assisted = (day, kg) => rec(`2026-10-${day}T10:00:00.000Z`, "Assisted Pull-Up", "assisted_bodyweight",
+      [0, 1].map(() => ({ weight: kg, reps: 3, rir: 4, loadType: "assisted_bodyweight", bodyweightUsed: 80, effectiveLoad: 80 - kg, est1rm: (80 - kg) * 1.1 })));
+    const pushUp = (day) => rec(`2026-10-${day}T10:00:00.000Z`, "Push-Up", "bodyweight",
+      [0, 1].map(() => ({ weight: null, reps: 6, rir: 4, loadType: "bodyweight" })));
+    deload({ "Assisted Pull-Up": state(20, 6), "Push-Up": state(null, 12) }, { "Assisted Pull-Up": 20 });
+    expect(apply(assisted(22, 25)).wwUpdates["Assisted Pull-Up"]).toBe(25);
+    const out = apply(pushUp(22));
+    expect(out.wwUpdates).not.toHaveProperty("Push-Up");
+    expect(out.wrUpdates).toEqual({});
+  });
+
+  it("the closing day re-enters at 90 and the ordinary climb follows", () => {
+    deload({ [SQUAT]: state(100) }, { [SQUAT]: 100 });
+    expect(written(apply(squat(22, 65)))).toBe(65);
+    expect(written(apply(squat(23, 65)))).toBe(65);
+    const closing = apply(squat(25, 65));
+    expect(closing.justCompletedDeload).toBe(true);
+    expect(written(closing)).toBe(90);
+    expect(written(apply(squat(27, 90)))).toBe(90);
+    expect(written(apply(squat(29, 90)))).toBe(92.5);
+  });
+});
