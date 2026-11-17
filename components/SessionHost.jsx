@@ -46,6 +46,7 @@ import {
   CD, coachTrainer, letterIndex, letterOf, sessionNameOf, COACH_MAX_SETS,
 } from "@/lib/session-source";
 import { changeStatus, sessionDayWords } from "@/lib/trainer-change";
+import { catalogueTemplateWeight } from "@/lib/programme-resolve";
 import {
   SESSIONS, EXERCISE_POOLS,
   applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
@@ -423,7 +424,15 @@ export default function SessionHost({ mode = null } = {}) {
   ), [planWeights, bodyweight, muscleAnchors]);
   const getR = useCallback((ex) => ex ? (planReps[ex.name] ?? ex.reps) : null, [planReps]);
 
-  const onSwap = (key, newEx) => {
+  const onSwap = (key, pick) => {
+    // A template-start lift with no working weight opens at its own
+    // template weight, carried on the swap (planStartWeight reads it as the
+    // template); nothing is written to W for it.
+    const fresh = !!pick?.name && pick.weight == null && workingWeights[pick.name] === undefined;
+    const template = fresh && getLiftProfile(pick.name).templateStart
+      ? catalogueTemplateWeight(pick.name, getLoadType(pick))
+      : null;
+    const newEx = template !== null ? { ...pick, weight: template } : pick;
     setSessionSwaps(prev => ({ ...prev, [key]: newEx }));
     // Seed a cold start for a lift the user has never trained.
     //
