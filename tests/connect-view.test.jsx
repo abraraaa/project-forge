@@ -101,4 +101,18 @@ describe("connect page: legible field and status", () => {
     expect(screen.getByLabelText("Your Heatwayve name").style.border).toBe("1px solid var(--ink-3)");
     expect(screen.getByRole("status").style.color).toBe("var(--ink-2)");
   });
+
+  it("leads with the destination: an unrecognised client's own name is only quoted", async () => {
+    const { default: ConnectView } = await import("../components/ConnectView.jsx");
+    render(<ConnectView clientName="Claude" host="attacker.example.com" params={{}} />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("attacker.example.com wants in");
+    expect(screen.getByText(/It calls itself \u201cClaude\u201d/)).toBeTruthy();
+  });
+
+  it("a recognised AI is named by its host", async () => {
+    const { default: ConnectView } = await import("../components/ConnectView.jsx");
+    render(<ConnectView clientName="Claude" host="claude.ai" params={{}} />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Claude wants in");
+    expect(screen.getByText("Returns to claude.ai")).toBeTruthy();
+  });
 });

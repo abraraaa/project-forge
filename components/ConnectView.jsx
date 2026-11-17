@@ -11,6 +11,7 @@ import { P } from "@/lib/storage";
 import { authenticatePasskey } from "@/lib/webauthn";
 import { fetchWithTimeout } from "@/lib/net";
 import { REPLY_COPY } from "@/lib/trainer-apply-copy";
+import { describeClient } from "@/lib/connect-client";
 
 export default function ConnectView({ clientName, host, params }) {
   // The field is the truth. The name used to seed from localStorage during
@@ -30,6 +31,7 @@ export default function ConnectView({ clientName, host, params }) {
   }, []);
   const currentName = () => (inputRef.current?.value ?? name).trim();
   const [busy, setBusy] = useState(false);
+  const shown = describeClient(clientName, host);
   const [error, setError] = useState(null);
 
   const send = async (approve, authToken = null) => {
@@ -79,11 +81,11 @@ export default function ConnectView({ clientName, host, params }) {
   return (
     <div style={{maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased",padding:"72px 24px 48px"}}>
       <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>Connect your AI</div>
-      <h1 style={{...DISPLAY,fontSize:38,color:T.ink,margin:"0 0 10px",overflowWrap:"anywhere"}}>{clientName} wants in</h1>
-      <p style={{fontSize:14,color:T.ink2,marginBottom:6,lineHeight:1.6}}>
-        It reads your training — lifts, volume, rhythm. Read only. Photos stay locked.
+      <h1 style={{...DISPLAY,fontSize:38,color:T.ink,margin:"0 0 10px",overflowWrap:"anywhere"}}>{shown.headline}</h1>
+      <p style={{fontSize:14,color:T.ink,marginBottom:10,lineHeight:1.5,overflowWrap:"anywhere"}}>{shown.note}</p>
+      <p style={{fontSize:14,color:T.ink2,marginBottom:32,lineHeight:1.6}}>
+        It reads your training: lifts, volume, rhythm. Read only. Photos stay locked.
       </p>
-      <p style={{fontSize:12,color:T.ink2,marginBottom:32,lineHeight:1.5}}>Returns to {host}</p>
 
       <label htmlFor="hw-connect-name" style={{display:"block",fontSize:13,color:T.ink2,marginBottom:6}}>Your Heatwayve name</label>
       <input id="hw-connect-name" ref={inputRef} value={name} onChange={e => setName(e.target.value)}
