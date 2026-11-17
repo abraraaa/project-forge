@@ -7,6 +7,7 @@ import { hasChallengeSecret, issueChallenge, rpConfigFromRequest, planLoginCerem
 import { normaliseProfile } from "@/lib/profile-name";
 import { dbResolveHandle } from "@/lib/identity-store";
 import { readCredentialSet } from "@/lib/credential-store";
+import { durationMs, msAfter } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -54,7 +55,7 @@ export async function POST(request) {
       await put(`forge/challenges/${userId}`, JSON.stringify({
         challenge,
         profile: normalise(profile),
-        expires: Date.now() + 120000,
+        expires: msAfter(Date.now(), durationMs({ minutes: 2 })),
         type: "login",
       }), {
         access: "private",

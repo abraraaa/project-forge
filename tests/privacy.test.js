@@ -40,8 +40,8 @@ describe("privacy notice stays true", () => {
   it("cookie lifetimes match the notice (sync 30 days, photos 7)", () => {
     expect(page).toMatch(/30 days \(sync\)/);
     expect(page).toMatch(/7 days \(photos\)/);
-    expect(read("app/api/photos/route.js")).toContain("maxAge: 7 * 86400");
-    expect(read("app/api/sync/route.js")).toContain("maxAge: 30 * 86400");
+    expect(read("app/api/photos/route.js")).toContain("maxAge: durationSeconds({ days: 7 })");
+    expect(read("app/api/sync/route.js")).toContain("maxAge: durationSeconds({ days: 30 })");
   });
 
   it("the trainer cookie matches the notice (14 days unused, 30 at most)", () => {

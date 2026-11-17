@@ -11,6 +11,7 @@ import { credentialsPrefix, credentialsPath } from "@/lib/storage-keys";
 import { acceptedConsentVersion } from "@/lib/consent";
 import { indexSignIn, readCredentialSet, credentialMirrorDoc } from "@/lib/credential-store";
 import { dbResolveHandle } from "@/lib/identity-store";
+import { durationMs, durationSeconds, isoInstant } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -145,7 +146,7 @@ export async function POST(request) {
                 }
               : c,
           ),
-          ...(stampConsent ? { consent: { version: consentVersion, at: new Date().toISOString() } } : null),
+          ...(stampConsent ? { consent: { version: consentVersion, at: isoInstant() } } : null),
         };
         // Write-first, sweep-after — see audit #6 / writeJsonReplacingPrefix.
         await writeJsonReplacingPrefix(credentialsPrefix(account.storageKey), credentialsPath(account.storageKey), updated);
@@ -155,7 +156,7 @@ export async function POST(request) {
       }
     } else if (!credData && stampConsent) {
       // No doc to mirror onto: the account is the only record.
-      stampedConsent = { version: consentVersion, at: new Date().toISOString() };
+      stampedConsent = { version: consentVersion, at: isoInstant() };
     }
 
     // Credential index (Neon): counter, rpId and last_used_at on every
@@ -188,7 +189,7 @@ export async function POST(request) {
     // Secure, SameSite=Strict, and PATH-SCOPED to /api/photos so it never
     // even accompanies any other request. scope:"photos" is rejected by the
     // wipe gate — destructive ops keep fresh short-lived ceremonies.
-    const photoToken = quiet ? null : await mintAuthToken({ identity, ttlMs: 7 * 86400000, scope: "photos" });
+    const photoToken = quiet ? null : await mintAuthToken({ identity, ttlMs: durationMs({ days: 7 }), scope: "photos" });
 
     // Sync-scope cookie (J1, 2026-07-26). Sync is AMBIENT — visibility
     // change, reconnect, every mutation — so it cannot ride the in-memory
@@ -198,7 +199,7 @@ export async function POST(request) {
     // path rejects every scoped token, so this cookie can read and write a
     // profile but can never destroy one. Sliding 7 days — same window as
     // hw_photos: any active day rotates it, so a device in use never re-auths.
-    const syncToken = quiet ? null : await mintAuthToken({ identity, ttlMs: 30 * 86400000, scope: "sync" });
+    const syncToken = quiet ? null : await mintAuthToken({ identity, ttlMs: durationMs({ days: 30 }), scope: "sync" });
 
     const res = NextResponse.json({
       ok: true, verified: true, profile: normalise(profile), authToken, expiresIn: 3600,
@@ -211,12 +212,12 @@ export async function POST(request) {
     // Quiet: the ceremony token in the body is all this device keeps.
     if (quiet) return res;
     res.cookies.set("hw_photos", photoToken, {
-      httpOnly: true, secure: true, sameSite: "strict", path: "/api/photos", maxAge: 7 * 86400,
+      httpOnly: true, secure: true, sameSite: "strict", path: "/api/photos", maxAge: durationSeconds({ days: 7 }),
     });
     res.cookies.set("hw_sync", syncToken, {
       // 30 days, matching the token TTL and the gate's sliding refresh —
       // the photos cookie deliberately stays at 7.
-      httpOnly: true, secure: true, sameSite: "strict", path: "/api/sync", maxAge: 30 * 86400,
+      httpOnly: true, secure: true, sameSite: "strict", path: "/api/sync", maxAge: durationSeconds({ days: 30 }),
     });
     return res;
   } catch (e) {

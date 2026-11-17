@@ -23,7 +23,9 @@ describe("auth_at survives the token table", () => {
     for (const f of ["app/api/sync/route.js", "app/api/photos/route.js"]) {
       const src = readFileSync(resolve(__dirname, "..", f), "utf8");
       expect(src).toContain("authAt: data.authAt || data.createdAt || null");
-      expect(src).toMatch(/new Date\(data\.authAt \|\| data\.createdAt/);
+      expect(src).toMatch(/slides\(data, /);
     }
+    const time = readFileSync(resolve(__dirname, "..", "lib/server-time.js"), "utf8");
+    expect(time).toContain("readInstantMs(authAt || createdAt || 0)");
   });
 });

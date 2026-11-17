@@ -12,6 +12,7 @@ import { indexRegistration, readCredentialSet, reclaimUserId, credentialHolder, 
 import { dbResolveHandle, dbReclaimHandle } from "@/lib/identity-store";
 import { entitled } from "@/lib/entitlements";
 import { put } from "@vercel/blob";
+import { durationMs, durationSeconds, isoInstant } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -167,7 +168,7 @@ export async function POST(request) {
       publicKey: Buffer.from(vc.publicKey).toString("base64url"),
       counter: vc.counter,
       transports: vc.transports || credential.response?.transports || [],
-      createdAt: new Date().toISOString(),
+      createdAt: isoInstant(),
       // As VERIFIED, not as requested. Immutable for the credential's life.
       rpId: verification.registrationInfo.rpID || rpConfigFromRequest(request).rpId,
     };
@@ -178,7 +179,7 @@ export async function POST(request) {
     const consentVersion = acceptedConsentVersion(consent);
     const priorConsent = reclaim ? undefined : set.consent ?? undefined;
     const nextConsent = consentVersion && priorConsent?.version !== consentVersion
-      ? { version: consentVersion, at: new Date().toISOString() }
+      ? { version: consentVersion, at: isoInstant() }
       : priorConsent;
 
     /** @type {{ accountId: string, storageKey: string }} */
@@ -224,7 +225,7 @@ export async function POST(request) {
         // Seeds displayName into meta on first push, as a claim does. No overwrite.
         await put(metaPath(target.storageKey), JSON.stringify({
           displayName: String(profile).trim(),
-          claimedAt: new Date().toISOString(),
+          claimedAt: isoInstant(),
           weights: {},
           reps: {},
           streak: { count: 0, lastDate: null },
@@ -269,12 +270,12 @@ export async function POST(request) {
     // Without this the flow would be "register a passkey → now sign in with
     // it" — two ceremonies back to back for one intent. The user just proved
     // control of this profile with an authenticator; that IS the ceremony.
-    const syncToken = await mintAuthToken({ identity: target, ttlMs: 30 * 86400000, scope: "sync" });
+    const syncToken = await mintAuthToken({ identity: target, ttlMs: durationMs({ days: 30 }), scope: "sync" });
     const res = NextResponse.json({ ok: true, credentialId: vc.id, rpId: newCredential.rpId });
     res.cookies.set("hw_sync", syncToken, {
       // 30 days, matching the token TTL and the gate's sliding refresh —
       // the photos cookie deliberately stays at 7.
-      httpOnly: true, secure: true, sameSite: "strict", path: "/api/sync", maxAge: 30 * 86400,
+      httpOnly: true, secure: true, sameSite: "strict", path: "/api/sync", maxAge: durationSeconds({ days: 30 }),
     });
     return res;
   } catch (e) {
