@@ -23,11 +23,11 @@ const notShared = () => json({ error: "Not shared with you now." }, 404);
 // POST /api/trainer/client { ref, today } -> { client: { name, since }, view }
 // POST keeps the grant id out of URLs and logs. The look is logged on the
 // grant before the client's data is read; if it can't be logged, nothing is read.
-// view.edits says where the trainer's changes stand: on, off, fresh (the
-// grant predates the current consent) or unavailable (changes on, but the
-// trainer's own changes could not be read: the failure is logged and the view
-// answers without a plan). When on, view.plan carries what the trainer may
-// change, with their own changes and budget (read after the look, like the
+// view.edits says where the trainer's changes stand: on, off, fresh (changes
+// were never turned on for this grant: edits_at is null) or unavailable
+// (changes on, but the trainer's own changes could not be read: the failure
+// is logged and the view answers without a plan). When on, view.plan
+// carries what the trainer may change, with their own changes and budget (read after the look, like the
 // profile). Otherwise view.ran carries only the sessions they ran with the
 // client and the session count, so a session on the client's phone still
 // shows after changes stop.

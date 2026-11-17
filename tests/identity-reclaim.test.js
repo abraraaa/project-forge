@@ -411,7 +411,7 @@ describe("options and verify agree on reclaim-or-not", () => {
   // The library checks the challenge through expectedChallenge; run it here.
   beforeEach(() => {
     seedAccount(A, "sam", "sam");
-    db.credentials.push({ ...LEGACY, account_id: A }); // theforged.fit: usable until the sunset
+    db.credentials.push({ ...LEGACY, account_id: A }); // theforged.fit: never usable
     reg.mockImplementation(async ({ response, expectedChallenge }) => {
       const { challenge } = JSON.parse(Buffer.from(response.response.clientDataJSON, "base64url").toString());
       const ok = typeof expectedChallenge === "function" ? expectedChallenge(challenge) : expectedChallenge === challenge;
@@ -419,13 +419,14 @@ describe("options and verify agree on reclaim-or-not", () => {
       return { verified: true, registrationInfo: { rpID: "heatwayve.app", credential: { id: "new", publicKey: new Uint8Array([9]), counter: 0, transports: [] } } };
     });
   });
-  const sunset = () => new Date(2026, 10, 16).getTime();
+  const NATIVE = { ...LEGACY, id: "live", rp_id: "heatwayve.app", account_id: A };
+  const dropNative = () => { db.credentials = db.credentials.filter((c) => c.id !== "live"); };
 
   it("a lapse that lands between options and verify fails the ceremony instead of recording a different user handle", async () => {
-    vi.setSystemTime(sunset() - 30_000);
+    db.credentials.push(NATIVE);
     const opts = await options();
     expect(opts.user.id).toBe(`uid-${A}`);
-    vi.setSystemTime(sunset() + 30_000);
+    dropNative();
     const res = await register(opts.challenge);
     expect(res.status).toBe(400);
     expect(writes()).toEqual([]);
@@ -435,7 +436,6 @@ describe("options and verify agree on reclaim-or-not", () => {
   });
 
   it("a reclaim challenge verifies only as a reclaim", async () => {
-    vi.setSystemTime(sunset() + 30_000);
     const opts = await options();
     expect((await register(opts.challenge)).status).toBe(200);
     expect(db.credentials.find((c) => c.id === "new").user_handle).toBe(opts.user.id);
@@ -443,10 +443,9 @@ describe("options and verify agree on reclaim-or-not", () => {
 
   it("blob mode: a carried reclaim user.id is refused once the handle is no longer lapsed", async () => {
     delete process.env.CHALLENGE_SECRET;
-    vi.setSystemTime(sunset() + 30_000);
     const opts = await options();
     blobWrites.length = 0; // the challenge blob options wrote
-    vi.setSystemTime(sunset() - 30_000);
+    db.credentials.push(NATIVE);
     tokens.set("tA", { profile: "sam", accountId: A, expires: Date.now() + 60000 });
     const res = await register(opts.challenge, { authToken: "tA" });
     expect(res.status).toBe(400);

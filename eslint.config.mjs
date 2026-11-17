@@ -23,7 +23,32 @@ const eslintConfig = [
     },
   },
   {
-    ignores: [".next/**", "node_modules/**", "public/**", ".claude/**"],
+    // The live service worker runs in worker scope, not a window: its own
+    // globals on top of the browser set. Same rules as the app.
+    files: ["public/sw.js"],
+    languageOptions: {
+      globals: {
+        importScripts: "readonly",
+        clients: "readonly",
+        registration: "readonly",
+        skipWaiting: "readonly",
+        serviceWorker: "readonly",
+        Client: "readonly",
+        Clients: "readonly",
+        WindowClient: "readonly",
+        ExtendableEvent: "readonly",
+        ExtendableMessageEvent: "readonly",
+        FetchEvent: "readonly",
+        InstallEvent: "readonly",
+        ServiceWorkerGlobalScope: "readonly",
+        WorkerGlobalScope: "readonly",
+      },
+    },
+  },
+  {
+    // public/ is served as-is; only the hand-written service worker is
+    // linted. The generated precache manifest (sw-precache.js) stays out.
+    ignores: [".next/**", "node_modules/**", "public/**/*", "!public/sw.js", ".claude/**"],
   },
 ];
 

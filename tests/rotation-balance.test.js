@@ -294,7 +294,7 @@ describe("equivalence: within budget the solver is the volume solver", () => {
 describe("Leg Press Calf Raise", () => {
   it("has its calf profile, not an inferred upper_push", () => {
     expect(getLiftProfile("Leg Press Calf Raise")).toEqual({
-      primaryMuscle: "Calves", category: "accessory_isolation", factor: 0, progressesByLoad: true,
+      primaryMuscle: "Calves", category: "accessory_isolation", factor: 0, progressesByLoad: true, machine: true,
     });
     expect(getLiftProfile("Leg Press Calf Raise")).toEqual(getLiftProfile("Standing Calf Raise"));
   });

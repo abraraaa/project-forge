@@ -131,6 +131,8 @@ describe("a swapped-in lift arrives with a weight to stand on", () => {
       // Weighted Dips and Hang Power Clean left this list on 2026-10-11 when
       // they got lift profiles; Resistance Band Crossover and Resistance Band
       // Face Pull on 2026-11-03, as reps-only band profiles.
+      // A machine with no anchor muscle: it arrives at "set your weight".
+      "Hip Adduction",
     ]);
     const orphans = new Set();
     for (const alts of Object.values(SWAP_DB)) {

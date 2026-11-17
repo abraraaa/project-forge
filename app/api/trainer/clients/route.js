@@ -1,6 +1,7 @@
 import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
 import { dbPrimaryHandle } from "@/lib/identity-store";
 import { dbTrainerGrants, dbRemoveByTrainer, dbRosterSignals } from "@/lib/trainer-store";
+import { dbRosterWaiting } from "@/lib/trainer-changes-store";
 import { publicName, rosterSignal, rosterDay, trainerToday } from "@/lib/trainer-view";
 import { trainerGate, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { dbMarkSeen } from "@/lib/notices";
@@ -37,11 +38,34 @@ async function roster(me, refs, rawToday, now = Date.now()) {
   }
 }
 
+/**
+ * What is waiting on each client with changes on (dbRosterWaiting), zeros
+ * included; null when the read fails. Clients without changes on are absent.
+ * @param {string} me
+ * @param {{ ref: string, edits: boolean }[]} grants
+ */
+async function waitingFor(me, grants) {
+  const refs = grants.filter((x) => x.edits === true).map((x) => x.ref);
+  if (!refs.length) return new Map();
+  try {
+    const rows = await dbRosterWaiting(me, refs);
+    if (!rows) return null;
+    return new Map(refs.map((ref) => [ref, rows.get(ref) ?? { changes: 0, sessions: 0 }]));
+  } catch (e) {
+    serverError(e, { label: `${LABEL}-waiting` }); // logged; the list still answers
+    return null;
+  }
+}
+
 // POST /api/trainer/clients
-//   { today }        -> { me: { name }, clients: [{ ref, name, since, lastLooked, signal }] }, by name.
+//   { today }        -> { me: { name }, clients: [{ ref, name, since, lastLooked, signal, waiting }] }, by name.
 //                       signal is the roster line (rosterSignal). It is read only after a
 //                       roster look is logged on every listed grant; if that log can't be
 //                       written, every signal is null and the list is names and dates only.
+//                       waiting: { changes, sessions } for a client with changes on, read
+//                       after the roster look like the signal: the trainer's changes the
+//                       pane lists as waiting and their sessions on the client's phone.
+//                       null for a read-only client, or when either read fails.
 //                       Once the signals are read, the clients notice is marked seen
 //                       (dbMarkSeen, an overwrite in place of the trainer's one 'clients' mark).
 //   { remove: ref }  -> { ok }. Ends that grant by UPDATE revoked_at, revoked_by 'trainer'.
@@ -68,6 +92,7 @@ export async function POST(request) {
     const grants = (await dbTrainerGrants(me)) ?? [];
     const at = Date.now();
     const signals = grants.length ? await roster(me, grants.map((x) => x.ref), body?.today, at) : null;
+    const waiting = signals ? await waitingFor(me, grants) : null;
     // Only after the roster was logged and read; marked at the read's start, so a
     // session that arrives mid-read still lights the dot. A failed mark never fails the list.
     if (signals) {
@@ -78,7 +103,9 @@ export async function POST(request) {
       }
     }
     const clients = grants
-      .map(({ ref, name, since, lastLooked }) => ({ ref, name, since, lastLooked, signal: signals?.get(ref) ?? null }))
+      .map(({ ref, name, since, lastLooked }) => ({
+        ref, name, since, lastLooked, signal: signals?.get(ref) ?? null, waiting: waiting?.get(ref) ?? null,
+      }))
       .sort(byName);
     return slid(g, json({ me: { name: publicName(await dbPrimaryHandle(me)) }, clients }));
   } catch (e) {

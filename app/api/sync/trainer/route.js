@@ -10,7 +10,7 @@ import { serverError } from "@/lib/api-errors";
 import { dbReadProfile, dbExpireToken } from "@/lib/db";
 import { dbMarkSeen } from "@/lib/notices";
 import { trainerToday } from "@/lib/trainer-view";
-import { SHARE_CONSENT_VERSION } from "@/lib/trainer-terms";
+import { shareVersionsFor } from "@/lib/trainer-terms";
 import { changeStatus, isUndoable, SESSION_KIND, sessionPreview } from "@/lib/trainer-change";
 import { dbChangesForClient, dbUndoChanges, dbAckChanges, dbEditsOff, dbEditsOn, cleanAcks, isIsoInstant } from "@/lib/trainer-changes-store";
 
@@ -227,7 +227,7 @@ async function changesWrite(verb, body, identity, request) {
     if ("fail" in c) return c.fail;
     // The Face ID must be the signed-in account's own.
     if (c.identity.accountId !== me) return json({ error: "Face ID didn't go through. Try again.", requiresAuth: true }, 401);
-    const r = await dbEditsOn(me, SHARE_CONSENT_VERSION, now);
+    const r = await dbEditsOn(me, shareVersionsFor("changes"), now);
     if (r === null) return json({ error: "Unavailable" }, 503);
     if (r === "fresh") return json({ fresh: true, error: "Ask your trainer for a fresh code" }, 409);
     if (r === "none") return json({ error: "Not found" }, 404);

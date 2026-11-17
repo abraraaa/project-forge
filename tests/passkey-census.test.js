@@ -96,6 +96,18 @@ describe("passkey census — counting", () => {
     expect(r.dependency.credentialsNativeToHeatwayve).toBe(1);
   });
 
+  it("counts a legacy-only profile as having no usable credential", () => {
+    const r = censusPasskeys([
+      blob("sam", "credentials.json", "2026-08-01T00:00:00Z", { credentials: [{ id: "A", publicKey: "k" }] }),
+      blob("lee", "credentials.json", "2026-08-01T00:00:00Z", { credentials: [{ id: "B", publicKey: "k", rpId: "theforged.fit" }] }),
+      blob("ada", "credentials.json", "2026-08-01T00:00:00Z", { credentials: [{ id: "C", publicKey: "k" }, { id: "D", publicKey: "k", rpId: NATIVE_RP_ID }] }),
+      blob("kit", "credentials.json", "2026-08-01T00:00:00Z", { credentials: [{ id: "E", rpId: NATIVE_RP_ID }] }),
+    ]);
+    expect(r.totals.profilesWithNoUsableCredential).toBe(3);
+    expect(r.totals.profilesLegacyOnly).toBe(2);
+    expect(r.dependency.rpIdInUse).toBe(NATIVE_RP_ID);
+  });
+
   it("splits minting either side of the flip", () => {
     const r = censusPasskeys([
       blob("sam", "credentials.json", "2026-08-01T00:00:00Z", {
@@ -152,35 +164,36 @@ describe("photo exposure — the kill list, and nothing more", () => {
   const withCreds = (profile, creds) =>
     blob(profile, "credentials.json", "2026-08-01T00:00:00Z", { credentials: creds });
 
-  it("lists a legacy-only profile's photos as at risk at the sunset", () => {
+  it("lists a legacy-only profile's photos among those with no usable credential", () => {
     const census = censusPasskeys([withCreds("sam", [{ id: "a", publicKey: "k" }])]);
     const r = photosAtRisk(census, [photo("sam", "2026-08-01"), photo("sam", "2026-08-02")]);
-    expect(r.atSunset.profiles).toBe(1);
-    expect(r.atSunset.photos).toBe(2);
-    expect(r.atSunset.rows[0].prefix).toBe("forge/profiles/sam/photos/");
+    expect(r.alreadyOpen.profiles).toBe(1);
+    expect(r.alreadyOpen.photos).toBe(2);
+    expect(r.alreadyOpen.legacyOnly).toBe(1);
+    expect(r.alreadyOpen.rows[0].prefix).toBe("forge/profiles/sam/photos/");
+    expect(r).not.toHaveProperty("atSunset");
   });
 
-  it("spares a profile that already holds a native passkey", () => {
+  it("spares a profile that holds a native passkey", () => {
     const census = censusPasskeys([
       withCreds("ada", [{ id: "a", publicKey: "k" }, { id: "b", publicKey: "k", rpId: NATIVE_RP_ID }]),
     ]);
     const r = photosAtRisk(census, [photo("ada", "2026-08-01")]);
-    expect(r.atSunset.profiles).toBe(0);
+    expect(r.alreadyOpen.profiles).toBe(0);
     expect(r.totals.photos).toBe(1);
   });
 
-  it("keeps already-claimable profiles in a SEPARATE bucket", () => {
-    // Keyless-only profiles are exposed today, not at the sunset.
+  it("counts keyless-only profiles as open but not as legacy-only", () => {
     const census = censusPasskeys([withCreds("kit", [{ id: "a" }])]);
     const r = photosAtRisk(census, [photo("kit", "2026-08-01")]);
-    expect(r.atSunset.profiles).toBe(0);
     expect(r.alreadyOpen.profiles).toBe(1);
+    expect(r.alreadyOpen.legacyOnly).toBe(0);
   });
 
   it("catches photos under a profile with no credential document at all", () => {
     const r = photosAtRisk(censusPasskeys([]), [photo("ghost", "2026-08-01")]);
     expect(r.alreadyOpen.profiles).toBe(1);
-    expect(r.atSunset.profiles).toBe(0);
+    expect(r.alreadyOpen.legacyOnly).toBe(0);
   });
 
   it("scopes every proposed prefix with a trailing slash", () => {
@@ -190,16 +203,16 @@ describe("photo exposure — the kill list, and nothing more", () => {
       withCreds("sammy", [{ id: "b", publicKey: "k" }]),
     ]);
     const r = photosAtRisk(census, [photo("sam", "2026-08-01"), photo("sammy", "2026-08-01")]);
-    for (const row of r.atSunset.rows) expect(row.prefix).toMatch(/\/photos\/$/);
-    const sam = r.atSunset.rows.find((x) => x.profile === "sam");
-    expect(r.atSunset.rows.find((x) => x.profile === "sammy").paths)
+    for (const row of r.alreadyOpen.rows) expect(row.prefix).toMatch(/\/photos\/$/);
+    const sam = r.alreadyOpen.rows.find((x) => x.profile === "sam");
+    expect(r.alreadyOpen.rows.find((x) => x.profile === "sammy").paths)
       .not.toContain(sam.paths[0]);
   });
 
   it("never truncates a path list silently", () => {
     const many = Array.from({ length: 25 }, (_, i) => photo("sam", `2026-08-${String(i + 1).padStart(2, "0")}`));
     const census = censusPasskeys([withCreds("sam", [{ id: "a", publicKey: "k" }])]);
-    const row = photosAtRisk(census, many).atSunset.rows[0];
+    const row = photosAtRisk(census, many).alreadyOpen.rows[0];
     expect(row.photos).toBe(25);
     expect(row.paths).toHaveLength(20);
     expect(row.pathsOmitted).toBe(5);
@@ -232,15 +245,19 @@ describe("the daily log line — aggregates, never identities", () => {
     }
   });
 
-  it("reports the migration split, which is the number worth watching", () => {
+  it("reports native and legacy credentials, and the profiles with no usable one", () => {
     const census = censusPasskeys([
       blobFor("a", [{ id: "1", publicKey: "k" }]),
       blobFor("b", [{ id: "2", publicKey: "k", rpId: NATIVE_RP_ID }]),
+      blobFor("c", [{ id: "3" }]),
     ]);
-    const line = censusLogLine(census, null, new Date("2026-08-20T12:00:00").getTime());
+    const line = censusLogLine(census, null);
     expect(line).toContain("native=1");
-    expect(line).toContain("legacy=1");
-    expect(line).toContain("sunsetInDays=88");
+    expect(line).toContain("legacy=2");
+    expect(line).toContain("noUsable=2");
+    expect(line).toContain("legacyOnly=1");
+    expect(line).not.toContain("sunset");
+    expect(line).not.toContain("atSunset");
   });
 
   it("is a single greppable line and survives an empty store", () => {

@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import {
-  validateOp, validateChangeSet, boundsFor, checkWeek, liftBasis, weekBasis, anchorIdOf, currentMainLift,
+  validateOp, validateChangeSet, boundsFor, firstLoadMax, checkWeek, liftBasis, weekBasis, anchorIdOf, currentMainLift,
   changeStatus, isUndoable, planDeviceSteps, rowFromDb, anchorLogged,
   DAY_LABELS, LIVE_SLICES, OUTCOMES, KINDS, MAX_OPS, HORIZON_DAYS, SET_ID_RE, REP_LIMITS, TIMED_SECONDS, MAX_KG, RESET,
   validateSessionSet, sessionStatus, planSessionSteps, isSwapFor, sessionTarget, sessionDayWords, sessionPreview,
@@ -14,7 +14,7 @@ import {
   SESSION_LETTERS, READINESS, READINESS_REASONS, RECORD_KEYS, RPE_TRACK,
 } from "@/lib/trainer-change";
 import { climbRungs, MAX_JUMP_FRACTION } from "@/lib/progression";
-import { STEP_SIZES, nextRung, weightStepForLoadType, CATEGORY_COLD_START_MAX_KG, WORKING_WEIGHT_MAX_KG, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights, getLoadType, swapLoadType, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
+import { STEP_SIZES, nextRung, weightStepForLoadType, CATEGORY_COLD_START_MAX_KG, coldStartCapKg, __test__ as LT, WORKING_WEIGHT_MAX_KG, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights, getLoadType, swapLoadType, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
 import {
   MAIN_LIFT_FUNCTIONAL_EQUIVALENTS, EXERCISE_POOLS, WEEK, SESSIONS, SWAP_DB,
   applyRotationToSession, applyMainLiftsToSession, applySwapsToSession, applyFocusToSession,
@@ -211,7 +211,7 @@ describe("W1: no weight change where W is never read", () => {
     const assisted = { programmeBlock: { config: { "bss1-B": pool("bss1-B", "Assisted Pull-Up") } } };
     expect(check({ kind: "weight", lift: "Assisted Pull-Up", kg: 20 }, assisted)).toMatchObject({ ok: true, code: null });
     const toes = { programmeBlock: { config: { "afin-A": pool("afin-A", "Toes-to-Bar") } } };
-    expect(code(check({ kind: "weight", lift: "Toes-to-Bar", kg: 5 }, toes))).toBe("not_by_load");
+    expect(code(check({ kind: "weight", lift: "Toes-to-Bar", kg: 5 }, toes))).toBe("bodyweight");
   });
   it("a loaded bodyweight lift takes added kg in the same band", () => {
     // 10 kg on the belt: two steps would be +2.5, but +15% a week holds it to one rung.
@@ -251,6 +251,13 @@ describe("W3: no ceiling past the cold-start cap; MAX_KG is the app's sanity bou
     expect(sanitiseWorkingWeights({ [CALF]: MAX_KG })).toEqual({ [CALF]: MAX_KG });
   });
 
+  it("the trainer's basis reads a corrupt stored W as no W", () => {
+    for (const bad of [MAX_KG + 1, -1]) {
+      expect(liftBasis(CALF, { meta: { weights: { [CALF]: bad } }, history: [] }).w, `${bad}`).toBe(null);
+    }
+    expect(liftBasis(CALF, { meta: { weights: { [CALF]: 0 } }, history: [] }).w).toBe(0);
+  });
+
   it("a Standing Calf Raise anchored at 100 kg gives 70 to 110, and both ends are accepted", () => {
     const c = calfAt(100);
     const b = boundsFor(CALF, c);
@@ -288,8 +295,8 @@ describe("W3: no ceiling past the cold-start cap; MAX_KG is the app's sanity bou
   });
 
   it("never lifted, the cap or the template still bounds it", () => {
-    expect(boundsFor(CALF, ctx({}))).toMatchObject({ max: 35, blocked: null });
-    expect(code(check({ kind: "weight", lift: CALF, kg: 37.5 }))).toBe("no_history");
+    expect(boundsFor(CALF, ctx({}))).toMatchObject({ max: 120, blocked: null });
+    expect(code(check({ kind: "weight", lift: CALF, kg: 122.5 }))).toBe("no_history");
   });
 });
 
@@ -396,11 +403,11 @@ describe("W7: down to the engine's deload load", () => {
   });
 });
 
-describe("W8: never performed — the larger of the category's cold-start cap and the template, in every phase", () => {
+describe("W8: never performed — the larger of the cold-start ceiling and the template, in every phase", () => {
   /** The public first-load top: max(category cap, template weight) on the lift's grid. */
   const firstMax = (lift) => {
     const step = weightStepForLoadType(lift.loadType);
-    const top = Math.max(CATEGORY_COLD_START_MAX_KG[getLiftProfile(lift.name).category], lift.ex.weight ?? 0);
+    const top = Math.max(coldStartCapKg(getLiftProfile(lift.name)), lift.ex.weight ?? 0);
     return Math.round(Math.floor(top / step + 1e-9) * step * 100) / 100;
   };
   const up = (kg, lt) => Math.round((kg + weightStepForLoadType(lt)) * 100) / 100;
@@ -449,16 +456,34 @@ describe("W8: never performed — the larger of the category's cold-start cap an
     }
     expect(checked).toBeGreaterThan(15);
   });
-  it("Standing Calf Raise and Machine Hamstring Curl take their template weight (35) over the isolation cap (25)", () => {
-    expect(CATEGORY_COLD_START_MAX_KG.accessory_isolation).toBe(25);
+  it("Standing Calf Raise and Machine Hamstring Curl take the machine ceiling (120) over their template (35)", () => {
+    expect(CATEGORY_COLD_START_MAX_KG.machine_isolation).toBe(120);
     for (const name of ["Standing Calf Raise", "Machine Hamstring Curl"]) {
       expect(resolvedProgramme({}).find((l) => l.name === name).ex.weight, name).toBe(35);
-      expect(boundsFor(name, ctx({})), name).toMatchObject({ max: 35, blocked: null });
+      expect(boundsFor(name, ctx({})), name).toMatchObject({ max: 120, blocked: null });
       for (const phase of ["write", "apply"]) {
-        expect(code(inPhase({ kind: "weight", lift: name, kg: 35 }, {}, phase)), `${name} ${phase}`).toBe(null);
-        expect(code(inPhase({ kind: "weight", lift: name, kg: 37.5 }, {}, phase)), `${name} ${phase}`).toBe("no_history");
-        expect(code(inPhase({ kind: "weight", lift: name, kg: 40 }, {}, phase)), `${name} ${phase}`).toBe("no_history");
+        expect(code(inPhase({ kind: "weight", lift: name, kg: 120 }, {}, phase)), `${name} ${phase}`).toBe(null);
+        expect(code(inPhase({ kind: "weight", lift: name, kg: 122.5 }, {}, phase)), `${name} ${phase}`).toBe("no_history");
       }
+    }
+  });
+  it("a free-weight or cable isolation lift keeps the 25 kg ceiling", () => {
+    expect(CATEGORY_COLD_START_MAX_KG.accessory_isolation).toBe(25);
+    for (const name of ["Lateral Raise", "Cable Lateral Raise", "Face Pull"]) {
+      expect(boundsFor(name, ctx({})), name).toMatchObject({ max: 25, blocked: null });
+    }
+  });
+  it("the trainer's first-load limit and the device's cold-start ceiling agree for every machine isolation lift", () => {
+    const machines = Object.entries(LT.PROFILES).filter(([, p]) => p.machine === true && p.category === "accessory_isolation").map(([n]) => n);
+    for (const name of ["Leg Extension", "Pec Deck", "Machine Hamstring Curl", "Seated Leg Curl", "Standing Calf Raise", "Seated Calf Raise", "Smith Calf Raise", "Hip Adduction"]) {
+      expect(machines, name).toContain(name);
+    }
+    for (const name of machines) {
+      const lt = getLoadType({ name });
+      const cap = coldStartCapKg(getLiftProfile(name));
+      expect(cap, name).toBe(120);
+      expect(firstLoadMax(name, null, lt), name).toBe(Math.floor(cap / weightStepForLoadType(lt) + 1e-9) * weightStepForLoadType(lt));
+      expect(firstLoadMax(name, { ex: { weight: 30 } }, lt), name).toBe(firstLoadMax(name, null, lt));
     }
   });
   it("a squat's first load is 250 kg at most, at any bodyweight, in both phases", () => {
@@ -1232,7 +1257,7 @@ describe("E1: one validator, built from the engine's modules", () => {
   it("no second definition of the validator, bounds, status or apply plan", () => {
     const DEF = /\b(?:function\s+|const\s+|let\s+)(validateOp|validateChangeSet|boundsFor|changeStatus|planDeviceSteps|DAY_LABELS)\b/;
     expect(source.filter((f) => f !== "lib/trainer-change.js" && DEF.test(readFileSync(join(ROOT, f), "utf8")))).toEqual([]);
-  }, 20_000); // reads every source file: a longer budget under full-suite load
+  });
   it("the engine's limits are used only by the engine and the validator", () => {
     const USE = /\b(MAX_JUMP_FRACTION|deloadIntensityFor)\b/;
     const allowed = new Set(["lib/progression.js", "lib/lift-translations.js", "lib/trainer-change.js"]);

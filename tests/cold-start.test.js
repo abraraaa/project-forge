@@ -175,12 +175,21 @@ describe("MCP tools read the same start", () => {
   });
   it("current_loads words a suggested start by load type, as programme does", () => {
     const pool = EXERCISE_POOLS["bss1-B"].pool;
-    for (const [name, want] of [["Weighted Pull-Up", "bodyweight + 8 kg (suggested start)"], ["Assisted Pull-Up", null]]) {
-      const ex = { ...pool.find((p) => p.name === name), ...(want ? {} : { weight: 20 }) };
-      const read = want ?? "20 kg assistance (suggested start)";
-      const d = { meta: { bodyweight: { kg: 80 }, reps: { [name]: ex.reps }, programmeBlock: { number: 1, config: { "bss1-B": ex } } }, history: [] };
-      expect(runTool("current_loads", {}, d, now).text).toBe(`- ${name}: ${read} × ${ex.reps}`);
-      expect(runTool("programme", {}, d, now).text).toContain(`${name} 3 × ${ex.reps} @ ${read}`);
+    // A stored pick reads its template from the pool, so the assisted case
+    // gives the pool entry a 20 kg template for the length of the test.
+    const assisted = pool.find((p) => p.name === "Assisted Pull-Up");
+    const template = assisted.weight;
+    assisted.weight = 20;
+    try {
+      for (const [name, want] of [["Weighted Pull-Up", "bodyweight + 8 kg (suggested start)"], ["Assisted Pull-Up", null]]) {
+        const ex = { ...pool.find((p) => p.name === name) };
+        const read = want ?? "20 kg assistance (suggested start)";
+        const d = { meta: { bodyweight: { kg: 80 }, reps: { [name]: ex.reps }, programmeBlock: { number: 1, config: { "bss1-B": ex } } }, history: [] };
+        expect(runTool("current_loads", {}, d, now).text).toBe(`- ${name}: ${read} × ${ex.reps}`);
+        expect(runTool("programme", {}, d, now).text).toContain(`${name} 3 × ${ex.reps} @ ${read}`);
+      }
+    } finally {
+      assisted.weight = template;
     }
   });
   it("a stored null reads as no working weight in both tools, as the resolver reads it", () => {
@@ -222,7 +231,7 @@ describe("lift profiles: each listed lift reads its own profile; a reference lif
     { name: "Hang Power Clean",       loadType: "barbell",           weight: 50, reps: 3,  want: { primaryMuscle: "Power",      category: "power",              factor: 0.9 } },
     { name: "Weighted Dips",          loadType: "loaded_bodyweight", weight: 10, reps: 8,  want: { primaryMuscle: "Chest",      category: "upper_push",         factor: 1.0 } },
     { name: "Incline BB Press",       loadType: "barbell",           weight: 50, reps: 8,  want: { primaryMuscle: "Chest",      category: "upper_push",         factor: 0.8 } },
-    { name: "Reverse Hyperextension", loadType: "machine",           weight: 25, reps: 12, want: { primaryMuscle: "Glutes",     category: "accessory_compound", factor: 0.35 } },
+    { name: "Reverse Hyperextension", loadType: "machine",           weight: 25, reps: 12, want: { primaryMuscle: "Glutes",     category: "accessory_compound", factor: 0.25 } },
   ];
   const BW = 80;
   const REFERENCE = new Set(Object.values(REFERENCE_LIFTS).flat());
@@ -296,10 +305,10 @@ describe("the engine's cold start lands on the implement's grid", () => {
     expect(TS.get("p").lifts["Incline DB Curl"].history.at(-1).decision).toBe("COLD_START");
   });
 
-  it("a cooked first session holds what was lifted, not the anchor", () => {
+  it("a cooked first session seeds what was lifted, not the anchor", () => {
     const out = firstSession(15, "cooked");
     expect(out.wwUpdates["Incline DB Curl"]).toBe(15);
-    expect(TS.get("p").lifts["Incline DB Curl"].history.at(-1).decision).toBe("HOLD");
+    expect(TS.get("p").lifts["Incline DB Curl"]).toMatchObject({ currentWeight: 15, history: [] });
   });
 });
 

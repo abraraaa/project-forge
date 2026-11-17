@@ -12,7 +12,7 @@
 //      missed workout when they remember on Saturday.
 // ────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { EXERCISE_ANATOMY } from "../lib/exercise-anatomy.js";
 import {
   SESSIONS,
@@ -22,7 +22,6 @@ import {
   STRENGTH_DAY_SESSIONS,
   findRecentDays,
   findUntickedRecent,
-  rotateAccessories,
   pushHistoryBlock, recentNamesFor,
   computeRotationStimulusDelta,
   deriveStrengthDaySessions,
@@ -48,6 +47,7 @@ import {
   weekdayIdxForDate,
 } from "../lib/programme.js";
 import { getAnatomy, distributeAcrossMuscles } from "../lib/exercise-anatomy.js";
+import { solveRotation, seededRng } from "../lib/rotation-solver.js";
 
 // ─── Pool[0] invariant ──────────────────────────────────────────────────────
 describe("EXERCISE_POOLS pool[0] === SESSIONS default", () => {
@@ -222,49 +222,6 @@ describe("EXERCISE_POOLS loadProfile invariants", () => {
 describe("rotation memory — 3-block exclusion", () => {
   it("ROTATION_MEMORY_BLOCKS is 3 (the spec'd memory depth)", () => {
     expect(ROTATION_MEMORY_BLOCKS).toBe(3);
-  });
-
-  it("excludes every name in the history array for a slot", () => {
-    // Pick a slot with a pool ≥ 4 so 3-block exclusion can't empty it
-    const slotKey = Object.entries(EXERCISE_POOLS).find(
-      ([, s]) => s.pool.length >= 4,
-    )?.[0];
-    expect(slotKey).toBeTruthy();
-    const pool = EXERCISE_POOLS[slotKey].pool;
-    const excluded = pool.slice(0, 3).map((p) => p.name);
-    const history = { [slotKey]: excluded };
-
-    // 30 trials — every pick must be outside the excluded set
-    for (let i = 0; i < 30; i++) {
-      const cfg = rotateAccessories(history);
-      expect(excluded).not.toContain(cfg[slotKey].name);
-    }
-  });
-
-  it("accepts legacy single-string history entries transparently", () => {
-    const slotKey = Object.keys(EXERCISE_POOLS)[0];
-    const pool = EXERCISE_POOLS[slotKey].pool;
-    const legacy = { [slotKey]: pool[0].name };
-    for (let i = 0; i < 20; i++) {
-      const cfg = rotateAccessories(legacy);
-      expect(cfg[slotKey].name).not.toBe(pool[0].name);
-    }
-  });
-
-  it("falls back to single-block exclusion when 3-block empties the pool", () => {
-    // 2-entry synthetic slot: forcing history of both should still yield a pick
-    // (relaxed fallback excludes only the most-recent name).
-    const slotKey = Object.keys(EXERCISE_POOLS)[0];
-    const pool = EXERCISE_POOLS[slotKey].pool;
-    // history claims EVERY name in the pool is recent → fallback kicks in,
-    // excludes only the most-recent name (recent[0])
-    const allNames = pool.map((p) => p.name);
-    const history = { [slotKey]: allNames };
-    for (let i = 0; i < 20; i++) {
-      const cfg = rotateAccessories(history);
-      expect(cfg[slotKey].name).not.toBe(allNames[0]); // most-recent still avoided
-      expect(allNames.slice(1)).toContain(cfg[slotKey].name);
-    }
   });
 });
 
@@ -688,74 +645,6 @@ describe("scoreExerciseForFocus", () => {
   });
 });
 
-describe("rotateAccessories — focus parameter", () => {
-  it("Forged matches the call-with-no-focus baseline (identity)", () => {
-    // Same seed isn't a thing here (Math.random), but the SCORING under
-    // Forged is uniform — so every pool entry is equally likely regardless
-    // of whether `focus` is passed. Run many trials and confirm both
-    // distributions cover the same set of picks.
-    const seen = { withFocus: new Set(), withoutFocus: new Set() };
-    for (let i = 0; i < 50; i++) {
-      seen.withFocus.add(rotateAccessories({}, { focus: "Forged" })["ass1-A"]?.name);
-      seen.withoutFocus.add(rotateAccessories({})["ass1-A"]?.name);
-    }
-    // Both should converge to "every pool member appears at least once"
-    // (the ass1-A pool has 6 entries and we ran 50 trials each).
-    expect(seen.withFocus.size).toBeGreaterThan(1);
-    expect(seen.withoutFocus.size).toBeGreaterThan(1);
-  });
-
-  it("Sculpt biases ass2-A picks toward heaviest-glute alternatives over time", () => {
-    // ass2-A is glute-themed already; under Sculpt the glute-primary entries
-    // (all of them) get the 1.5 weight, so we mostly want to confirm rotation
-    // STILL produces a valid glute pick every time — the bias doesn't
-    // accidentally exclude anything.
-    const pool = EXERCISE_POOLS["ass2-A"].pool;
-    const poolNames = new Set(pool.map(p => p.name));
-    for (let i = 0; i < 50; i++) {
-      const cfg = rotateAccessories({}, { focus: "Sculpt" });
-      expect(poolNames.has(cfg["ass2-A"].name)).toBe(true);
-    }
-  });
-
-  it("Strong picks compounds more often than isolations in mixed pools", () => {
-    // bss1-A has Leg Press (compound) + Leg Extension (isolation) + others.
-    // Strong should pick compound entries more often than unbiased Forged.
-    //
-    // This used to compare two independent Math.random() samples with a
-    // 5%-of-trials margin, which flaked ~1 in 5–10 CI runs: the true effect
-    // is ~9 percentage points (Strong ~80% vs Forged ~71%) but the noise
-    // band on the *difference* of two random samples left only ~1.25 SD of
-    // headroom over the threshold. Rather than chase a wider margin, make it
-    // deterministic: seed Math.random with a fixed PRNG so the run is
-    // reproducible and can never flake. The bias is strong enough that any
-    // reasonable seed shows it clearly.
-    const mulberry32 = (seed) => () => {
-      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
-      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-    const TRIALS = 400;
-    const compoundNames = new Set(["Leg Press", "Hack Squat", "Pendulum Squat", "V-Squat", "Belt Squat"]);
-    const realRandom = Math.random;
-    let strongCompoundHits = 0;
-    let forgedCompoundHits = 0;
-    try {
-      Math.random = mulberry32(0x5EED);
-      for (let i = 0; i < TRIALS; i++) {
-        if (compoundNames.has(rotateAccessories({}, { focus: "Strong" })["bss1-A"]?.name)) strongCompoundHits++;
-        if (compoundNames.has(rotateAccessories({}, { focus: "Forged" })["bss1-A"]?.name)) forgedCompoundHits++;
-      }
-    } finally {
-      Math.random = realRandom;
-    }
-    // Deterministic under the seed above. Margin kept well below the true
-    // ~9pp effect so the assertion stays meaningful, not knife-edge.
-    expect(strongCompoundHits).toBeGreaterThan(forgedCompoundHits + TRIALS * 0.04);
-  });
-});
-
 describe("FOCUS_OPTIONS / FOCUS_SUMMARIES — copy invariants", () => {
   it("DEFAULT_FOCUS is in FOCUS_OPTIONS", () => {
     expect(FOCUS_OPTIONS).toContain(DEFAULT_FOCUS);
@@ -1088,36 +977,12 @@ describe("applySwapsToSession", () => {
   });
 });
 
-// ─── Cross-slot rotation deduplication ──────────────────────────────────────
-// Pools overlap (e.g. "Leaning Lateral Raise" lives in both bfin-B and
-// css1-B). Two independent picks can land on the same exercise → user
-// trains it twice in the same week. The dedup pass walks slots in order;
-// any slot whose pick already appears earlier gets re-rolled excluding all
-// claimed names. First-slot wins.
-describe("rotateAccessories — cross-slot deduplication", () => {
-  it("emits no duplicate exercise names across slots", () => {
-    // Run rotation across many seeds — the dedup is randomised so we want
-    // confidence it holds reliably. 50 rolls is plenty for a smoke check.
-    for (let i = 0; i < 50; i++) {
-      const config = rotateAccessories({}, { focus: "Forged" });
-      const names = Object.values(config).map(ex => ex?.name).filter(Boolean);
-      const uniques = new Set(names);
-      expect(uniques.size).toBe(names.length);
-    }
-  });
-
-  it("never picks an exercise that isn't in its slot's pool", () => {
-    const config = rotateAccessories({}, { focus: "Forged" });
-    for (const [key, pick] of Object.entries(config)) {
-      const pool = EXERCISE_POOLS[key].pool;
-      expect(pool.some(ex => ex.name === pick.name)).toBe(true);
-    }
-  });
-});
+// A production week: the solver's Forged config on a fixed seed.
+const solvedWeek = (n) => solveRotation({ focus: "Forged", rng: seededRng(`fixture-${n}`) }).config;
 
 describe("dedupeRotationConfig", () => {
   it("returns the input reference when there are no duplicates", () => {
-    const config = rotateAccessories({}, { focus: "Forged" });
+    const config = solvedWeek(1);
     const deduped = dedupeRotationConfig(config, {});
     expect(deduped).toBe(config);
   });
@@ -1139,7 +1004,7 @@ describe("dedupeRotationConfig", () => {
     const keys = Object.keys(EXERCISE_POOLS);
     expect(keys.indexOf("bfin-B")).toBeLessThan(keys.indexOf("css1-B"));
 
-    const seed = rotateAccessories({}, { focus: "Forged" });
+    const seed = solvedWeek(1);
     const config = { ...seed, "bfin-B": llr, "css1-B": llr };
     const deduped = dedupeRotationConfig(config, {}, { focus: "Forged" });
     expect(deduped).not.toBe(config);
@@ -1153,7 +1018,7 @@ describe("dedupeRotationConfig", () => {
   it("never introduces new duplicates while resolving existing ones", () => {
     const llr = { name: "Leaning Lateral Raise", reps: 12, weight: 7, muscle: "Lateral delt" };
     for (let i = 0; i < 50; i++) {
-      const seed = rotateAccessories({}, { focus: "Forged" });
+      const seed = solvedWeek(i);
       const config = { ...seed, "bfin-B": llr, "css1-B": llr };
       const deduped = dedupeRotationConfig(config, {}, { focus: "Forged" });
       const names = Object.values(deduped).map(ex => ex?.name).filter(Boolean);
@@ -1164,7 +1029,7 @@ describe("dedupeRotationConfig", () => {
 
 describe("pruneStaleRotationConfig", () => {
   it("returns the input reference when nothing is stale", () => {
-    const config = rotateAccessories({}, { focus: "Forged" });
+    const config = solvedWeek(1);
     expect(pruneStaleRotationConfig(config)).toBe(config);
   });
 
@@ -1179,7 +1044,7 @@ describe("pruneStaleRotationConfig", () => {
     // into it before that should have the stale entry pruned, so the
     // resolver falls through to the SESSIONS default (Skullcrusher).
     const ghost = { name: "DB Kickback", reps: 12, weight: 8, muscle: "Triceps" };
-    const seed = rotateAccessories({}, { focus: "Forged" });
+    const seed = solvedWeek(1);
     const config = { ...seed, "css3-B": ghost };
     const pruned = pruneStaleRotationConfig(config);
     expect(pruned).not.toBe(config);

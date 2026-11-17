@@ -8,11 +8,13 @@
 // Surface doctrine: measured data gets NO containers — numbers sit on the
 // ground between hairlines. Only documents and commit actions get surfaces.
 // Card is therefore for document-like content (session overviews, notes,
-// photographs), not a default wrapper for everything.
+// photographs, a trainer's client records), not a default wrapper for
+// everything.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from "react";
 import { T } from "@/lib/tokens";
+import { rovingIndex } from "@/lib/a11y";
 
 // Fade-in-on-mount style hook. `d` is the stagger delay in ms.
 // `opaque` keeps the rise but starts at full opacity — for content that must
@@ -138,5 +140,63 @@ export function Tag({ children, color, style = {} }) {
       <span aria-hidden="true" style={{ width: 16, height: 4, background: color || T.ink3, flexShrink: 0 }} />
       {children}
     </span>
+  );
+}
+
+// TabStrip — the house tabs, in the Home week strip's grammar: words on the
+// ground, an ink underline on the current one, forge-press. One tab stop:
+// the current tab; Left and Right step and wrap, Home and End jump, and a
+// tab is current as soon as it has focus. Each tab names its panel by
+// tabIds; TabPanel hides the others with the hidden attribute, so what they
+// hold keeps its state and stays out of reach.
+/** @param {string} base @param {string} key */
+export const tabIds = (base, key) => ({ tab: `${base}-tab-${key}`, panel: `${base}-panel-${key}` });
+
+/**
+ * @param {{ label: string, idBase: string, tabs: Array<{ key: string, label: string }>, selected: string, onSelect: (key: string) => void, style?: import("react").CSSProperties }} props
+ */
+export function TabStrip({ label, idBase, tabs, selected, onSelect, style = {} }) {
+  /** @param {import("react").KeyboardEvent<HTMLDivElement>} e */
+  const onKeyDown = (e) => {
+    const at = tabs.findIndex((t) => t.key === selected);
+    const to = rovingIndex(e.key, at < 0 ? 0 : at, tabs.length);
+    if (to == null) return;
+    e.preventDefault();
+    onSelect(tabs[to].key);
+    const el = /** @type {HTMLElement | undefined} */ (e.currentTarget.querySelectorAll('[role="tab"]')[to]);
+    el?.focus();
+  };
+  return (
+    <div role="tablist" aria-label={label} onKeyDown={onKeyDown}
+      style={{ display: "flex", gap: 22, borderBottom: `1px solid ${T.rule}`, ...style }}>
+      {tabs.map((t) => {
+        const on = t.key === selected;
+        const ids = tabIds(idBase, t.key);
+        return (
+          <button key={t.key} type="button" role="tab" id={ids.tab} aria-controls={ids.panel} aria-selected={on}
+            tabIndex={on ? 0 : -1} onClick={() => onSelect(t.key)} className="forge-press"
+            style={{ position: "relative", minHeight: 44, padding: "0 0 2px", background: "none", border: "none", cursor: "pointer",
+              fontFamily: T.text, fontSize: 14, fontWeight: on ? 500 : 400, color: on ? T.ink : T.ink2, whiteSpace: "nowrap" }}>
+            {t.label}
+            <span aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, bottom: -1, height: 2, background: on ? T.ink : "transparent", transition: `background 200ms ${T.ease}` }}/>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// TabPanel — one tab's content. It sets no display of its own: an inline
+// display would beat the hidden attribute.
+/**
+ * @param {{ idBase: string, tabKey: string, selected: boolean, children?: import("react").ReactNode }} props
+ */
+export function TabPanel({ idBase, tabKey, selected, children }) {
+  const ids = tabIds(idBase, tabKey);
+  return (
+    <div role="tabpanel" id={ids.panel} aria-labelledby={ids.tab} hidden={!selected} tabIndex={0} data-tab-panel={tabKey}
+      style={{ outlineOffset: 4 }}>
+      {children}
+    </div>
   );
 }

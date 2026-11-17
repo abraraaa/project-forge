@@ -6,7 +6,7 @@ import { dbInsertChangeSet, dbWithdrawChanges, dbOpenChangesForGrant, dbChangesF
 import {
   validateChangeSet, validateSessionSet, changeStatus, sessionTarget, SETS_PER_WEEK, SESSIONS_PER_WEEK, SESSION_KIND,
 } from "@/lib/trainer-change";
-import { SHARE_CONSENT_VERSION } from "@/lib/trainer-terms";
+import { shareCovers } from "@/lib/trainer-terms";
 import { TYPE_LABEL, stableStringify } from "@/lib/sync-merge";
 import { trainerToday, SELF_REF } from "@/lib/trainer-view";
 import { trainerGate, faceIdFresh, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
@@ -173,8 +173,8 @@ export async function POST(request) {
     const session = Array.isArray(set?.ops) && set.ops[0]?.kind === SESSION_KIND;
     const who = grant.name || "this client";
     // A session needs the client's yes to a share that names it: a grant
-    // approved under an older consent needs a fresh code first. Nothing read.
-    if (session && grant.consentVersion !== SHARE_CONSENT_VERSION) {
+    // whose consent predates sessions needs a fresh code first. Nothing read.
+    if (session && !shareCovers(grant.consentVersion, "session")) {
       return slid(g, json({ fresh: true, error: `Ask ${who} for a fresh code.` }, 403));
     }
 

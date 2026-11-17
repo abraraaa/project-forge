@@ -1,87 +1,65 @@
-// theforged.fit -> heatwayve.app rpId migration. A ceremony is single-rpId,
-// so a plan's declared rpId and its offered credentials must always agree.
+// Passkeys verify against heatwayve.app only. A credential bound to
+// theforged.fit (or with no rpId field) stays on file and is never usable.
+// A ceremony is single-rpId, so a plan's declared rpId and its offered
+// credentials must always agree.
 
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import {
-  rpConfigFromRequest, planLoginCeremony, credentialRpId,
+  rpConfigFromRequest, planLoginCeremony, credentialRpId, hasUsablePasskey,
 } from "../lib/auth-server.js";
-import {
-  NATIVE_RP_ID, LEGACY_RP_ID, PASSKEY_SUNSET,
-  acceptedRpIds, legacyRpRetired, passkeyNudgeUrgent, daysUntilPasskeySunset,
-} from "../lib/origin.js";
+import { NATIVE_RP_ID, LEGACY_RP_ID, acceptedRpIds } from "../lib/origin.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const src = (p) => readFileSync(resolve(root, p), "utf8");
 
 const req = (host) => /** @type {any} */ ({ headers: { get: (k) => (k === "host" ? host : null) } });
-const at = (d) => new Date(`${d}T12:00:00`).getTime();
 const cred = (id, rpId, extra = {}) => ({ id, publicKey: "k", ...(rpId ? { rpId } : null), ...extra });
 
-describe("migration timeline", () => {
-  it("accepts both rpIds during the window and only the native one after", () => {
-    expect(acceptedRpIds(at("2026-08-18"))).toEqual([NATIVE_RP_ID, LEGACY_RP_ID]);
-    expect(acceptedRpIds(at("2026-11-15"))).toEqual([NATIVE_RP_ID, LEGACY_RP_ID]);
-    expect(acceptedRpIds(at("2026-11-16"))).toEqual([NATIVE_RP_ID]);
+describe("accepted rpIds", () => {
+  it("is the native id alone", () => {
+    expect(acceptedRpIds()).toEqual([NATIVE_RP_ID]);
   });
 
-  it("retires on the sunset date, not before", () => {
-    expect(legacyRpRetired(at("2026-11-15"))).toBe(false);
-    expect(legacyRpRetired(at("2026-11-16"))).toBe(true);
-  });
-
-  it("turns the nudge urgent for the final 30 days only", () => {
-    expect(passkeyNudgeUrgent(at("2026-10-16"))).toBe(false);
-    expect(passkeyNudgeUrgent(at("2026-10-18"))).toBe(true);
-    expect(passkeyNudgeUrgent(at("2026-11-15"))).toBe(true);
-    expect(passkeyNudgeUrgent(at("2026-11-17"))).toBe(false);
-  });
-
-  it("counts down and never goes negative", () => {
-    expect(daysUntilPasskeySunset(at("2026-08-18"))).toBe(90);
-    expect(daysUntilPasskeySunset(at("2026-12-25"))).toBe(0);
-  });
-
-  it("the window is 90 days from the ruling", () => {
-    expect(PASSKEY_SUNSET).toBe("2026-11-16");
-    expect(daysUntilPasskeySunset(at("2026-08-18"))).toBe(90);
+  it("a legacy credential, labelled or not, is never usable", () => {
+    expect(hasUsablePasskey({ credentials: [cred("l1")] })).toBe(false);
+    expect(hasUsablePasskey({ credentials: [cred("l2", LEGACY_RP_ID)] })).toBe(false);
+    expect(hasUsablePasskey({ credentials: [cred("l1"), cred("n1", NATIVE_RP_ID)] })).toBe(true);
   });
 });
 
 describe("rp config — which rpId a NEW credential is minted under", () => {
   it("mints native from a heatwayve origin", () => {
     for (const host of ["heatwayve.app", "www.heatwayve.app"]) {
-      const c = rpConfigFromRequest(req(host), at("2026-08-18"));
+      const c = rpConfigFromRequest(req(host));
       expect(c.rpId).toBe(NATIVE_RP_ID);
       expect(c.expectedOrigin).toBe(`https://${host}`);
     }
   });
 
-  it("mints legacy from the legacy origin — the browser would reject native there", () => {
-    // No reverse ROR document at heatwayve.app.
-    const c = rpConfigFromRequest(req(LEGACY_RP_ID), at("2026-08-18"));
-    expect(c.rpId).toBe(LEGACY_RP_ID);
+  it("never mints legacy, and never admits the old origin", () => {
+    for (const host of [LEGACY_RP_ID, `www.${LEGACY_RP_ID}`]) {
+      const c = rpConfigFromRequest(req(host));
+      expect(c.rpId).toBe(NATIVE_RP_ID);
+      expect(c.acceptedRpIds).toEqual([NATIVE_RP_ID]);
+      expect(c.expectedOrigin).toBe(`https://${NATIVE_RP_ID}`);
+    }
   });
 
-  it("stops minting legacy once the domain is retired", () => {
-    expect(rpConfigFromRequest(req(LEGACY_RP_ID), at("2026-12-01")).rpId).toBe(NATIVE_RP_ID);
-  });
-
-  it("keeps localhost isolated from migration semantics", () => {
-    const c = rpConfigFromRequest(req("localhost:3000"), at("2026-08-18"));
+  it("keeps localhost isolated", () => {
+    const c = rpConfigFromRequest(req("localhost:3000"));
     expect(c).toMatchObject({ rpId: "localhost", expectedOrigin: "http://localhost:3000" });
     expect(c.acceptedRpIds).toEqual(["localhost"]);
   });
 
-  it("pins expectedOrigin to one exact string even though the library allows a list", () => {
-    // Only the rpId dimension is widened; the origin is known exactly.
+  it("pins expectedOrigin to one exact string", () => {
     expect(typeof rpConfigFromRequest(req("heatwayve.app")).expectedOrigin).toBe("string");
   });
 
   it("fails an unknown host toward a live origin it cannot match", () => {
-    const c = rpConfigFromRequest(req("evil.example"), at("2026-08-18"));
+    const c = rpConfigFromRequest(req("evil.example"));
     expect(c.expectedOrigin).toBe(`https://${NATIVE_RP_ID}`);
   });
 });
@@ -97,7 +75,7 @@ describe("credentialRpId — absent means legacy, not unknown", () => {
 });
 
 describe("planLoginCeremony — one rpId, and only its own credentials", () => {
-  const cfgNative = (now = at("2026-08-18")) => rpConfigFromRequest(req("heatwayve.app"), now);
+  const cfgNative = () => rpConfigFromRequest(req("heatwayve.app"));
 
   // Applied to every plan below.
   const assertCoherent = (plan) => {
@@ -130,23 +108,19 @@ describe("planLoginCeremony — one rpId, and only its own credentials", () => {
     expect(plan.credentials).toHaveLength(2);
   });
 
-  it("falls back to the legacy pool while the window is open", () => {
-    const plan = planLoginCeremony({ credentials: [cred("l1"), cred("l2")] }, cfgNative());
-    assertCoherent(plan);
-    expect(plan.rpId).toBe(LEGACY_RP_ID);
-  });
-
-  it("returns null for a legacy-only profile once the domain is retired", () => {
+  it("returns null for a legacy-only profile", () => {
     // Client reads null as "no passkey" and re-offers setup.
-    const now = at("2026-12-01");
-    expect(planLoginCeremony({ credentials: [cred("l1")] }, cfgNative(now))).toBeNull();
+    expect(planLoginCeremony({ credentials: [cred("l1"), cred("l2", LEGACY_RP_ID)] }, cfgNative())).toBeNull();
   });
 
-  it("still logs in a profile that upgraded, after the sunset", () => {
-    const now = at("2026-12-01");
+  it("returns null from the old origin too, for a legacy-only profile", () => {
+    expect(planLoginCeremony({ credentials: [cred("l1")] }, rpConfigFromRequest(req(LEGACY_RP_ID)))).toBeNull();
+  });
+
+  it("logs in a profile that holds a native passkey beside a legacy one", () => {
     const plan = planLoginCeremony(
       { credentials: [cred("l1"), cred("n1", NATIVE_RP_ID)] },
-      cfgNative(now),
+      cfgNative(),
     );
     assertCoherent(plan);
     expect(plan.rpId).toBe(NATIVE_RP_ID);
@@ -173,7 +147,7 @@ describe("planLoginCeremony — one rpId, and only its own credentials", () => {
 });
 
 describe("the routes read the rpId back rather than assuming it", () => {
-  it("both verify routes accept the rpId SET, not a single guess", () => {
+  it("both verify routes verify against the config's accepted rpIds", () => {
     for (const p of ["app/api/auth/register-verify/route.js", "app/api/auth/login-verify/route.js"]) {
       expect(src(p)).toContain("expectedRPID: acceptedRpIds");
     }

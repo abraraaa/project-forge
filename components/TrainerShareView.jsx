@@ -27,10 +27,12 @@ import { fetchWithTimeout } from "@/lib/net";
 import { authenticatePasskey } from "@/lib/webauthn";
 import { todayLocalIso } from "@/lib/dates";
 import { timedTargetFor } from "@/lib/programme";
-import { SHARE_CONSENT_VERSION, SHARE_COPY } from "@/lib/trainer-terms";
+import { SHARE_COPY, shareCovers } from "@/lib/trainer-terms";
 import { keepsAtWords } from "@/components/TrainerSessionSheet";
 
 const LOG_SHOWN = 20;
+/** Change sets shown before "Show earlier", newest first. */
+const SETS_SHOWN = 3;
 const OFFLINE = "Couldn't reach Heatwayve. Try again.";
 const NOT_STOPPED = "That didn't go through. Try again.";
 const SIGN_IN = "Sign in again to see your trainer.";
@@ -242,6 +244,7 @@ export default function TrainerShareView() {
   const [editsBusy, setEditsBusy] = useState(false);
   const [editsLine, setEditsLine] = useState(/** @type {string | null} */ (null));
   const [undoing, setUndoing] = useState(/** @type {string | null} */ (null));
+  const [setsShown, setSetsShown] = useState(SETS_SHOWN);
   const [undoLine, setUndoLine] = useState(/** @type {string | null} */ (null));
   const undoLineRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const markedSeen = useRef(false);
@@ -417,7 +420,7 @@ export default function TrainerShareView() {
         <h2 style={{ marginTop: 28, marginBottom: 6, fontSize: 13, fontWeight: 400, color: T.ink2 }}>{allTheirs ? `Changes from ${who}` : "Changes to your plan"}</h2>
         <p style={{ ...small, margin: "0 0 10px" }}>Undo any change until you&apos;ve trained at it. Your logged sessions never change.</p>
         <div ref={undoLineRef} tabIndex={-1} role="status" aria-live="polite" style={{ ...small, color: T.ink, minHeight: 16, marginBottom: 6, outline: "none" }}>{undoLine || ""}</div>
-        {bySet(changes).map((set) => {
+        {bySet(changes).slice(0, setsShown).map((set) => {
           const open = set.rows.filter(canUndo);
           const sent = Number.isFinite(set.at) ? `Sent ${sentDate.format(new Date(set.at))}` : "Sent";
           return (
@@ -455,6 +458,12 @@ export default function TrainerShareView() {
             </section>
           );
         })}
+        {bySet(changes).length > setsShown && (
+          <button type="button" onClick={() => setSetsShown((n) => n + SETS_SHOWN)} className="forge-press forge-tint" aria-label="Show earlier changes"
+            style={{ ...BTN.quiet, width: "100%" }}>
+            Show earlier
+          </button>
+        )}
       </Fade>
     );
   };
@@ -505,7 +514,7 @@ export default function TrainerShareView() {
               approved before changes were part of it needs a fresh code. */}
           {sharing.live && edits && (
             <div style={{ marginTop: 4 }}>
-              {edits.on || sharing.consentVersion === SHARE_CONSENT_VERSION ? (
+              {edits.on || shareCovers(sharing.consentVersion, "changes") ? (
                 <button type="button" onClick={() => onEdits(!edits.on)} aria-disabled={editsBusy} className="forge-press"
                   style={{ minHeight: 44, background: "none", border: "none", padding: "0 2px", cursor: "pointer", fontFamily: T.text, fontSize: 13, color: T.ink2, opacity: editsBusy ? 0.6 : 1 }}>
                   {editsBusy ? "One moment" : edits.on ? `Stop ${who} changing your plan` : `Let ${who} change your plan`}

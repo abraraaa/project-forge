@@ -18,7 +18,7 @@ import {
   validateChangeSet, boundsFor, liftBasis, rowFromDb, weekBasis, anchorLogged, SETS_PER_WEEK, SESSIONS_PER_WEEK,
   validateSessionSet, sessionStatus, AUTO_KEEP_MS,
 } from "@/lib/trainer-change";
-import { nextRung, CATEGORY_COLD_START_MAX_KG, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
+import { nextRung, CATEGORY_COLD_START_MAX_KG, coldStartCapKg, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
 import { pacePresets } from "@/components/TrainerClientView";
 import { resolvedProgramme, planStartWeight, validMainLifts, repTargets } from "@/lib/programme-resolve";
 import {
@@ -806,7 +806,7 @@ describe("the plan: only on a grant with changes on", () => {
     expect(JSON.stringify(projectPlan(none, { todayIso: TODAY, rows }))).toBe(light);
   });
 
-  it("a never-trained lift's top is the larger of its category's cold-start cap and its template weight (public), whatever the bodyweight or muscle anchors", () => {
+  it("a never-trained lift's top is the larger of its cold-start ceiling and its template weight (public), whatever the bodyweight or muscle anchors", () => {
     const at = (bw, anchors) => {
       const data = planData(bw ?? 80);
       if (bw === null) { delete data.meta.bodyweight; delete data.meta.bodyweightLog; }
@@ -823,15 +823,15 @@ describe("the plan: only on a grant with changes on", () => {
     const template = (name) => resolvedProgramme(planData().meta).find((x) => x.name === name)?.ex?.weight ?? 0;
     for (const l of ref.lifts) {
       if (!l.bounds || l.basis.anchorKg !== null || isBodyweightMovement(l.loadType)) continue;
-      const top = Math.max(CATEGORY_COLD_START_MAX_KG[getLiftProfile(l.name).category], template(l.name));
+      const top = Math.max(coldStartCapKg(getLiftProfile(l.name)), template(l.name));
       expect(l.bounds.max, l.name).toBe(Math.floor(top / l.bounds.step + 1e-9) * l.bounds.step);
       expect(l.bounds.warnBelow, l.name).toBeNull();
       checked++;
     }
     expect(checked).toBeGreaterThan(10);
-    // Template over cap: the calf raise and the hamstring curl (35 kg, the isolation cap is 25).
+    // Machine isolation lifts take the machine ceiling (120) over their 35 kg template.
     for (const name of ["Standing Calf Raise", "Machine Hamstring Curl"]) {
-      expect(ref.lifts.find((l) => l.name === name)?.bounds, name).toMatchObject({ max: 35 });
+      expect(ref.lifts.find((l) => l.name === name)?.bounds, name).toMatchObject({ max: 120 });
     }
     // Probe: no bodyweight, far-apart bodyweights, strong and weak muscle anchors: byte for byte the same.
     const text = JSON.stringify(ref);
@@ -1462,14 +1462,21 @@ describe("the plan: what a coached session is composed from", () => {
     const meta = coachMeta("Forged");
     const pick = (slot, name) => ({ ...EXERCISE_POOLS[slot].pool.find((e) => e.name === name) });
     meta.programmeBlock.config = {
-      "ass1-A": pick("ass1-A", "DB Split Squat"), "ass1-B": pick("ass2-B", "Incline DB Row"),
+      "ass1-A": pick("ass1-A", "DB Split Squat"), "ass1-B": pick("ass2-B", "Meadows Row"),
       "ass2-A": pick("ass2-A", "Barbell Glute Bridge"), "ass2-B": pick("ass1-B", "Landmine Press"),
     };
     const plan = projectPlan({ meta, history: [] }, { todayIso: TODAY });
     expect(Object.fromEntries(Object.entries(plan.programme.config).map(([k, v]) => [k, v.name]))).toEqual({
-      "ass1-A": "DB Split Squat", "ass1-B": "Landmine Press", "ass2-A": "Barbell Glute Bridge", "ass2-B": "Incline DB Row",
+      "ass1-A": "DB Split Squat", "ass1-B": "Landmine Press", "ass2-A": "Barbell Glute Bridge", "ass2-B": "Meadows Row",
     });
     expect(serverSays(ipadRecord(plan, 0), meta)).toBe("ok");
+  });
+
+  it("a stored pick reads as its pool holds it now: the current load type and template", () => {
+    const meta = coachMeta("Forged");
+    meta.programmeBlock.config = { ...meta.programmeBlock.config, "ass2-A": { ...EXERCISE_POOLS["ass2-A"].pool.find((e) => e.name === "Single-Leg Hip Thrust"), loadType: "barbell", weight: 45 } };
+    const plan = projectPlan({ meta, history: [] }, { todayIso: TODAY });
+    expect(plan.programme.config["ass2-A"]).toMatchObject({ name: "Single-Leg Hip Thrust", loadType: "bodyweight", weight: null });
   });
 
   it("only programme data leaves: a pool slot holding a lift of its pool, plain values; the block's other fields never", () => {
@@ -1490,8 +1497,8 @@ describe("the plan: what a coached session is composed from", () => {
     const p = projectPlan({ meta, history: [] }, { todayIso: TODAY }).programme;
     expect(p.number).toBe(4);
     expect(p.focus).toBe("Forged");
-    const { weight, ...rest } = pick;
-    expect(p.config).toEqual({ [slot]: rest });
+    // The stored pick's fields give way to its pool entry's: the malformed weight never reads.
+    expect(p.config).toEqual({ [slot]: pick });
     expect(p.mainLifts).toEqual({ [BENCH]: MAIN_LIFT_FUNCTIONAL_EQUIVALENTS[BENCH][0] });
     expect(p.reps).toEqual({ [SQUAT]: 6 });
     expect(JSON.stringify(p)).not.toMatch(/CANARY|7004/);

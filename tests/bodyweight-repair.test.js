@@ -47,6 +47,16 @@ describe("stale added loads — dry run", () => {
     });
     expect(out).toEqual([]);
   });
+  it("a cooked last session or a missed reach lists nothing for a healthy lift", () => {
+    const state = { weights: { "Pull-Up": 10 }, trainingState: { lifts: { "Pull-Up": { currentWeight: 10 } } } };
+    const cooked = { ...rec("2026-10-03", "Pull-Up", [0, 0]), readiness: "cooked" };
+    expect(staleAddedLoads({ ...state, history: [rec("2026-10-01", "Pull-Up", [10, 10]), cooked] })).toEqual([]);
+    const reach = rec("2026-10-03", "Pull-Up", [10, 10, 15]);
+    const ex = reach.blocks[0].exercises[0];
+    ex.prescribed = { sets: 3, reps: 8 };
+    ex.sets[2] = { ...ex.sets[2], reps: 5, reach: true };
+    expect(staleAddedLoads({ ...state, history: [rec("2026-10-01", "Pull-Up", [10, 10]), reach] })).toEqual([]);
+  });
   it("still lists a loaded bodyweight lift with a stale working weight", () => {
     const out = staleAddedLoads({
       weights: { "Dip": 82.5 },

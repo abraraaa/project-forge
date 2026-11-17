@@ -701,14 +701,31 @@ describe("liftBests", () => {
     expect(b).toMatchObject({ date: "2025-01-10", weight: 110, reps: 5, est1RM: 128.3 });
   });
 
-  it("ignores accessory blocks, unlogged rows and assisted sets", () => {
+  it("ignores accessory blocks and unlogged rows", () => {
     const b = liftBests([
       rec("2026-09-01", "Bench Press", [{ weight: 200, reps: 5 }], { type: "accessory" }),
       rec("2026-09-02", "Bench Press", [{ weight: null, reps: null }, { weight: 80, reps: 5 }]),
-      rec("2026-09-03", "Assisted Pull-Up", [{ weight: 40, reps: 8 }], { loadType: "assisted_bodyweight" }),
     ]);
     expect(b["Bench Press"]).toMatchObject({ date: "2026-09-02", weight: 80 });
-    expect(b["Assisted Pull-Up"]).toBeUndefined();
+  });
+
+  it("ranks an assisted lift by its effective load, not the kg of help", () => {
+    const assisted = { loadType: "assisted_bodyweight" };
+    const b = liftBests([
+      // Most help, least moved: 40 kg of help at 80 kg is 40 kg.
+      rec("2026-09-01", "Assisted Pull-Up", [{ weight: 40, reps: 8, effectiveLoad: 40 }], assisted),
+      rec("2026-09-08", "Assisted Pull-Up", [{ weight: 20, reps: 8, effectiveLoad: 60 }], assisted),
+      rec("2026-09-15", "Assisted Pull-Up", [{ weight: 30, reps: 8, effectiveLoad: 50 }], assisted),
+    ])["Assisted Pull-Up"];
+    expect(b).toEqual({ date: "2026-09-08", est1RM: 76, weight: 20, reps: 8, loadType: "assisted_bodyweight", effectiveLoad: 60 });
+  });
+
+  it("skips an assisted set logged without a bodyweight", () => {
+    const b = liftBests([
+      rec("2026-09-01", "Assisted Pull-Up", [{ weight: 40, reps: 8, effectiveLoad: null }], { loadType: "assisted_bodyweight" }),
+      rec("2026-09-02", "Assisted Dip", [{ weight: 20, reps: 8 }], { loadType: "assisted_bodyweight" }),
+    ]);
+    expect(b).toEqual({});
   });
 
   it("keeps the earliest date on a tie", () => {

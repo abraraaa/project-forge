@@ -5,13 +5,9 @@
 // beforeinstallprompt, so we walk the user through the native flow ourselves.
 // Extracted from ForgeApp so it serves two callers:
 //   · ForgeApp's one-shot nudge (after first completed session, dismissable,
-//     remembered via localStorage — including the migration voice, dormant
-//     until heatwayve.app is primary: three gates, boss catches 2026-07-27)
+//     remembered via localStorage)
 //   · the Profile row, where a user who tapped "Maybe later" once can find
 //     the steps again on purpose. The nudge fires once; the route is forever.
-// `migration`: the re-add moment for MIGRATED users only — new origin AND
-// inside the 60-day window AND a pre-flip story in history. First-timers get
-// the ordinary pitch (you can't add something BACK you never had).
 // `cta`: bottom-row label. The nudge says "Maybe later" (it interrupted);
 // the Profile row says "Close" (the user asked).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -19,7 +15,7 @@
 import { T, DISPLAY } from "@/lib/tokens";
 import { useModalA11y } from "@/lib/a11y";
 
-export default function InstallWalkthrough({ onDismiss, migration = false, cta = "Maybe later" }) {
+export default function InstallWalkthrough({ onDismiss, cta = "Maybe later" }) {
   const { containerRef, onKeyDown } = useModalA11y(onDismiss);
   const titleId = "ios-install-title";
   return (
@@ -46,15 +42,13 @@ export default function InstallWalkthrough({ onDismiss, migration = false, cta =
         }}>
         {/* No corner ✕ — house modal doctrine (bottom-row dismiss only). */}
         <div style={{fontSize:13,fontWeight:500,color:T.ink2,marginBottom:8}}>
-          {migration ? "Same fire, new home" : "Live on your home screen"}
+          Live on your home screen
         </div>
         <div id={titleId} style={{...DISPLAY,fontSize:28,color:T.ink,marginBottom:10}}>
           Heatwayve
         </div>
         <p style={{fontSize:13,color:T.ink2,marginBottom:20,lineHeight:1.6}}>
-          {migration
-            ? "Add it back — we moved, and your story came with us. One re-add and the home screen is yours again."
-            : "Install it: fullscreen, one tap to open, works offline between sessions."}
+          Install it: fullscreen, one tap to open, works offline between sessions.
         </p>
 
         {/* Three steps — Safari's share flow */}

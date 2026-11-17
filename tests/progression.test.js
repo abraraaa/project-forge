@@ -8,7 +8,7 @@
 //   1. Cold start — first session, no history, no anchor; fallback to anchor
 //   2. Decision tree — each ADD/HOLD/DROP path with realistic preconditions
 //   3. RIR thresholds per category — power vs lower vs accessory vs isolation
-//   4. Cooked override — readiness=cooked must never trigger ADD
+//   4. Cooked — a cooked session is history only
 //   5. State transitions — updateLiftStateFromSession produces expected shape
 //   6. Phase 3 — deload signal detection, prescription scaling, recovery
 //   7. Edge cases — null history, missing fields, parse failures
@@ -18,6 +18,8 @@ import { describe, it, expect } from "vitest";
 import {
   computeNextPrescription,
   updateLiftStateFromSession,
+  recordCookedSession,
+  cookedSeedWeight,
   reconcileLiftStateWithSession,
   topSetWeight,
   isLatestSessionForLift,
@@ -369,249 +371,63 @@ describe("computeNextPrescription — category thresholds", () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// 4. Cooked override — readiness="cooked" must never ADD
+// 4. Cooked — a cooked session is history only (recordCookedSession)
 // ────────────────────────────────────────────────────────────────────────────
-describe("computeNextPrescription — cooked override", () => {
-  // The cooked override is conservative-by-design: a cooked session is
-  // assumed to not reflect the user's true performance, so the engine
-  // falls back to HOLD regardless of what numbers were logged. Two effects:
-  //   1. Cooked sessions don't trigger ADD even on great numbers
-  //   2. Cooked sessions don't trigger DROP on bad numbers either
-  // The latter is debatable — a user who's cooked AND missing reps is
-  // arguably in trouble — but the current contract is "cooked = ignore
-  // performance, hold steady." This test locks in that contract.
+describe("recordCookedSession", () => {
+  const SQUAT = "Barbell Back Squat";
+  const rec = { date: "2026-10-27", readiness: "cooked" };
+  const ex = (sets) => ({ name: SQUAT, loadType: "barbell", prescribed: { sets: 3, reps: 5, weight: 102.5 }, sets });
+  const at = (weight, reps = 5, rir = 2) => ({ weight, reps, rir, effectiveLoad: weight, est1rm: weight * (1 + reps / 30) });
+  const state = {
+    currentWeight: 100, nextPrescribed: 102.5, e1RM: 120, e1RMDate: "2026-10-20", sessionsCount: 5, sessionsSinceLastPR: 1,
+    consecutiveAdds: 1, consecutiveHolds: 2, consecutiveLightMisses: 1, stallSignal: "mild",
+    currentRepRange: { reps: 6, sets: 3, baseReps: 5 }, history: [{ date: "2026-10-20", est1rm: 116.7, decision: "ADD", rationale: [] }],
+  };
 
-  it("HOLDs when readiness=cooked, even with full reps + good RIR", () => {
-    // Note: `findMostRecentLiftSession` skips cooked sessions when looking
-    // for last performance. So a cooked session in history is invisible to
-    // the next prescription's lookback. To test the cooked override we need
-    // a CLEAN session in history + context.readiness="cooked" passed in.
-    const cleanSession = buildSession({
-      readiness: "normal",
-      exercises: [buildExercise({
-        name: "Barbell Back Squat",
-        sets: [buildSet({ weight: 100, reps: 5, rir: 3 })],
-        prescribed: { sets: 1, reps: 5, weight: 100 },
-      })],
-    });
-    const result = computeNextPrescription({
-      liftName: "Barbell Back Squat",
-      history: [cleanSession],
-      liftState: { currentWeight: 100, currentRepRange: { reps: 5, sets: 3 }, bestE1RM: 117, consecutiveHolds: 0, stallSignal: null, history: [] },
-      muscleAnchor: null,
-      context: { readiness: "cooked", currentWeight: 100 },
-    });
-    expect(result.decision).toBe("HOLD");
-    expect(result.weight).toBe(100);
-    // Engine writes "decision_reason=readiness_cooked" into rationale
-    expect(result.rationale.some(r => r.includes("readiness_cooked"))).toBe(true);
-  });
-
-  it("HOLDs (does NOT drop) even when last session shows missed reps if context=cooked", () => {
-    // Documents that the cooked override blocks drops too — a deliberate
-    // contract choice. If you want this to drop instead, that's a real
-    // engine change to discuss separately.
-    const lastSession = buildSession({
-      readiness: "normal",
-      exercises: [buildExercise({
-        name: "Barbell Back Squat",
-        sets: [
-          buildSet({ weight: 100, reps: 2, rir: 0 }),
-          buildSet({ weight: 100, reps: 1, rir: 0 }),
-          buildSet({ weight: 100, reps: 0, rir: 0 }),
-        ],
-        prescribed: { sets: 3, reps: 5, weight: 100 },
-      })],
-    });
-    const result = computeNextPrescription({
-      liftName: "Barbell Back Squat",
-      history: [lastSession],
-      liftState: { currentWeight: 100, currentRepRange: { reps: 5, sets: 3 }, bestE1RM: 117, consecutiveHolds: 0, stallSignal: null, history: [] },
-      muscleAnchor: null,
-      context: { readiness: "cooked", currentWeight: 100 },
-    });
-    expect(result.decision).toBe("HOLD"); // cooked wins — no drop
-  });
-
-  // A cooked session never moves an earned working weight: the next W is the
-  // one in force that day, whatever was lifted. The last counted session's top
-  // set predates the add that session earned.
-  const earnedAdd = buildSession({
-    id: "2026-10-20T10:00:00.000Z", date: "2026-10-20",
-    exercises: [buildExercise({
-      sets: [buildSet({ weight: 100, rir: 3 }), buildSet({ weight: 100, rir: 3 }), buildSet({ weight: 100, rir: 3 })],
-      prescribed: { sets: 3, reps: 5, weight: 100 },
-    })],
-  });
-  // Lifted 100, earned 102.5.
-  const afterAdd = { currentWeight: 100, nextPrescribed: 102.5, currentRepRange: { reps: 5, sets: 3, baseReps: 5 }, sessionsCount: 5, consecutiveHolds: 0, consecutiveAdds: 1, stallSignal: null, history: [] };
-  const atKg = (weight) => [buildSet({ weight, rir: 2 }), buildSet({ weight, rir: 2 }), buildSet({ weight, rir: 2 })];
-  // As the session records it: prescribed is W, whatever the drum was set to.
-  const cooked = (sets, prescribed = { sets: 3, reps: 5, weight: 102.5 }) => buildSession({
-    id: "2026-10-27T10:00:00.000Z", date: "2026-10-27", readiness: "cooked",
-    exercises: [buildExercise({ sets, prescribed })],
-  });
-  // As the finalise does: the session being applied is reconciled in first.
-  const reconciled = (session, state = afterAdd) => reconcileLiftStateWithSession(state, session.blocks[0].exercises[0]);
-  const nextAfterCooked = (session, state = afterAdd) => computeNextPrescription({
-    liftName: "Barbell Back Squat",
-    history: [earnedAdd, session],
-    liftState: reconciled(session, state),
-    muscleAnchor: null,
-    context: { readiness: "cooked" },
-  });
-
-  it("a cooked session after an earned add keeps the new weight", () => {
-    const result = nextAfterCooked(cooked(atKg(102.5)));
-    expect(result.decision).toBe("HOLD");
-    expect(result.weight).toBe(102.5);
-    expect(result.decisionReason).toBe("readiness_cooked");
-    expect(result.rationale).toContain("decision_reason=readiness_cooked");
-  });
-
-  it("a cooked session dialled down leaves the weight in force", () => {
-    for (const kg of [97.5, 87.5]) {
-      expect(nextAfterCooked(cooked(atKg(kg))), `${kg} kg`).toMatchObject({ decision: "HOLD", weight: 102.5, decisionReason: "readiness_cooked" });
+  it("counts the session and leaves everything else, dialled down, heavier or failed", () => {
+    for (const sets of [[at(87.5), at(87.5), at(87.5)], [at(107.5, 1, 0), at(95), at(95)]]) {
+      const next = recordCookedSession(state, rec, ex(sets));
+      expect(next).toEqual({ ...state, sessionsCount: 6, sessionsSinceLastPR: 2 });
     }
   });
 
-  it("a heavier or failed set on a cooked day never raises the weight", () => {
-    const failedSingle = [buildSet({ weight: 107.5, reps: 1, rir: 0 }), buildSet({ weight: 95, rir: 2 }), buildSet({ weight: 95, rir: 2 })];
-    expect(nextAfterCooked(cooked(failedSingle))).toMatchObject({ decision: "HOLD", weight: 102.5, decisionReason: "readiness_cooked" });
+  it("records a new best e1RM", () => {
+    const next = recordCookedSession(state, rec, ex([at(110), at(100), at(100)]));
+    expect(next).toEqual({ ...state, sessionsCount: 6, e1RM: 110 * (1 + 5 / 30), e1RMDate: "2026-10-27", sessionsSinceLastPR: 0 });
   });
 
-  it("the cooked record's prescription is the weight in force: a trainer's W holds", () => {
-    // W moved to 105 outside the engine, whose last prescription was 102.5.
-    expect(nextAfterCooked(cooked(atKg(100), { sets: 3, reps: 5, weight: 105 }))).toMatchObject({ decision: "HOLD", weight: 105 });
+  it("a seed lands only where there is no working weight", () => {
+    expect(recordCookedSession(state, rec, ex([at(90)]), { seed: 90 }).currentWeight).toBe(100);
+    const first = recordCookedSession(null, rec, ex([at(90)]), { seed: 90 });
+    expect(first).toMatchObject({ currentWeight: 90, nextPrescribed: 90, sessionsCount: 1, currentRepRange: null, history: [] });
+    expect(recordCookedSession(null, rec, ex([at(90)]))).toMatchObject({ currentWeight: null, sessionsCount: 1 });
   });
 
-  it("a cooked record without a prescribed weight leaves the engine's last prescription", () => {
-    expect(nextAfterCooked(cooked(atKg(97.5), { sets: 3, reps: 5 }))).toMatchObject({ decision: "HOLD", weight: 102.5 });
-  });
-
-  it("with no prescription on the record or the state, the last counted top set holds", () => {
-    const result = nextAfterCooked(cooked(atKg(97.5), { sets: 3, reps: 5 }), { ...afterAdd, nextPrescribed: undefined });
-    expect(result).toMatchObject({ decision: "HOLD", weight: 100 });
-  });
-
-  it("when the newest record is counted, its prescription gives way to the add it earned", () => {
-    const result = computeNextPrescription({
-      liftName: "Barbell Back Squat",
-      history: [earnedAdd],
-      liftState: afterAdd,
-      muscleAnchor: null,
-      context: { readiness: "cooked" },
-    });
-    expect(result).toMatchObject({ decision: "HOLD", weight: 102.5 });
-  });
-
-  it("an assisted cooked session leaves the help in force, with more help or less", () => {
-    const LIFT = "Assisted Pull-Up";
-    const help = (kg, reps, rir) => ({ ...buildSet({ weight: kg, reps, rir, effectiveLoad: 80 - kg }), loadType: "assisted_bodyweight" });
-    const earned = buildSession({
-      id: "2026-10-20T10:00:00.000Z", date: "2026-10-20",
-      exercises: [buildExercise({ name: LIFT, sets: [help(20, 6, 3), help(20, 6, 3), help(20, 6, 3)], prescribed: { sets: 3, reps: 6, weight: 20 } })],
-    });
-    const state = { ...afterAdd, currentWeight: 20, nextPrescribed: 18.75, currentRepRange: { reps: 6, sets: 3, baseReps: 6 } };
-    // 18.75 kg of help in force after the add: a day at 25 kg, and one with a failed set at 15.
-    for (const sets of [[help(25, 6, 2), help(25, 6, 2), help(25, 6, 2)], [help(15, 2, 0), help(18.75, 6, 2), help(18.75, 6, 2)]]) {
-      const session = buildSession({
-        id: "2026-10-27T10:00:00.000Z", date: "2026-10-27", readiness: "cooked",
-        exercises: [buildExercise({ name: LIFT, sets, prescribed: { sets: 3, reps: 6, weight: 18.75 } })],
-      });
-      const result = computeNextPrescription({
-        liftName: LIFT,
-        history: [earned, session],
-        liftState: reconcileLiftStateWithSession(state, session.blocks[0].exercises[0]),
-        muscleAnchor: null,
-        context: { readiness: "cooked", loadType: "assisted_bodyweight" },
-      });
-      expect(result, `${sets[0].weight} kg`).toMatchObject({ decision: "HOLD", weight: 18.75, decisionReason: "readiness_cooked" });
-    }
-  });
-
-  it("a belted lift keeps its added kg through an unbelted cooked day", () => {
-    const LIFT = "Pull-Up";
-    const belt = (kg, rir) => ({ ...buildSet({ weight: kg, reps: 8, rir, effectiveLoad: 80 + kg }), loadType: "loaded_bodyweight" });
-    const earned = buildSession({
-      id: "2026-10-20T10:00:00.000Z", date: "2026-10-20",
-      exercises: [buildExercise({ name: LIFT, sets: [belt(10, 3), belt(10, 3), belt(10, 3)], prescribed: { sets: 3, reps: 8, weight: 10 } })],
-    });
-    const session = buildSession({
-      id: "2026-10-27T10:00:00.000Z", date: "2026-10-27", readiness: "cooked",
-      exercises: [buildExercise({ name: LIFT, sets: [belt(0, 2), belt(0, 2), belt(0, 2)], prescribed: { sets: 3, reps: 8, weight: 11.25 } })],
-    });
-    const state = { ...afterAdd, currentWeight: 10, nextPrescribed: 11.25, currentRepRange: { reps: 8, sets: 3, baseReps: 8 } };
-    const result = computeNextPrescription({
-      liftName: LIFT,
-      history: [earned, session],
-      liftState: reconcileLiftStateWithSession(state, session.blocks[0].exercises[0]),
-      muscleAnchor: null,
-      context: { readiness: "cooked", loadType: "loaded_bodyweight" },
-    });
-    expect(result).toMatchObject({ decision: "HOLD", weight: 11.25, decisionReason: "readiness_cooked" });
-  });
-
-  // No counted session means no working weight yet: what was lifted stands,
-  // as a first session's does.
-  it("a lift whose sessions are all cooked holds what it lifted, never the anchor", () => {
-    const LIFT = "Face-Away Cable Row";
-    const row = (id) => buildSession({
-      id, date: id.slice(0, 10), readiness: "cooked",
-      exercises: [buildExercise({ name: LIFT, muscle: "Back", sets: [0, 1, 2].map(() => ({ ...buildSet({ weight: 26, reps: 10, rir: 1 }), loadType: "cable" })) })],
-    });
-    const first = row("2026-10-11T10:00:00.000Z");
-    const second = row("2026-10-13T10:00:00.000Z");
-    const state = { currentWeight: 26, nextPrescribed: 26, sessionsCount: 1, consecutiveHolds: 0, stallSignal: null, history: [], currentRepRange: { reps: 10, sets: 3, baseReps: 10 } };
-    const result = computeNextPrescription({
-      liftName: LIFT,
-      history: [first, second],
-      liftState: reconcileLiftStateWithSession(state, second.blocks[0].exercises[0]),
-      muscleAnchor: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" },
-      context: { readiness: "cooked", loadType: "cable" },
-    });
-    expect(result).toMatchObject({ decision: "HOLD", weight: 26, decisionReason: "readiness_cooked" });
-    expect(result.rationale).toEqual(["last_session_cooked", "decision_reason=readiness_cooked"]);
-  });
-
-  // Not the 26 the first one held, below it or above: with no counted session
-  // there is no W to keep.
-  for (const kg of [20, 30]) {
-    it(`a later cooked session, still with no counted one, takes its own top set: 26 then ${kg} holds ${kg}`, () => {
-      const LIFT = "Face-Away Cable Row";
-      const row = (id, weight) => buildSession({
-        id, date: id.slice(0, 10), readiness: "cooked",
-        exercises: [buildExercise({ name: LIFT, muscle: "Back", sets: [0, 1, 2].map(() => ({ ...buildSet({ weight, reps: 10, rir: 1 }), loadType: "cable" })) })],
-      });
-      const first = row("2026-10-11T10:00:00.000Z", 26);
-      const second = row("2026-10-13T10:00:00.000Z", kg);
-      // As the first cooked session left it.
-      const state = { currentWeight: 26, nextPrescribed: 26, sessionsCount: 1, consecutiveHolds: 0, stallSignal: null, history: [], currentRepRange: { reps: 10, sets: 3, baseReps: 10 } };
-      const result = computeNextPrescription({
-        liftName: LIFT,
-        history: [first, second],
-        liftState: reconcileLiftStateWithSession(state, second.blocks[0].exercises[0]),
-        muscleAnchor: { bestE1RM: 152.4, bestE1RMLift: "Chest-Supported DB Row" },
-        context: { readiness: "cooked", loadType: "cable" },
-      });
-      expect(result).toMatchObject({ decision: "HOLD", weight: kg, decisionReason: "readiness_cooked" });
-    });
-  }
-
-  it("recovery sessions 2-3 take the standard path, cooked hold included", () => {
-    const session = cooked(atKg(97.5));
-    const result = computeRecoveryPrescription("Barbell Back Squat", { ...reconciled(session), inRecoveryUntil: 2 }, [earnedAdd, session], { readiness: "cooked" });
-    expect(result).toMatchObject({ decision: "HOLD", weight: 102.5, mesocyclePhase: "recovery" });
+  it("a bodyweight lift's added load sets no e1RM", () => {
+    const vest = { name: "Push-Up", loadType: "bodyweight", sets: [{ weight: 10, reps: 12, rir: 2, loadType: "bodyweight", est1rm: 300 }] };
+    expect(recordCookedSession(null, rec, vest).e1RM).toBe(null);
   });
 });
 
-// A cooked day holds reps on every path too (README: a cooked rating forces a
-// hold outright): the target in force stays, the climb and the run of adds
-// wait, and the next counted session carries on as if it had not happened.
+// A cooked session's top set seeds a load-progressed lift, failed or not.
+describe("cookedSeedWeight", () => {
+  it("takes the heaviest set logged: total load, or the added kg on a belted lift", () => {
+    expect(cookedSeedWeight({ sets: [{ weight: 30, reps: 2, effectiveLoad: 30 }, { weight: 26, reps: 10, effectiveLoad: 26 }] }, "cable")).toBe(30);
+    expect(cookedSeedWeight({ sets: [{ weight: 10, reps: 8, effectiveLoad: 90 }] }, "loaded_bodyweight")).toBe(10);
+    expect(cookedSeedWeight({ sets: [{ weight: 0, reps: 8, effectiveLoad: 80 }] }, "loaded_bodyweight")).toBe(null);
+    expect(cookedSeedWeight({ sets: [{ weight: null, reps: 8 }] }, "barbell")).toBe(null);
+  });
+});
+
+// A cooked day holds reps on every path too: the target in force stays, the
+// climb and the run of adds wait, and the next counted session carries on as
+// if it had not happened.
 describe("a cooked day holds reps on every path", () => {
-  // As the finalise does: reconcile the session in, prescribe, update.
-  const fold = (liftName, records, state, context = {}) => records.reduce(({ liftState }, rec, i) => {
+  // As the finalise does: a cooked record is history only; a counted one is
+  // reconciled in, prescribed and updated.
+  const fold = (liftName, records, state, context = {}) => records.reduce(({ prescription: held, liftState }, rec, i) => {
     const ex = rec.blocks[0].exercises[0];
+    if (rec.readiness === "cooked") return { prescription: held, liftState: recordCookedSession(liftState, rec, ex) };
     const reconciled = reconcileLiftStateWithSession(liftState, ex);
     const prescription = computeNextPrescription({
       liftName, history: records.slice(0, i + 1), liftState: reconciled, muscleAnchor: null,
@@ -648,8 +464,8 @@ describe("a cooked day holds reps on every path", () => {
     it(`${name}: a cooked day holds the target in force and moves no counter`, () => {
       const before = fold(name, [counted], start, context);
       const after = fold(name, [counted, cookedDay], start, context);
-      expect(after.prescription).toMatchObject({ reps: 11, decision: "HOLD", decisionReason: "readiness_cooked", repRangeChanged: false });
-      expect(after.prescription.rationale).toContain("decision_reason=readiness_cooked");
+      expect(before.prescription).toMatchObject({ reps: 11 });
+      expect(after.prescription).toEqual(before.prescription);
       expect(kept(after.liftState)).toEqual(kept(before.liftState));
     });
 
@@ -658,13 +474,9 @@ describe("a cooked day holds reps on every path", () => {
       // only come from the range in force.
       const { liftState } = fold(name, [counted], start, context);
       const inForce = { ...liftState, currentRepRange: { ...liftState.currentRepRange, reps: 8, baseReps: 8 } };
-      const result = computeNextPrescription({
-        liftName: name, history: [counted, cookedDay],
-        liftState: reconcileLiftStateWithSession(inForce, cookedDay.blocks[0].exercises[0]),
-        muscleAnchor: null, context: { ...context, readiness: "cooked" },
-      });
-      expect(result).toMatchObject({ reps: 8, decision: "HOLD", decisionReason: "readiness_cooked", repRangeChanged: false });
-      expect(result.repRange).toBeUndefined();
+      const after = fold(name, [cookedDay], inForce, context);
+      expect(after.prescription).toBe(null);
+      expect(after.liftState.currentRepRange).toEqual(inForce.currentRepRange);
     });
 
     it(`${name}: the next counted session carries on as if the cooked day had not happened`, () => {
@@ -694,7 +506,7 @@ describe("a cooked day holds reps on every path", () => {
     const before = fold(SQUAT, [climbed], start);
     expect(before.liftState.currentRepRange).toMatchObject({ reps: 6, baseReps: 5 });
     const after = fold(SQUAT, [climbed, cookedDay], start);
-    expect(after.prescription).toMatchObject({ reps: 6, decision: "HOLD", decisionReason: "readiness_cooked" });
+    expect(after.prescription).toEqual(before.prescription);
     expect(kept(after.liftState)).toEqual(kept(before.liftState));
     const without = fold(SQUAT, [climbed, next], start);
     const withCooked = fold(SQUAT, [climbed, cookedDay, next], start);
@@ -745,7 +557,7 @@ describe("updateLiftStateFromSession", () => {
       sets: [{ weight: 100, effectiveLoad: 100, reps: 5, rir: 2 }],
     };
     expect(__test__.evaluatePerformance(exercise)).toBe("PERFORMED_PARTIAL");
-    const movement = __test__.decideMovement("PERFORMED_PARTIAL", 2, 2, "normal");
+    const movement = __test__.decideMovement("PERFORMED_PARTIAL", 2, 2);
     expect(movement.decision).toBe("HOLD");
     expect(movement.reason).toBe("partial_session");
   });
@@ -765,15 +577,16 @@ describe("updateLiftStateFromSession", () => {
     expect(__test__.evaluatePerformance(exercise)).toBe("MISSED_HEAVY");
   });
 
-  it("cooked HOLDs freeze consecutiveHolds instead of incrementing", () => {
-    const prev = { consecutiveHolds: 2, sessionsCount: 5, history: [] };
+  it("a cooked session freezes consecutiveHolds instead of incrementing", () => {
+    const prev = { consecutiveHolds: 2, stallSignal: "mild", sessionsCount: 5, history: [] };
     const cookedRecord = { date: "2026-07-10", readiness: "cooked" };
     const exercise = { name: "Barbell Back Squat", sets: [{ weight: 100, reps: 5, rir: 0, est1rm: 116 }] };
     const prescription = { decision: "HOLD", weight: 100, reps: 5, sets: 3, rationale: [] };
-    const next = updateLiftStateFromSession(prev, cookedRecord, exercise, prescription);
+    const next = recordCookedSession(prev, cookedRecord, exercise);
     // Frozen at 2 — not bumped to 3 (which would flip stallSignal to "stall").
     expect(next.consecutiveHolds).toBe(2);
     expect(next.stallSignal).toBe("mild");
+    expect(next.sessionsCount).toBe(6);
 
     // A normal-readiness HOLD still increments.
     const normalRecord = { date: "2026-07-12", readiness: "normal" };
@@ -1486,22 +1299,21 @@ describe("startingWeightForLift — BW% seeded starts", () => {
 // producing absurd cold-start recommendations.
 describe("coldStartFromAnchor — sanity cap", () => {
   it("clamps absurd anchor-derived cold-start to the category cap", () => {
-    // Construct a shoulder anchor that would translate to ~108kg cold-start
-    // for Leaning Lateral Raise (factor 0.12): 1200 × 0.75 × 0.12 = 108.
-    // The accessory_isolation cap is 25kg, so output should be ≤25.
+    // A shoulder anchor that would translate to 72kg cold-start for Prone Y
+    // Raise (factor 0.08): 1200 × 0.75 × 0.08 = 72. The accessory_isolation
+    // cap is 25kg, so output should be ≤25.
     const inflatedAnchor = { bestE1RM: 1200, bestE1RMLift: "Phantom", bestE1RMDate: null };
-    const out = coldStartFromAnchor("Leaning Lateral Raise", inflatedAnchor);
+    const out = coldStartFromAnchor("Prone Y Raise", inflatedAnchor);
     expect(out).toBeLessThanOrEqual(CATEGORY_COLD_START_MAX_KG.accessory_isolation);
     expect(out).toBeGreaterThan(0);
   });
 
   it("leaves a realistic cold-start untouched", () => {
-    // OHP at 60kg × 5 → e1RM 70 → for Leaning Lateral Raise (factor 0.12)
-    // gives 70 × 0.75 × 0.12 = 6.3 → rounds to 6.5kg. Well under cap.
+    // OHP at 60kg × 5 → e1RM 70 → for Rear Delt Fly (factor 0.25)
+    // gives 70 × 0.75 × 0.25 = 13.1 → rounds to 13kg. Under the cap.
     const realisticAnchor = { bestE1RM: 70, bestE1RMLift: "Barbell Overhead Press" };
-    const out = coldStartFromAnchor("Leaning Lateral Raise", realisticAnchor);
-    expect(out).toBeGreaterThanOrEqual(5);
-    expect(out).toBeLessThanOrEqual(10);
+    const out = coldStartFromAnchor("Rear Delt Fly", realisticAnchor);
+    expect(out).toBe(13);
   });
 
   it("returns null for BW-progression lifts (no anchor weight)", () => {
@@ -1520,11 +1332,12 @@ describe("sanitiseWorkingWeights", () => {
     expect(sanitiseWorkingWeights(weights)).toBe(weights);
   });
 
-  it("rewrites a corrupt weight (over 400 kg) back to the cap", () => {
-    const weights = { "Leaning Lateral Raise": 1100 };
+  it("drops a corrupt weight (over 400 kg) so it reads as absent", () => {
+    const weights = { "Leaning Lateral Raise": 1100, "Barbell Back Squat": 100 };
     const out = sanitiseWorkingWeights(weights);
     expect(out).not.toBe(weights);
-    expect(out["Leaning Lateral Raise"]).toBe(CATEGORY_COLD_START_MAX_KG.accessory_isolation);
+    expect(out).toEqual({ "Barbell Back Squat": 100 });
+    expect(weights["Leaning Lateral Raise"]).toBe(1100);
   });
 
   it("leaves above-cap values alone (real progression)", () => {
@@ -1535,15 +1348,21 @@ describe("sanitiseWorkingWeights", () => {
     }
   });
 
-  it("ignores BW-progression lifts (no weight cap applies)", () => {
-    const weights = { "Pike Push-Up": 999 };  // nonsensical but BW has no cap
-    expect(sanitiseWorkingWeights(weights)).toBe(weights);
+  it("drops a corrupt weight on a bodyweight-progression lift too", () => {
+    expect(sanitiseWorkingWeights({ "Pike Push-Up": 999 })).toEqual({});
   });
 
-  it("ignores non-numeric entries; a non-finite number goes to the cap", () => {
+  it("ignores non-numeric entries; a non-finite or negative number is dropped", () => {
     const weights = { "Bench Press": null, "Lateral Raise": "twenty" };
     expect(sanitiseWorkingWeights(weights)).toBe(weights);
-    expect(sanitiseWorkingWeights({ "Lateral Raise": Infinity })).toEqual({ "Lateral Raise": CATEGORY_COLD_START_MAX_KG.accessory_isolation });
+    for (const bad of [Infinity, NaN, -1, -0.5]) {
+      expect(sanitiseWorkingWeights({ "Lateral Raise": bad }), `${bad}`).toEqual({});
+    }
+  });
+
+  it("keeps 0, 400 and a real 300 kg", () => {
+    const weights = { "Assisted Pull-Up": 0, "Lateral Raise": 0, "Barbell Back Squat": 400, "Hex Bar Deadlift": 300 };
+    expect(sanitiseWorkingWeights(weights)).toBe(weights);
   });
 
   it("handles null/empty input safely", () => {
@@ -2129,5 +1948,43 @@ describe("reconcile on an assisted lift honours the reach contract", () => {
   it("a reach set that met the target with less help does", () => {
     const out = reconcileLiftStateWithSession(state, ex([set(20, 8), set(20, 8), set(15, 8, { reach: true })]));
     expect(out.currentWeight).toBe(15);
+  });
+});
+
+describe("stored lift state follows the earned top set", () => {
+  const squat = (sets) => buildExercise({ sets, prescribed: { sets: 3, reps: 5, weight: 100 } });
+  const withMissedReach = () => squat([
+    buildSet({ weight: 100 }), buildSet({ weight: 100 }),
+    { ...buildSet({ weight: 110, reps: 3, rir: 0 }), est1rm: 120, reach: true },
+  ]);
+  const state = { currentWeight: 100, nextPrescribed: 100, sessionsCount: 4, history: [] };
+  const hold = { decision: "HOLD", weight: 100, rationale: [] };
+
+  it("reconcile keeps a loaded lift at 100 when the 110 reach missed", () => {
+    expect(reconcileLiftStateWithSession(state, withMissedReach()).currentWeight).toBe(100);
+  });
+
+  it("reconcile keeps a belted lift at its earned added load", () => {
+    const sets = [
+      { ...buildSet({ weight: 10 }), loadType: "loaded_bodyweight" },
+      { ...buildSet({ weight: 20, reps: 2 }), loadType: "loaded_bodyweight", reach: true },
+    ];
+    const ex = { ...buildExercise({ name: "Weighted Pull-Up", sets, prescribed: { sets: 2, reps: 5, weight: 10 } }), loadType: "loaded_bodyweight" };
+    expect(reconcileLiftStateWithSession({ currentWeight: 10 }, ex).currentWeight).toBe(10);
+  });
+
+  it("a reach that met its target still sets the weight", () => {
+    const ex = squat([buildSet({ weight: 100 }), { ...buildSet({ weight: 110, reps: 5 }), reach: true }]);
+    expect(reconcileLiftStateWithSession(state, ex).currentWeight).toBe(110);
+  });
+
+  it("finalise stores 100, and the pre-deload snapshot reads 100", () => {
+    const ex = withMissedReach();
+    ex.sets = ex.sets.map((s) => ({ est1rm: s.weight * 1.17, ...s }));
+    const session = buildSession({ exercises: [ex] });
+    const next = updateLiftStateFromSession(state, session, ex, hold);
+    expect(next.currentWeight).toBe(100);
+    const ts = startDeload({ lifts: { "Barbell Back Squat": next }, mesocycle: {} }, { type: "test" });
+    expect(ts.mesocycle.activeDeload.preDeloadWeights["Barbell Back Squat"]).toBe(100);
   });
 });

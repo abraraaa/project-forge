@@ -4,7 +4,7 @@
 // lift and gets that lift's answer.
 
 import { describe, it, expect } from "vitest";
-import { computeNextPrescription, updateLiftStateFromSession } from "../lib/progression.js";
+import { computeNextPrescription, updateLiftStateFromSession, recordCookedSession } from "../lib/progression.js";
 
 const set = (reps, rir = 1) => ({ weight: 100, effectiveLoad: 100, reps, rir, est1rm: 100 * (1 + reps / 30) });
 
@@ -89,7 +89,7 @@ describe("the counter", () => {
   });
 
   it("cooked freezes it, as it freezes consecutiveHolds", () => {
-    const st = updateLiftStateFromSession(state(2), rec("cooked"), ex, hold("readiness_cooked"));
+    const st = recordCookedSession(state(2), rec("cooked"), ex);
     expect(st.consecutiveLightMisses).toBe(2);
   });
 

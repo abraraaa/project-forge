@@ -78,25 +78,20 @@ describe("E3: WORKING_WEIGHT_MAX_KG is the sanitiser's bound and the validator's
   it("covers the catalogue", () => {
     expect(lifts.length).toBeGreaterThan(50);
   });
-  it("for every catalogue lift: the bound passes untouched, one rung more is rewritten to the cap", () => {
+  it("for every catalogue lift: the bound passes untouched, one rung more reads as absent", () => {
     let checked = 0;
     for (const [name, lt] of lifts) {
       const profile = getLiftProfile(name);
       const cap = profile.progressesByLoad ? CATEGORY_COLD_START_MAX_KG[profile.category] : undefined;
-      if (!cap) {
-        // No cap: the sanitiser never touches the lift, however heavy.
-        const w = { [name]: 9999 };
-        expect(sanitiseWorkingWeights(w)).toBe(w);
-        continue;
-      }
       // Past the cold-start cap, and the old 1.5x clamp, is real progression.
-      for (const kg of [cap * 1.5, nextRung(cap * 1.5, lt, +1), WORKING_WEIGHT_MAX_KG]) {
+      const real = cap ? [cap * 1.5, nextRung(cap * 1.5, lt, +1), WORKING_WEIGHT_MAX_KG] : [0, WORKING_WEIGHT_MAX_KG];
+      for (const kg of real) {
         const w = { [name]: kg };
         expect(sanitiseWorkingWeights(w), `${name} ${kg}`).toBe(w);
       }
       const above = nextRung(WORKING_WEIGHT_MAX_KG, lt, +1);
       expect(above).toBeGreaterThan(WORKING_WEIGHT_MAX_KG);
-      expect(sanitiseWorkingWeights({ [name]: above })).toEqual({ [name]: cap });
+      expect(sanitiseWorkingWeights({ [name]: above }), `${name} ${above}`).toEqual({});
       checked++;
     }
     expect(checked).toBeGreaterThan(40);

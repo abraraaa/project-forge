@@ -370,6 +370,19 @@ describe("POST /api/share/approve", () => {
     expect(strikes()).toBe(0);
   });
 
+  it("a trainer on an older Terms version is still approved, with the same grant and writes", async () => {
+    db.accounts.get(T).trainer_terms = { ...CURRENT, version: "draft-2026-10-05b" };
+    invite(T, CODE);
+    const authToken = mint(L, { cred: "cL" });
+    const res = await approve({ code: CODE, authToken });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, trainer: { name: "Tia" }, replaced: null });
+    expect(writes()).toEqual(["UPDATE trainer_invites SET", "UPDATE oauth_grants SET", "INSERT INTO oauth_grants", "UPDATE auth_tokens SET"]);
+    expect(live(L)).toHaveLength(1);
+    expect(live(L)[0]).toMatchObject({ trainer_account_id: T, kind: "trainer", consent_version: SHARE_CONSENT_VERSION });
+    expect(strikes()).toBe(0);
+  });
+
   it("approves: one transaction marks the code used and writes the grant; then the ceremony token expires", async () => {
     invite(T, CODE);
     const authToken = mint(L, { cred: "cL" });

@@ -106,6 +106,12 @@ vi.mock("@neondatabase/serverless", () => ({
 }));
 // The per-IP minute limit is in memory; the daily count (failureGate) runs for real on the fake.
 vi.mock("@/lib/rate-limit", async (importOriginal) => ({ ...(await importOriginal()), rateLimit: vi.fn(() => null) }));
+// TRAINER_LIVE as shipped unless a test closes it.
+const switchLive = vi.hoisted(() => ({ value: true }));
+vi.mock("@/lib/trainer-terms", async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, get TRAINER_LIVE() { return switchLive.value; } };
+});
 
 const exportRoute = await import("@/app/api/trainer/export/route");
 const { POST, EXPORTS_PER_DAY } = exportRoute;
@@ -206,6 +212,27 @@ beforeEach(() => {
 });
 afterEach(() => {
   delete process.env.DATABASE_URL;
+  delete process.env.ADMIN_ACCOUNT_ID;
+  switchLive.value = true;
+});
+
+describe("TRAINER_LIVE off: the export fails closed", () => {
+  it("a signed-in trainer other than the admin gets the sign-in reply, for a client and their own, nothing counted, logged or read", async () => {
+    switchLive.value = false;
+    for (const ref of ["hwg_cara", "me"]) {
+      const res = await post(session(T, "cT"), { ref, today: TODAY });
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: "Sign in to see your clients", requiresAuth: true });
+    }
+    expect(writes()).toEqual([]);
+    expect(dataReads()).toEqual([]);
+  });
+
+  it("the admin still downloads", async () => {
+    switchLive.value = false;
+    process.env.ADMIN_ACCOUNT_ID = T;
+    expect((await post(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).status).toBe(200);
+  });
 });
 
 describe("POST /api/trainer/export", () => {
@@ -237,9 +264,9 @@ describe("POST /api/trainer/export", () => {
     const text = await res.text();
     const lines = text.split("\r\n");
     expect(lines[0]).toBe(`# Heatwayve export for Cara, ${TODAY}, shared with Tia`);
-    expect(lines[1]).toBe("date,session,block,lift,set,prescribed_reps,reps,kg,felt,top_set,set_by,logged_by");
-    expect(lines).toContain(`${daysAgo(1)},A,main,${SQUAT},1,,5,100,RPE 8,1,,`);
-    expect(lines).toContain(`${daysAgo(200)},,main,${SQUAT},top,,5,100,RPE 8,1,,`);
+    expect(lines[1]).toBe("date,session,block,lift,set,prescribed_reps,reps,kg,effort,readiness,top_set,set_by,logged_by");
+    expect(lines).toContain(`${daysAgo(1)},A,main,${SQUAT},1,,5,100,RPE 8,cooked,1,,`);
+    expect(lines).toContain(`${daysAgo(200)},,main,${SQUAT},top,,5,100,RPE 8,cooked,1,,`);
   });
 
   it("logs the look before reading the client's data, by the grant's storage key; the only writes are the count and the look", async () => {
@@ -388,9 +415,9 @@ describe("POST /api/trainer/export", () => {
     const text = await (await post(session(T, "cT"), { ref: "hwg_cara", today: TODAY })).text();
     const lines = text.split("\r\n");
     // Trained at the session after it landed (prescribed 100): that set was the trainer's.
-    expect(lines).toContain(`${daysAgo(1)},A,main,${SQUAT},1,,5,100,RPE 8,1,Tia,`);
+    expect(lines).toContain(`${daysAgo(1)},A,main,${SQUAT},1,,5,100,RPE 8,cooked,1,Tia,`);
     // The older top set predates the change.
-    expect(lines).toContain(`${daysAgo(200)},,main,${SQUAT},top,,5,100,RPE 8,1,,`);
+    expect(lines).toContain(`${daysAgo(200)},,main,${SQUAT},top,,5,100,RPE 8,cooked,1,,`);
     // The changes are read after the look, like the profile.
     expect(calls.findIndex((c) => /FROM trainer_changes c LEFT JOIN/.test(c.q))).toBeGreaterThan(lookAt());
   });

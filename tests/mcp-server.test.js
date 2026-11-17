@@ -102,6 +102,10 @@ describe("tools", () => {
       "- Plank: bodyweight × 45s",
     ]);
   });
+  it("current_loads reads a corrupt stored W as no W", () => {
+    const d = { meta: { weights: { "Barbell Bench Press": 9000, "Barbell Hip Thrust": -5, "Hex Bar Deadlift": 300 } }, history: [] };
+    expect(runTool("current_loads", {}, d, now).text.split("\n")).toEqual(["- Hex Bar Deadlift: 300 kg"]);
+  });
   it("current_loads: pure-BW lifts show the added load, never a phantom W", () => {
     // "Barbell Glute Bridge" name-matches the bodyweight pattern but is a
     // barbell lift; "45-Degree Hip Extension" is bodyweight but unmatched.
@@ -419,7 +423,10 @@ describe("resolvedProgramme behind describeProgramme (E8)", () => {
   // re-captured for the same re-pair and its Day A drop moving to the lunge +
   // landmine superset (ass1), so Strong's Day A keeps the hip extension + row.
   // Re-captured 2026-11-03: the pool edits of that day moved the solved weeks.
-  const BEFORE = { undefined: "26919eb0de00f0dc", Forged: "5e50870ffc27efc5", Strong: "174a668f7f22f8b6", Sculpt: "6bdea838c026083e" };
+  // Re-captured 2026-11-16 for library data only (factors, templates, the
+  // Triceps reference, template starts and the machine isolation ceiling),
+  // and again for that day's pool edits and load types.
+  const BEFORE = { undefined: "3cb1f70048934ff3", Forged: "1f1ed1f00d78b35b", Strong: "808c7f291ffe98fc", Sculpt: "b19e5e99b4ffd0be" };
   const fixtures = e8Fixtures();
   const texts = fixtures.map((f) => [runTool("programme", {}, f, now).text, runTool("current_loads", {}, f, now).text]);
 

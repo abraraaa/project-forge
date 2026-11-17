@@ -17,11 +17,12 @@
 // time.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { Fragment, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { T, DISPLAY } from "@/lib/tokens";
+import { Fragment, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
+import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
+import { pressLiftHandlers } from "@/lib/press-lift";
 import { useInlineModalA11y } from "@/lib/a11y";
 import Glyph from "@/components/Glyph";
-import { BTN, Tag } from "@/components/ui";
+import { BTN, Tag, TabStrip, TabPanel } from "@/components/ui";
 import { InkSpark, LineChart } from "@/components/LiftCharts";
 import { mainLiftTrend, readinessBreakdown } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
@@ -45,7 +46,7 @@ const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct
 const BAND = { fresh: "Fresh", normal: "Normal", cooked: "Cooked" };
 
 /** Screen-reader-only text. */
-const SR_ONLY = /** @type {import("react").CSSProperties} */ ({
+export const SR_ONLY = /** @type {import("react").CSSProperties} */ ({
   position: "absolute", width: 1, height: 1, padding: 0, margin: -1,
   overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0,
 });
@@ -140,6 +141,8 @@ function bestOf(points) {
 const kicker = { fontSize: 13, color: T.ink2, paddingBottom: 8, borderBottom: `1px solid ${T.rule}`, marginBottom: 12 };
 /** @type {import("react").CSSProperties} */
 const section = { marginTop: 32 };
+/** @type {import("react").CSSProperties} */
+const tabTop = { marginTop: 24 };
 
 /**
  * @param {{
@@ -156,7 +159,11 @@ const section = { marginTop: 32 };
  *   onExport?: (body: { ref: string, today: string }) => Promise<Response | null | undefined>,
  *   onRunSession?: (letter: "A" | "B" | "C") => void,
  *   unsent?: { letter: "A" | "B" | "C", date: string | null, sets: number } | null,
+ *   signal?: { lastTrainedDaysAgo: number | null, weekDone: number, weekPlanned: number, rhythmPct: number | null, paused: boolean } | null,
+ *   onClose?: () => void,
  * }} props
+ * signal: this client's roster signal (lib/trainer-view.js rosterSignal),
+ * for the glance strip; none for your own training. onClose closes the pane.
  * unsent: a session with this client run on this device and not sent yet
  * (lib/session-source.js unsentDraft, read by the parent).
  * clientRef is the ref the parent opened this pane by (a client's; your own
@@ -169,7 +176,7 @@ const section = { marginTop: 32 };
  * answers false when the reload didn't land. onRunSession opens a session
  * with this client on the trainer's device, at the letter picked.
  */
-export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false, onChange, onFaceId, onChanged, clientRef = null, onExport, onRunSession, unsent: unsentProp = null }) {
+export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false, onChange, onFaceId, onChanged, clientRef = null, onExport, onRunSession, unsent: unsentProp = null, signal = null, onClose }) {
   const name = client?.name || null;
   const title = self ? "You" : name || "Your client";
   const they = self ? "you" : "they";
@@ -195,17 +202,18 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
     ? AUDIT_MUSCLE_ORDER.filter((m) => audit.perMuscle?.[m]?.status === "under_mev")
     : [];
 
-  const [earlier, setEarlier] = useState(false);
   const [openLift, setOpenLift] = useState(null);
   const shownLift = openLift && lifts.includes(openLift) ? openLift : lifts[0];
   const [shown, setShown] = useState(PAGE);
   const newestFirst = useMemo(() => [...sessions].reverse(), [sessions]);
 
+  // The Sharing sheet: the export and Stop seeing, whose confirm is its second step.
+  const [sharing, setSharing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [stopFailed, setStopFailed] = useState(false);
-  const closeConfirm = () => { if (!removing) { setConfirming(false); setStopFailed(false); } };
-  const { containerRef, onKeyDown } = useInlineModalA11y(confirming, closeConfirm);
+  const closeSharing = () => { if (!removing) { setSharing(false); setConfirming(false); setStopFailed(false); } };
+  const { containerRef, onKeyDown } = useInlineModalA11y(sharing, closeSharing);
   // False from onRemove: it didn't go through, so the sheet stays and says so.
   const onStop = async () => {
     if (removing) return;
@@ -213,7 +221,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
     const ok = await onRemove?.();
     setRemoving(false);
     if (ok === false) setStopFailed(true);
-    else setConfirming(false);
+    else { setConfirming(false); setSharing(false); }
   };
 
   const looked = self ? null : agoText(lastLooked, now);
@@ -226,6 +234,19 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   const ranRows = useMemo(() => (Array.isArray(ran?.changes) ? ran.changes.filter((c) => c?.kind === SESSION_KIND) : []), [ran]);
   // A session run on this device and not sent yet (the parent reads it).
   const unsent = !self && unsentProp && LETTERS.includes(unsentProp.letter) ? unsentProp : null;
+  // What the summary needs of the sessions sent: the plan's, or view.ran's once changes stopped.
+  const planAll = useMemo(() => (Array.isArray(plan?.changes) ? plan.changes : []), [plan]);
+  const sentSessions = useMemo(() => (plan ? planAll.filter((c) => c?.kind === SESSION_KIND) : ranRows), [plan, planAll, ranRows]);
+  const waitingChanges = planAll.filter((c) => c?.kind !== SESSION_KIND && c?.status === "waiting").length;
+  const onPhone = sentSessions.filter((c) => c?.status === "seen").length;
+  const runBudget = plan ? plan.budget?.sessions : null;
+  const runUsed = Number.isFinite(runBudget?.used) ? Number(runBudget.used) : 0;
+  const runOf = Number.isFinite(runBudget?.of) ? Number(runBudget.of) : SESSIONS_PER_WEEK;
+  // A new session needs the plan's programme; a read-only grant has none.
+  const runState = !self && plan?.programme && onRunSession ? {
+    next: nextLetter(sentSessions, sessions), full: runUsed >= runOf, used: runUsed, of: runOf,
+    freeAt: typeof runBudget?.freeAt === "number" ? runBudget.freeAt : null,
+  } : null;
   // Where their changes stand (view.edits); "on" without a plan means it couldn't be read.
   const edits = plan ? "on" : view?.edits === "on" ? "unavailable" : view?.edits;
   const lead = self ? "Read only." : leadLine(edits, name);
@@ -251,14 +272,43 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
     if (!ok) setExportFailed(true);
   };
 
+  // The plan's lists the Plan and Sent tabs share.
+  const planLifts = useMemo(() => (Array.isArray(plan?.lifts) ? plan.lifts : []), [plan]);
+  const planChanges = useMemo(() => planAll.filter((c) => c?.kind !== SESSION_KIND), [planAll]);
+  const planBudget = plan?.budget || { used: 0, of: 10, freeAt: null };
+
+  // Tabs: Plan only with changes on, Sent once anything can be listed there.
+  // The pick is React state, so a reload of this pane keeps it; the parent
+  // keys the pane by client, so another client starts at the default.
+  const idBase = useId();
+  const hasSent = !!plan || ranRows.length > 0 || !!unsent;
+  const tabs = [
+    plan && { key: "plan", label: "Plan" },
+    hasSent && { key: "sent", label: "Sent" },
+    { key: "lifts", label: "Lifts" },
+    { key: "sessions", label: "Sessions" },
+  ].filter(Boolean);
+  const [picked, setPicked] = useState(/** @type {string | null} */ (null));
+  const tab = picked && tabs.some((t) => t.key === picked) ? picked : plan ? "plan" : "sessions";
+  const changesWord = edits === "on" || edits === "unavailable" ? "changes on" : "changes off";
+
   return (
     <div style={{ fontFamily: T.text, color: T.ink }}>
       {/* 1. Header */}
-      <div style={{ fontSize: 13, color: T.ink2, marginBottom: 8 }}>{self ? "Your training" : "Shared with you"}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.ink2 }}>{self ? "Your training" : "Shared with you"}</div>
+        {/* From 640 the roster stays beside the pane, so the pane closes itself. */}
+        {onClose && (
+          <span className="forge-wide-mw-only" style={{ flexShrink: 0 }}>
+            <button type="button" onClick={onClose} data-close-pane=""
+              style={{ ...BTN.text, color: T.ink2, minHeight: 44, margin: "-12px 0", padding: "0 0 0 12px" }}>
+              Close <Glyph name="cross" size={11} color={T.ink3}/>
+            </button>
+          </span>
+        )}
+      </div>
       <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" }}>{title}</h1>
-      <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>
-        {lead} Sessions from the last 24 weeks; main lifts over 12 months.
-      </p>
+      <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>{lead}</p>
       {edits === "unavailable" && onChanged && (
         <div data-plan-retry="">
           <button type="button" onClick={onPlanRetry} aria-disabled={planRetrying}
@@ -268,13 +318,112 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
           <div role="status" aria-live="polite" style={statusLine}>{planRetryFailed ? NOT_LATEST : ""}</div>
         </div>
       )}
-      <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "6px 0 0" }}>
-        {since ? <>Sharing since <Nums text={msDayMonth(since)}/></> : null}
-        {since && looked ? " · " : null}
-        {looked ? <>You last looked <Nums text={looked}/></> : null}
-      </p>
-      {exportRef && onExport && (
-        <div data-export="" style={{ marginTop: 4 }}>
+
+      <ClientSummary signal={self ? null : signal} weeks={weeks} felt={felt} they={they} lifts={lifts} line={line} all={all}
+        todayIso={todayIso} under={under} waiting={waitingChanges} onPhone={onPhone}
+        name={name} run={runState} unsent={unsent} onRunSession={onRunSession}/>
+
+      {/* 2. The tabs: depth, one view at a time */}
+      <TabStrip label={`${self ? "Your" : name ? `${name}'s` : "Their"} training`} idBase={idBase} tabs={tabs} selected={tab}
+        onSelect={setPicked} style={{ marginTop: 28 }}/>
+
+      {plan && (
+        <TabPanel idBase={idBase} tabKey="plan" selected={tab === "plan"}>
+          <PlanSection plan={plan} name={name} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
+        </TabPanel>
+      )}
+
+      {hasSent && (
+        <TabPanel idBase={idBase} tabKey="sent" selected={tab === "sent"}>
+          {plan ? (
+            <>
+              <YourChanges changes={planChanges} lifts={planLifts} name={name} budget={planBudget}
+                onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
+              <SessionsYouRan ran={sentSessions} name={name} budget={planBudget.sessions} todayIso={todayIso}
+                unsent={unsent} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
+            </>
+          ) : (
+            <div data-section="ran">
+              <SessionsYouRan ran={ranRows} name={name} budget={ran?.budget} todayIso={todayIso}
+                unsent={unsent} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
+            </div>
+          )}
+        </TabPanel>
+      )}
+
+      <TabPanel idBase={idBase} tabKey="lifts" selected={tab === "lifts"}>
+        {/* Main lifts: the 12-month line, the bests and the ledger, one open at a time */}
+        <div style={tabTop} data-section="lifts">
+          {lifts.length === 0 && (
+            <div style={{ fontSize: 13, color: T.ink2 }}>No main-lift sessions in the last 12 months.</div>
+          )}
+          {lifts.map((lift) => (
+            <LiftBlock key={lift} lift={lift} line={line[lift] || []} points={all[lift] || []} from={from}
+              ledger={ledgers[lift] || []} open={shownLift === lift} onOpen={() => setOpenLift(lift)}/>
+          ))}
+        </div>
+      </TabPanel>
+
+      <TabPanel idBase={idBase} tabKey="sessions" selected={tab === "sessions"}>
+        {/* Breather: never a reason */}
+        {resting && (
+          <div style={tabTop} data-section="breather">
+            <div style={{ fontSize: 13, color: T.ink2, marginBottom: 4 }}>On a breather</div>
+            <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5 }}>Paused for now. {self ? "Your" : "Their"} numbers are holding.</div>
+          </div>
+        )}
+
+        {/* Rhythm: the screen's one heat system, all 24 weeks */}
+        <div style={tabTop} data-section="rhythm">
+          <div style={kicker}>Rhythm, last <Nums text="24"/> weeks</div>
+          <ol className="forge-wide-rhythm" aria-label="Weekly sessions against plan, oldest first">
+            {weeks.map((w) => <RhythmCell key={w.mondayIso} week={w}/>)}
+          </ol>
+        </div>
+
+        {/* Under minimum: only when flagged */}
+        {under.length > 0 && (
+          <div style={section} data-section="under">
+            <div style={kicker}>Under minimum</div>
+            <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5 }}>
+              <span style={{ color: T.under }}>{under.slice(0, 3).join(", ")}</span>: under minimum, last <Nums text="2"/> weeks
+            </div>
+          </div>
+        )}
+
+        {/* Sessions: newest first */}
+        <div style={section} data-section="sessions">
+          <div style={kicker}>Sessions</div>
+          <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 4px" }}>
+            Sessions from the last <Nums text="24"/> weeks; main lifts over <Nums text="12"/> months.
+          </p>
+          {newestFirst.length === 0 && (
+            <div style={{ fontSize: 13, color: T.ink2 }}>No sessions in the last 24 weeks.</div>
+          )}
+          {newestFirst.slice(0, shown).map((s) => <SessionRow key={s.id} session={s}/>)}
+          {newestFirst.length > shown && (
+            <button type="button" onClick={() => setShown((n) => n + PAGE)} className="forge-press forge-tint" aria-label="Show earlier sessions"
+              style={{ ...BTN.quiet, width: "100%", marginTop: 12 }}>
+              Show earlier
+            </button>
+          )}
+        </div>
+      </TabPanel>
+
+      {/* 3. Foot: a client's sharing, behind one row; your own export as a link */}
+      {!self && (
+        <div style={{ marginTop: 40, borderTop: `1px solid ${T.rule}` }}>
+          <button type="button" onClick={() => setSharing(true)} aria-haspopup="dialog" className="forge-press forge-tint" data-sharing-row=""
+            style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 52, padding: "12px 0", background: "none", border: "none", borderBottom: `1px solid ${T.ruleFaint}`, cursor: "pointer", textAlign: "left", fontFamily: T.text, fontSize: 14, color: T.ink }}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              {since ? <>Sharing since <Nums text={msDayMonth(since)}/></> : "Sharing"} · {changesWord}
+            </span>
+            <Glyph name="arrowRight" size={13} color={T.ink3}/>
+          </button>
+        </div>
+      )}
+      {self && exportRef && onExport && (
+        <div data-export="" style={{ marginTop: 32 }}>
           <button type="button" onClick={onDownload} aria-disabled={exporting}
             style={{ ...BTN.text, padding: "12px 0", lineHeight: "20px" }}>
             Download CSV <Glyph name="arrowRight" size={11}/>
@@ -283,136 +432,57 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
         </div>
       )}
 
-      <div className="forge-wide-pane">
-        <div>
-          {/* 2. Breather: never a reason */}
-          {resting && (
-            <div style={section} data-section="breather">
-              <div style={{ fontSize: 13, color: T.ink2, marginBottom: 4 }}>On a breather</div>
-              <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5 }}>Paused for now. {self ? "Your" : "Their"} numbers are holding.</div>
-            </div>
-          )}
-
-          {/* 3. Rhythm: the screen's one heat system */}
-          <div style={section} data-section="rhythm">
-            <div style={kicker}>Rhythm, last <Nums text="24"/> weeks</div>
-            <ol className="forge-wide-rhythm" data-earlier={earlier ? "" : undefined} aria-label="Weekly sessions against plan, oldest first">
-              {weeks.map((w, i) => (
-                <RhythmCell key={w.mondayIso} week={w} early={i < weeks.length - 8}/>
-              ))}
-            </ol>
-            {/* The tier classes sit on wrappers: an inline display would beat them. */}
-            <div className="forge-wide-n-only">
-              <button type="button" aria-expanded={earlier} onClick={() => setEarlier((v) => !v)}
-                style={{ ...BTN.text, padding: "10px 0 0" }}>
-                {earlier ? "Fewer weeks" : "Earlier weeks"}
-                <Glyph name={earlier ? "chevronUp" : "chevronDown"} size={11} color={T.ink3}/>
-              </button>
-            </div>
-            {weeks.length > 0 && (
-              <div style={{ fontSize: 12, color: T.ink2, marginTop: 8 }}>
-                Oldest first, from the week of <Nums text={isoDayMonth(weeks[0].mondayIso)}/>.
-              </div>
-            )}
-          </div>
-
-          {/* 3b. Plan: only when the client has the trainer's changes on */}
-          {plan && <PlanSection plan={plan} name={name} sessions={sessions} todayIso={todayIso} unsent={unsent}
-            onChange={onChange} onFaceId={onFaceId} onChanged={onChanged} onRunSession={onRunSession}/>}
-          {/* 3c. Changes not on: the sessions you ran, and nothing of the plan */}
-          {!plan && !self && (ranRows.length > 0 || unsent) && (
-            <div style={section} data-section="ran">
-              <SessionsYouRan ran={ranRows} name={name} budget={ran?.budget} programme={false} sessions={sessions} todayIso={todayIso}
-                unsent={unsent} onRunSession={onRunSession} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
-            </div>
-          )}
-
-          {/* 4. Main lifts: the 12-month line and the bests */}
-          <div style={section} data-section="lifts">
-            <div style={kicker}>Main lifts</div>
-            {lifts.length === 0 && (
-              <div style={{ fontSize: 13, color: T.ink2 }}>No main-lift sessions in the last 12 months.</div>
-            )}
-            {lifts.map((lift) => (
-              <LiftBlock key={lift} lift={lift} line={line[lift] || []} points={all[lift] || []} from={from}
-                ledger={ledgers[lift] || []} open={shownLift === lift} onOpen={() => setOpenLift(lift)}/>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          {/* 5. How they felt: always shown */}
-          <div style={section} data-section="felt">
-            <div style={kicker}>How {they} felt</div>
-            {felt.total > 0 ? (
-              <div style={{ fontSize: 14, color: T.ink }}>
-                <Nums text={`Fresh ${felt.fresh} · Normal ${felt.normal} · Cooked ${felt.cooked}`}/>
-              </div>
+      {sharing && !self && (
+        <div onKeyDown={onKeyDown} onClick={closeSharing} className="forge-scrim" style={{ overscrollBehavior: "contain", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="trainer-sharing-title" tabIndex={-1}
+            onClick={(e) => e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={sheetStyle}>
+            {confirming ? (
+              <>
+                <div id="trainer-sharing-title" style={{ fontSize: 18, fontWeight: 500, color: T.ink, lineHeight: 1.3, marginBottom: 10 }}>
+                  {name ? `Stop seeing ${name}'s training?` : "Stop seeing their training?"}
+                </div>
+                <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "0 0 22px" }}>
+                  They'll see you ended it. To see it again, they'd approve a new code.
+                </p>
+                <button type="button" onClick={onStop} aria-disabled={removing}
+                  style={{ ...BTN.commit, opacity: removing ? 0.6 : 1 }}>
+                  {removing ? "One moment" : "Stop"}
+                </button>
+                <div role="status" aria-live="polite" style={{ fontSize: 12, color: T.ink2, marginTop: 8, minHeight: 16, textAlign: "center" }}>
+                  {stopFailed ? "Couldn't stop that just now. Try again." : ""}
+                </div>
+                <button type="button" onClick={closeSharing} style={{ ...BTN.text, width: "100%", justifyContent: "center", padding: 12, marginTop: 4 }}>
+                  Keep
+                </button>
+              </>
             ) : (
-              <div style={{ fontSize: 13, color: T.ink2 }}>Nothing logged in the last 24 weeks.</div>
+              <>
+                <div id="trainer-sharing-title" style={{ fontSize: 18, fontWeight: 500, color: T.ink, lineHeight: 1.3, marginBottom: 10 }}>Sharing</div>
+                <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: 0 }}>
+                  {since ? <>Sharing since <Nums text={msDayMonth(since)}/></> : null}
+                  {since && looked ? " · " : null}
+                  {looked ? <>You last looked <Nums text={looked}/></> : null}
+                </p>
+                <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "4px 0 0" }}>
+                  {edits === "on" || edits === "unavailable" ? "" : "Read only. "}{sentenceName} can stop sharing any time.
+                </p>
+                {exportRef && onExport && (
+                  <div data-export="" style={{ marginTop: 12 }}>
+                    <button type="button" onClick={onDownload} aria-disabled={exporting}
+                      style={{ ...BTN.text, minHeight: 44, padding: "12px 0", lineHeight: "20px" }}>
+                      Download CSV <Glyph name="arrowRight" size={11}/>
+                    </button>
+                    <div role="status" aria-live="polite" style={statusLine}>{exportFailed ? EXPORT_FAILED : ""}</div>
+                  </div>
+                )}
+                <button type="button" onClick={() => { setStopFailed(false); setConfirming(true); }} style={{ ...BTN.quiet, width: "100%", marginTop: 20 }}>
+                  {name ? `Stop seeing ${name}'s training` : "Stop seeing their training"}
+                </button>
+                <button type="button" onClick={closeSharing} style={{ ...BTN.text, width: "100%", justifyContent: "center", padding: 12, marginTop: 4 }}>
+                  Done
+                </button>
+              </>
             )}
-          </div>
-
-          {/* 6. Under minimum: only when flagged */}
-          {under.length > 0 && (
-            <div style={section} data-section="under">
-              <div style={kicker}>Under minimum</div>
-              <div style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5 }}>
-                <span style={{ color: T.under }}>{under.slice(0, 3).join(", ")}</span>: under minimum, last <Nums text="2"/> weeks
-              </div>
-            </div>
-          )}
-
-          {/* 7. Sessions: the 24-week detail tier, newest first */}
-          <div style={section} data-section="sessions">
-            <div style={kicker}>Sessions</div>
-            {newestFirst.length === 0 && (
-              <div style={{ fontSize: 13, color: T.ink2 }}>No sessions in the last 24 weeks.</div>
-            )}
-            {newestFirst.slice(0, shown).map((s) => <SessionRow key={s.id} session={s}/>)}
-            {newestFirst.length > shown && (
-              <button type="button" onClick={() => setShown((n) => n + PAGE)} className="forge-press forge-tint" aria-label="Show earlier sessions"
-                style={{ ...BTN.quiet, width: "100%", marginTop: 12 }}>
-                Show earlier
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 8. Footer: a client's only. Nothing to stop on your own. */}
-      {!self && (
-        <div style={{ marginTop: 40, paddingTop: 16, borderTop: `1px solid ${T.rule}` }}>
-          <p style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "0 0 12px" }}>
-            {edits === "on" || edits === "unavailable" ? "" : "Read only. "}{sentenceName} can stop sharing any time.
-          </p>
-          <button type="button" onClick={() => setConfirming(true)} className="forge-press forge-tint" style={BTN.quiet}>
-            {name ? `Stop seeing ${name}'s training` : "Stop seeing their training"}
-          </button>
-        </div>
-      )}
-
-      {confirming && !self && (
-        <div onKeyDown={onKeyDown} onClick={closeConfirm} className="forge-scrim" style={{ overscrollBehavior: "contain", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-          <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="trainer-stop-title" tabIndex={-1}
-            onClick={(e) => e.stopPropagation()} className="forge-sheet-ground forge-vellum"
-            style={{ padding: "26px 24px calc(24px + env(safe-area-inset-bottom))", width: "100%", animation: `slideUp 260ms ${T.ease}`, boxSizing: "border-box", outline: "none" }}>
-            <div id="trainer-stop-title" style={{ fontSize: 18, fontWeight: 500, color: T.ink, lineHeight: 1.3, marginBottom: 10 }}>
-              {name ? `Stop seeing ${name}'s training?` : "Stop seeing their training?"}
-            </div>
-            <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "0 0 22px" }}>
-              They'll see you ended it. To see it again, they'd approve a new code.
-            </p>
-            <button type="button" onClick={onStop} aria-disabled={removing}
-              style={{ ...BTN.commit, opacity: removing ? 0.6 : 1 }}>
-              {removing ? "One moment" : "Stop"}
-            </button>
-            <div role="status" aria-live="polite" style={{ fontSize: 12, color: T.ink2, marginTop: 8, minHeight: 16, textAlign: "center" }}>
-              {stopFailed ? "Couldn't stop that just now. Try again." : ""}
-            </div>
-            <button type="button" onClick={closeConfirm} style={{ ...BTN.text, width: "100%", justifyContent: "center", padding: 12, marginTop: 4 }}>
-              Keep
-            </button>
           </div>
         </div>
       )}
@@ -423,7 +493,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
 // One week. Filled on the thermal ramp by the share of the plan done; a
 // week a breather took entirely reads as rest. The words are printed, so the
 // colour carries nothing on its own.
-function RhythmCell({ week, early }) {
+function RhythmCell({ week }) {
   const text = rhythmCellText(week);
   const paused = week.planned === 0 && week.plannedResting > 0;
   const due = week.partial ? week.plannedSoFar : week.planned;
@@ -431,13 +501,13 @@ function RhythmCell({ week, early }) {
   const step = paused || ratio === 0 ? null : ratio >= 1 ? 3 : ratio >= 0.5 ? 2 : 1;
   // "so far" and "part paused" don't fit a narrow cell at 12px: they live
   // in the screen-reader line, and the cell shows the figure alone. A paused
-  // week's only mark is its word, set at 10px with no side padding so it
-  // stays inside the cell's border (12px "paused" is ~39px; a 390 cell ~35).
+  // week's only mark is its word, at 11px with no side padding (about 35px);
+  // the grids' columns keep every cell at least 37px (app/globals.css).
   const [figure, note] = paused ? ["", "paused"]
     : week.partial ? [`${week.done}/${week.plannedSoFar}`, ""]
     : [`${week.done}/${week.planned}`, ""];
   return (
-    <li className={early ? "forge-wide-rhythm-early" : undefined} data-week={week.mondayIso}
+    <li data-week={week.mondayIso}
       style={{
         position: "relative", boxSizing: "border-box", minWidth: 0, padding: paused ? "8px 0" : "8px 2px", borderRadius: T.rMark,
         textAlign: "center", lineHeight: 1.2,
@@ -449,32 +519,214 @@ function RhythmCell({ week, early }) {
       <span aria-hidden="true" style={{ display: "block" }}>
         {figure && <span style={{ display: "block", fontFamily: T.measured, fontSize: 12 }}>{figure}</span>}
         {/* Breaks between words only: "paused" never splits. */}
-        {note && <span style={{ display: "block", fontSize: 10, marginTop: figure ? 2 : 0 }}>{note}</span>}
+        {note && <span style={{ display: "block", fontSize: 11, marginTop: figure ? 2 : 0 }}>{note}</span>}
       </span>
     </li>
   );
 }
 
-// One main lift. Under 640 a row with a sparkline that opens its chart (one
-// open at a time, as in the Lab); from 640 every chart shows. Its ledger
-// sits under the bests.
+// ── The summary: the client at a glance, then the one commit ───────────────
+
+/**
+ * The glance strip's parts, from the roster signal: "2 of 3 this week",
+ * "rhythm 86%", "last trained yesterday". Paused reads "Paused" and the
+ * last session only. None without a signal.
+ * @param {any} signal
+ * @returns {string[]}
+ */
+export function glanceParts(signal) {
+  if (!signal || typeof signal !== "object") return [];
+  const d = signal.lastTrainedDaysAgo;
+  const last = d == null ? "no sessions in the last year"
+    : d === 0 ? "trained today"
+    : d === 1 ? "last trained yesterday"
+    : `last trained ${d} days ago`;
+  if (signal.paused) return ["Paused", last];
+  const parts = [];
+  if (signal.weekPlanned > 0) parts.push(`${signal.weekDone} of ${signal.weekPlanned} this week`);
+  if (signal.rhythmPct != null) parts.push(`rhythm ${signal.rhythmPct}%`);
+  parts.push(last);
+  return parts;
+}
+
+/**
+ * A main lift's e1RM now against the first point in the last 28 days, as
+ * the Lab's strength row reads it: "+2.5", "-5" or "level".
+ * @param {Array<{ date: string, est1RM: number }>} series
+ * @param {string | undefined} todayIso
+ */
+export function liftDelta(series, todayIso) {
+  const cur = series[series.length - 1];
+  if (!cur) return null;
+  const cut = todayIso ? addDaysIso(todayIso, -28) : null;
+  const base = (cut && series.find((p) => p.date >= cut)) || series[0];
+  const delta = Math.round((cur.est1RM - base.est1RM) * 10) / 10;
+  return { now: cur.est1RM, delta, text: delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : "level" };
+}
+
+/** The readiness bands on the effort scale: cool, middle and hot. */
+const FELT_MARKS = /** @type {const} */ ([["fresh", "Fresh", 6], ["normal", "Normal", 8], ["cooked", "Cooked", 10]]);
+
+/** @type {import("react").CSSProperties} */
+const summaryRow = { marginTop: 14 };
+/** The commit stays a button's width beside the wide pane. */
+const RUN_MAX = 440;
+
+/**
+ * Above the sections: the glance strip (the roster signal), the latest eight
+ * weeks, how they felt as heat marks with their counts, a row per main lift,
+ * what is waiting, then the pane's one commit. Every part drops out when it
+ * has nothing to say; the commit shows only when a session can run.
+ */
+function ClientSummary({ signal, weeks, felt, they, lifts, line, all, todayIso, under, waiting, onPhone, name, run, unsent, onRunSession }) {
+  const glance = glanceParts(signal);
+  const recent = weeks.slice(-8);
+  const [choosing, setChoosing] = useState(false);
+  const canContinue = !!onRunSession && !!unsent;
+  const tags = [
+    waiting > 0 && { key: "changes", color: T.ink3, text: `${waiting} change${waiting === 1 ? "" : "s"} waiting` },
+    onPhone > 0 && { key: "phone", color: T.ink3, text: `${onPhone} session${onPhone === 1 ? "" : "s"} on their phone` },
+    under.length > 0 && { key: "under", color: T.under, text: "Under minimum" },
+  ].filter(Boolean);
+  const runLabel = (letter) => `Run ${sessionName(letter)}${name ? ` with ${name}` : ""}`;
+
+  return (
+    <div data-summary="">
+      {glance.length > 0 && (
+        <div data-glance="" style={{ marginTop: 16, borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}`, padding: "10px 0", fontSize: 13, color: T.ink2, display: "flex", gap: "4px 14px", flexWrap: "wrap" }}>
+          {glance.map((g) => <span key={g}><Nums text={g}/></span>)}
+        </div>
+      )}
+
+      {recent.length > 0 && (
+        <ol data-summary-rhythm="" className="forge-summary-rhythm" aria-label="Weekly sessions against plan, the latest 8 weeks, oldest first"
+          style={{ ...summaryRow, display: "grid", gap: 4, listStyle: "none", padding: 0, marginBottom: 0 }}>
+          {recent.map((w) => <RhythmCell key={w.mondayIso} week={w}/>)}
+        </ol>
+      )}
+
+      {felt.total > 0 && (
+        <div data-felt="" role="group" aria-label={`How ${they} felt, last 24 weeks`}
+          style={{ ...summaryRow, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 18px" }}>
+          {FELT_MARKS.map(([key, word, rpe]) => (
+            <span key={key} data-felt-band={key} style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: T.ink2 }}>
+              <span aria-hidden="true" style={{ width: 24, height: heatMarkHeight(rpe), background: heatForRpe(rpe), borderRadius: T.rMark, flexShrink: 0 }}/>
+              <span>{word} <span style={{ fontFamily: T.measured, color: T.ink }}>{felt[key]}</span></span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {lifts.length > 0 && (
+        <div data-summary-lifts="" style={summaryRow}>
+          <div style={{ fontSize: 12, color: T.ink2, paddingBottom: 6 }}>Main lifts · e1RM vs <Nums text="28"/> days</div>
+          {lifts.map((lift) => {
+            const series = (line[lift] && line[lift].length ? line[lift] : all[lift]) || [];
+            const d = liftDelta(series, todayIso);
+            if (!d) return null;
+            return (
+              <div key={lift} data-summary-lift={lift} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 15, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lift}</span>
+                <InkSpark values={series.slice(-8).map((p) => p.est1RM)}/>
+                <span style={{ fontFamily: T.measured, fontSize: 15, color: T.ink, flexShrink: 0 }}>{d.now}<span style={{ fontFamily: T.text, fontSize: 11, color: T.ink3 }}> kg</span></span>
+                <span style={{ width: 58, textAlign: "right", fontSize: 11, color: T.ink2, flexShrink: 0 }}>
+                  {d.delta !== 0 ? <><span style={{ fontFamily: T.measured }}>{d.text}</span> kg</> : "level"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {tags.length > 0 && (
+        <div data-pending="" style={{ ...summaryRow, display: "flex", flexWrap: "wrap", gap: "6px 16px" }}>
+          {tags.map((t) => (
+            <Tag key={t.key} color={t.color}><span data-tag={t.key}><Nums text={t.text}/></span></Tag>
+          ))}
+        </div>
+      )}
+
+      {canContinue ? (
+        <div data-run="" style={{ marginTop: 20 }}>
+          {/* The draft on this device opens as it is: its own letter. */}
+          <button type="button" onClick={() => onRunSession?.(unsent.letter)}
+            className="forge-press forge-lift" {...pressLiftHandlers} style={{ ...BTN.commit, maxWidth: RUN_MAX }}>
+            Continue
+          </button>
+        </div>
+      ) : run && (
+        <div data-run="" style={{ marginTop: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px 16px" }}>
+            <button type="button" onClick={() => { if (!run.full) onRunSession?.(run.next); }} disabled={run.full}
+              className="forge-press forge-lift" {...pressLiftHandlers}
+              style={{ ...BTN.commit, flex: "1 1 220px", width: "auto", minWidth: 0, maxWidth: RUN_MAX, padding: "0 16px", lineHeight: 1.2, opacity: run.full ? 0.6 : 1, cursor: run.full ? "default" : "pointer" }}>
+              {runLabel(run.next)}
+            </button>
+            {!run.full && (
+              <button type="button" onClick={() => setChoosing(true)} aria-haspopup="dialog"
+                style={{ ...BTN.text, color: T.ink2, minHeight: 44, flexShrink: 0 }}>
+                Different session
+              </button>
+            )}
+          </div>
+          {run.full && (
+            <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 6 }}>
+              <Nums text={`${run.used} of ${run.of} sessions this week`}/>
+              {run.freeAt ? <> · <Nums text={`more from ${msDayLabel(run.freeAt)}`}/></> : null}
+            </div>
+          )}
+        </div>
+      )}
+
+      {choosing && run && !run.full && (
+        <LetterSheet next={run.next} name={name} runLabel={runLabel}
+          onRun={(letter) => { setChoosing(false); onRunSession?.(letter); }} onClose={() => setChoosing(false)}/>
+      )}
+    </div>
+  );
+}
+
+/** The letter choice: the next in their rotation first, any of the three to run. */
+function LetterSheet({ next, name, runLabel, onRun, onClose }) {
+  const { containerRef, onKeyDown } = useInlineModalA11y(true, onClose);
+  const [pick, setPick] = useState(/** @type {"A" | "B" | "C"} */ (next));
+  return (
+    <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{ overscrollBehavior: "contain", zIndex: 400, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby="trainer-letter-title" tabIndex={-1}
+        onClick={(e) => e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={sheetStyle}>
+        <div id="trainer-letter-title" style={{ fontSize: 18, fontWeight: 500, color: T.ink, lineHeight: 1.3, marginBottom: 6 }}>A different session</div>
+        <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.5, margin: "0 0 14px" }}>{sessionName(next)} is next for {name || "them"}.</p>
+        <div role="radiogroup" aria-label="Session to run" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+          {LETTERS.map((l) => (
+            <button key={l} type="button" role="radio" aria-checked={pick === l} onClick={() => setPick(l)} style={{ ...BTN.chip(pick === l), minHeight: 44 }}>
+              {sessionName(l)}
+            </button>
+          ))}
+        </div>
+        <button type="button" onClick={() => onRun(pick)} style={{ ...BTN.commit, padding: "0 16px" }}>{runLabel(pick)}</button>
+        <button type="button" onClick={onClose} style={{ ...BTN.text, width: "100%", justifyContent: "center", padding: 12, marginTop: 4 }}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+// One main lift: a row with a sparkline that opens its chart, one open at a
+// time as in the Lab, at every width. Its ledger sits under the bests.
 function LiftBlock({ lift, line, points, from, ledger, open, onOpen }) {
   const best = bestOf(points);
   const last = points[points.length - 1];
   const recent = from ? points.filter((p) => p.date >= from).length : points.length;
   const latest = (line.length ? line : points)[(line.length ? line : points).length - 1];
   return (
-    <div className="forge-wide-lift" data-open={open ? "" : undefined} style={{ borderTop: `1px solid ${T.ruleFaint}`, padding: "10px 0" }}>
-      <div className="forge-wide-n-only">
-        <button type="button" className="forge-press forge-tint" onClick={onOpen} aria-expanded={open}
-          style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "6px 0", background: "none", border: "none", cursor: "pointer", fontFamily: T.text, textAlign: "left", color: T.ink }}>
-          <span style={{ flex: 1, minWidth: 0, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lift}</span>
-          <InkSpark values={points.slice(-8).map((p) => p.est1RM)}/>
-          {latest && <span style={{ fontFamily: T.measured, fontSize: 15, flexShrink: 0 }}>{latest.est1RM}<span style={{ fontFamily: T.text, fontSize: 11, color: T.ink3 }}> kg</span></span>}
-        </button>
-      </div>
-      <div className="forge-wide-mw-only" style={{ fontSize: 15, fontWeight: 500, color: T.ink, padding: "6px 0" }}>{lift}</div>
-      <div className="forge-wide-lift-detail" style={{ paddingTop: 6 }}>
+    <div data-lift={lift} data-open={open ? "" : undefined} style={{ borderTop: `1px solid ${T.ruleFaint}`, padding: "4px 0" }}>
+      <button type="button" className="forge-press forge-tint" onClick={onOpen} aria-expanded={open}
+        style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 44, padding: "6px 0", background: "none", border: "none", cursor: "pointer", fontFamily: T.text, textAlign: "left", color: T.ink }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: open ? 500 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lift}</span>
+        <InkSpark values={points.slice(-8).map((p) => p.est1RM)}/>
+        {latest && <span style={{ fontFamily: T.measured, fontSize: 15, flexShrink: 0 }}>{latest.est1RM}<span style={{ fontFamily: T.text, fontSize: 11, color: T.ink3 }}> kg</span></span>}
+      </button>
+      {/* Hidden, not unmounted: a closed lift's ledger keeps its place. */}
+      <div data-lift-detail="" hidden={!open} style={{ padding: "6px 0 10px" }}>
         <LineChart series={line}/>
         <div style={{ fontSize: 13, color: T.ink2, lineHeight: 1.6, marginTop: 10 }}>
           {best && (
@@ -924,13 +1176,13 @@ const NOT_APPLIED = {
   stopped: "Stopped before it arrived",
 };
 
-/** A change's status, in the trainer's words (lib/trainer-change.js changeStatus). */
+/** A change's status, in the trainer's words (lib/trainer-change.js changeStatus). A data line: parts join with a middle dot, no full stop. */
 export function trainerStatusText(c, name) {
   if (c?.kind === SESSION_KIND) return sessionStatusText(c, name);
   switch (c.status) {
     case "waiting": return c.from ? `From ${isoDayLabel(c.from)}` : `Waiting for ${name ? `${name}'s` : "their"} app`;
     case "in_force": return "In their plan";
-    case "trained_yours": return `Done at your number${c.date ? `, ${isoDayMonth(c.date)}` : ""}${c.cooked ? " · cooked day" : ""}`;
+    case "trained_yours": return `Done at your number${c.date ? ` · ${isoDayMonth(c.date)}` : ""}${c.cooked ? " · cooked day" : ""}`;
     case "changed_since": return "They changed it since";
     case "undone": return `Undone by ${name || "them"}`;
     case "withdrawn": return "Withdrawn";
@@ -1069,24 +1321,19 @@ const statusLine = { fontSize: 13, color: T.ink2, lineHeight: 1.5, minHeight: 0 
 const NOT_LATEST = "Couldn't get their latest just now. Try again.";
 
 /**
- * The plan section and its sheets. Every request goes through onChange
+ * The Plan tab: the tray, the rows by session, and their sheets. What was
+ * sent lists on the Sent tab. Every request goes through onChange
  * (POST /api/trainer/change, the parent adds the grant and the date).
  * @param {{
- *   plan: any, name: string | null, sessions: any[], todayIso: string | undefined,
- *   unsent?: { letter: "A" | "B" | "C", date: string | null, sets: number } | null,
+ *   plan: any, name: string | null,
  *   onChange?: (body: any) => Promise<{ status: number, body: any }>,
  *   onFaceId?: () => Promise<boolean>,
  *   onChanged?: () => Promise<unknown> | unknown,
- *   onRunSession?: (letter: "A" | "B" | "C") => void,
  * }} props
  */
-function PlanSection({ plan, name, sessions, todayIso, unsent = null, onChange, onFaceId, onChanged, onRunSession }) {
+function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
   const lifts = useMemo(() => (Array.isArray(plan?.lifts) ? plan.lifts : []), [plan]);
   const mains = useMemo(() => (Array.isArray(plan?.mains) ? plan.mains : []), [plan]);
-  // Sessions the trainer ran list apart from plan changes: they spend their own budget.
-  const all = useMemo(() => (Array.isArray(plan?.changes) ? plan.changes : []), [plan]);
-  const changes = useMemo(() => all.filter((c) => c?.kind !== SESSION_KIND), [all]);
-  const ran = useMemo(() => all.filter((c) => c?.kind === SESSION_KIND), [all]);
   const budget = plan?.budget || { used: 0, of: 10, freeAt: null };
   const outOfSends = budget.used >= budget.of;
   const mainFor = (liftName) => mains.find((m) => m.choice === liftName && Array.isArray(m.options) && m.options.length > 1) || null;
@@ -1161,40 +1408,35 @@ function PlanSection({ plan, name, sessions, todayIso, unsent = null, onChange, 
   }, [lifts]);
 
   return (
-    <div style={section} data-section="plan">
-      <div style={kicker}>Plan</div>
-      {plan?.deload?.active && (
-        <p data-deload="" style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "8px 0 0" }}>
-          On a deload{plan.deload.until ? <> until about <Nums text={isoDayMonth(plan.deload.until)}/></> : null}. Weights can change once it ends.
-        </p>
-      )}
-      {bySession.map(([letter, rows]) => (
-        <div key={letter || "-"} data-plan-session={letter || undefined}>
-          <div style={subKicker}>{letter ? `Session ${letter}` : "Other lifts"}</div>
-          {rows.map((l) => (
-            <PlanRow key={l.name} lift={l} main={mainFor(l.name)} drafts={drafts} onOpen={() => setSheet(l.name)}/>
-          ))}
-        </div>
-      ))}
-
-      <div data-tray="" style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+    <div style={tabTop} data-section="plan">
+      <div data-tray="" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <button type="button" onClick={() => { setStatus(""); setReviewing(true); }} disabled={count === 0 || outOfSends}
           className="forge-press forge-tint" style={{ ...BTN.quiet, opacity: count && !outOfSends ? 1 : 0.6, cursor: count && !outOfSends ? "pointer" : "default" }}>
           {count ? <Nums text={`${count} change${count === 1 ? "" : "s"} · Review`}/> : "No changes yet"}
         </button>
         {count > 0 && (
-          <button type="button" onClick={() => { setDrafts(EMPTY_DRAFTS); setStatus("Cleared"); }} style={{ ...BTN.text, padding: "8px 0" }}>
+          <button type="button" onClick={() => { setDrafts(EMPTY_DRAFTS); setStatus("Cleared."); }} style={{ ...BTN.text, minHeight: 44, padding: "0 4px" }}>
             Clear
           </button>
         )}
       </div>
       <div role="status" aria-live="polite" style={{ ...statusLine, marginTop: 8 }}>{status}</div>
-
-      <SessionsYouRan ran={ran} name={name} budget={budget.sessions} programme={!!plan?.programme} sessions={sessions} todayIso={todayIso}
-        unsent={unsent} onRunSession={onRunSession} onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
-
-      <YourChanges changes={changes} lifts={lifts} name={name} budget={budget}
-        onChange={onChange} onFaceId={onFaceId} onChanged={onChanged}/>
+      {plan?.deload?.active && (
+        <p data-deload="" style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "8px 0 0" }}>
+          On a deload{plan.deload.until ? <> until about <Nums text={isoDayMonth(plan.deload.until)}/></> : null}. Weights can change once it ends.
+        </p>
+      )}
+      {/* Two columns of sessions from 1024 (app/globals.css .forge-wide-pane). */}
+      <div className="forge-wide-pane">
+        {bySession.map(([letter, rows]) => (
+          <div key={letter || "-"} data-plan-session={letter || undefined}>
+            <div style={subKicker}>{letter ? `Session ${letter}` : "Other lifts"}</div>
+            {rows.map((l) => (
+              <PlanRow key={l.name} lift={l} main={mainFor(l.name)} drafts={drafts} onOpen={() => setSheet(l.name)}/>
+            ))}
+          </div>
+        ))}
+      </div>
 
       {sheetLift && (
         <LiftSheet key={sheetLift.name} lift={sheetLift} main={mainFor(sheetLift.name)} drafts={drafts}
@@ -1690,39 +1932,37 @@ function YourChanges({ changes, lifts, name, budget, onChange, onFaceId, onChang
 }
 
 /**
+ * The letter next in their rotation, counting sessions sent and not yet
+ * decided, so a phone left in a locker doesn't get the same letter twice.
+ * @param {any[]} ran  the plan's session rows
+ * @param {any[]} sessions  their history
+ * @returns {"A" | "B" | "C"}
+ */
+export function nextLetter(ran, sessions) {
+  const pending = ran.filter((c) => c?.status === "waiting" || c?.status === "seen")
+    .map((c) => ({ id: String(c.id ?? ""), date: c.after?.date, scheduledLetter: c.after?.letter }));
+  return LETTERS[nextStrengthIdx([...sessions, ...pending])] ?? "A";
+}
+
+/**
  * Sessions the trainer ran with this client: the week's count against its
- * own cap, the way to run one (the letter, defaulting to the next in their
- * rotation), and each one sent, newest first, with what became of it.
+ * own cap and each one sent, newest first, with what became of it.
  * Withdraw shows only before it reaches their phone; after that the
- * decision is theirs. Running one is the parent's (onRunSession): nothing
- * here writes to the device. A session run on this device and not sent yet
- * (unsent) lists first, and the run control continues it, whatever letter
- * is picked; it is there even when no new one can start, so it can still be
- * sent or discarded.
+ * decision is theirs. A session run on this device and not sent yet
+ * (unsent) lists first. Running one is the summary's commit.
  * @param {{
  *   ran: any[], name: string | null, unsent?: { letter: "A" | "B" | "C", date: string | null, sets: number } | null,
  *   budget: { used?: number, of?: number, freeAt?: number | null } | null | undefined,
- *   programme: boolean, sessions: any[], todayIso: string | undefined,
- *   onRunSession?: (letter: "A" | "B" | "C") => void,
+ *   todayIso: string | undefined,
  *   onChange?: (body: any) => Promise<{ status: number, body: any }>,
  *   onFaceId?: () => Promise<boolean>,
  *   onChanged?: () => Promise<unknown> | unknown,
  * }} props
  */
-function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unsent = null, onRunSession, onChange, onFaceId, onChanged }) {
+function SessionsYouRan({ ran, name, budget, todayIso, unsent = null, onChange, onFaceId, onChanged }) {
   const used = Number.isFinite(budget?.used) ? Number(budget?.used) : 0;
   const of = Number.isFinite(budget?.of) ? Number(budget?.of) : SESSIONS_PER_WEEK;
   const full = used >= of;
-  // Next in their rotation, counting sessions sent and not yet decided, so a
-  // phone left in a locker doesn't get the same letter twice.
-  const next = useMemo(() => {
-    const pending = ran.filter((c) => c?.status === "waiting" || c?.status === "seen")
-      .map((c) => ({ id: String(c.id ?? ""), date: c.after?.date, scheduledLetter: c.after?.letter }));
-    return LETTERS[nextStrengthIdx([...sessions, ...pending])] ?? "A";
-  }, [ran, sessions]);
-  // The trainer's pick; until they pick, the next one (it follows a reload).
-  const [picked, setPick] = useState(/** @type {"A" | "B" | "C" | null} */ (null));
-  const pick = picked ?? next;
   const [shown, setShown] = useState(SETS_PAGE);
   // The viewer's now, for when a session on their phone will be kept: a
   // minute's tick, so a pane left open moves on past the five hours.
@@ -1740,9 +1980,6 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
       editsOff: `Changes are off for ${name || "them"} now, so it won't reach them.`,
     },
   });
-  const canRun = !!onRunSession && programme;
-  // The draft on this device opens as it is: its own letter, never the chips'.
-  const canContinue = !!onRunSession && !!unsent;
 
   return (
     <div data-section="coach" style={{ marginTop: 24 }}>
@@ -1751,38 +1988,6 @@ function SessionsYouRan({ ran, name, budget, programme, sessions, todayIso, unse
         <Nums text={`${used} of ${of} this week`}/>
         {full && budget?.freeAt ? <> · <Nums text={`more from ${msDayLabel(budget.freeAt)}`}/></> : null}
       </div>
-
-      {canContinue ? (
-        <div data-run="" style={{ marginBottom: 12 }}>
-          <button type="button" onClick={() => onRunSession?.(unsent.letter)}
-            className="forge-press forge-tint" style={{ ...BTN.quiet, width: "100%" }}>
-            Continue
-          </button>
-          <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 6 }}>
-            Opens where you left it on this device.
-          </div>
-        </div>
-      ) : canRun && (
-        <div data-run="" style={{ marginBottom: 12 }}>
-          <div role="radiogroup" aria-label="Session to run" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {LETTERS.map((l) => (
-              <button key={l} type="button" role="radio" aria-checked={pick === l} onClick={() => setPick(l)} className="forge-press forge-tint" style={BTN.chip(pick === l)}>
-                {sessionName(l)}
-              </button>
-            ))}
-          </div>
-          <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 6 }}>
-            {sessionName(next)} is next for {name || "them"}.
-          </div>
-          <button type="button" onClick={() => { if (!full) onRunSession?.(pick); }} disabled={full}
-            className="forge-press forge-tint" style={{ ...BTN.quiet, width: "100%", marginTop: 12, opacity: full ? 0.6 : 1, cursor: full ? "default" : "pointer" }}>
-            {name ? `Run a session with ${name}` : "Run a session"}
-          </button>
-          <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 6 }}>
-            A session you haven&apos;t sent yet opens where you left it on this device.
-          </div>
-        </div>
-      )}
 
       {unsent && (
         <div data-unsent="" style={{ padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>

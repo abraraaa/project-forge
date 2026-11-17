@@ -1,5 +1,4 @@
 import { rateLimit, rateLimitShared } from "@/lib/rate-limit";
-import { trainerOpenFor } from "@/lib/auth-server";
 import { entitled } from "@/lib/entitlements";
 import { issueInvite, dbCancelInvite, dbInviteStatus } from "@/lib/trainer-store";
 import { trainerGate, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
@@ -43,7 +42,6 @@ export async function POST(request) {
     const shared = await rateLimitShared(request, "trainer-invite", 30, { windowMs: HOUR_MS, id: me });
     if (shared) return slid(g, noStore(shared));
     if (!entitled(g.account, "trainer.invite")) return slid(g, json({ notTrainer: true }, 403));
-    if (!trainerOpenFor(g.identity)) return slid(g, json({ error: "Not open yet." }, 503));
 
     const body = await request.json().catch(() => ({}));
     const action = body && typeof body === "object" ? body.action : undefined;

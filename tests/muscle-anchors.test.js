@@ -26,7 +26,7 @@ const { PROFILES, REFERENCE_MUSCLE_OF, referenceMuscleOf, BODY_INCLUSIVE_REFEREN
 const DECLARED = Object.values(REFERENCE_LIFTS).flat();
 // Muscles with a lift that progresses by load at a factor above zero, but no
 // reference lift: their lifts never read an anchor.
-const NO_REFERENCE = ["Core", "Triceps"];
+const NO_REFERENCE = ["Core"];
 
 const round1 = (x) => Math.round(x * 10) / 10;
 const epley = (w, r) => (r === 1 ? w : round1(w * (1 + r / 30)));
@@ -56,7 +56,7 @@ const bwPullUp = pullUp({ weight: null, reps: 9, bodyweightUsed: 79.8, effective
 
 describe("the guard: the declared reference lifts against the lift profiles", () => {
   it("maps every declared name, so none was dropped at load", () => {
-    expect(DECLARED.length).toBe(26);
+    expect(DECLARED.length).toBe(27);
     expect(REFERENCE_MUSCLE_OF.size).toBe(DECLARED.length);
   });
 
@@ -182,7 +182,7 @@ describe("deriveMuscleAnchors: reference lifts only", () => {
       lift("Face Pull", "total", [[28, 15]]),                 // 210 on the press's
       lift("Dumbbell Bent-Over Row", "per_db", [[40, 10]]),
       lift("Machine Hamstring Curl", "machine", [[45, 12]]),
-      lift("Tricep Pushdown", "total", [[40, 12]]),
+      lift("Skullcrusher", "barbell", [[40, 12]]),
       lift("Barbell Row", "external", [[100, 5]]),
       pullUp({ weight: 20, reps: 8, bodyweightUsed: 80, effectiveLoad: 100, est1rm: 126.7 }, "Weighted Dips"),
     ])];
@@ -623,7 +623,7 @@ describe("a trainer's device derives no anchor", () => {
 });
 
 describe("the owner's cold starts, from only the sets that anchor them", () => {
-  const STARTS = { "DB Step-Up": 21, "Landmine Squeeze Press": 23.75, "Reverse Hyperextension": 50, "Seal Row": 23, "Leg Press Calf Raise": 55 };
+  const STARTS = { "DB Step-Up": 21, "Landmine Squeeze Press": 23.75, "Reverse Hyperextension": 35, "Seal Row": 23, "Leg Press Calf Raise": 55 };
   // Where the stored anchor started them.
   const OLD = { "DB Step-Up": 31, "Landmine Squeeze Press": 80, "Reverse Hyperextension": 50, "Seal Row": 35, "Leg Press Calf Raise": 55 };
 
@@ -635,7 +635,7 @@ describe("the owner's cold starts, from only the sets that anchor them", () => {
     });
   });
 
-  it("the never-logged lifts start at 21 each, 23.75, 50, 23 each and 55, none above its old start", () => {
+  it("the never-logged lifts start at 21 each, 23.75, 35, 23 each and 55, none above its old start", () => {
     const anchors = deriveMuscleAnchors(OWNER);
     const got = Object.fromEntries(OWNER_SLOTS.map(([slot, name]) => [name, planStartWeight(pool(slot, name), { working: {}, bodyweight: BODY, anchors })]));
     expect(got).toEqual(STARTS);

@@ -103,3 +103,24 @@ describe("Locker room: the empty bodyweight chart", () => {
     expect(screen.queryByRole("button", { name: "Log a weight" })).toBeNull();
   });
 });
+
+describe("Locker room: hydration", () => {
+  it("the server HTML holds no profile content, and hydrating it raises no mismatch", async () => {
+    P.setActive("sam");
+    const { renderToString } = await import("react-dom/server");
+    const { hydrateRoot } = await import("react-dom/client");
+    const html = renderToString(<LockerRoom />);
+    expect(html).not.toContain("Show photos");
+    expect(html).not.toContain("No active profile");
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    document.body.appendChild(host);
+    const onRecoverableError = vi.fn();
+    let root;
+    await act(async () => { root = hydrateRoot(host, <LockerRoom />, { onRecoverableError }); });
+    expect(onRecoverableError).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("Show photos");
+    act(() => root.unmount());
+    host.remove();
+  });
+});

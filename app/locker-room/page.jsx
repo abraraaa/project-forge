@@ -370,6 +370,7 @@ export default function LockerRoom() {
     );
   };
 
+  if (!mounted) return <div style={page} />;
   if (!profile) return <div style={page}><p style={{ color: T.ink2 }}>No active profile — sign in first, then come back to the Locker Room.</p></div>;
 
   // ── Chart-first layout: ungated bodyweight on top, photos behind the toggle ──

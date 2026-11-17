@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { list } from "@vercel/blob";
 import { readJsonDirect } from "@/lib/blob-utils";
-import { censusPasskeys, photosAtRisk, censusLogLine } from "@/lib/passkey-census";
+import { sql } from "@/lib/db";
+import { censusPasskeys, photosAtRisk, cloudExposure, censusLogLine } from "@/lib/passkey-census";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -10,7 +11,8 @@ export const preferredRegion = "lhr1";
 // PASSKEY CENSUS — READ ONLY.
 // GET /api/diag/passkey-census   (Authorization: Bearer <CRON_SECRET>)
 //
-// Imports no writer; asserted by tests/passkey-census.test.js. Gated as
+// Imports no writer and runs SELECTs only; asserted by
+// tests/passkey-census.test.js. Gated as
 // /api/diag/db-import is — a whole-namespace enumeration, and profile name is
 // the identity. Fails closed when CRON_SECRET is unset.
 
@@ -29,11 +31,12 @@ export async function GET(request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Enumerate credential blobs only — prefix-scoped to forge/profiles/, then
-  // matched on the credentials filename the auth routes write. Nothing else
+  // Prefix-scoped to forge/profiles/. Credentials docs are read; photos and
+  // sync blobs (meta.json, history.json) are counted, never read. Nothing else
   // in the namespace is touched or reported.
   const found = [];
   const photos = [];
+  const syncKeys = new Set();
   let cursor;
   try {
     do {
@@ -54,7 +57,11 @@ export async function GET(request) {
         }
         // Photos, counted not read — this pass already walks the namespace.
         const ph = b.pathname.match(/^forge\/profiles\/([^/]+)\/photos\/[^/]+$/);
-        if (ph) photos.push({ profile: decode(ph[1]), pathname: b.pathname, size: b.size || 0 });
+        if (ph) { photos.push({ profile: decode(ph[1]), pathname: b.pathname, size: b.size || 0 }); continue; }
+        // Sync blobs, the legacy suffixed ones included (the sync GET serves
+        // them when the plain file is absent), counted not read.
+        const sy = b.pathname.match(/^forge\/profiles\/([^/]+)\/(?:meta|history)(?:-[^/]+)?\.json$/);
+        if (sy) syncKeys.add(decode(sy[1]));
       }
       cursor = page.cursor;
     } while (cursor);
@@ -73,14 +80,34 @@ export async function GET(request) {
     f.doc = await readJsonDirect(f.pathname);
   }
 
+  // Live accounts and the credential index: SELECTs only, no key material.
+  let accounts = null;
+  let indexCredentials = null;
+  const q = sql();
+  if (q) {
+    try {
+      accounts = (await q`SELECT id, storage_key FROM accounts WHERE deleted_at IS NULL`)
+        .map((r) => ({ id: r.id, storageKey: r.storage_key }));
+      indexCredentials = (await q`SELECT account_id, rp_id, (public_key <> '') AS keyed FROM credentials`)
+        .map((r) => ({ accountId: r.account_id, rpId: r.rp_id, keyed: !!r.keyed }));
+    } catch (e) {
+      // The Blob census still runs; db=0 on the log line marks the gap.
+      console.error("[forge:passkey-census] db read failed", e?.message || e);
+      accounts = null;
+      indexCredentials = null;
+    }
+  }
+
   const census = censusPasskeys(found);
   const photoExposure = photosAtRisk(census, photos);
-  console.log(censusLogLine(census, photoExposure));
+  const cloud = cloudExposure(census, { syncKeys, accounts, indexCredentials });
+  console.log(censusLogLine(census, photoExposure, cloud));
   return NextResponse.json({
     dryRun: true,
     writes: "none — enumeration and reads only",
-    scanned: { prefix: "forge/profiles/", matched: ["credentials*.json", "photos/*"] },
+    scanned: { prefix: "forge/profiles/", matched: ["credentials*.json", "photos/*", "meta*.json", "history*.json"] },
     ...census,
     photoExposure,
+    cloud,
   });
 }

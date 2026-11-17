@@ -23,12 +23,12 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { T, DISPLAY } from "@/lib/tokens";
+import { T, DISPLAY, heatMarkHeight } from "@/lib/tokens";
 import { withNavTransition } from "@/lib/nav-transitions";
 import { pressLiftHandlers } from "@/lib/press-lift";
 import { useInlineModalA11y } from "@/lib/a11y";
 import Glyph from "@/components/Glyph";
-import { BTN } from "@/components/ui";
+import { BTN, Card } from "@/components/ui";
 import { authenticatePasskey } from "@/lib/webauthn";
 import { fetchWithTimeout } from "@/lib/net";
 import { todayLocalIso } from "@/lib/dates";
@@ -38,7 +38,7 @@ import {
   APPLY_COPY, REPLY_COPY, ABOUT_MAX, ABOUT_COUNT_FROM, LINK_MAX, aboutProblem, deniedLine, linkProblem, linkToSend, toMs,
 } from "@/lib/trainer-apply-copy";
 import { SELF_REF } from "@/lib/trainer-view";
-import TrainerClientView, { Nums, msDayMonth } from "@/components/TrainerClientView";
+import TrainerClientView, { Nums, msDayMonth, SR_ONLY } from "@/components/TrainerClientView";
 import QrCode from "@/components/QrCode";
 
 const POLL_MS = 3000;
@@ -117,26 +117,82 @@ function resultFor(app) {
   return null;
 }
 
+/** "Last trained 2 days ago", or the same for today, yesterday and none in a year. @param {number | null | undefined} d */
+const lastText = (d) => (d == null ? "No sessions in the last year"
+  : d === 0 ? "Trained today"
+  : d === 1 ? "Last trained yesterday"
+  : `Last trained ${d} days ago`);
+
 /**
  * A roster line: "Last trained 2 days ago · 2 of 3 this week · rhythm 86%".
  * Paused clients show no week count or rhythm. With no signal (the roster
- * look could not be logged) only the sharing date shows.
+ * look could not be logged) only the sharing date shows. rhythm: false
+ * leaves the rhythm out, for a card whose mark prints it.
  * @param {any} signal
  * @param {number | null} since
+ * @param {{ rhythm?: boolean }} [opts]
  */
-export function signalText(signal, since) {
+export function signalText(signal, since, { rhythm = true } = {}) {
   if (!signal) return since ? `Sharing since ${msDayMonth(since)}` : "Sharing with you";
   const d = signal.lastTrainedDaysAgo;
-  const last = d == null ? "No sessions in the last year"
-    : d === 0 ? "Trained today"
-    : d === 1 ? "Last trained yesterday"
-    : `Last trained ${d} days ago`;
+  const last = lastText(d);
   if (signal.paused) return `${last} · paused`;
   if (d == null) return last;
   const parts = [last];
   if (signal.weekPlanned > 0) parts.push(`${signal.weekDone} of ${signal.weekPlanned} this week`);
-  if (signal.rhythmPct != null) parts.push(`rhythm ${signal.rhythmPct}%`);
+  if (rhythm && signal.rhythmPct != null) parts.push(`rhythm ${signal.rhythmPct}%`);
   return parts.join(" · ");
+}
+
+const counted = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+/** The rhythm the card's mark prints, or null: none while paused or with no plan to measure against. @param {any} signal */
+export const rosterRhythm = (signal) => (signal && !signal.paused && Number.isFinite(signal.rhythmPct) ? signal.rhythmPct : null);
+
+/**
+ * A roster card's one line, by priority: paused ("Paused · last trained 9
+ * days ago"); then what this trainer has waiting on them ("1 session on
+ * their phone · 2 changes waiting · 2 of 3 this week"); then the signal line,
+ * without the rhythm when the card's mark prints it.
+ * @param {{ signal?: any, since?: number | null, waiting?: { changes?: number, sessions?: number } | null }} client
+ */
+export function rosterLine({ signal = null, since = null, waiting = null }) {
+  if (signal?.paused) {
+    const last = lastText(signal.lastTrainedDaysAgo);
+    return `Paused · ${last.charAt(0).toLowerCase()}${last.slice(1)}`;
+  }
+  const sessions = Number(waiting?.sessions) || 0;
+  const changes = Number(waiting?.changes) || 0;
+  if (sessions > 0 || changes > 0) {
+    const parts = [];
+    if (sessions > 0) parts.push(`${counted(sessions, "session", "sessions")} on their phone`);
+    if (changes > 0) parts.push(`${counted(changes, "change", "changes")} waiting`);
+    if (signal?.weekPlanned > 0) parts.push(`${signal.weekDone} of ${signal.weekPlanned} this week`);
+    return parts.join(" · ");
+  }
+  return signalText(signal, since, { rhythm: rosterRhythm(signal) === null });
+}
+
+/**
+ * The card's rhythm mark: 24 px wide, on the rhythm cells' heat steps (a full
+ * 28 days, half or more, some, none), its height paired to the step, and the
+ * percentage printed beside it. None is a hairline outline.
+ * @param {{ pct: number }} props
+ */
+function RhythmMark({ pct }) {
+  const step = pct >= 100 ? 3 : pct >= 50 ? 2 : pct > 0 ? 1 : 0;
+  return (
+    <span data-rhythm-mark="" style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+      <span aria-hidden="true" style={{
+        width: 24, height: step ? heatMarkHeight(6 + step) : 3, boxSizing: "border-box", borderRadius: T.rMark, flexShrink: 0,
+        background: step ? T.heat[step] : "transparent", border: step ? "none" : `1px solid ${T.rule}`,
+      }}/>
+      {/* A fixed width for "100%", so every card's mark stands at one place. */}
+      <span style={{ fontFamily: T.measured, fontSize: 15, color: T.ink, minWidth: 40, textAlign: "right" }}>
+        <span style={SR_ONLY}>rhythm </span>{pct}<span style={{ fontFamily: T.text, fontSize: 11, color: T.ink3 }}>%</span>
+      </span>
+    </span>
+  );
 }
 
 /** "14:32", the device's own clock. @param {number} ms */
@@ -164,6 +220,12 @@ const openMark = { position: "absolute", left: 0, top: 0, bottom: 0, width: 3, b
 const rowTitle = { display: "block", fontSize: 15, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 /** @type {import("react").CSSProperties} */
 const rowLine = { display: "block", fontSize: 12, color: T.ink2, marginTop: 3, lineHeight: 1.45 };
+/** A client's card: the row's button filling the surface, its tint and open mark clipped to the radius. @type {import("react").CSSProperties} */
+const cardButton = { ...rowStyle, minHeight: 64, padding: "14px 16px", borderRadius: T.r };
+/** @type {import("react").CSSProperties} */
+const cardTitle = { ...rowTitle, fontSize: 17 };
+/** @type {import("react").CSSProperties} */
+const cardLine = { ...rowLine, fontSize: 13, marginTop: 4 };
 
 export default function TrainerView() {
   const router = useRouter();
@@ -655,25 +717,29 @@ export default function TrainerView() {
         {clients.length === 0 ? (
           <p className="forge-wide-n-only" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: "14px 0 0" }}>{EMPTY_ROSTER}</p>
         ) : (
-          <ul aria-label="Clients" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          <ul aria-label="Clients" style={{ listStyle: "none", margin: "16px 0 0", padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             {clients.map((c, i) => {
-              const line = signalText(c.signal, c.since);
+              const line = rosterLine(c);
+              const pct = rosterRhythm(c.signal);
               const current = i === selected;
               return (
-                <li key={c.ref} style={{ borderBottom: `1px solid ${T.ruleFaint}` }}>
-                  <button type="button" onClick={() => openClient(i)} aria-current={current ? "true" : undefined}
-                    className="forge-press forge-tint" style={rowStyle}>
-                    {current && <span aria-hidden="true" style={openMark}/>}
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={rowTitle}>{c.name || "Your client"}</span>
-                      <span className="forge-wide-signal" title={line} style={rowLine}>
-                        <Nums text={line}/>
+                <li key={c.ref}>
+                  <Card style={{ overflow: "hidden" }}>
+                    <button type="button" onClick={() => openClient(i)} aria-current={current ? "true" : undefined}
+                      className="forge-press forge-tint" style={cardButton}>
+                      {current && <span aria-hidden="true" style={openMark}/>}
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={cardTitle}>{c.name || "Your client"}</span>
+                        <span className="forge-wide-signal" title={line} style={cardLine}>
+                          <Nums text={line}/>
+                        </span>
                       </span>
-                    </span>
-                    <span className="forge-wide-n-only" style={{ flexShrink: 0, lineHeight: 0 }}>
-                      <Glyph name="arrowRight" size={12} color={T.ink3}/>
-                    </span>
-                  </button>
+                      {pct !== null && <RhythmMark pct={pct}/>}
+                      <span className="forge-wide-n-only" style={{ flexShrink: 0, lineHeight: 0 }}>
+                        <Glyph name="arrowRight" size={12} color={T.ink3}/>
+                      </span>
+                    </button>
+                  </Card>
                 </li>
               );
             })}
@@ -722,7 +788,8 @@ export default function TrainerView() {
             onChanged={shown.self ? undefined : () => refreshPane(shown.ref)}
             clientRef={shown.self ? null : shown.ref} onExport={exportCsv}
             onRunSession={shown.self ? undefined : (letter) => runSession(shown.ref, letter)}
-            unsent={!shown.self && unsent?.ref === shown.ref ? unsent.draft : null}/>
+            unsent={!shown.self && unsent?.ref === shown.ref ? unsent.draft : null}
+            signal={!shown.self && selected >= 0 ? clients[selected].signal ?? null : null} onClose={closeClient}/>
         )}
       </div>
 

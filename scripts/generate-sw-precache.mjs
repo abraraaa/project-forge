@@ -1,7 +1,7 @@
 // scripts/generate-sw-precache.mjs
 // ─────────────────────────────────────────────────────────────────────────────
 // postbuild: emit public/sw-precache.js — the build-time precache manifest the
-// service worker imports. See docs/offline-shell.md.
+// service worker (public/sw.js) imports.
 //
 // Source of truth: the PRERENDERED HTML of each shell route under
 // .next/server (htmlPathsFor). Parsing those for /_next/static references

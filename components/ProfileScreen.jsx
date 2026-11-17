@@ -27,8 +27,6 @@ import { PROFILE_SUFFIXES, LEGACY_PROFILE_KEY_PREFIXES } from "@/lib/store-healt
 import { Fade } from "@/components/ui";
 import { getThemePreference, applyThemePreference } from "@/lib/theme";
 import Glyph from "@/components/Glyph";
-import { PasskeyUpgradeCard, PasskeyUpgradeModal } from "@/components/PasskeyUpgrade";
-import { readUpgradeNeed, shouldInterrupt } from "@/lib/passkey-upgrade";
 import Link from "next/link";
 import { SyncStatusCard, SyncNowRow } from "@/components/sync-cards";
 import BodyweightEditModal from "@/components/BodyweightEditModal";
@@ -185,17 +183,6 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const [consentAck, setConsentAck] = useState(null);
   const [authToken, setAuthToken] = useState(null); // For authenticated destructive ops
   const [needsPasskeyAuth, setNeedsPasskeyAuth] = useState(null); // Profile name requiring auth
-  // Recorded at login by lib/webauthn.js; read here, never probed. Same
-  // profile-guarded derive as themeState above, so it is right on first paint.
-  const [upgradeState, setUpgradeState] = useState(() => ({
-    profile: current,
-    value: typeof window === "undefined" ? null : readUpgradeNeed(current),
-  }));
-  if (upgradeState.profile !== current) {
-    setUpgradeState({ profile: current, value: readUpgradeNeed(current) });
-  }
-  const upgrade = upgradeState.value;
-  const refreshUpgrade = () => setUpgradeState({ profile: current, value: readUpgradeNeed(current) });
   const [bugSheetOpen, setBugSheetOpen] = useState(false);
   // The install walkthrough, findable on purpose: the home-screen nudge fires
   // once and "Maybe later" is remembered forever, so this row is the only way
@@ -298,7 +285,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         // Now retry the wipe with the token
         setConfirmWipe(needsPasskeyAuth);
       } else {
-        setPasskeyError("Authentication cancelled or failed");
+        setPasskeyError("Face ID didn't go through. Try again.");
       }
     } catch (e) {
       setPasskeyError(e?.message === "WebAuthn not supported" ? "This browser can't use passkeys." : "Face ID didn't go through. Try again.");
@@ -336,8 +323,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
   // Existing holders confirm once, quietly: the tap runs the sign-in
   // ceremony with the consent claim. Cancel or failure: stay quiet, the
-  // tap simply remains. No refreshUpgrade() here: a need recorded by this
-  // sign-in must not open the upgrade modal during this visit.
+  // tap simply remains.
   const handleConfirmConsent = async () => {
     if (!current || consentBusy) return;
     setConsentBusy(true);
@@ -424,9 +410,8 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   // device", not "New here".
   const hasAnyProfile = !!current || existing.length > 0;
   // The quiet consent tap: a confirmed passkey holder with no current
-  // consent on file. Unknown (check failed / in flight) never prompts; the
-  // upgrade card owns the slot while it shows. Off entirely until
-  // EXISTING_HOLDER_CONSENT_TAP is switched on (see lib/consent.js).
+  // consent on file. Unknown (check failed / in flight) never prompts. Off
+  // entirely until EXISTING_HOLDER_CONSENT_TAP is switched on (see lib/consent.js).
   const consentKnown = current ? profileConsent[current] : undefined;
   const trainerRow = trainerRowFor(trainerShare, noticeDots);
   // What's new on the trainer side this week, if anything. A waiting signal
@@ -435,7 +420,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
   const todayIso = useTodayIso();
   const trainerNews = noticeDots?.clients === true ? null : (newFor(todayIso)[0] ?? null);
   const askConsent = EXISTING_HOLDER_CONSENT_TAP && !!current && webAuthnSupported && profileHasPasskey[current] === true
-    && !upgrade?.needed && consentKnown !== undefined && !isCurrentConsent(consentKnown);
+    && consentKnown !== undefined && !isCurrentConsent(consentKnown);
   // The other names on this device, for "Not you?": names only.
   const others = current ? existing.filter(n => n !== current) : [];
 
@@ -821,15 +806,8 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </Fade>
       )}
 
-      {/* Takes the "Passkey enabled" slot rather than sitting beside it. */}
-      {current && upgrade?.needed && (
-        <Fade d={280}>
-          <PasskeyUpgradeCard profile={current} state={upgrade} onDone={refreshUpgrade} />
-        </Fade>
-      )}
-
       {/* Passkey enabled row */}
-      {current && profileHasPasskey[current] && !upgrade?.needed && (
+      {current && profileHasPasskey[current] && (
         <Fade d={280}>
           <div style={{borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`,padding:"15px 2px"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -1128,7 +1106,7 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
 
       {/* Passkey auth required modal */}
       {needsPasskeyAuth && (
-        <div onKeyDown={authKeyDown} onClick={()=>setNeedsPasskeyAuth(null)} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div onKeyDown={authKeyDown} onClick={()=>{setNeedsPasskeyAuth(null);setPasskeyError(null);}} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <div ref={authRef} role="dialog" aria-modal="true" aria-labelledby="auth-title" tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-vellum" style={{borderRadius:T.r,padding:"32px 28px",width:"90%",maxWidth:340,textAlign:"center",outline:"none",boxShadow:"0 10px 24px -14px rgba(36,28,25,0.35)"}}>
             <div style={{fontSize:13,color:T.ink2,marginBottom:10}}>
               Authentication required
@@ -1254,22 +1232,12 @@ export default function ProfileScreen({existing,current,onActivate,onCancel,body
         </div>
       )}
 
-      {/* Closing stretch only; snoozes on dismissal. */}
-      {current && shouldInterrupt(upgrade) && (
-        <PasskeyUpgradeModal
-          profile={current}
-          state={upgrade}
-          onDone={refreshUpgrade}
-          onSnooze={refreshUpgrade}
-        />
-      )}
-
       {/* Taken name → passkey sign-in or fallback explainer */}
       {showTakenHelp && (
         <TakenNameModal
           name={name.trim()}
           webAuthnSupported={webAuthnSupported}
-          onClose={() => setShowTakenHelp(false)}
+          onClose={() => { setShowTakenHelp(false); setPasskeyError(null); }}
           onActivate={onActivate}
           passkeyBusy={passkeyBusy}
           setPasskeyBusy={setPasskeyBusy}

@@ -62,7 +62,7 @@ describe("csvFromView", () => {
   it("opens with the comment line and the header, CRLF throughout", () => {
     const csv = csvFromView(VIEW, opts);
     expect(csv.split("\r\n")[0]).toBe("# Heatwayve export for Cara, 2026-10-05, shared with Tia");
-    expect(csv.split("\r\n")[1]).toBe("date,session,block,lift,set,prescribed_reps,reps,kg,felt,top_set,set_by,logged_by");
+    expect(csv.split("\r\n")[1]).toBe("date,session,block,lift,set,prescribed_reps,reps,kg,effort,readiness,top_set,set_by,logged_by");
     expect(csv.endsWith("\r\n")).toBe(true);
     // The only bare LF is the one inside the quoted name.
     expect(csv.replace(/\r\n/g, "").split("\n")).toHaveLength(2);
@@ -77,8 +77,17 @@ describe("csvFromView", () => {
       ["2026-10-01", "Plank", "1"],
       ["2026-01-10", SQUAT, "top"],
     ]);
-    expect(rows[0]).toMatchObject({ session: "A", block: "main", reps: "5", kg: "100", felt: "RPE 7", top_set: "0", set_by: "", prescribed_reps: "" });
-    expect(rows[7]).toMatchObject({ session: "", block: "main", reps: "5", kg: "95", felt: "RPE 8", top_set: "1" });
+    expect(rows[0]).toMatchObject({ session: "A", block: "main", reps: "5", kg: "100", effort: "RPE 7", top_set: "0", set_by: "", prescribed_reps: "" });
+    expect(rows[7]).toMatchObject({ session: "", block: "main", reps: "5", kg: "95", effort: "RPE 8", top_set: "1" });
+  });
+
+  it("effort holds the set's RPE or RIR; readiness holds the session's band on each of its rows", () => {
+    expect(EXPORT_COLUMNS).not.toContain("felt");
+    const { rows } = records(csvFromView(VIEW, opts));
+    expect(rows.slice(0, 7).every((r) => r.readiness === "normal")).toBe(true);
+    expect(rows[7]).toMatchObject({ set: "top", readiness: "cooked" });
+    const unlogged = { ...VIEW, sessions: [{ ...VIEW.sessions[0], readiness: null }], tops: [] };
+    expect(records(csvFromView(unlogged, opts)).rows.every((r) => r.readiness === "")).toBe(true);
   });
 
   it("quotes commas, quotes and line breaks in names (RFC 4180) and round-trips them", () => {
@@ -89,10 +98,10 @@ describe("csvFromView", () => {
 
   it("reps-only sets show blank kg; a bodyweight set shows only added kg; effort is RPE, else RIR", () => {
     const { rows } = records(csvFromView(VIEW, opts));
-    expect(rows[3]).toMatchObject({ lift: "Pull-up", kg: "", reps: "8", felt: "RIR 2" });
-    expect(rows[4]).toMatchObject({ lift: "Pull-up", kg: "5", reps: "6", felt: "RIR 1" });
-    expect(rows[6]).toMatchObject({ lift: "Plank", kg: "", reps: "45s", felt: "" });
-    expect(rows[5]).toMatchObject({ kg: "20", reps: "12", felt: "" });
+    expect(rows[3]).toMatchObject({ lift: "Pull-up", kg: "", reps: "8", effort: "RIR 2" });
+    expect(rows[4]).toMatchObject({ lift: "Pull-up", kg: "5", reps: "6", effort: "RIR 1" });
+    expect(rows[6]).toMatchObject({ lift: "Plank", kg: "", reps: "45s", effort: "" });
+    expect(rows[5]).toMatchObject({ kg: "20", reps: "12", effort: "" });
   });
 
   it("marks the main lift's top set by the trend's rule (highest e1RM, first on ties); never an accessory", () => {
@@ -146,7 +155,7 @@ describe("csvFromView", () => {
 
   it("names in the comment line stay on one line and never start a formula", () => {
     const csv = csvFromView({ sessions: [], tops: [] }, { name: "=cmd,\"x\"\r\ny", trainer: "@t", date: "2026-10-05" });
-    expect(csv).toBe("# Heatwayve export for '=cmd x y, 2026-10-05, shared with '@t\r\ndate,session,block,lift,set,prescribed_reps,reps,kg,felt,top_set,set_by,logged_by\r\n");
+    expect(csv).toBe("# Heatwayve export for '=cmd x y, 2026-10-05, shared with '@t\r\ndate,session,block,lift,set,prescribed_reps,reps,kg,effort,readiness,top_set,set_by,logged_by\r\n");
   });
 
   it("an empty or missing view is the header alone", () => {
@@ -186,9 +195,11 @@ describe("csvFromView", () => {
     }];
     const csv = csvFromView(projectView({ meta, history }, { todayIso: "2026-10-05" }), opts);
     expect(csv).toContain(SQUAT);
-    for (const f of ["SENTINEL", "777.", "778.", "81.37", "91.37", "07:13:42", "1777777777777", "bodyweight", "photo", "est1rm", "cooked"]) {
+    for (const f of ["SENTINEL", "777.", "778.", "81.37", "91.37", "07:13:42", "1777777777777", "bodyweight", "photo", "est1rm"]) {
       expect(csv, f).not.toContain(f);
     }
+    // The band is what the pane shows as how they felt; its reason never is.
+    expect(records(csv).rows.every((r) => r.readiness === "cooked")).toBe(true);
   });
 });
 

@@ -156,14 +156,14 @@ describe("home day card — rows read the live prescription", () => {
     // Stored as the old pools had them: a row in ass1-B, a landmine press in ass2-B.
     const config = {
       "ass1-A": pick("ass1-A", "DB Split Squat"),
-      "ass1-B": pick("ass2-B", "Incline DB Row"),
+      "ass1-B": pick("ass2-B", "Meadows Row"),
       "ass2-A": pick("ass2-A", "Barbell Glute Bridge"),
       "ass2-B": pick("ass1-B", "Landmine Press"),
     };
     render(home({ programmeBlock: { config } }));
     expect(screen.getByText("DB Split Squat ↔ Landmine Press")).toBeTruthy();
-    expect(screen.getByText("Barbell Glute Bridge ↔ Incline DB Row")).toBeTruthy();
-    expect(screen.queryByText("DB Split Squat ↔ Incline DB Row")).toBeNull();
+    expect(screen.getByText("Barbell Glute Bridge ↔ Meadows Row")).toBeTruthy();
+    expect(screen.queryByText("DB Split Squat ↔ Meadows Row")).toBeNull();
   });
 
   it("a timed hold prints seconds and no weight", () => {

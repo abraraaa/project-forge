@@ -3,7 +3,7 @@
 // Locks for the S&C content cluster (#58–#61, boss calls 2026-07-24):
 //   #58 swaps resolve their own loadType — never inherit the slot's
 //   #59 Strong keeps BOTH the pull-up and direct hamstring work (rescue sub)
-//   #60 zone map is symmetric; day-B pairings kept deliberately (Decided)
+//   #60 day-B pairings kept deliberately (Decided)
 //   #61 Power Clean 4×3; Svend = total; same name → same vid + eq everywhere
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import {
-  SESSIONS, ZONE_ADJ, EXERCISE_POOLS, SWAP_DB,
+  SESSIONS, EXERCISE_POOLS, SWAP_DB,
   applySwapsToSession, applyFocusToSession, STRONG_SLOT_SUBSTITUTIONS,
 } from "../lib/programme.js";
 import { swapLoadType } from "../lib/lift-translations.js";
@@ -116,16 +116,6 @@ describe("#59 — Strong keeps hamstrings AND the pull-up", () => {
       const s = applyFocusToSession(SESSIONS[1], focus);
       const n = s.blocks.flatMap((b) => [b.exA?.name, b.exB?.name]).filter(Boolean);
       expect(n, focus).toContain("Leg Press");
-    }
-  });
-});
-
-describe("#60 — zone adjacency (Decided: day-B pairings kept, map must be symmetric)", () => {
-  it("every adjacency is listed in both directions", () => {
-    for (const [zone, adj] of Object.entries(ZONE_ADJ)) {
-      for (const other of adj) {
-        expect(ZONE_ADJ[other], `${zone}→${other} listed but not ${other}→${zone}`).toContain(zone);
-      }
     }
   });
 });

@@ -245,6 +245,12 @@ vi.mock("@neondatabase/serverless", () => ({
   },
 }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: vi.fn(() => null), rateLimitShared: vi.fn(async () => null) }));
+// TRAINER_LIVE as shipped unless a test closes it.
+const switchLive = vi.hoisted(() => ({ value: true }));
+vi.mock("@/lib/trainer-terms", async (importOriginal) => {
+  const real = await importOriginal();
+  return { ...real, get TRAINER_LIVE() { return switchLive.value; } };
+});
 // Real implementations, wrapped so one test can make a store answer null or a
 // closed account (branches the fake tables can't reach).
 vi.mock("@/lib/trainer-changes-store", async (importOriginal) => {
@@ -354,6 +360,28 @@ beforeEach(() => {
 });
 afterEach(() => {
   delete process.env.DATABASE_URL;
+  delete process.env.ADMIN_ACCOUNT_ID;
+  switchLive.value = true;
+});
+
+describe("TRAINER_LIVE off: the change route fails closed", () => {
+  it("a signed-in trainer other than the admin gets the sign-in reply, dry run and send alike, nothing read or written", async () => {
+    switchLive.value = false;
+    for (const b of [body(S1, 105, { dryRun: true }), body()]) {
+      const res = await post(tia, b);
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: "Sign in to see your clients", requiresAuth: true });
+    }
+    expect(grantReads()).toEqual([]);
+    expect(dataReads()).toEqual([]);
+    expect(writes()).toEqual([]);
+  });
+
+  it("the admin still sends", async () => {
+    switchLive.value = false;
+    process.env.ADMIN_ACCOUNT_ID = T;
+    expect((await post(tia, body())).status).toBe(200);
+  });
 });
 
 describe("faceIdFresh", () => {
@@ -871,8 +899,8 @@ describe("coached sessions: sending one", () => {
     DAY0 = rec.date;
   });
 
-  it("needs the grant approved at the current share consent: an older one is 403 fresh, before the look and any read", async () => {
-    for (const v of ["2026-10-05b", null]) {
+  it("needs a share consent that covers sessions: an older or unknown one is 403 fresh, before the look and any read", async () => {
+    for (const v of ["2026-10", "2026-10-04", "2026-10-05", "2026-10-05b", "2026-10-11", "", null]) {
       db.grants[0].consent_version = v;
       calls.length = 0;
       for (const extra of [{}, { dryRun: true }]) {
@@ -888,6 +916,15 @@ describe("coached sessions: sending one", () => {
     }
     db.grants[0].consent_version = SHARE_CONSENT_VERSION;
     expect((await post(tia, sbody(rec))).status).toBe(200);
+  });
+
+  it("the client's off switch refuses a session whatever the grant's consent", async () => {
+    db.grants[0].edits_off_at = db.grants[0].edits_at + 1;
+    for (const v of ["2026-10", "2026-10-05", SHARE_CONSENT_VERSION]) {
+      db.grants[0].consent_version = v;
+      expect((await post(tia, sbody(rec))).status, v).toBeGreaterThanOrEqual(403);
+    }
+    expect(writes()).toEqual([]);
   });
 
   it("runs behind the route's gates: Face ID within the day, a real grant, changes on", async () => {
@@ -1118,7 +1155,7 @@ describe("source pins", () => {
     const send = post.slice(post.indexOf("await dbWithdrawChanges("));
     inOrder(send, ["await logLook(", "dbReadProfile(", "validateSessionSet(", "validateChangeSet(", "await dbInsertChangeSet("]);
     // A session's consent gate comes before the look, so an old grant reads nothing.
-    inOrder(send, ["grant.consentVersion !== SHARE_CONSENT_VERSION", "await logLook("]);
+    inOrder(send, ['!shareCovers(grant.consentVersion, "session")', "await logLook("]);
     // Exactly two reads of the profile, each straight after its look.
     expect(post.match(/dbReadProfile\(/g)).toHaveLength(2);
     expect(post.match(/await logLook\(ref, me, now\);\n\s+if \(failed\) return slid\(g, failed\);/g)).toHaveLength(2);

@@ -8,6 +8,7 @@ import {
   TRAINER_LIVE, APPLICATIONS_OPEN, TRAINER_TERMS_VERSION, TRAINER_TERMS_SINCE, KNOWN_TRAINER_TERMS_VERSIONS, TRAINER_TERMS_COPY,
   acceptedTrainerTermsVersion, isCurrentTrainerTerms, hasTrainerTerms, termsDate,
   SHARE_CONSENT_VERSION, SHARE_COPY, acceptedShareConsentVersion, TRAINER_SCOPE,
+  SHARE_CONSENT_HISTORY, SHARE_FEATURE_SINCE, shareVersionsFor, shareCovers,
 } from "../lib/trainer-terms.js";
 import { trainerOpenFor, shareOpenFor, applyOpenFor } from "../lib/auth-server.js";
 import { publicName, SIGNAL_KEYS } from "../lib/trainer-view.js";
@@ -246,6 +247,38 @@ describe("share consent", () => {
     expect(acceptedShareConsentVersion({ version: SHARE_CONSENT_VERSION })).toBe(SHARE_CONSENT_VERSION);
     for (const bad of [undefined, null, SHARE_CONSENT_VERSION, {}, { version: 202610 }, { version: TRAINER_TERMS_VERSION }, [SHARE_CONSENT_VERSION]]) {
       expect(acceptedShareConsentVersion(bad)).toBeNull();
+    }
+  });
+});
+
+describe("share consent, per feature", () => {
+  it("the history runs oldest first to the current version, and each feature names a version in it", () => {
+    expect(SHARE_CONSENT_HISTORY).toEqual(["2026-10", "2026-10-04", "2026-10-05", "2026-10-05b", "2026-10-10"]);
+    expect(SHARE_CONSENT_HISTORY.at(-1)).toBe(SHARE_CONSENT_VERSION);
+    expect(SHARE_FEATURE_SINCE).toEqual({ changes: "2026-10-05", session: "2026-10-10" });
+    for (const v of Object.values(SHARE_FEATURE_SINCE)) expect(SHARE_CONSENT_HISTORY).toContain(v);
+  });
+
+  it("a grant keeps a feature its consent covered; it never gains one its consent did not", () => {
+    const covered = (f) => SHARE_CONSENT_HISTORY.filter((v) => shareCovers(v, f));
+    expect(covered("changes")).toEqual(["2026-10-05", "2026-10-05b", "2026-10-10"]);
+    expect(covered("session")).toEqual(["2026-10-10"]);
+    expect(shareVersionsFor("changes")).toEqual(covered("changes"));
+    expect(shareVersionsFor("session")).toEqual(covered("session"));
+  });
+
+  it("a brand-new grant covers every feature", () => {
+    for (const f of Object.keys(SHARE_FEATURE_SINCE)) expect(shareCovers(SHARE_CONSENT_VERSION, /** @type {any} */ (f))).toBe(true);
+  });
+
+  it("an unknown, missing or malformed version, or an unknown feature, covers nothing", () => {
+    for (const v of [null, undefined, "", "2026-10-11", "2026-09", "2026-10-05c", 20261010, ["2026-10-10"], { version: "2026-10-10" }]) {
+      expect(shareCovers(v, "changes"), String(v)).toBe(false);
+      expect(shareCovers(v, "session"), String(v)).toBe(false);
+    }
+    for (const f of ["view", "export", "toString", "__proto__", ""]) {
+      expect(shareCovers(SHARE_CONSENT_VERSION, /** @type {any} */ (f)), f).toBe(false);
+      expect(shareVersionsFor(/** @type {any} */ (f))).toEqual([]);
     }
   });
 });

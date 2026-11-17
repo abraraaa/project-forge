@@ -59,7 +59,7 @@ import {
 } from "../lib/trainer-sync.js";
 import { DeltaSync } from "../lib/sync-delta.js";
 import { commitSessionRecord } from "../lib/session-commit.js";
-import { planSessionSteps, isUndoable, changeStatus, AUTO_KEEP_MS, sessionTarget, sessionPreview } from "../lib/trainer-change.js";
+import { planSessionSteps, isUndoable, changeStatus, AUTO_KEEP_MS, sessionTarget, sessionPreview, anchorLogged } from "../lib/trainer-change.js";
 import { cleanAcks } from "../lib/trainer-changes-store.js";
 import { SESSIONS, EXERCISE_POOLS, applyRotationToSession, applyMainLiftsToSession, applyFocusToSession } from "../lib/programme.js";
 import { getLoadType } from "../lib/lift-translations.js";
@@ -246,6 +246,17 @@ describe("W-B: the kept record is the sent record", () => {
       expect(sent).not.toHaveProperty("loggedBy");
     });
   }
+
+  it("prescribedKg changes only those lifts' prescribed weight", () => {
+    const sent = liveLog();
+    const kept = recordForKeep(sent, keepOpts({ prescribedKg: { "DB Reverse Lunge": 24, "Not In It": 5, [SQUAT]: Number.NaN } }));
+    const d = diff(sent, kept).filter((x) => x.kind !== PROV);
+    expect(d.length).toBeGreaterThan(0);
+    for (const x of d) expect(x.path).toMatch(/^blocks\.\d+\.exercises\.\d+\.prescribed\.weight$/);
+    const lunges = kept.blocks.flatMap((b) => b.exercises).filter((e) => e.name === "DB Reverse Lunge");
+    expect(lunges.length).toBeGreaterThan(0);
+    for (const e of lunges) expect(e.prescribed.weight).toBe(24);
+  });
 
   it("felt edits change only those sets' rpe and rir, and the summaries", () => {
     const sent = liveLog();
@@ -491,6 +502,38 @@ describe("Keep and Discard", () => {
     expect((await keepTrainerSession(WHO, ID)).kept).toBe(false);
     expect(discardTrainerSession(WHO, ID).discarded).toBe(false);
     expect(H.get(WHO).filter((r) => r.id === record.id)).toHaveLength(1);
+  });
+
+  it("a loaded lift the plan gave no weight keeps this device's working weight as its prescription; a weighed one keeps the sent one", async () => {
+    const LUNGE = "DB Reverse Lunge";
+    seedClient();
+    P.saveWeights(WHO, { ...BASE_W, [LUNGE]: 24 });
+    // Their last lunge reads as reps only to the plan (a set typed as the body's), so the plan sent no weight.
+    vi.setSystemTime(T0 - 86_400_000);
+    const odd = newDraftLog({ profileName: WHO, session: "strength-c", blockNumber: 1, readiness: "normal" });
+    logSet(odd, { blockId: "b2", blockType: "accessory", exerciseName: LUNGE, muscle: "Quads & Glutes", weight: 24, reps: "8/leg", rpe: null, loadType: "bodyweight", prescribed: { reps: "8/leg", weight: 24, sets: 3 } });
+    H.append(WHO, finaliseDraft(odd));
+    vi.setSystemTime(T0);
+    expect(anchorLogged(H.get(WHO), LUNGE, "per_db")).toBe(false);
+    expect(anchorLogged(H.get(WHO), SQUAT, "barbell")).toBe(true);
+
+    // The trainer's device, with no plan weight for the lunge, fell back to the slot's template.
+    const record = liveLog();
+    const at = record.blocks.flatMap((b, bi) => b.exercises.map((e, ei) => ({ e, bi, ei }))).find((x) => x.e.name === LUNGE);
+    expect(at).toBeTruthy();
+    record.blocks[at.bi].exercises[at.ei].prescribed.weight = 18;
+    const sentSquat = record.blocks[0].exercises[0].prescribed;
+    expect(record.blocks[0].exercises[0].name).toBe(SQUAT);
+    const stored = JSON.stringify(H.get(WHO));
+
+    applyTrainerRows(WHO, { rows: [sessionRow(record)] });
+    expect((await keepTrainerSession(WHO, ID)).outcome).toBe("kept");
+    const kept = H.get(WHO).find((r) => r.id === record.id);
+    expect(kept.blocks[at.bi].exercises[at.ei].prescribed).toEqual({ ...record.blocks[at.bi].exercises[at.ei].prescribed, weight: 24 });
+    expect(kept.blocks[0].exercises[0].prescribed).toEqual(sentSquat);
+    // The sets are as logged, and the records already stored are untouched.
+    expect(kept.blocks[at.bi].exercises[at.ei].sets.map((x) => x.weight)).toEqual(record.blocks[at.bi].exercises[at.ei].sets.map((x) => x.weight));
+    expect(JSON.stringify(H.get(WHO).filter((r) => r.id !== record.id))).toBe(stored);
   });
 
   it("the felt edits held on the device are used when Keep passes none, and Keep's own win", async () => {

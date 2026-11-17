@@ -96,6 +96,27 @@ describe("the list", () => {
     expect(document.body.textContent).not.toContain("nonsense");
   });
 
+  it("shows the latest three sets, then Show earlier reveals the rest", async () => {
+    const id = (n) => "hws_" + String.fromCharCode(99 + n).repeat(26);
+    // Newest first, as the route sends them: five sets a day apart.
+    server.status = status({ changes: [0, 1, 2, 3, 4].map((n) => change({ id: `${id(n)}.0`, set: id(n), at: NOW - (n + 1) * DAY, after: 105 + n * 2.5 })) });
+    await renderView();
+    const labels = () => screen.getAllByRole("region", { name: /^Sent/ }).map((s) => s.getAttribute("aria-label"));
+    expect(labels()).toEqual(["Sent 13 Oct", "Sent 12 Oct", "Sent 11 Oct"]);
+    const more = screen.getByRole("button", { name: "Show earlier changes" });
+    expect(more.textContent).toBe("Show earlier");
+    fireEvent.click(more);
+    expect(labels()).toEqual(["Sent 13 Oct", "Sent 12 Oct", "Sent 11 Oct", "Sent 10 Oct", "Sent 9 Oct"]);
+    expect(screen.queryByRole("button", { name: "Show earlier changes" })).toBeNull();
+  });
+
+  it("three sets or fewer show without Show earlier", async () => {
+    server.status = status({ changes: [change(), change({ id: `${S2}.0`, set: S2, at: NOW - 2 * DAY })] });
+    await renderView();
+    expect(screen.getAllByRole("region", { name: /^Sent/ })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Show earlier changes" })).toBeNull();
+  });
+
   it("a warning reads in ink2, never the under-minimum steel", async () => {
     server.status = status({ changes: [change({ warnings: ["big_drop"], before: 120, after: 100, target: "Barbell Deadlift" })] });
     await renderView();
@@ -345,10 +366,20 @@ describe("the changes switch", () => {
   });
 
   it("a share from before changes existed asks for a fresh code instead of offering the switch", async () => {
-    server.status = status({ sharing: sharing({ consentVersion: "2026-10" }), edits: { on: false, since: null } });
+    server.status = status({ sharing: sharing({ consentVersion: "2026-10-04" }), edits: { on: false, since: null } });
     await renderView();
     expect(screen.getByText("Ask Jo for a fresh code to let them change your plan.")).toBeTruthy();
     expect(screen.queryByText("Let Jo change your plan")).toBeNull();
+  });
+
+  it("a share approved on an earlier consent that covers changes offers the switch, not a fresh code", async () => {
+    for (const consentVersion of ["2026-10-05", "2026-10-05b"]) {
+      server.status = status({ sharing: sharing({ consentVersion }), edits: { on: false, since: null } });
+      await renderView();
+      expect(screen.getByText("Let Jo change your plan")).toBeTruthy();
+      expect(screen.queryByText("Ask Jo for a fresh code to let them change your plan.")).toBeNull();
+      cleanup();
+    }
   });
 
   it("the server says a fresh code is needed: says so", async () => {

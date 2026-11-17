@@ -27,7 +27,7 @@ import { daysBetween, mondayIndex } from "@/lib/dates";
 import { useTodayIso } from "@/lib/use-today-iso";
 import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
-import { WEEK, SWAP_DB } from "@/lib/programme";
+import { WEEK, swapOptionsFor } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise } from "@/lib/analytics";
 import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, usesOptionalChrome, addedLoadFor, loggedAddedKg, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
@@ -1059,7 +1059,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         </>
       )}
       {editTarget&&<DrumEditOverlay target={editTarget} planWeights={planWeights} setPlanWeights={setPlanWeights} planReps={planReps} setPlanReps={setPlanReps} prescribedReps={prescribedReps} addedLoads={addedLoads} setAddedLoad={setAddedLoad} block={block} onClose={()=>setEditTarget(null)}/>}
-      {swapEx&&<SwapOverlay activeEx={activeEx} swapKey={swapKey} onSwap={onSwap} onClose={()=>setSwapEx(null)}/>}
+      {swapEx&&<SwapOverlay activeEx={activeEx} session={session} swapKey={swapKey} onSwap={onSwap} onClose={()=>setSwapEx(null)}/>}
       {showVid&&vidEx&&(
         <div onClick={()=>setShowVid(false)} className="forge-scrim forge-scrim-video" style={{overscrollBehavior:"contain",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
           <div onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:24,width:"100%",animation:`slideUp 280ms ${T.ease}`}}>
@@ -1122,13 +1122,13 @@ function VideoEmbed({vid,name}){
 
 // ─── Swap Overlay ────────────────────────────────────────────────────────────
 
-function SwapOverlay({activeEx,swapKey,onSwap,onClose}){
+function SwapOverlay({activeEx,session,swapKey,onSwap,onClose}){
   // The travel filter that used to live here is retired (2026-08-04). It was
   // per-exercise and per-open, and every main lift's swap list is
   // heavy-equivalents-only, so the anchor of every session answered "no
   // alternatives for the current filter". Travel is a session-level mode now
   // — see lib/travel.js and the readiness check-in.
-  const options=SWAP_DB[activeEx?.name]||[];
+  const options=swapOptionsFor(activeEx?.name, session);
 
   const applySwap=(option)=>{
     // Inherit reps from the current slot — same movement pattern, same

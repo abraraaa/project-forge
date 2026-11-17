@@ -45,7 +45,7 @@ describe("every hold carries a timed target in the data", () => {
 
   it("the census finds the holds we know about", () => {
     const names = new Set(holds.map((e) => e.ex.name));
-    for (const n of ["L-Sit Hold", "Wall Sit", "Plank", "Side Plank", "Hollow Body Hold"]) expect(names.has(n)).toBe(true);
+    for (const n of ["L-Sit Hold", "Wall Sit", "Plank", "Hollow Body Hold"]) expect(names.has(n)).toBe(true);
   });
 
   it.each(holds.map((e) => [e.ex.name, e.where, e.ex]))("%s at %s is timed", (_n, _w, ex) => {

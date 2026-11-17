@@ -7,7 +7,8 @@
 //     only), then the 12-month tier (its one top set, tier "top", no volume);
 //     sessions on one day ordered by their synthetic ids;
 //   - the top-set mark is the e1RM line's pick (first on ties), and the most
-//     reps when there is no e1RM to read;
+//     reps when there is no e1RM to read; a doubled main lift marks one set
+//     per entry, exactly the line's points for that day, in both tiers;
 //   - a set the view carries no kg for stays reps only, whatever else rides
 //     on it; pure bodyweight shows only added kg; volume never counts a
 //     bodyweight movement's kg, and counts both dumbbells;
@@ -115,6 +116,44 @@ describe("ledgerFor", () => {
     expect(ledgerVolumeText(row.volume)).toBe("18 reps in all");
     expect(JSON.stringify(row)).not.toContain("83.7");
     expect(JSON.stringify(row)).not.toContain("99.1");
+  });
+
+  it("a doubled main lift: the row's marked sets are exactly the line's points for the day, in both tiers", () => {
+    const doubled = (date, first, second) => ({
+      v: 2, id: `${date}T07:00:00.000Z`, date, readiness: "normal", session: "strength A", scheduledLetter: "A",
+      blocks: [
+        { id: "main", type: "main", exercises: [{ name: SQ, muscle: "Quads", loadType: "barbell", sets: first }] },
+        { id: "acc", type: "accessory", exercises: [{ name: SQ, muscle: "Quads", loadType: "barbell", sets: [{ weight: 200, reps: 10, loadType: "barbell" }] }] },
+        { id: "main2", type: "main", exercises: [{ name: SQ, muscle: "Quads", loadType: "barbell", sets: second }] },
+      ],
+    });
+    const bb = (weight, reps) => ({ weight, reps, rpe: 8, loadType: "barbell" });
+    // The detail tier: 100 × 5 (116.7) leads the first entry, 110 × 3 (121) the second.
+    // The 12-month tier: 105 × 5 (122.5) and 100 × 3 (110).
+    const v = projectForTrainer({ history: [
+      doubled("2026-09-29", [bb(95, 5), bb(100, 5), bb(100, 5)], [bb(110, 3)]),
+      doubled("2026-02-02", [bb(105, 5)], [bb(100, 3)]),
+    ] }, { todayIso: "2026-10-05" });
+    expect(v.sessions).toHaveLength(1);
+    expect(v.tops).toHaveLength(1);
+
+    const rows = ledgerFor(v, SQ);
+    expect(rows).toHaveLength(2);
+    // The pane's line, as TrainerClientView draws it.
+    for (const includeCooked of [false, true]) {
+      const line = mainLiftTrend([...v.tops, ...v.sessions], { includeCooked })[SQ];
+      for (const r of rows) {
+        const points = line.filter((p) => p.date === r.date).map((p) => [p.topSet.weight, p.topSet.reps]);
+        expect(r.sets.filter((x) => x.top).map((x) => [x.kg, x.reps])).toEqual(points);
+        expect(ledgerSetsShown(r, "top").map((x) => [x.kg, x.reps])).toEqual(points);
+      }
+      expect(line).toHaveLength(4);
+    }
+    expect(rows[0].sets.map((x) => x.top)).toEqual([false, true, false, true]);
+    // The row's summary set is the higher point, the line's highest that day.
+    expect(rows.map((r) => ledgerSetText(r.best))).toEqual(["110 × 3", "105 × 5"]);
+    // The accessory entry is neither's.
+    expect(JSON.stringify(rows)).not.toContain("200");
   });
 
   it("through the real projection, a reps-only set and a pure bodyweight set carry no load from bodyweight", () => {

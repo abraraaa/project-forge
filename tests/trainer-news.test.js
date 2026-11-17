@@ -12,6 +12,12 @@ describe("TRAINER_NEWS", () => {
     expect(ledger).toEqual({ key: "ledger-export", shipped: "2026-10-09" });
   });
 
+  it("carries coached sessions, dated the day they shipped to trainers (2026-11-15)", () => {
+    expect(TRAINER_NEWS.find((n) => n.key === "coached-sessions")).toEqual({ key: "coached-sessions", shipped: "2026-11-15" });
+    expect(newFor("2026-11-15")[0]?.key).toBe("coached-sessions");
+    expect(newFor("2026-11-22")).toEqual([]);
+  });
+
   it("every entry has a unique key and a local date", () => {
     expect(new Set(TRAINER_NEWS.map((n) => n.key)).size).toBe(TRAINER_NEWS.length);
     for (const n of TRAINER_NEWS) {

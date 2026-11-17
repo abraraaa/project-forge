@@ -50,6 +50,7 @@ import { projectForTrainer } from "../../lib/trainer-plan.js";
 import { todayLocalIso, addDaysIso } from "../../lib/dates.js";
 import { TRAINER_TERMS_VERSION } from "../../lib/trainer-terms.js";
 import { encodeQr, qrToSvgPath } from "../../lib/qr.js";
+import { T } from "../../lib/tokens.js";
 
 const { server, auth, panes, nav } = vi.hoisted(() => ({
   server: { calls: [], routes: {} },
@@ -87,6 +88,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const today = todayLocalIso();
 const flush = () => act(async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); });
 
+/** Stop seeing a client: the Sharing row opens the sheet, whose first step offers it. */
+const stopSeeing = (name) => {
+  fireEvent.click(screen.getByRole("button", { name: /^Sharing/ }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByText(`Stop seeing ${name}'s training`));
+};
 const posts = (url) => server.calls.filter((c) => c.url === url && c.method === "POST");
 const gets = (url) => server.calls.filter((c) => c.url === url && c.method === "GET");
 /** The controls in `el` with a press visual: a sheet's take none (app/globals.css). */
@@ -267,24 +273,51 @@ describe("TrainerView: signing in", () => {
 });
 
 describe("TrainerView: the roster", () => {
-  it("renders each signal variant, numbers in the measured face", async () => {
+  it("renders each signal variant, numbers in the measured face; the rhythm moves to the card's mark", async () => {
     signedIn();
     await mount();
     const rows = [...screen.getByRole("list", { name: "Clients" }).querySelectorAll("li")].map((li) => li.textContent);
     expect(rows).toEqual([
-      "AlexLast trained 2 days ago · 2 of 3 this week · rhythm 86%",
-      "BeaTrained today · 1 of 3 this week · rhythm 100%",
-      "CalLast trained yesterday · 1 of 3 this week · rhythm 50%",
-      "DeeLast trained 9 days ago · paused",
-      "EveNo sessions in the last year",
+      "AlexLast trained 2 days ago · 2 of 3 this weekrhythm 86%",
+      "BeaTrained today · 1 of 3 this weekrhythm 100%",
+      "CalLast trained yesterday · 1 of 3 this weekrhythm 50%",
+      "DeePaused · last trained 9 days ago",
+      "EveNo sessions in the last yearrhythm 0%",
       "FinLast trained 4 days ago · 1 of 2 this week",
       "GusSharing since 3 Oct",
-      "Your clientLast trained 3 days ago · 2 of 3 this week · rhythm 75%",
+      "Your clientLast trained 3 days ago · 2 of 3 this weekrhythm 75%",
     ]);
-    const line = screen.getByTitle("Last trained 2 days ago · 2 of 3 this week · rhythm 86%");
+    const line = screen.getByTitle("Last trained 2 days ago · 2 of 3 this week");
     expect(line.className).toBe("forge-wide-signal");
-    expect([...line.querySelectorAll("span")].map((s) => s.textContent)).toEqual(["2", "2", "3", "86"]);
+    expect([...line.querySelectorAll("span")].map((s) => s.textContent)).toEqual(["2", "2", "3"]);
     expect(screen.getByText("Signed in as Coach Kim")).toBeTruthy();
+  });
+
+  it("each client is a card: the name at 17/500, a 24 px rhythm mark with its number printed in the measured face", async () => {
+    signedIn();
+    await mount();
+    const card = (name) => screen.getByText(name, { selector: "span" }).closest("li");
+    const name = screen.getByText("Alex", { selector: "span" });
+    expect([name.style.fontSize, name.style.fontWeight]).toEqual(["17px", "500"]);
+    const surface = card("Alex").firstElementChild;
+    expect(surface.style.background).toBe("var(--surface)");
+    expect(surface.style.boxShadow).toBe("var(--elev)");
+    expect(surface.style.overflow).toBe("hidden");
+    const markOf = (n) => card(n).querySelector("[data-rhythm-mark]");
+    const bar = (n) => markOf(n).firstElementChild;
+    const printed = (n) => markOf(n).lastElementChild;
+    for (const [n, pct, height, heat] of [["Alex", "86", "8px", 2], ["Bea", "100", "11px", 3], ["Cal", "50", "8px", 2]]) {
+      expect(bar(n).style.width, n).toBe("24px");
+      expect(bar(n).style.height, n).toBe(height);
+      expect(bar(n).style.background, n).toBe(`var(--heat-${heat})`);
+      expect(bar(n).getAttribute("aria-hidden"), n).toBe("true");
+      // Never colour alone: the number prints in the measured face, the unit beside it.
+      expect(printed(n).style.fontFamily, n).toBe(T.measured);
+      expect(printed(n).textContent, n).toBe(`rhythm ${pct}%`);
+    }
+    // Nothing logged: an outline with 0 printed. Paused, no plan, or no signal: no mark.
+    expect([bar("Eve").style.height, bar("Eve").style.background, printed("Eve").textContent]).toEqual(["3px", "transparent", "rhythm 0%"]);
+    for (const n of ["Dee", "Fin", "Gus"]) expect(markOf(n), n).toBeNull();
   });
 
   it("pins your own training first, a hairline apart from the clients", async () => {
@@ -333,14 +366,15 @@ describe("TrainerView: the roster", () => {
     expect(src).not.toMatch(/lib\/storage|getActive\(|localStorage|sessionStorage|indexedDB|dangerouslySetInnerHTML/);
   });
 
-  it("rows are hairlines with no radius and no resting fill; the open one carries aria-current and a 3 px ink mark", async () => {
+  it("your row is a hairline, clients are cards; none has a resting fill, the open one carries aria-current and a 3 px ink bar", async () => {
     signedIn();
     await mount();
     const row = (name) => screen.getByText(name, { selector: "span" }).closest("button");
     const mark = (btn) => [...btn.children].find((c) => c.style.width === "3px") ?? null;
+    expect(row("Your training").style.borderRadius).toBe("");
+    for (const name of ["Alex", "Bea"]) expect(row(name).style.borderRadius, name).toBe("12px");
     for (const name of ["Your training", "Alex", "Bea"]) {
       const btn = row(name);
-      expect(btn.style.borderRadius, name).toBe("");
       expect(btn.style.background, name).toBe("none");
       expect(btn.className, name).toBe("forge-press forge-tint");
       expect(btn.getAttribute("aria-current"), name).toBeNull();
@@ -350,7 +384,7 @@ describe("TrainerView: the roster", () => {
     await flush();
     const alex = row("Alex");
     expect(alex.getAttribute("aria-current")).toBe("true");
-    // Open is a mark, not a fill: --press is the press itself.
+    // Open is a bar, not a fill: --press is the press itself.
     expect(alex.style.background).toBe("none");
     expect(alex.style.position).toBe("relative");
     const bar = mark(alex);
@@ -359,6 +393,27 @@ describe("TrainerView: the roster", () => {
     expect([bar.style.left, bar.style.top, bar.style.bottom].map(parseFloat)).toEqual([0, 0, 0]);
     expect(mark(row("Bea"))).toBeNull();
     expect(mark(row("Your training"))).toBeNull();
+  });
+
+  it("a card's line by priority: paused, then what is waiting on them, then the signal", async () => {
+    const week = { lastTrainedDaysAgo: 2, weekDone: 2, weekPlanned: 3, rhythmPct: 86, paused: false };
+    const paused = { lastTrainedDaysAgo: 9, weekDone: 0, weekPlanned: 0, rhythmPct: null, paused: true };
+    signedIn([
+      { ref: "hwg_p", name: "Pat", since: Date.UTC(2026, 8, 1), lastLooked: null, signal: paused, waiting: { changes: 2, sessions: 1 } },
+      { ref: "hwg_q", name: "Quin", since: Date.UTC(2026, 8, 1), lastLooked: null, signal: week, waiting: { changes: 0, sessions: 1 } },
+      { ref: "hwg_r", name: "Ros", since: Date.UTC(2026, 8, 1), lastLooked: null, signal: week, waiting: { changes: 1, sessions: 0 } },
+      { ref: "hwg_s", name: "Sol", since: Date.UTC(2026, 8, 1), lastLooked: null, signal: week, waiting: { changes: 3, sessions: 2 } },
+      { ref: "hwg_t", name: "Tam", since: Date.UTC(2026, 8, 1), lastLooked: null, signal: week, waiting: { changes: 0, sessions: 0 } },
+      { ref: "hwg_u", name: "Una", since: Date.UTC(2026, 8, 1), lastLooked: null, signal: week, waiting: null },
+    ]);
+    await mount();
+    const lineOf = (n) => screen.getByText(n, { selector: "span" }).closest("button").querySelector(".forge-wide-signal").textContent;
+    expect(lineOf("Pat")).toBe("Paused · last trained 9 days ago");
+    expect(lineOf("Quin")).toBe("1 session on their phone · 2 of 3 this week");
+    expect(lineOf("Ros")).toBe("1 change waiting · 2 of 3 this week");
+    expect(lineOf("Sol")).toBe("2 sessions on their phone · 3 changes waiting · 2 of 3 this week");
+    expect(lineOf("Tam")).toBe("Last trained 2 days ago · 2 of 3 this week");
+    expect(lineOf("Una")).toBe("Last trained 2 days ago · 2 of 3 this week");
   });
 
   it("its buttons are the house set: commits 56 at 17/500, quiet 46 at 14/500 in ink, links 13 in ink3", async () => {
@@ -507,7 +562,7 @@ describe("TrainerView: a client", () => {
     await mount();
     fireEvent.click(screen.getByText("Alex"));
     await flush();
-    fireEvent.click(screen.getByText("Stop seeing Alex's training"));
+    stopSeeing("Alex");
     await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Stop")); });
     await flush();
     expect(posts("/api/trainer/clients").filter((c) => "remove" in c.body).map((c) => c.body)).toEqual([{ remove: "hwg_a" }]);
@@ -532,7 +587,7 @@ describe("TrainerView: a client", () => {
     expect(screen.getByText("Bea", { selector: "h1" })).toBeTruthy();
     expect(screen.queryByText("Alex", { selector: "h1" })).toBeNull();
     expect(screen.getByText("Bea", { selector: "span" }).closest("button").getAttribute("aria-current")).toBe("true");
-    fireEvent.click(screen.getByText("Stop seeing Bea's training"));
+    stopSeeing("Bea");
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Stop seeing Bea's training?")).toBeTruthy();
     await act(async () => { fireEvent.click(within(dialog).getByText("Stop")); });
@@ -549,7 +604,7 @@ describe("TrainerView: a client", () => {
     await mount();
     fireEvent.click(screen.getByText("Alex"));
     await flush();
-    fireEvent.click(screen.getByText("Stop seeing Alex's training"));
+    stopSeeing("Alex");
     await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Stop")); });
     await flush();
     const dialog = screen.getByRole("dialog");
@@ -572,7 +627,7 @@ describe("TrainerView: a client", () => {
     const rest = SIGNALS.slice(1);
     server.routes["POST /api/trainer/clients"] = (b) => ("remove" in b ? { status: 200, body: { ok: true } }
       : { status: 200, body: { me: { name: "Coach Kim" }, clients: rest } });
-    fireEvent.click(screen.getByText("Stop seeing Alex's training"));
+    stopSeeing("Alex");
     await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Stop")); });
     await flush();
     await act(async () => { window.dispatchEvent(new PopStateEvent("popstate", { state: null })); });
@@ -1089,8 +1144,9 @@ describe("TrainerView: changing a client's plan", () => {
     const push = vi.spyOn(nav, "push");
     await openAlex();
     const before = server.calls.length;
-    await act(async () => { fireEvent.click(screen.getByRole("radio", { name: "Strength C" })); });
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Run a session with Alex" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Different session" })); });
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("radio", { name: "Strength C" })); });
+    await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Run Strength C with Alex" })); });
     await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
     const [to] = push.mock.calls[0];
     expect(to).toBe("/trainer/coach#ref=hwg_a&letter=C");
@@ -1139,7 +1195,7 @@ describe("TrainerView: changing a client's plan", () => {
   it("back from the coach page (Send, or its back row), /trainer opens that client's pane again, once", async () => {
     const push = vi.spyOn(nav, "push");
     await openAlex();
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Run a session with Alex" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /^Run Strength [ABC] with Alex$/ })); });
     await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
     // The coach page replaces itself with /trainer: a fresh mount.
     cleanup();
@@ -1282,6 +1338,36 @@ describe("TrainerView: one way back at each level", () => {
     await act(async () => { window.dispatchEvent(new PopStateEvent("popstate", { state: null })); });
     expect(container.firstChild.getAttribute("data-view")).toBe("roster");
     expect(screen.queryByRole("button", { name: "Clients" })).toBeNull();
+  });
+
+  it("client pane: from 640 the pane's own Close goes the same way, keyboard reachable", async () => {
+    signedIn();
+    const { container } = await mount();
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    const close = screen.getByRole("button", { name: "Close" });
+    expect(close.tagName).toBe("BUTTON");
+    expect(close.parentElement.className).toBe("forge-wide-mw-only");
+    expect(close.getAttribute("tabindex")).toBeNull();
+    const hb = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    fireEvent.click(close);
+    expect(hb).toHaveBeenCalledTimes(1);
+    await act(async () => { window.dispatchEvent(new PopStateEvent("popstate", { state: null })); });
+    expect(container.firstChild.getAttribute("data-view")).toBe("roster");
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+  });
+
+  it("the open client's roster signal reaches the pane's glance strip; your own training has none", async () => {
+    signedIn();
+    await mount();
+    fireEvent.click(screen.getByText("Alex"));
+    await flush();
+    expect(panes.props.at(-1).signal).toEqual(SIGNALS[0].signal);
+    expect(document.querySelector("[data-glance]").textContent).toBe("2 of 3 this weekrhythm 86%last trained 2 days ago");
+    fireEvent.click(screen.getByText("Your training"));
+    await flush();
+    expect(panes.props.at(-1).signal).toBeNull();
+    expect(document.querySelector("[data-glance]")).toBeNull();
   });
 
   it("the invite sheet closes from Done, Escape and the scrim", async () => {

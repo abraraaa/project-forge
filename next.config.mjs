@@ -36,17 +36,6 @@ const nextConfig = {
     // a first paint on slow 4G.
     inlineCss: true,
   },
-  // ── THE FLIP (docs/heatwayve-flip.md, step 3) ────────────────────────────
-  // The 2026-07-22 freeze (heatwayve→theforged 307) is DELETED; the reverse
-  // PERMANENT 301 below sends theforged.fit → heatwayve.app, with two
-  // carve-outs that must keep serving on the OLD origin:
-  //   /.well-known/webauthn — the ROR document must stay fetchable at the
-  //     rpId origin, or cross-origin passkey ceremonies break;
-  //   /api/auth/*           — ceremonies are negotiated against the rpId
-  //     origin. Everything else follows the redirect (clients re-request).
-  // Bonus TLDs (.fit/.space/.life → .app) stay at the Vercel dashboard.
-  // THIS PR MERGES ON FLIP DAY ONLY — the 301 is cached aggressively by
-  // design; merging early strands users before DNS is ready.
   // Security headers. The CSP was previously three directives with no
   // default-src and no script-src, which meant scripts were entirely
   // unconstrained — it framed-blocked and nothing else (deep audit
@@ -93,8 +82,8 @@ const nextConfig = {
         { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         // Asserted in-repo rather than relying on an unstated platform
         // default. Two years, subdomains included. NOT preloaded: preload is
-        // effectively irreversible and both domains would need every
-        // subdomain HTTPS-only forever.
+        // effectively irreversible and would need every subdomain
+        // HTTPS-only forever.
         { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
       ],
     }, {
@@ -139,25 +128,6 @@ const nextConfig = {
         { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
       ],
     }];
-  },
-  async redirects() {
-    // Carve-out via negative lookahead in the path matcher: auth ceremony
-    // routes + the ROR document never leave the rpId origin.
-    const CARVE_OUT = "/:path((?!api/auth/|\\.well-known/webauthn).*)";
-    return [
-      {
-        source: CARVE_OUT,
-        has: [{ type: "host", value: "theforged.fit" }],
-        destination: "https://heatwayve.app/:path",
-        permanent: true, // 301 — the move is forever
-      },
-      {
-        source: CARVE_OUT,
-        has: [{ type: "host", value: "www.theforged.fit" }],
-        destination: "https://heatwayve.app/:path",
-        permanent: true,
-      },
-    ];
   },
 };
 

@@ -9,7 +9,8 @@
 //   - a record from the trend tier (day 200) is never listed as a session;
 //   - set lines: "100 × 5, 5, 5 · RPE 8, 8, 8.5", RIR when RPE is missing,
 //     bodyweight as reps or proven added kg;
-//   - 24 rhythm cells, the oldest 16 behind the narrow disclosure;
+//   - 24 rhythm cells, all in the Sessions tab with no disclosure; the
+//     summary shows the latest 8;
 //   - a breather shows as paused, never its reason; a cell's note never
 //     breaks inside a word; a travel session says so, and "Away" never shows;
 //   - "Stop seeing" asks first, then hands back to the dashboard;
@@ -36,8 +37,9 @@
 //     from "Your changes", newest first, titled with the record's own day
 //     words (today, yesterday, a weekday), each status in the trainer's
 //     words, Withdraw only while it hasn't reached their phone; the week's
-//     count of 7; Run a session hands the parent the letter picked (the next
-//     in their rotation by default) and nothing else, and is off at the cap;
+//     count of 7; the summary's Run commit ("Run Strength X with <name>")
+//     hands the parent the next letter in their rotation and nothing else;
+//     Different session opens the letters in a sheet; both are off at the cap;
 //   - a session or ledger row a trainer logged reads Coached;
 //   - the house buttons: no press visual inside a bottom sheet, a press on
 //     the page's chips, letters and Withdraw, a chip on raised on the
@@ -54,8 +56,10 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import TrainerClientView, {
   setsLine, rhythmCellText, refusalText, noHistoryText, leadLine, warningText, sessionStatusText, sessionRunLine, trainerStatusText,
+  glanceParts, liftDelta,
 } from "../../components/TrainerClientView.jsx";
 import Glyph from "../../components/Glyph.jsx";
+import { T, heatForRpe, heatMarkHeight } from "../../lib/tokens.js";
 import { projectForTrainer } from "../../lib/trainer-plan.js";
 import { EXERCISE_POOLS } from "../../lib/programme.js";
 import { addDaysIso, todayLocalIso } from "../../lib/dates.js";
@@ -111,15 +115,36 @@ function history() {
 const view = (hist = history(), meta = {}) => projectForTrainer({ meta, history: hist }, { todayIso: today });
 const client = { name: "Sam", since: Date.UTC(2026, 9, 3, 12) };
 
+/** Opens one of the pane's tabs by name and hands back its panel, the only one shown. */
+function tab(name) {
+  fireEvent.click(screen.getByRole("tab", { name }));
+  const panel = screen.getByRole("tabpanel", { name });
+  expect(panel.hidden).toBe(false);
+  return panel;
+}
+/** Opens the Sharing sheet from its row and hands it back. */
+function sharing() {
+  fireEvent.click(screen.getByRole("button", { name: /^Sharing/ }));
+  return screen.getByRole("dialog", { name: "Sharing" });
+}
+
 describe("TrainerClientView", () => {
-  it("always shows how they felt, and every session's readiness word", () => {
+  it("shows how they felt as heat marks with their counts printed, and every session's readiness word", () => {
     const hist = history();
     hist[0].readiness = null; // the newest session has no check-in
     render(<TrainerClientView client={client} view={view(hist)}/>);
-    expect(screen.getByText("How they felt")).toBeTruthy();
-    const felt = screen.getByText("How they felt").parentElement;
-    expect(felt.textContent).toMatch(/Fresh \d+ · Normal \d+ · Cooked \d+/);
-    const rows = document.querySelectorAll("[data-session]");
+    const felt = screen.getByRole("group", { name: "How they felt, last 24 weeks" });
+    // 24 sessions with a check-in in the detail tier, a third each.
+    expect([...felt.querySelectorAll("[data-felt-band]")].map((b) => b.textContent)).toEqual(["Fresh 8", "Normal 8", "Cooked 8"]);
+    // Colour and height both carry the band, and the number is in the measured face.
+    const marks = [...felt.querySelectorAll('[aria-hidden="true"]')];
+    expect(marks.map((m) => [m.style.width, m.style.height, m.style.background])).toEqual([
+      ["24px", `${heatMarkHeight(6)}px`, heatForRpe(6)], ["24px", `${heatMarkHeight(8)}px`, heatForRpe(8)], ["24px", `${heatMarkHeight(10)}px`, heatForRpe(10)],
+    ]);
+    for (const b of felt.querySelectorAll("[data-felt-band]")) expect(/** @type {HTMLElement} */ (b.lastElementChild?.lastElementChild).style.fontFamily).toBe(T.measured);
+    // The words line is gone.
+    expect(document.body.textContent).not.toMatch(/Fresh \d+ · Normal/);
+    const rows = tab("Sessions").querySelectorAll("[data-session]");
     expect(rows.length).toBe(10);
     const heads = [...rows].map((r) => r.firstChild.textContent);
     expect(heads[0]).toMatch(/· Readiness not logged$/);
@@ -128,6 +153,7 @@ describe("TrainerClientView", () => {
 
   it("pages sessions by 10, newest first", () => {
     render(<TrainerClientView client={client} view={view()}/>);
+    tab("Sessions");
     const dates = () => [...document.querySelectorAll("[data-session]")].map((r) => r.getAttribute("data-session"));
     expect(dates()).toHaveLength(10);
     expect(dates()[0]).toBe(ago(1));
@@ -145,6 +171,7 @@ describe("TrainerClientView", () => {
     const v = view();
     expect(v.tops.map((t) => t.date)).toContain(ago(200));
     render(<TrainerClientView client={client} view={v}/>);
+    tab("Sessions");
     let more;
     const sessions = within(document.querySelector('[data-section="sessions"]'));
     while ((more = sessions.queryByText("Show earlier"))) fireEvent.click(more);
@@ -153,6 +180,7 @@ describe("TrainerClientView", () => {
     expect(rows.map((r) => r.getAttribute("data-session"))).not.toContain(ago(200));
     for (const r of rows) expect(r.textContent).not.toContain("137.5");
     // It is still a point on the 12-month line, and the best.
+    tab("Lifts");
     expect(document.querySelector('[data-section="lifts"]').textContent).toContain("137.5 × 5");
     // Nothing from past 12 months anywhere.
     expect(document.body.textContent).not.toContain("150 ×");
@@ -176,28 +204,27 @@ describe("TrainerClientView", () => {
       { name: "Romanian Deadlift", muscle: "Hamstrings", loadType: "barbell", sets: [{ weight: 80, reps: 10, rpe: null, rir: 2 }] },
     ] };
     render(<TrainerClientView client={client} view={view(hist)}/>);
-    const newest = document.querySelector("[data-session]");
+    const newest = tab("Sessions").querySelector("[data-session]");
     expect(newest.textContent).toContain("Barbell Back Squat · 100 × 5, 5, 5 · RPE 8, 8, 8.5");
     expect(newest.textContent).toContain("Push-up · 12, 10, 9");
     expect(newest.textContent).toContain("Dip · +10 kg × 8, 8");
     expect(newest.textContent).toContain("Romanian Deadlift · 80 × 10 · RIR 2");
   });
 
-  it("shows 24 rhythm cells, the oldest 16 behind the narrow disclosure", () => {
+  it("the Sessions tab shows all 24 rhythm cells, with no disclosure and no hint line", () => {
     render(<TrainerClientView client={client} view={view()}/>);
-    const list = document.querySelector("ol.forge-wide-rhythm");
+    const panel = tab("Sessions");
+    const list = panel.querySelector("ol.forge-wide-rhythm");
     const cells = list.querySelectorAll("li");
     expect(cells).toHaveLength(24);
-    expect(list.querySelectorAll("li.forge-wide-rhythm-early")).toHaveLength(16);
-    expect([...cells].slice(16).every((c) => !c.classList.contains("forge-wide-rhythm-early"))).toBe(true);
     // Oldest first; the current week reads "… so far".
     const weeks = [...cells].map((c) => c.getAttribute("data-week"));
     expect([...weeks].sort()).toEqual(weeks);
     expect(cells[23].textContent).toMatch(/\d+ of \d+ so far/);
     expect(list.hasAttribute("data-earlier")).toBe(false);
-    fireEvent.click(screen.getByText("Earlier weeks"));
-    expect(list.hasAttribute("data-earlier")).toBe(true);
-    expect(screen.getByText("Fewer weeks").closest("button").getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector(".forge-wide-rhythm-early")).toBeNull();
+    expect(screen.queryByText("Earlier weeks")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Oldest first, from the week of/);
   });
 
   it("words rhythm cells in house copy", () => {
@@ -208,16 +235,28 @@ describe("TrainerClientView", () => {
     expect(rhythmCellText({ ...w, planned: 1, plannedResting: 2, done: 1 })).toBe("1/1 · part paused");
   });
 
+  it("the rhythm grids keep a paused cell wide enough for 11px: 6 a row under 375, 12 only from 840, the summary two rows of 4 under 375", () => {
+    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../app/globals.css"), "utf8").replace(/\s+/g, " ");
+    expect(css).toContain("@media (max-width: 374.98px) { .forge-wide-rhythm { grid-template-columns: repeat(6, minmax(0, 1fr)); } .forge-summary-rhythm { grid-template-columns: repeat(4, minmax(0, 1fr)); } }");
+    expect(css).toContain("@media (min-width: 840px) and (max-width: 1023.98px) { .forge-wide-rhythm { grid-template-columns: repeat(12, minmax(0, 1fr)); } }");
+    expect(css.match(/repeat\(12,/g)).toHaveLength(1);
+    render(<TrainerClientView client={client} view={view()}/>);
+    const strip = /** @type {HTMLElement} */ (document.querySelector("[data-summary-rhythm]"));
+    expect(strip.className).toBe("forge-summary-rhythm");
+    expect(strip.style.gridTemplateColumns).toBe("");
+  });
+
   it("a rhythm cell shows only the paused note; so far and part paused are screen-reader words", () => {
     const meta = { breaks: [{ id: "b1", start: "2026-08-31", endedAt: "2026-09-14", reason: "injured" }] };
     render(<TrainerClientView client={client} view={projectForTrainer({ meta, history: history() }, { todayIso: MIDWEEK })}/>);
+    tab("Sessions");
     const notes = [...document.querySelectorAll("ol.forge-wide-rhythm li > span[aria-hidden] > span")]
       .filter((n) => /^(so far|paused|part paused)$/.test(n.textContent));
     expect(notes.length).toBeGreaterThan(0);
     expect(new Set(notes.map((n) => n.textContent))).toEqual(new Set(["paused"]));
     expect(document.querySelector("ol.forge-wide-rhythm").textContent).toMatch(/\d+ of \d+ so far/);
     for (const n of notes) {
-      expect(n.style.fontSize).toBe("10px");
+      expect(n.style.fontSize).toBe("11px");
       expect(n.parentElement.parentElement.style.padding).toBe("8px 0px");
       expect(n.style.overflowWrap).toBe("");
       expect(n.getAttribute("style")).not.toMatch(/overflow-wrap|word-break/);
@@ -229,7 +268,7 @@ describe("TrainerClientView", () => {
     hist[0] = rec(1, { travel: true });
     const meta = { breaks: [{ id: "b1", start: ago(40), endedAt: ago(34), reason: "travelling" }] };
     render(<TrainerClientView client={client} view={view(hist, meta)}/>);
-    const rows = [...document.querySelectorAll("[data-session]")];
+    const rows = [...tab("Sessions").querySelectorAll("[data-session]")];
     expect(rows[0].textContent).toContain("Travel session");
     expect(rows.filter((r) => r.textContent.includes("Travel session"))).toHaveLength(1);
     expect(document.body.textContent).not.toMatch(/\bAway\b/i);
@@ -239,7 +278,7 @@ describe("TrainerClientView", () => {
   it("shows a breather as paused, never why", () => {
     const meta = { breaks: [{ id: "b1", start: ago(3), endedAt: null, reason: "injured" }] };
     render(<TrainerClientView client={client} view={view(history(), meta)}/>);
-    expect(screen.getByText("On a breather")).toBeTruthy();
+    expect(within(tab("Sessions")).getByText("On a breather")).toBeTruthy();
     expect(screen.getByText("Paused for now. Their numbers are holding.")).toBeTruthy();
     expect(document.body.textContent.toLowerCase()).not.toMatch(/injur|ill\b|away|travelling/);
   });
@@ -251,7 +290,7 @@ describe("TrainerClientView", () => {
       .filter((m) => m?.status === "under_mev");
     expect(flagged.length).toBeGreaterThan(3);
     render(<TrainerClientView client={client} view={v}/>);
-    const under = document.querySelector('[data-section="under"]');
+    const under = tab("Sessions").querySelector('[data-section="under"]');
     expect(under).toBeTruthy();
     expect(under.textContent).toMatch(/: under minimum, last 2 weeks$/);
     const named = under.textContent.replace(/^Under minimum/, "").split(":")[0].split(", ");
@@ -264,7 +303,7 @@ describe("TrainerClientView", () => {
 
   it("shows each main lift's best in 12 months and the last top set", () => {
     render(<TrainerClientView client={client} view={view()}/>);
-    const lifts = document.querySelector('[data-section="lifts"]');
+    const lifts = tab("Lifts").querySelector('[data-section="lifts"]');
     expect(within(lifts).getAllByText("Barbell Back Squat").length).toBeGreaterThan(0);
     expect(lifts.textContent).toMatch(/Best in 12 months: [\d.]+ kg e1RM · 137\.5 × 5 · \d{1,2} [A-Z][a-z]{2}/);
     expect(lifts.textContent).toMatch(/Last top set: [\d.]+ × 5/);
@@ -275,28 +314,36 @@ describe("TrainerClientView", () => {
     const now = Date.UTC(2026, 9, 5, 12);
     render(<TrainerClientView client={client} view={view()} lastLooked={now - 2 * 86_400_000} now={now}/>);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Sam");
-    expect(screen.getByText("Read only. Sam can let you change their plan in Profile. Sessions from the last 24 weeks; main lifts over 12 months.")).toBeTruthy();
-    expect(document.body.textContent).toContain("Sharing since 3 Oct · You last looked 2 days ago");
+    expect(screen.getByText("Read only. Sam can let you change their plan in Profile.")).toBeTruthy();
+    // The window sentence sits with the sessions.
+    expect(tab("Sessions").querySelector('[data-section="sessions"]').textContent).toContain("Sessions from the last 24 weeks; main lifts over 12 months.");
+    // The row says since when and whether changes are on; the sheet adds the last look.
+    expect(screen.getByRole("button", { name: "Sharing since 3 Oct · changes off" })).toBeTruthy();
+    expect(document.body.textContent).not.toContain("You last looked");
+    expect(sharing().textContent).toContain("Sharing since 3 Oct · You last looked 2 days ago");
   });
 
   it("falls back to 'Your client' with no name", () => {
     render(<TrainerClientView client={{ name: null }} view={view()}/>);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Your client");
-    expect(screen.getByText("Read only. They can stop sharing any time.")).toBeTruthy();
+    expect(within(sharing()).getByText("Read only. They can stop sharing any time.")).toBeTruthy();
   });
 
   it("asks before it stops seeing a client, then hands back", async () => {
     const onRemove = vi.fn(async () => true);
     render(<TrainerClientView client={client} view={view()} onRemove={onRemove}/>);
-    expect(screen.getByText("Read only. Sam can stop sharing any time.")).toBeTruthy();
-    fireEvent.click(screen.getByText("Stop seeing Sam's training"));
-    const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText("Stop seeing Sam's training?")).toBeTruthy();
+    expect(screen.queryByText("Stop seeing Sam's training")).toBeNull();
+    const sheet = sharing();
+    expect(within(sheet).getByText("Read only. Sam can stop sharing any time.")).toBeTruthy();
+    // The confirm is the same sheet's second step.
+    fireEvent.click(within(sheet).getByText("Stop seeing Sam's training"));
+    const dialog = screen.getByRole("dialog", { name: "Stop seeing Sam's training?" });
+    expect(dialog).toBe(sheet);
     expect(within(dialog).getByText("They'll see you ended it. To see it again, they'd approve a new code.")).toBeTruthy();
     fireEvent.click(within(dialog).getByText("Keep"));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(onRemove).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByText("Stop seeing Sam's training"));
+    fireEvent.click(within(sharing()).getByText("Stop seeing Sam's training"));
     await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Stop")); });
     expect(onRemove).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -305,12 +352,12 @@ describe("TrainerClientView", () => {
   it("keeps the sheet open and says so when stopping didn't go through", async () => {
     const onRemove = vi.fn(async () => false);
     render(<TrainerClientView client={client} view={view()} onRemove={onRemove}/>);
-    fireEvent.click(screen.getByText("Stop seeing Sam's training"));
+    fireEvent.click(within(sharing()).getByText("Stop seeing Sam's training"));
     await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByText("Stop")); });
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByRole("status").textContent).toBe("Couldn't stop that just now. Try again.");
     fireEvent.click(within(dialog).getByText("Keep"));
-    fireEvent.click(screen.getByText("Stop seeing Sam's training"));
+    fireEvent.click(within(sharing()).getByText("Stop seeing Sam's training"));
     expect(within(screen.getByRole("dialog")).getByRole("status").textContent).toBe("");
   });
 
@@ -325,11 +372,15 @@ describe("TrainerClientView", () => {
     expect(text).not.toContain("You last looked");
     expect(text).not.toContain("Shared with you");
     expect(text).not.toMatch(/Stop seeing|can stop sharing/);
-    expect(screen.queryByRole("button", { name: /Stop/ })).toBeNull();
-    expect(screen.getByText("How you felt")).toBeTruthy();
-    expect(screen.queryByText("How they felt")).toBeNull();
-    // The training itself shows as for any client.
-    expect(document.querySelectorAll("[data-session]").length).toBe(10);
+    expect(screen.queryByRole("button", { name: /Stop|^Sharing/ })).toBeNull();
+    expect(screen.getByRole("group", { name: "How you felt, last 24 weeks" })).toBeTruthy();
+    // No roster signal for your own training: no glance strip, and nothing to run.
+    expect(document.querySelector("[data-glance]")).toBeNull();
+    expect(document.querySelector("[data-run]")).toBeNull();
+    expect(document.querySelectorAll("[data-summary-rhythm] li")).toHaveLength(8);
+    // The training itself shows as for any client: no plan, so no Plan or Sent tab.
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Lifts", "Sessions"]);
+    expect(tab("Sessions").querySelectorAll("[data-session]").length).toBe(10);
   });
 
   it("never imports sessionCount or the device store", () => {
@@ -382,30 +433,32 @@ function fakeRoute(data = planData()) {
 }
 
 const settle = () => act(async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); });
-const openLift = (name) => fireEvent.click(document.querySelector(`[data-plan-lift="${name}"]`));
+const openLift = (name) => fireEvent.click(tab("Plan").querySelector(`[data-plan-lift="${name}"]`));
 const dialog = () => screen.getByRole("dialog");
 const tap = (label) => fireEvent.click(within(dialog()).getByRole("button", { name: label }));
 async function review() {
-  await act(async () => { fireEvent.click(within(document.querySelector("[data-tray]")).getByRole("button", { name: /Review/ })); });
+  await act(async () => { fireEvent.click(within(tab("Plan").querySelector("[data-tray]")).getByRole("button", { name: /Review/ })); });
   await settle();
 }
 
 describe("TrainerClientView: the plan", () => {
   it("says what the trainer can do: change the plan, or ask for changes in Profile", () => {
     render(<TrainerClientView client={client} view={planView()}/>);
-    expect(screen.getByText("You can change their plan. They see every change and can undo it. Sessions from the last 24 weeks; main lifts over 12 months.")).toBeTruthy();
-    expect(screen.getByText("Sam can stop sharing any time.")).toBeTruthy();
-    expect(document.querySelector('[data-section="plan"]')).toBeTruthy();
+    expect(screen.getByText("You can change their plan. They see every change and can undo it.")).toBeTruthy();
+    expect(tab("Plan").querySelector('[data-section="plan"]')).toBeTruthy();
+    expect(within(sharing()).getByText("Sam can stop sharing any time.")).toBeTruthy();
     cleanup();
     // No plan on the view: read only, and the way to change that.
     render(<TrainerClientView client={client} view={view()}/>);
+    expect(screen.queryByRole("tab", { name: "Plan" })).toBeNull();
     expect(document.querySelector('[data-section="plan"]')).toBeNull();
-    expect(screen.getByText("Read only. Sam can stop sharing any time.")).toBeTruthy();
+    expect(within(sharing()).getByText("Read only. Sam can stop sharing any time.")).toBeTruthy();
     cleanup();
     // Your own training never carries a plan section.
     render(<TrainerClientView self client={{ name: "Coach Kim" }} view={planView()}/>);
+    expect(screen.queryByRole("tab", { name: "Plan" })).toBeNull();
     expect(document.querySelector('[data-section="plan"]')).toBeNull();
-    expect(screen.getByText("Read only. Sessions from the last 24 weeks; main lifts over 12 months.")).toBeTruthy();
+    expect(screen.getByText("Read only.")).toBeTruthy();
   });
 
   it("changes off, a fresh approval needed, and a plan that couldn't load each read differently", () => {
@@ -416,7 +469,7 @@ describe("TrainerClientView: the plan", () => {
       cleanup();
       return text;
     };
-    const tail = " Sessions from the last 24 weeks; main lifts over 12 months.";
+    const tail = "";
     expect(lead("off")).toBe(`Read only. Sam can let you change their plan in Profile.${tail}`);
     expect(lead("fresh")).toBe(`Read only. Sam needs to approve a fresh code before you can change their plan.${tail}`);
     expect(lead("unavailable")).toBe(`Couldn't load their plan just now. Try again in a moment.${tail}`);
@@ -428,27 +481,31 @@ describe("TrainerClientView: the plan", () => {
     // On, with the plan: the plan line; on without one (it couldn't be read) is the unavailable line.
     render(<TrainerClientView client={client} view={{ ...view(), edits: "on" }}/>);
     expect(document.querySelector("p").textContent).toBe(`Couldn't load their plan just now. Try again in a moment.${tail}`);
-    // Changes on but unread: the footer doesn't call it read only.
-    expect(screen.getByText("Sam can stop sharing any time.")).toBeTruthy();
+    // Changes on but unread: the Sharing row and sheet don't call it read only.
+    expect(screen.getByRole("button", { name: "Sharing since 3 Oct · changes on" })).toBeTruthy();
+    expect(within(sharing()).getByText("Sam can stop sharing any time.")).toBeTruthy();
     cleanup();
     render(<TrainerClientView client={client} view={planView()}/>);
     expect(document.querySelector("p").textContent).toBe(`You can change their plan. They see every change and can undo it.${tail}`);
   });
 
-  it("sits after Rhythm and before Main lifts, rows by session: last, next, and a waiting change", () => {
+  it("the Plan tab: the tray first, then rows by session: last, next, and a waiting change", () => {
     const rows = [{ id: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa.0", set: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa", kind: "weight", target: "Barbell Back Squat",
       before: 102.5, after: 105, from: null, at: Date.now() - 3600e3, appliedAt: null, outcome: null, undoneAt: null }];
     render(<TrainerClientView client={client} view={planView(planData(), { rows })}/>);
-    const order = [...document.querySelectorAll("[data-section]")].map((n) => n.getAttribute("data-section"));
-    expect(order.indexOf("plan")).toBe(order.indexOf("rhythm") + 1);
-    expect(order.indexOf("lifts")).toBeGreaterThan(order.indexOf("plan"));
-    const squatRow = document.querySelector('[data-plan-lift="Barbell Back Squat"]');
+    const panel = tab("Plan");
+    const tray = panel.querySelector("[data-tray]");
+    const firstSession = panel.querySelector("[data-plan-session]");
+    expect(tray.compareDocumentPosition(firstSession) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // What was sent lists on the Sent tab, not here.
+    expect(panel.querySelector('[data-section="changes"], [data-section="coach"]')).toBeNull();
+    const squatRow = panel.querySelector('[data-plan-lift="Barbell Back Squat"]');
     expect(squatRow.closest("[data-plan-session]").getAttribute("data-plan-session")).toBe("A");
     expect(squatRow.textContent).toBe("Barbell Back SquatMain liftlast 100 × 5 · next 102.5 × 5 · yours 105 (waiting)");
     expect(document.querySelector('[data-plan-lift="Barbell Bench Press"]').textContent).toContain("last 60 × 5 · next 5 reps");
     expect(document.querySelector('[data-plan-lift="45-Degree Hip Extension"]').textContent).toContain("not lifted yet · next 15 reps");
     // Nothing drafted: nothing to review.
-    expect(within(document.querySelector("[data-tray]")).getByRole("button").textContent).toBe("No changes yet");
+    expect(within(tab("Plan").querySelector("[data-tray]")).getByRole("button").textContent).toBe("No changes yet");
   });
 
   it("steps the weight over the implement's rungs inside the validator's bounds, with Hold, Step, Jump and Ease", () => {
@@ -577,7 +634,7 @@ describe("TrainerClientView: the plan", () => {
     expect(onChanged).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.querySelector('[data-section="plan"]').textContent).toContain("Sent to Sam.");
-    expect(within(document.querySelector("[data-tray]")).getByRole("button").textContent).toBe("No changes yet");
+    expect(within(tab("Plan").querySelector("[data-tray]")).getByRole("button").textContent).toBe("No changes yet");
   });
 
   it("a send whose reload fails keeps the sent line and says the list may be behind", async () => {
@@ -689,10 +746,10 @@ describe("TrainerClientView: the plan", () => {
       fireEvent.blur(input);
       expect(input.value).toBe("250");
       cleanup();
-      // The calf raise's template (35 kg) is over its category cap (25): the sheet names 35.
+      // The calf raise takes the machine ceiling (120) over its 35 kg template: the sheet names 120.
       render(<TrainerClientView client={client} view={planView(planData({ bodyweight: { kg } }))}/>);
       openLift("Standing Calf Raise");
-      expect(dialog().textContent).toContain("Not lifted yet. Up to 35 kg for a first weight.");
+      expect(dialog().textContent).toContain("Not lifted yet. Up to 120 kg for a first weight.");
       cleanup();
     }
   });
@@ -775,8 +832,8 @@ describe("TrainerClientView: the plan", () => {
     const freeAt = new Date(2026, 9, 12, 9).getTime();
     render(<TrainerClientView client={client} view={planView(planData(), { used: 10, freeAt })} onChange={fakeRoute()}/>);
     openLift("Barbell Back Squat"); tap("More weight"); tap("Add to changes");
-    expect(within(document.querySelector("[data-tray]")).getByRole("button", { name: /Review/ }).disabled).toBe(true);
-    expect(document.querySelector('[data-section="changes"]').textContent).toContain("10 of 10 changes this week · more from Mon 12 Oct");
+    expect(within(tab("Plan").querySelector("[data-tray]")).getByRole("button", { name: /Review/ }).disabled).toBe(true);
+    expect(tab("Sent").querySelector('[data-section="changes"]').textContent).toContain("10 of 10 changes this week · more from Mon 12 Oct");
   });
 
   it("your changes: by set, newest first, in the trainer's words, with Withdraw only where it can be taken back", async () => {
@@ -792,12 +849,12 @@ describe("TrainerClientView: the plan", () => {
     const route = fakeRoute();
     const onChanged = vi.fn();
     render(<TrainerClientView client={client} view={v} onChange={route} onChanged={onChanged}/>);
-    const box = document.querySelector('[data-section="changes"]');
+    const box = tab("Sent").querySelector('[data-section="changes"]');
     expect([...box.querySelectorAll("[data-set]")].map((n) => n.getAttribute("data-set"))).toEqual(["s1", "s0"]);
     const row = (id) => box.querySelector(`[data-change="${id}"]`);
     expect(row("s1.0").textContent).toBe("Barbell Back Squat · 105 kg, was 102.5Waiting for Sam's appWithdraw");
     expect(row("s1.1").textContent).toBe("Barbell Bench Press · 8 reps, was 5In their planOutside the programme's usual reps for this lift.Withdraw");
-    expect(row("s0.0").textContent).toBe(`Barbell Bench Press · 60 kg, was 57.5Done at your number, ${isoDayMonthOf(ago(3))} · cooked day`);
+    expect(row("s0.0").textContent).toBe(`Barbell Bench Press · 60 kg, was 57.5Done at your number · ${isoDayMonthOf(ago(3))} · cooked day`);
     expect(row("s0.1").textContent).toBe("Main lift · Front Squat, was Barbell Back SquatThey trained before it arrived");
     expect(row("s0.2").textContent).toBe("Barbell Back Squat · 6 reps, was 5Withdrawn");
     expect(within(box.querySelector('[data-set="s1"]')).getByRole("button", { name: "Withdraw all" })).toBeTruthy();
@@ -832,7 +889,7 @@ describe("TrainerClientView: the plan", () => {
     const route = vi.fn(async (body) => (fresh ? { status: 200, body: { withdrawn: [body.withdraw] } } : { status: 403, body: { needsFaceId: true } }));
     const onFaceId = vi.fn(async () => { fresh = true; return true; });
     render(<TrainerClientView client={client} view={v} onChange={route} onFaceId={onFaceId} onChanged={vi.fn()}/>);
-    const box = document.querySelector('[data-section="changes"]');
+    const box = tab("Sent").querySelector('[data-section="changes"]');
     const set = (id) => box.querySelector(`[data-set="${id}"]`);
     expect(within(set("m")).queryByRole("button", { name: "Withdraw all" })).toBeNull();
     expect(within(set("m")).getAllByRole("button", { name: "Withdraw" })).toHaveLength(2);
@@ -855,7 +912,7 @@ describe("TrainerClientView: the plan", () => {
     const route = vi.fn(async () => ({ status: 200, body: { withdrawn: [] } }));
     const onChanged = vi.fn();
     render(<TrainerClientView client={client} view={v} onChange={route} onChanged={onChanged}/>);
-    const box = document.querySelector('[data-section="changes"]');
+    const box = tab("Sent").querySelector('[data-section="changes"]');
     await act(async () => { fireEvent.click(within(box).getByRole("button", { name: "Withdraw" })); });
     await settle();
     expect(within(box).getByRole("status").textContent).toBe("Nothing to withdraw. It's already undone, or it can't be taken back now.");
@@ -892,7 +949,7 @@ describe("TrainerClientView: the plan", () => {
     v.plan.changes = [{ id: "s1.0", set: "s1", kind: "weight", target: "Barbell Back Squat", before: 102.5, after: 105, from: null, status: "waiting", reason: null, date: null, at: Date.now(), warnings: [] }];
     const onChanged = vi.fn(async () => false);
     render(<TrainerClientView client={client} view={v} onChange={fakeRoute()} onChanged={onChanged}/>);
-    const box = document.querySelector('[data-section="changes"]');
+    const box = tab("Sent").querySelector('[data-section="changes"]');
     await act(async () => { fireEvent.click(within(box).getByRole("button", { name: "Withdraw" })); });
     await settle();
     expect(onChanged).toHaveBeenCalledTimes(1);
@@ -949,7 +1006,7 @@ describe("TrainerClientView: the plan", () => {
     expect(kg().value).toBe("");
     expect(within(dialog()).getByRole("button", { name: "Less weight" }).disabled).toBe(true);
     tap("Add to changes");
-    expect(within(document.querySelector("[data-tray]")).getByRole("button").textContent).toBe("No changes yet");
+    expect(within(tab("Plan").querySelector("[data-tray]")).getByRole("button").textContent).toBe("No changes yet");
     openLift("Landmine Press");
     fireEvent.change(kg(), { target: { value: "30.6" } });
     fireEvent.blur(kg());
@@ -1000,7 +1057,7 @@ const ranRow = (id, letter, date, at, extra = {}) => ({
   id, set: id.split(".")[0], kind: "session", target: `${date}:${letter}`, before: null, after: { record: ranRecord(letter, date, extra.sets), drum: {} },
   from: date, at, appliedAt: null, outcome: null, undoneAt: null, undoneBy: null, deliveredAt: null, editsLive: true, warnings: null, ...extra,
 });
-const ranBox = () => /** @type {HTMLElement} */ (document.querySelector('[data-section="coach"]'));
+const ranBox = () => /** @type {HTMLElement} */ (tab("Sent").querySelector('[data-section="coach"]'));
 const ranRowEl = (id) => ranBox().querySelector(`[data-ran="${id}"]`);
 
 describe("TrainerClientView: sessions you ran", () => {
@@ -1024,7 +1081,7 @@ describe("TrainerClientView: sessions you ran", () => {
   it("lists sessions apart from your changes, newest first, by the record's own day, each status in the trainer's words, Withdraw only before it arrives", () => {
     render(<TrainerClientView client={client} view={ranView()} onChange={fakeRoute()}/>);
     // Never among the plan changes.
-    expect(document.querySelector('[data-section="changes"]').textContent).toContain("Nothing sent yet.");
+    expect(tab("Sent").querySelector('[data-section="changes"]').textContent).toContain("Nothing sent yet.");
     expect(document.querySelector('[data-section="changes"] [data-change]')).toBeNull();
     const box = ranBox();
     expect(box.querySelector("[data-session-budget]").textContent).toBe(`2 of ${SESSIONS_PER_WEEK} this week`);
@@ -1059,6 +1116,7 @@ describe("TrainerClientView: sessions you ran", () => {
     const onFaceId = vi.fn(async () => { fresh = true; return true; });
     const onChanged = vi.fn();
     render(<TrainerClientView client={client} view={ranView()} onChange={route} onFaceId={onFaceId} onChanged={onChanged}/>);
+    tab("Sent");
     const status = () => within(ranBox()).getByRole("status").textContent;
     await act(async () => { fireEvent.click(within(ranRowEl("w.00")).getByRole("button", { name: "Withdraw" })); });
     await settle();
@@ -1078,46 +1136,51 @@ describe("TrainerClientView: sessions you ran", () => {
     expect(document.body.textContent).not.toContain(SERVER_WORDS);
   });
 
-  it("Run a session hands the parent the letter picked, the next in their rotation by default, and nothing else", () => {
+  it("Run hands the parent the next letter in their rotation; Different session opens the letters in a sheet; nothing else", () => {
     const onRun = vi.fn();
     const route = fakeRoute();
     render(<TrainerClientView client={client} view={ranView()} onChange={route} onRunSession={onRun}/>);
-    const run = within(ranBox()).getByRole("button", { name: "Run a session with Sam" });
-    const pick = within(ranBox()).getByRole("radiogroup", { name: "Session to run" });
-    // Their last was A (planData), so B is next.
-    expect(ranBox().textContent).toContain("Strength B is next for Sam.");
-    expect(within(pick).getAllByRole("radio").map((r) => [r.textContent, r.getAttribute("aria-checked")]))
-      .toEqual([["Strength A", "false"], ["Strength B", "true"], ["Strength C", "false"]]);
+    // Their last was A (planData), so B is next: the commit says so.
+    const run = screen.getByRole("button", { name: "Run Strength B with Sam" });
+    expect(run.closest("[data-summary]")).toBeTruthy();
+    expect(screen.queryByRole("radiogroup")).toBeNull();
     fireEvent.click(run);
     expect(onRun).toHaveBeenLastCalledWith("B");
+    fireEvent.click(screen.getByRole("button", { name: "Different session" }));
+    const sheet = screen.getByRole("dialog", { name: "A different session" });
+    expect(sheet.textContent).toContain("Strength B is next for Sam.");
+    const pick = within(sheet).getByRole("radiogroup", { name: "Session to run" });
+    expect(within(pick).getAllByRole("radio").map((r) => [r.textContent, r.getAttribute("aria-checked")]))
+      .toEqual([["Strength A", "false"], ["Strength B", "true"], ["Strength C", "false"]]);
     fireEvent.click(within(pick).getByRole("radio", { name: "Strength C" }));
-    fireEvent.click(run);
+    fireEvent.click(within(sheet).getByRole("button", { name: "Run Strength C with Sam" }));
     expect(onRun).toHaveBeenLastCalledWith("C");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    // Cancel runs nothing.
+    fireEvent.click(screen.getByRole("button", { name: "Different session" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(onRun).toHaveBeenCalledTimes(2);
     // Running one is the parent's: the pane posts nothing.
     expect(route).not.toHaveBeenCalled();
   });
 
-  it("the next letter counts sessions sent and not yet decided, and follows a reload until one is picked", () => {
-    const checked = () => within(ranBox()).getAllByRole("radio").filter((r) => r.getAttribute("aria-checked") === "true").map((r) => r.textContent);
+  it("the next letter counts sessions sent and not yet decided, and follows a reload", () => {
+    const runName = () => within(document.querySelector("[data-run]")).getAllByRole("button")[0].textContent;
     const at = (rs) => planView(planData(), { rows: rs, sessions: { used: rs.length, freeAt: null } });
     const { rerender } = render(<TrainerClientView client={client} view={at([])} onRunSession={vi.fn()}/>);
     // Their last kept was A: B is next.
-    expect(ranBox().textContent).toContain("Strength B is next for Sam.");
-    expect(checked()).toEqual(["Strength B"]);
-    // B sent today, still on its way: C is next, and the pick follows the reload.
+    expect(runName()).toBe("Run Strength B with Sam");
+    // B sent today, still on its way: C is next.
     rerender(<TrainerClientView client={client} view={at([ranRow("w.00", "B", today, Date.now())])} onRunSession={vi.fn()}/>);
-    expect(ranBox().textContent).toContain("Strength C is next for Sam.");
-    expect(checked()).toEqual(["Strength C"]);
+    expect(runName()).toBe("Run Strength C with Sam");
     // One they decided on counts only once it's in their history.
     const hourAgo = new Date(Date.now() - 3600e3).toISOString();
     rerender(<TrainerClientView client={client} view={at([ranRow("d.00", "B", today, Date.now(), { outcome: "discarded", deliveredAt: hourAgo })])} onRunSession={vi.fn()}/>);
-    expect(ranBox().textContent).toContain("Strength B is next for Sam.");
-    // A letter the trainer picked stays picked.
-    fireEvent.click(within(ranBox()).getByRole("radio", { name: "Strength A" }));
-    rerender(<TrainerClientView client={client} view={at([ranRow("w.00", "B", today, Date.now())])} onRunSession={vi.fn()}/>);
-    expect(ranBox().textContent).toContain("Strength C is next for Sam.");
-    expect(checked()).toEqual(["Strength A"]);
+    expect(runName()).toBe("Run Strength B with Sam");
+    // The sheet starts on the next one.
+    fireEvent.click(screen.getByRole("button", { name: "Different session" }));
+    expect(within(screen.getByRole("dialog")).getAllByRole("radio").filter((r) => r.getAttribute("aria-checked") === "true").map((r) => r.textContent)).toEqual(["Strength B"]);
   });
 
   it("a pane left open moves past the five hours on its own", () => {
@@ -1133,31 +1196,34 @@ describe("TrainerClientView: sessions you ran", () => {
     }
   });
 
-  it("at the week's cap, Run is off and says when more come", () => {
+  it("at the week's cap, Run is off and says when more come, with no other letter on offer", () => {
     const freeAt = new Date(2026, 9, 12, 9).getTime();
     const onRun = vi.fn();
     render(<TrainerClientView client={client} view={ranView({ sessions: { used: SESSIONS_PER_WEEK, freeAt } })} onRunSession={onRun}/>);
-    const run = within(ranBox()).getByRole("button", { name: "Run a session with Sam" });
+    const run = screen.getByRole("button", { name: "Run Strength B with Sam" });
     expect(run.disabled).toBe(true);
     fireEvent.click(run);
     expect(onRun).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Different session" })).toBeNull();
+    expect(document.querySelector("[data-run]").textContent).toContain(`${SESSIONS_PER_WEEK} of ${SESSIONS_PER_WEEK} sessions this week · more from Mon 12 Oct`);
     expect(ranBox().querySelector("[data-session-budget]").textContent).toBe(`${SESSIONS_PER_WEEK} of ${SESSIONS_PER_WEEK} this week · more from Mon 12 Oct`);
     // Plan changes keep their own budget.
-    expect(document.querySelector('[data-section="changes"]').textContent).toContain("3 of 10 changes this week");
+    expect(tab("Sent").querySelector('[data-section="changes"]').textContent).toContain("3 of 10 changes this week");
   });
 
   it("no way to run one without the parent's handler or the programme; never on your own training", () => {
     render(<TrainerClientView client={client} view={ranView()}/>);
-    expect(ranBox().querySelector("[data-run]")).toBeNull();
+    expect(document.querySelector("[data-run]")).toBeNull();
     expect(ranBox().querySelectorAll("[data-ran]").length).toBe(5);
     cleanup();
     const v = ranView();
     delete v.plan.programme;
     render(<TrainerClientView client={client} view={v} onRunSession={vi.fn()}/>);
-    expect(ranBox().querySelector("[data-run]")).toBeNull();
+    expect(document.querySelector("[data-run]")).toBeNull();
     cleanup();
     render(<TrainerClientView self client={{ name: "Coach Kim" }} view={ranView()} onRunSession={vi.fn()}/>);
     expect(document.querySelector('[data-section="coach"]')).toBeNull();
+    expect(document.querySelector("[data-run]")).toBeNull();
   });
 
   it("nothing sent yet says so, and the count starts at none", () => {
@@ -1173,9 +1239,9 @@ describe("TrainerClientView: sessions you ran", () => {
     render(<TrainerClientView client={client} view={v} onChange={fakeRoute()} onRunSession={vi.fn()}/>);
     // Nothing of the plan: no lifts, no changes, nothing to run.
     expect(document.querySelector('[data-section="plan"]')).toBeNull();
-    expect(document.querySelector('[data-section="changes"]')).toBeNull();
+    expect(tab("Sent").querySelector('[data-section="changes"]')).toBeNull();
     expect(ranBox().closest('[data-section="ran"]')).toBeTruthy();
-    expect(ranBox().querySelector("[data-run]")).toBeNull();
+    expect(document.querySelector("[data-run]")).toBeNull();
     expect(ranBox().querySelector("[data-session-budget]").textContent).toBe(`2 of ${SESSIONS_PER_WEEK} this week`);
     expect(ranRowEl("seen.00").textContent).toBe("Strength B, today · 3 setsOn Sam's phone · it waits for Sam to decide");
     expect(ranRowEl("w.00").textContent).toBe("Strength A, today · 26 setsStopped before it arrived");
@@ -1220,10 +1286,12 @@ describe("TrainerClientView: sessions you ran", () => {
       // First: before every sent one.
       const first = ranBox().querySelector("[data-ran]");
       expect(row.compareDocumentPosition(/** @type {Node} */ (first)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      // The run control continues it; the letter chips are not offered.
-      expect(within(ranBox()).queryByRole("radiogroup")).toBeNull();
-      expect(within(ranBox()).queryByRole("button", { name: "Run a session with Sam" })).toBeNull();
-      fireEvent.click(within(ranBox()).getByRole("button", { name: "Continue" }));
+      // The commit continues it; no other letter is offered.
+      expect(screen.queryByRole("button", { name: /^Run Strength/ })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Different session" })).toBeNull();
+      const cont = screen.getByRole("button", { name: "Continue" });
+      expect(cont.closest("[data-summary]")).toBeTruthy();
+      fireEvent.click(cont);
       expect(onRun).toHaveBeenCalledWith("B");
       expect(route).not.toHaveBeenCalled();
       expect(ranBox().textContent).not.toContain("None sent yet.");
@@ -1233,18 +1301,18 @@ describe("TrainerClientView: sessions you ran", () => {
       plant();
       const onRun = vi.fn();
       render(<TrainerClientView client={client} clientRef={REF} view={ranView({ sessions: { used: SESSIONS_PER_WEEK, freeAt: null } })} onRunSession={onRun} unsent={unsentDraft(REF)}/>);
-      fireEvent.click(within(ranBox()).getByRole("button", { name: "Continue" }));
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
       expect(onRun).toHaveBeenCalledWith("B");
       cleanup();
       render(<TrainerClientView client={client} clientRef={REF} view={projectForTrainer(planData(), { todayIso: today, edits: { rows: [] }, status: "off" })} onRunSession={onRun} unsent={unsentDraft(REF)}/>);
       expect(ranBox().querySelector("[data-unsent]").textContent).toBe("Strength B, today · 2 setsNot sent yet · on this iPad");
-      fireEvent.click(within(ranBox()).getByRole("button", { name: "Continue" }));
+      fireEvent.click(screen.getByRole("button", { name: "Continue" }));
       expect(onRun).toHaveBeenCalledTimes(2);
       cleanup();
       // Another client's draft is not this one's.
       render(<TrainerClientView client={client} clientRef="hwg_someone_else" view={ranView()} onRunSession={onRun} unsent={unsentDraft("hwg_someone_else")}/>);
       expect(ranBox().querySelector("[data-unsent]")).toBeNull();
-      expect(within(ranBox()).getByRole("button", { name: "Run a session with Sam" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Run Strength B with Sam" })).toBeTruthy();
       // Your own training never shows one.
       cleanup();
       render(<TrainerClientView self client={{ name: "Coach Kim" }} view={ranView()} onRunSession={onRun} unsent={unsentDraft(REF)}/>);
@@ -1286,7 +1354,7 @@ describe("TrainerClientView: a session a trainer logged", () => {
     const rowsOf = [...document.querySelectorAll("[data-session]")];
     expect(rowsOf.map((r) => !!r.querySelector("[data-coached]"))).toEqual([true, false]);
     expect(rowsOf[0].querySelector("[data-coached]").textContent).toBe("Coached");
-    const ledger = /** @type {HTMLElement} */ (document.querySelector('[data-ledger="Barbell Back Squat"]'));
+    const ledger = /** @type {HTMLElement} */ (tab("Lifts").querySelector('[data-ledger="Barbell Back Squat"]'));
     expect([...ledger.querySelectorAll("[data-ledger-narrow] [data-ledger-row]")].map((r) => r.querySelector("[data-ledger-mark]")?.textContent ?? null)).toEqual(["Coached", null]);
     expect([...ledger.querySelectorAll("[data-ledger-wide] tbody[data-ledger-row]")].map((r) => r.querySelector("[data-ledger-mark]")?.textContent ?? null)).toEqual(["Coached", null]);
     expect(document.body.textContent).not.toContain("Coach Kim");
@@ -1296,7 +1364,7 @@ describe("TrainerClientView: a session a trainer logged", () => {
 // ── The ledger ──────────────────────────────────────────────────────────────
 
 const SQUAT = "Barbell Back Squat";
-const ledgerEl = (lift = SQUAT) => /** @type {HTMLElement} */ (document.querySelector(`[data-ledger="${lift}"]`));
+const ledgerEl = (lift = SQUAT) => /** @type {HTMLElement} */ (tab("Lifts").querySelector(`[data-ledger="${lift}"]`));
 const narrowRows = () => [...ledgerEl().querySelectorAll("[data-ledger-narrow] [data-ledger-row]")];
 const wideRows = () => [...ledgerEl().querySelectorAll("[data-ledger-wide] tbody[data-ledger-row]")];
 
@@ -1304,8 +1372,8 @@ describe("TrainerClientView: the ledger", () => {
   it("sits under the bests, for a read-only grant too: a compact row per session under 640, a table from 640", () => {
     render(<TrainerClientView client={client} view={view()}/>);
     const l = ledgerEl();
-    const detail = l.closest(".forge-wide-lift-detail");
-    expect(detail).toBeTruthy();
+    const detail = /** @type {HTMLElement} */ (l.closest("[data-lift-detail]"));
+    expect(detail.hidden).toBe(false);
     const best = within(/** @type {HTMLElement} */ (detail)).getByText(/^Best in 12 months/);
     expect(best.compareDocumentPosition(l) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The tiers pick one: the compact rows hide from 640, the table under it.
@@ -1446,16 +1514,21 @@ describe("TrainerClientView: the ledger", () => {
       r.blocks[0].exercises.push({ ...squat(80), name: BENCH, muscle: "Chest" });
     }
     render(<TrainerClientView client={client} view={view(hist)}/>);
+    // Every such button a screen reader can reach, across the lifts and tabs.
+    const reachable = () => screen.getAllByRole("button").filter((b) => /^(Show earlier|Top sets|All sets)$/.test(b.textContent ?? ""))
+      .map((b) => b.getAttribute("aria-label"));
+    const named = [];
     for (const lift of [SQUAT, BENCH]) {
+      fireEvent.click(/** @type {HTMLElement} */ (tab("Lifts").querySelector(`[data-lift="${lift}"] > button`)));
       const l = within(ledgerEl(lift));
       expect(l.getByRole("button", { name: `Top sets for ${lift}` }).textContent).toBe("Top sets");
       expect(l.getByRole("button", { name: `All sets for ${lift}` }).textContent).toBe("All sets");
       expect(l.getByRole("button", { name: `Show earlier ${lift} sessions` }).textContent).toBe("Show earlier");
+      named.push(...reachable());
     }
-    const sessions = within(/** @type {HTMLElement} */ (document.querySelector('[data-section="sessions"]')));
+    const sessions = within(/** @type {HTMLElement} */ (tab("Sessions").querySelector('[data-section="sessions"]')));
     expect(sessions.getByRole("button", { name: "Show earlier sessions" }).textContent).toBe("Show earlier");
-    const named = screen.getAllByRole("button").filter((b) => /^(Show earlier|Top sets|All sets)$/.test(b.textContent ?? ""))
-      .map((b) => b.getAttribute("aria-label"));
+    named.push(...reachable());
     expect(named).toHaveLength(7);
     expect(named.every(Boolean)).toBe(true);
     expect(new Set(named).size).toBe(named.length);
@@ -1501,7 +1574,9 @@ describe("TrainerClientView: Download CSV", () => {
       else Reflect.deleteProperty(URL, k);
     });
   });
+  // A client's export sits in the Sharing sheet; your own is a link on the page.
   const download = async () => {
+    if (!screen.queryByRole("button", { name: "Download CSV" })) sharing();
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Download CSV" })); });
   };
   const status = () => /** @type {HTMLElement} */ (document.querySelector("[data-export] [role=status]")).textContent;
@@ -1574,9 +1649,11 @@ describe("TrainerClientView: Download CSV", () => {
     expect(clicks.map((k) => k.download)).toEqual([`heatwayve-kim-${today}.csv`]);
     cleanup();
     render(<TrainerClientView client={client} view={view()} onExport={parentExport(fetchMock)}/>);
+    sharing();
     expect(screen.queryByRole("button", { name: "Download CSV" })).toBeNull();
     cleanup();
     render(<TrainerClientView client={client} view={view()} clientRef="hwg_abc"/>);
+    sharing();
     expect(screen.queryByRole("button", { name: "Download CSV" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Download CSV" })).toBeNull();
   });
@@ -1594,8 +1671,16 @@ describe("TrainerClientView: every sheet closes from its foot control, Escape an
   it.each(CLOSERS)("stop sharing: Keep, from %s, stops nothing", (_, close) => {
     const onRemove = vi.fn(async () => true);
     render(<TrainerClientView client={client} view={view()} onRemove={onRemove}/>);
-    fireEvent.click(screen.getByText("Stop seeing Sam's training"));
+    fireEvent.click(within(sharing()).getByText("Stop seeing Sam's training"));
     close(screen.getByRole("dialog", { name: "Stop seeing Sam's training?" }), "Keep");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(onRemove).not.toHaveBeenCalled();
+  });
+
+  it.each(CLOSERS)("sharing: Done, from %s, stops nothing", (_, close) => {
+    const onRemove = vi.fn(async () => true);
+    render(<TrainerClientView client={client} view={view()} onRemove={onRemove}/>);
+    close(sharing(), "Done");
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(onRemove).not.toHaveBeenCalled();
   });
@@ -1647,8 +1732,11 @@ function glyphHtml(props) {
 
 describe("TrainerClientView: the house buttons", () => {
   it("no control inside a trainer bottom sheet carries a press class", async () => {
-    render(<TrainerClientView client={client} view={view()} onRemove={vi.fn(async () => true)}/>);
-    fireEvent.click(screen.getByText("Stop seeing Sam's training"));
+    render(<TrainerClientView client={client} view={view()} clientRef="hwg_abc" onExport={vi.fn(async () => null)} onRemove={vi.fn(async () => true)}/>);
+    sharing();
+    expect(within(sheetEl()).getByRole("button", { name: "Download CSV" })).toBeTruthy();
+    expect(pressIn(sheetEl())).toEqual([]);
+    fireEvent.click(within(sheetEl()).getByText("Stop seeing Sam's training"));
     expect(within(sheetEl()).getByRole("button", { name: "Stop" })).toBeTruthy();
     expect(pressIn(sheetEl())).toEqual([]);
     cleanup();
@@ -1692,13 +1780,12 @@ describe("TrainerClientView: the house buttons", () => {
     v.plan.changes = [...v.plan.changes, ch("s1.0", "Barbell Back Squat"), ch("s1.1", "Barbell Bench Press")];
     render(<TrainerClientView client={client} view={v} onChange={fakeRoute()} onRunSession={vi.fn()}/>);
     const PRESS = "forge-press forge-tint";
-    const changes = /** @type {HTMLElement} */ (document.querySelector('[data-section="changes"]'));
+    const changes = /** @type {HTMLElement} */ (tab("Sent").querySelector('[data-section="changes"]'));
     const all = within(changes).getByRole("button", { name: "Withdraw all" });
     const withdraws = [all, ...within(changes).getAllByRole("button", { name: "Withdraw" }), within(ranBox()).getByRole("button", { name: "Withdraw" })];
     expect(withdraws.map((b) => b.className)).toEqual([PRESS, PRESS, PRESS, PRESS]);
     expect([all.style.minHeight, all.style.borderRadius, all.style.fontSize, all.style.fontWeight, all.style.color]).toEqual(["36px", "8px", "13px", "400", "var(--ink-2)"]);
-    const letters = within(ranBox()).getAllByRole("radio");
-    expect(letters.map((r) => r.className)).toEqual([PRESS, PRESS, PRESS]);
+    fireEvent.click(/** @type {HTMLElement} */ (tab("Lifts").querySelector(`[data-lift="${SQUAT}"] > button`)));
     const [top, every] = within(within(ledgerEl()).getByRole("group", { name: `${SQUAT} ledger sets` })).getAllByRole("button");
     expect([top.className, every.className]).toEqual([PRESS, PRESS]);
 
@@ -1706,18 +1793,22 @@ describe("TrainerClientView: the house buttons", () => {
     expect(chip(top)).toEqual(["var(--surface)", "var(--elev)", "500", "var(--ink)", "36px", "8px"]);
     expect(top.style.borderColor).toBe("transparent");
     expect(chip(every)).toEqual(["transparent", "none", "400", "var(--ink-2)", "36px", "8px"]);
+    // The session letters live in a sheet: chips without press, 44 tall.
+    fireEvent.click(screen.getByRole("button", { name: "Different session" }));
+    const letters = within(screen.getByRole("dialog", { name: "A different session" })).getAllByRole("radio");
+    expect(letters.map((r) => r.className)).toEqual(["", "", ""]);
     const picked = letters.filter((r) => r.getAttribute("aria-checked") === "true");
-    expect(picked.map(chip)).toEqual([chip(top)]);
+    expect(picked.map(chip)).toEqual([[...chip(top).slice(0, 4), "44px", "8px"]]);
   });
 
-  it("commits are 56 at 17/500; quiet buttons 46 at 14/500 in ink, Run and Continue whatever their state", async () => {
+  it("commits are 56 at 17/500, Run and Continue whatever their state; quiet buttons 46 at 14/500 in ink", async () => {
     render(<TrainerClientView client={client} view={planView(planData(), { sessions: { used: SESSIONS_PER_WEEK, freeAt: null } })}
       onChange={fakeRoute()} onRunSession={vi.fn()} onRemove={vi.fn(async () => true)}/>);
-    const run = screen.getByRole("button", { name: "Run a session with Sam" });
+    const run = screen.getByRole("button", { name: "Run Strength B with Sam" });
     expect(run.disabled).toBe(true);
-    expect(size(run)).toEqual(QUIET);
-    expect(size(screen.getByRole("button", { name: "Stop seeing Sam's training" }))).toEqual(QUIET);
-    fireEvent.click(screen.getByText("Stop seeing Sam's training"));
+    expect(size(run)).toEqual(COMMIT);
+    expect(size(within(sharing()).getByRole("button", { name: "Stop seeing Sam's training" }))).toEqual(QUIET);
+    fireEvent.click(within(sheetEl()).getByText("Stop seeing Sam's training"));
     expect(size(within(sheetEl()).getByRole("button", { name: "Stop" }))).toEqual(COMMIT);
     tap("Keep");
     openLift("Barbell Back Squat");
@@ -1725,37 +1816,46 @@ describe("TrainerClientView: the house buttons", () => {
     const cancel = within(sheetEl()).getByRole("button", { name: "Cancel" });
     expect([cancel.style.fontSize, cancel.style.color]).toEqual(["13px", "var(--ink-3)"]);
     tap("More weight"); tap("Add to changes");
-    expect(size(within(/** @type {HTMLElement} */ (document.querySelector("[data-tray]"))).getByRole("button", { name: /Review/ }))).toEqual(QUIET);
+    expect(size(within(/** @type {HTMLElement} */ (tab("Plan").querySelector("[data-tray]"))).getByRole("button", { name: /Review/ }))).toEqual(QUIET);
     await review();
     expect(size(within(sheetEl()).getByRole("button", { name: "Send to Sam" }))).toEqual(COMMIT);
     cleanup();
     render(<TrainerClientView client={client} view={planView()} onRunSession={vi.fn()} unsent={{ letter: "B", date: today, sets: 2 }}/>);
-    expect(size(screen.getByRole("button", { name: "Continue" }))).toEqual(QUIET);
+    expect(size(screen.getByRole("button", { name: "Continue" }))).toEqual(COMMIT);
     cleanup();
     render(<TrainerClientView client={client} view={view()}/>);
-    expect(size(within(/** @type {HTMLElement} */ (document.querySelector('[data-section="sessions"]'))).getByRole("button", { name: "Show earlier sessions" }))).toEqual(QUIET);
-    const earlier = screen.getByRole("button", { name: "Earlier weeks" });
-    expect([earlier.style.fontSize, earlier.style.color]).toEqual(["13px", "var(--ink-3)"]);
+    expect(size(within(/** @type {HTMLElement} */ (tab("Sessions").querySelector('[data-section="sessions"]'))).getByRole("button", { name: "Show earlier sessions" }))).toEqual(QUIET);
   });
 
-  it("an off quiet button keeps its ink and dims to 0.6, as a busy commit does: Run at the cap, Review with nothing drafted or no sends left", () => {
-    const tray = () => /** @type {HTMLButtonElement} */ (document.querySelector("[data-tray] button"));
-    const run = () => /** @type {HTMLButtonElement} */ (screen.getByRole("button", { name: "Run a session with Sam" }));
+  it("an off button keeps its ink and dims to 0.6, as a busy commit does: Run at the cap, Review with nothing drafted or no sends left", () => {
+    const tray = () => /** @type {HTMLButtonElement} */ (tab("Plan").querySelector("[data-tray] button"));
+    const run = () => /** @type {HTMLButtonElement} */ (screen.getByRole("button", { name: "Run Strength B with Sam" }));
     const look = (b) => [b.disabled, b.style.color, b.style.opacity];
     const draft = () => { openLift("Barbell Back Squat"); tap("More weight"); tap("Add to changes"); };
     render(<TrainerClientView client={client} view={planView(planData(), { sessions: { used: SESSIONS_PER_WEEK, freeAt: null } })}
       onChange={fakeRoute()} onRunSession={vi.fn()}/>);
-    expect(look(run())).toEqual([true, "var(--ink)", "0.6"]);
+    expect(look(run())).toEqual([true, "var(--commit-ink)", "0.6"]);
     expect(tray().textContent).toBe("No changes yet");
     expect(look(tray())).toEqual([true, "var(--ink)", "0.6"]);
     draft();
     expect(look(tray())).toEqual([false, "var(--ink)", "1"]);
     cleanup();
     render(<TrainerClientView client={client} view={planView(planData(), { used: 10 })} onChange={fakeRoute()} onRunSession={vi.fn()}/>);
-    expect(look(run())).toEqual([false, "var(--ink)", "1"]);
+    expect(look(run())).toEqual([false, "var(--commit-ink)", "1"]);
     draft();
     expect(tray().textContent).toBe("1 change · Review");
     expect(look(tray())).toEqual([true, "var(--ink)", "0.6"]);
+  });
+
+  it("plan status punctuation: a sentence ends with a full stop; a data line joins with a middle dot and takes none", () => {
+    render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()} onRunSession={vi.fn()}/>);
+    openLift("Barbell Back Squat"); tap("More weight"); tap("Add to changes");
+    const status = () => /** @type {HTMLElement} */ (tab("Plan").querySelector('[role="status"]')).textContent;
+    expect(status()).toBe("1 change to review");
+    fireEvent.click(within(tab("Plan")).getByRole("button", { name: "Clear" }));
+    expect(status()).toBe("Cleared.");
+    expect(trainerStatusText({ status: "trained_yours", date: "2026-10-12" }, "Sam")).toBe(`Done at your number · ${isoDayMonthOf("2026-10-12")}`);
+    expect(trainerStatusText({ status: "trained_yours", date: null, cooked: true }, "Sam")).toBe("Done at your number · cooked day");
   });
 
   it("validator warnings read in ink2; under minimum keeps the steel, on its flag and in the review", async () => {
@@ -1785,7 +1885,7 @@ describe("TrainerClientView: the house buttons", () => {
 
   it("plan rows are house rows: the arrow at the right, Main lift as a Tag", () => {
     render(<TrainerClientView client={client} view={planView()}/>);
-    const row = /** @type {HTMLElement} */ (document.querySelector('[data-plan-lift="Barbell Back Squat"]'));
+    const row = /** @type {HTMLElement} */ (tab("Plan").querySelector('[data-plan-lift="Barbell Back Squat"]'));
     expect(row.textContent).toBe("Barbell Back SquatMain liftlast 100 × 5 · next 102.5 × 5");
     expect(row.lastElementChild?.outerHTML).toBe(glyphHtml({ name: "arrowRight", size: 13, color: "var(--ink-3)" }));
     const tag = within(row).getByText("Main lift");
@@ -1797,7 +1897,7 @@ describe("TrainerClientView: the house buttons", () => {
 
   it("Download CSV is a house link: 13 px in ink3 with the arrow, never underlined", () => {
     render(<TrainerClientView client={client} view={view()} clientRef="hwg_abc" onExport={vi.fn(async () => null)}/>);
-    const btn = screen.getByRole("button", { name: "Download CSV" });
+    const btn = within(sharing()).getByRole("button", { name: "Download CSV" });
     expect([btn.style.fontSize, btn.style.color, btn.style.textDecoration]).toEqual(["13px", "var(--ink-3)", ""]);
     expect(btn.lastElementChild?.outerHTML).toBe(glyphHtml({ name: "arrowRight", size: 11 }));
   });
@@ -1844,5 +1944,170 @@ describe("TrainerClientView: the house buttons", () => {
     openLift("Barbell Back Squat");
     expect(dialog().textContent).toContain("Up to 110 kg: last top set 100 kg");
     expect(dialog().textContent).not.toContain("of help");
+  });
+});
+
+describe("TrainerClientView: the summary", () => {
+  const SIGNAL = { lastTrainedDaysAgo: 1, weekDone: 2, weekPlanned: 3, rhythmPct: 86, paused: false };
+  const glance = () => /** @type {HTMLElement | null} */ (document.querySelector("[data-glance]"));
+
+  it("the glance strip reads the roster signal, numerals in the measured face; paused says so; no signal, no strip", () => {
+    render(<TrainerClientView client={client} view={view()} signal={SIGNAL}/>);
+    expect([...glance().children].map((c) => c.textContent)).toEqual(["2 of 3 this week", "rhythm 86%", "last trained yesterday"]);
+    expect([...glance().querySelectorAll("span span")].map((n) => [n.textContent, n.style.fontFamily]))
+      .toEqual(["2", "3", "86"].map((d) => [d, T.measured]));
+    expect(glance().closest("[data-summary]")).toBeTruthy();
+    cleanup();
+    render(<TrainerClientView client={client} view={view()} signal={{ ...SIGNAL, paused: true, lastTrainedDaysAgo: 9 }}/>);
+    expect([...glance().children].map((c) => c.textContent)).toEqual(["Paused", "last trained 9 days ago"]);
+    cleanup();
+    render(<TrainerClientView client={client} view={view()}/>);
+    expect(glance()).toBeNull();
+    expect(document.querySelectorAll("[data-summary-rhythm] li")).toHaveLength(8);
+  });
+
+  it("glanceParts: today, never, and a week with no plan", () => {
+    expect(glanceParts(null)).toEqual([]);
+    expect(glanceParts({ ...SIGNAL, lastTrainedDaysAgo: 0 })).toEqual(["2 of 3 this week", "rhythm 86%", "trained today"]);
+    expect(glanceParts({ ...SIGNAL, lastTrainedDaysAgo: null, weekPlanned: 0, rhythmPct: null })).toEqual(["no sessions in the last year"]);
+  });
+
+  it("a row per main lift: name, spark, e1RM and the change against 28 days", () => {
+    render(<TrainerClientView client={client} view={view()}/>);
+    const rows = [...document.querySelectorAll("[data-summary-lift]")];
+    expect(rows.map((r) => r.getAttribute("data-summary-lift"))).toEqual(["Barbell Back Squat"]);
+    expect(rows[0].querySelector("svg")).toBeTruthy();
+    expect(rows[0].textContent).toMatch(/^Barbell Back Squat[\d.]+ kg(level|[+-][\d.]+ kg)$/);
+  });
+
+  it("liftDelta: the newest e1RM against the first in the last 28 days", () => {
+    const s = [{ date: "2026-10-01", est1RM: 100 }, { date: "2026-10-20", est1RM: 105 }, { date: "2026-11-10", est1RM: 110 }];
+    expect(liftDelta(s, "2026-11-16")).toEqual({ now: 110, delta: 5, text: "+5" });
+    expect(liftDelta(s.slice(0, 2), "2026-10-25")).toEqual({ now: 105, delta: 5, text: "+5" });
+    expect(liftDelta([{ date: "2026-11-01", est1RM: 100 }, { date: "2026-11-10", est1RM: 97.5 }], "2026-11-16")?.text).toBe("-2.5");
+    expect(liftDelta([{ date: "2026-11-10", est1RM: 100 }], "2026-11-16")?.text).toBe("level");
+    expect(liftDelta([], "2026-11-16")).toBeNull();
+  });
+
+  it("pending marks as tags: changes waiting, sessions on their phone, and the steel under minimum only when flagged", () => {
+    const tags = () => [...document.querySelectorAll("[data-pending] [data-tag]")].map((t) => [t.getAttribute("data-tag"), t.textContent]);
+    // Flagged under minimum, nothing sent: the one steel tag.
+    render(<TrainerClientView client={client} view={view()}/>);
+    expect(tags()).toEqual([["under", "Under minimum"]]);
+    const bar = /** @type {HTMLElement} */ (document.querySelector("[data-pending] [data-tag]")?.parentElement?.firstElementChild);
+    expect(bar.style.background).toBe("var(--under)");
+    cleanup();
+    const at = Date.now();
+    const hourAgo = new Date(at - 3600e3).toISOString();
+    const v = planView(planData(), { rows: [ranRow("seen.00", "B", today, at, { deliveredAt: hourAgo })] });
+    v.plan.changes = [...v.plan.changes, { id: "s1.0", set: "s1", kind: "weight", target: "Barbell Back Squat", before: 100, after: 102.5, from: null, status: "waiting", reason: null, date: null, at, warnings: [] }];
+    render(<TrainerClientView client={client} view={v}/>);
+    expect(tags().filter(([k]) => k !== "under")).toEqual([["changes", "1 change waiting"], ["phone", "1 session on their phone"]]);
+    cleanup();
+    // Nothing waiting and nothing flagged: no tags at all.
+    render(<TrainerClientView client={client} view={view(history().filter((r) => r.date < ago(14)))}/>);
+    expect(document.querySelector("[data-pending]")).toBeNull();
+  });
+});
+
+// ── The tabs ────────────────────────────────────────────────────────────────
+
+describe("TrainerClientView: the tabs", () => {
+  const names = () => screen.getAllByRole("tab").map((t) => t.textContent);
+  const current = () => screen.getAllByRole("tab").filter((t) => t.getAttribute("aria-selected") === "true").map((t) => t.textContent);
+
+  it("opens on Plan when changes are on, and on Sessions for a read-only grant, which has no Plan", () => {
+    render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()}/>);
+    expect(names()).toEqual(["Plan", "Sent", "Lifts", "Sessions"]);
+    expect(current()).toEqual(["Plan"]);
+    expect(screen.getByRole("tabpanel").getAttribute("data-tab-panel")).toBe("plan");
+    cleanup();
+    render(<TrainerClientView client={client} view={view()}/>);
+    expect(names()).toEqual(["Lifts", "Sessions"]);
+    expect(current()).toEqual(["Sessions"]);
+    expect(screen.getByRole("tabpanel").getAttribute("data-tab-panel")).toBe("sessions");
+    cleanup();
+    // Changes off with sessions the trainer ran: Sent lists them, and Sessions still opens.
+    const v = view();
+    v.ran = { changes: [ranRow("w.00", "A", today, Date.now())], budget: { used: 1, of: SESSIONS_PER_WEEK, freeAt: null } };
+    render(<TrainerClientView client={client} view={v}/>);
+    expect(names()).toEqual(["Sent", "Lifts", "Sessions"]);
+    expect(current()).toEqual(["Sessions"]);
+  });
+
+  it("only the current panel is reachable: the others are hidden, their controls out of the tree", () => {
+    render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()}/>);
+    const panels = [...document.querySelectorAll('[role="tabpanel"]')];
+    expect(panels.map((p) => /** @type {HTMLElement} */ (p).hidden)).toEqual([false, true, true, true]);
+    expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
+    const rhythm = { name: "Weekly sessions against plan, oldest first" };
+    expect(screen.queryByRole("list", rhythm)).toBeNull();
+    tab("Sessions");
+    expect(screen.getByRole("list", rhythm)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Review|No changes yet/ })).toBeNull();
+  });
+
+  it("a draft and its tray survive a trip to another tab", () => {
+    render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()}/>);
+    openLift("Barbell Back Squat"); tap("More weight"); tap("Add to changes");
+    tab("Sessions");
+    tab("Lifts");
+    const panel = tab("Plan");
+    expect(within(/** @type {HTMLElement} */ (panel.querySelector("[data-tray]"))).getAllByRole("button")[0].textContent).toBe("1 change · Review");
+    expect(panel.querySelector('[data-plan-lift="Barbell Back Squat"]').textContent).toContain("not sent");
+  });
+
+  it("a reload of the pane keeps the tab, the open lift and the sessions shown; another client starts afresh", () => {
+    const BENCH = "Barbell Bench Press";
+    const hist = history();
+    for (const r of hist) r.blocks[0].exercises.push({ ...squat(80), name: BENCH, muscle: "Chest" });
+    const data = () => ({ meta: planData().meta, history: hist });
+    const { rerender } = render(<TrainerClientView key="a" client={client} view={planView(data())} onChange={fakeRoute()}/>);
+    tab("Sessions");
+    fireEvent.click(within(/** @type {HTMLElement} */ (document.querySelector('[data-section="sessions"]'))).getByText("Show earlier"));
+    tab("Lifts");
+    fireEvent.click(/** @type {HTMLElement} */ (document.querySelector(`[data-lift="${BENCH}"] > button`)));
+    // The parent hands a fresh view after a send, a withdraw or a retry.
+    rerender(<TrainerClientView key="a" client={client} view={planView(data())} onChange={fakeRoute()}/>);
+    expect(current()).toEqual(["Lifts"]);
+    expect(document.querySelector(`[data-lift="${BENCH}"]`).hasAttribute("data-open")).toBe(true);
+    expect(tab("Sessions").querySelectorAll("[data-session]")).toHaveLength(20);
+    // The parent keys the pane by client: another one opens at its own default.
+    rerender(<TrainerClientView key="b" client={{ name: "Bea" }} view={planView(data())} onChange={fakeRoute()}/>);
+    expect(current()).toEqual(["Plan"]);
+  });
+
+  it("a plan that arrives on a retry opens Plan, unless a tab was picked", () => {
+    const { rerender } = render(<TrainerClientView client={client} view={{ ...view(), edits: "on" }} onChanged={vi.fn()}/>);
+    expect(current()).toEqual(["Sessions"]);
+    rerender(<TrainerClientView client={client} view={planView()} onChanged={vi.fn()}/>);
+    expect(current()).toEqual(["Plan"]);
+    cleanup();
+    const again = render(<TrainerClientView client={client} view={{ ...view(), edits: "on" }} onChanged={vi.fn()}/>);
+    tab("Lifts");
+    again.rerender(<TrainerClientView client={client} view={planView()} onChanged={vi.fn()}/>);
+    expect(current()).toEqual(["Lifts"]);
+  });
+
+  it("a tab picked that a reload takes away falls back to the default", () => {
+    const { rerender } = render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()}/>);
+    tab("Sent");
+    // Changes turned off, nothing ran: no Sent tab any more.
+    rerender(<TrainerClientView client={client} view={view()}/>);
+    expect(current()).toEqual(["Sessions"]);
+  });
+
+  it("the Sharing row is a house row that opens one sheet; no export or stop control sits on the page", () => {
+    render(<TrainerClientView client={client} view={view()} clientRef="hwg_abc" onExport={vi.fn(async () => null)} onRemove={vi.fn(async () => true)}/>);
+    expect(screen.queryByRole("button", { name: "Download CSV" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Stop seeing/ })).toBeNull();
+    const row = screen.getByRole("button", { name: "Sharing since 3 Oct · changes off" });
+    expect(row.className).toBe("forge-press forge-tint");
+    expect(row.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(row.lastElementChild?.outerHTML).toBe(glyphHtml({ name: "arrowRight", size: 13, color: T.ink3 }));
+    const sheet = sharing();
+    expect(within(sheet).getAllByRole("button").map((b) => b.textContent?.trim())).toEqual(["Download CSV", "Stop seeing Sam's training", "Done"]);
+    // The hint lines are gone.
+    expect(document.body.textContent).not.toMatch(/Oldest first|opens where you left it/);
   });
 });

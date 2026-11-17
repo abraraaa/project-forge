@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
-// The working-weight sanity bound (sanitiseWorkingWeights): only a corrupt
-// value (a number that is not finite, or over WORKING_WEIGHT_MAX_KG) is
-// rewritten, to the category's cold-start cap. Real progression past the
-// cold-start cap survives, in the function and through ForgeApp's mount and
-// sync paths.
+// The working-weight sanity bound (sanitiseWorkingWeights): a corrupt value
+// (a number that is not finite, over WORKING_WEIGHT_MAX_KG, or below 0) reads
+// as absent and is never written back. Real progression past the cold-start
+// cap survives, in the function and through ForgeApp's mount and sync paths.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { createElement as h } from "react";
 import { render, screen, fireEvent, cleanup, act, waitFor } from "@testing-library/react";
-import { sanitiseWorkingWeights, WORKING_WEIGHT_MAX_KG, CATEGORY_COLD_START_MAX_KG } from "@/lib/lift-translations";
+import { sanitiseWorkingWeights, startWeightFor, coldStartFromAnchor, getLiftProfile, WORKING_WEIGHT_MAX_KG, CATEGORY_COLD_START_MAX_KG } from "@/lib/lift-translations";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }) }));
 vi.mock("@vercel/analytics", () => ({ track: vi.fn() }));
@@ -65,19 +64,52 @@ describe("sanitiseWorkingWeights: a sanity bound, not a ceiling", () => {
     }
   });
 
-  it("rewrites 401 kg and a non-finite number to the category cap, keeping the key", () => {
-    for (const bad of [401, 1000, NaN, Infinity, -Infinity]) {
+  it("drops 401 kg, a negative and a non-finite number, so they read as absent", () => {
+    for (const bad of [401, 1000, -1, -0.5, NaN, Infinity, -Infinity]) {
       const w = { [CALF]: bad, [THRUST]: 130 };
       const out = sanitiseWorkingWeights(w);
       expect(out, `${bad}`).not.toBe(w);
-      expect(out, `${bad}`).toEqual({ [CALF]: ISO_CAP, [THRUST]: 130 });
+      expect(out, `${bad}`).toEqual({ [THRUST]: 130 });
     }
-    expect(sanitiseWorkingWeights({ [THRUST]: 401 })).toEqual({ [THRUST]: CATEGORY_COLD_START_MAX_KG.lower_compound });
+    expect(sanitiseWorkingWeights({ [THRUST]: 401 })).toEqual({});
+    expect(sanitiseWorkingWeights({ "Pike Push-Up": 999 })).toEqual({});
   });
 
-  it("leaves lifts with no cap and non-number entries alone", () => {
-    const w = { "Pike Push-Up": 999, [CALF]: null, [CURL]: "twenty" };
+  it("keeps 0 on every kind of lift, 400 and a real 300 kg", () => {
+    const w = { "Assisted Pull-Up": 0, "Weighted Pull-Up": 0, [CALF]: 0, [THRUST]: 400, "Hex Bar Deadlift": 300 };
     expect(sanitiseWorkingWeights(w)).toBe(w);
+  });
+
+  it("leaves non-number entries alone", () => {
+    const w = { [CALF]: null, [CURL]: "twenty" };
+    expect(sanitiseWorkingWeights(w)).toBe(w);
+  });
+
+  it("a corrupt weight gives the ordinary cold start: the template, else the anchor start", () => {
+    const ex = { name: THRUST, weight: 60 };
+    for (const bad of [401, -5, NaN]) {
+      expect(startWeightFor(ex, { working: { [THRUST]: bad } }), `${bad}`).toBe(60);
+      expect(startWeightFor(ex, { working: sanitiseWorkingWeights({ [THRUST]: bad }) }), `${bad}`).toBe(60);
+    }
+    const muscle = getLiftProfile(THRUST).primaryMuscle;
+    const anchors = { [muscle]: { bestE1RM: 140 } };
+    const fromAnchor = startWeightFor(ex, { working: {}, anchors });
+    expect(coldStartFromAnchor(THRUST, anchors[muscle])).toBeGreaterThan(0);
+    expect(fromAnchor).not.toBe(60);
+    expect(startWeightFor(ex, { working: { [THRUST]: 401 }, anchors })).toBe(fromAnchor);
+    expect(startWeightFor(ex, { working: { [THRUST]: 300 }, anchors })).toBe(300);
+  });
+
+  it("the store reads a corrupt weight as absent and a save of another lift keeps it stored", () => {
+    localStorage.clear();
+    localStorage.setItem("forge:Ann:weights", JSON.stringify({ [CALF]: 401, [THRUST]: 130 }));
+    expect(P.getWeights("Ann")).toEqual({ [THRUST]: 130 });
+    P.saveWeights("Ann", { ...P.getWeights("Ann"), [THRUST]: 132.5 });
+    expect(P.getWeightsRaw("Ann")).toEqual({ [CALF]: 401, [THRUST]: 132.5 });
+    // Logging the lift replaces it in the ordinary way.
+    P.saveWeights("Ann", { ...P.getWeights("Ann"), [CALF]: 20 });
+    expect(P.getWeightsRaw("Ann")).toEqual({ [CALF]: 20, [THRUST]: 132.5 });
+    localStorage.clear();
   });
 });
 
@@ -107,12 +139,17 @@ describe("ForgeApp: a heavy real working weight survives mount and sync", () => 
     save.mockRestore();
   });
 
-  it("control: a corrupt 401 kg is rewritten to the cap on both paths", async () => {
-    localStorage.setItem("forge:Sam:weights", JSON.stringify({ [CALF]: 401 }));
-    remote.meta = { weights: { [CALF]: 401 } };
+  it("a stored corrupt weight writes nothing on mount or sync, and reads as absent", async () => {
+    localStorage.setItem("forge:Sam:weights", JSON.stringify({ [CALF]: 401, [THRUST]: 130 }));
+    remote.meta = { weights: { [CALF]: 401, [THRUST]: 130 } };
     const save = vi.spyOn(P, "saveWeights");
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
     await signIn();
-    expect(save.mock.calls).toEqual([["Sam", { [CALF]: ISO_CAP }], ["Sam", { [CALF]: ISO_CAP }]]);
+    expect(save).not.toHaveBeenCalled();
+    expect(setItem.mock.calls.filter(([k]) => k === "forge:Sam:weights")).toEqual([]);
+    expect(JSON.parse(localStorage.getItem("forge:Sam:weights") || "{}")).toEqual({ [CALF]: 401, [THRUST]: 130 });
+    expect(P.getWeights("Sam")).toEqual({ [THRUST]: 130 });
+    setItem.mockRestore();
     save.mockRestore();
   });
 });

@@ -13,17 +13,14 @@ import { rpConfigFromRequest, isTokenValid, hasRealPasskey, issueChallenge, veri
 const reqWithHost = (host) => ({ headers: { get: (k) => (k === "host" ? host : null) } });
 
 describe("rpConfigFromRequest", () => {
-  // These once pinned "every credential is theforged.fit". That contract was
-  // retired by the 2026-08-18 ruling — new credentials are minted native and
-  // the old domain is not being renewed — so the expectations move with it.
-  // The SECURITY properties they were guarding do not move: localhost stays
-  // isolated, preview hosts get no rpId of their own, and an unrecognised host
-  // is handed an origin it cannot match.
-  it("the legacy origin still mints legacy while the window is open", () => {
-    // A ceremony genuinely on theforged.fit cannot declare the native rpId:
-    // no reverse Related Origin Requests document is served at heatwayve.app.
-    expect(rpConfigFromRequest(reqWithHost("theforged.fit")))
-      .toMatchObject({ rpId: "theforged.fit", expectedOrigin: "https://theforged.fit" });
+  // The rpId is native on every host. The security properties hold: localhost
+  // stays isolated, preview hosts get no rpId of their own, and an
+  // unrecognised host is handed an origin it cannot match.
+  it("the old origin is an unknown host: no origin or rpId of its own", () => {
+    for (const host of ["theforged.fit", "www.theforged.fit"]) {
+      expect(rpConfigFromRequest(reqWithHost(host)))
+        .toEqual({ rpId: "heatwayve.app", expectedOrigin: "https://heatwayve.app", acceptedRpIds: ["heatwayve.app"] });
+    }
   });
 
   it("localhost keeps its port and uses http", () => {
@@ -126,11 +123,9 @@ describe("stateless challenges (signed, no blob round-trip)", () => {
   });
 });
 
-describe("Heatwayve migration — two origins, and now two rpIds", () => {
+describe("native origins, one rpId", () => {
   const req = (host) => ({ headers: { get: (k) => (k === "host" ? host : null) } });
   it("a heatwayve origin now mints a NATIVE credential", () => {
-    // Was "allowed origin, but rpId stays theforged.fit" — the single-rpId
-    // arrangement that the 90-day window exists to unwind.
     expect(rpConfigFromRequest(req("heatwayve.app")))
       .toMatchObject({ rpId: "heatwayve.app", expectedOrigin: "https://heatwayve.app" });
     expect(rpConfigFromRequest(req("www.heatwayve.app")).expectedOrigin).toBe("https://www.heatwayve.app");
@@ -144,14 +139,5 @@ describe("Heatwayve migration — two origins, and now two rpIds", () => {
       expect(expectedOrigin).toBe("https://heatwayve.app");
       expect(expectedOrigin).not.toBe(`https://${host}`);
     }
-  });
-  it("the ROR well-known lists both domains and stays a static literal", async () => {
-    const { readFileSync } = await import("node:fs");
-    const { resolve, dirname } = await import("node:path");
-    const { fileURLToPath } = await import("node:url");
-    const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../app/.well-known/webauthn/route.js"), "utf8");
-    expect(src).toContain('"https://theforged.fit"');
-    expect(src).toContain('"https://heatwayve.app"');
-    expect(src).not.toMatch(/request|headers\.get/); // never reflected from input
   });
 });

@@ -362,6 +362,17 @@ describe("/api/auth/check", () => {
     expect(await read()).toEqual({ hasPasskey: false, credentialCount: 0, consent: null });
   });
 
+  it("a profile whose passkeys are all legacy reads as no passkey", async () => {
+    store.creds = {
+      credentials: [
+        { id: "l1", publicKey: "AQID", counter: 0, rpId: "theforged.fit", transports: [] },
+        { id: "l2", publicKey: "AQID", counter: 0, transports: [] },
+      ],
+      consent: ON_FILE,
+    };
+    expect(await read()).toEqual({ hasPasskey: false, credentialCount: 0, consent: null });
+  });
+
   it("null when none, no doc, malformed, or no usable passkey", async () => {
     store.creds = stored();
     expect((await read()).consent).toBeNull();

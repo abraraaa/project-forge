@@ -26,7 +26,6 @@ import { GLYPH_NAMES } from "../components/Glyph.jsx";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const css = readFileSync(resolve(root, "app/globals.css"), "utf8");
 const layout = readFileSync(resolve(root, "app/layout.jsx"), "utf8");
-const themeSrc = readFileSync(resolve(root, "lib/theme.js"), "utf8");
 
 describe("the mode contract is one axis — light-dark(), no twins", () => {
   it("flipped tokens declare both values once", () => {
