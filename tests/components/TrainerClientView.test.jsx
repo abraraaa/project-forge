@@ -746,10 +746,10 @@ describe("TrainerClientView: the plan", () => {
       fireEvent.blur(input);
       expect(input.value).toBe("250");
       cleanup();
-      // The calf raise's template (35 kg) is over its category cap (25): the sheet names 35.
+      // The calf raise takes the machine ceiling (120) over its 35 kg template: the sheet names 120.
       render(<TrainerClientView client={client} view={planView(planData({ bodyweight: { kg } }))}/>);
       openLift("Standing Calf Raise");
-      expect(dialog().textContent).toContain("Not lifted yet. Up to 35 kg for a first weight.");
+      expect(dialog().textContent).toContain("Not lifted yet. Up to 120 kg for a first weight.");
       cleanup();
     }
   });

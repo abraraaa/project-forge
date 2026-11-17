@@ -18,7 +18,7 @@ import {
   validateChangeSet, boundsFor, liftBasis, rowFromDb, weekBasis, anchorLogged, SETS_PER_WEEK, SESSIONS_PER_WEEK,
   validateSessionSet, sessionStatus, AUTO_KEEP_MS,
 } from "@/lib/trainer-change";
-import { nextRung, CATEGORY_COLD_START_MAX_KG, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
+import { nextRung, CATEGORY_COLD_START_MAX_KG, coldStartCapKg, getLiftProfile, isBodyweightMovement, sanitiseWorkingWeights, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
 import { pacePresets } from "@/components/TrainerClientView";
 import { resolvedProgramme, planStartWeight, validMainLifts, repTargets } from "@/lib/programme-resolve";
 import {
@@ -806,7 +806,7 @@ describe("the plan: only on a grant with changes on", () => {
     expect(JSON.stringify(projectPlan(none, { todayIso: TODAY, rows }))).toBe(light);
   });
 
-  it("a never-trained lift's top is the larger of its category's cold-start cap and its template weight (public), whatever the bodyweight or muscle anchors", () => {
+  it("a never-trained lift's top is the larger of its cold-start ceiling and its template weight (public), whatever the bodyweight or muscle anchors", () => {
     const at = (bw, anchors) => {
       const data = planData(bw ?? 80);
       if (bw === null) { delete data.meta.bodyweight; delete data.meta.bodyweightLog; }
@@ -823,15 +823,15 @@ describe("the plan: only on a grant with changes on", () => {
     const template = (name) => resolvedProgramme(planData().meta).find((x) => x.name === name)?.ex?.weight ?? 0;
     for (const l of ref.lifts) {
       if (!l.bounds || l.basis.anchorKg !== null || isBodyweightMovement(l.loadType)) continue;
-      const top = Math.max(CATEGORY_COLD_START_MAX_KG[getLiftProfile(l.name).category], template(l.name));
+      const top = Math.max(coldStartCapKg(getLiftProfile(l.name)), template(l.name));
       expect(l.bounds.max, l.name).toBe(Math.floor(top / l.bounds.step + 1e-9) * l.bounds.step);
       expect(l.bounds.warnBelow, l.name).toBeNull();
       checked++;
     }
     expect(checked).toBeGreaterThan(10);
-    // Template over cap: the calf raise and the hamstring curl (35 kg, the isolation cap is 25).
+    // Machine isolation lifts take the machine ceiling (120) over their 35 kg template.
     for (const name of ["Standing Calf Raise", "Machine Hamstring Curl"]) {
-      expect(ref.lifts.find((l) => l.name === name)?.bounds, name).toMatchObject({ max: 35 });
+      expect(ref.lifts.find((l) => l.name === name)?.bounds, name).toMatchObject({ max: 120 });
     }
     // Probe: no bodyweight, far-apart bodyweights, strong and weak muscle anchors: byte for byte the same.
     const text = JSON.stringify(ref);
