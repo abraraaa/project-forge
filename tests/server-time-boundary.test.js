@@ -60,8 +60,18 @@ function sourceFiles(dir) {
   return out;
 }
 
-/** A "use client" directive ahead of any other statement. */
-const isClient = (file) => /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*["']use client["']/.test(read(file));
+/** A "use client" directive ahead of any other statement (a linear scan past whitespace and comments). */
+function isClient(file) {
+  const src = read(file);
+  let i = 0;
+  for (;;) {
+    while (i < src.length && /\s/.test(src[i])) i++;
+    if (src.startsWith("//", i)) { const nl = src.indexOf("\n", i); if (nl < 0) return false; i = nl + 1; continue; }
+    if (src.startsWith("/*", i)) { const end = src.indexOf("*/", i + 2); if (end < 0) return false; i = end + 2; continue; }
+    break;
+  }
+  return src.startsWith('"use client"', i) || src.startsWith("'use client'", i);
+}
 
 const ALL = ["app", "components", "lib"].flatMap(sourceFiles);
 const ROOTS = ALL.filter((f) => f.startsWith("components/") || isClient(f));
