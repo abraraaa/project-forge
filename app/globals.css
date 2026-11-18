@@ -806,6 +806,11 @@ body { --trend-1: var(--heat-1); --trend-2: var(--heat-2); --trend-3: var(--heat
   }
 }
 
+/* Rest ring: under reduced motion its colour steps are instant. */
+@media (prefers-reduced-motion: reduce) {
+  .hw-rest-ring { transition: none !important; }
+}
+
 /* Breathe hook class — rest ring. Kept as a class so reduced-motion can
    kill it above. */
 .hw-breathe {
