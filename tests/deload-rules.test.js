@@ -158,6 +158,21 @@ describe("ignoring a deload", () => {
     expect(card(SQUAT).kg).toBe(65);
   });
 
+  it("a backfilled ignored session before a later followed one does not end it", () => {
+    three();
+    accept();
+    expect(session(2, [{ name: SQUAT, lifted: 100 }]).ended).toBeNull();
+    expect(session(4, [{ name: SQUAT }]).ended).toBeNull();
+    // Logged on Thursday 5th for Tuesday 3rd, at the pre-deload weight.
+    vi.setSystemTime(at(5, 9));
+    const rec = { v: 2, id: at(5, 9).toISOString(), date: iso(3), readiness: "normal", session: "strength-a",
+      blocks: [{ id: "b0", type: "main", exercises: [{ name: SQUAT, loadType: "barbell", prescribed: { sets: 3, reps: 5, weight: 65 }, sets: sets(100, "barbell", 5, 3, 2) }] }] };
+    const engine = commitSessionRecord(PROFILE, rec, { currentWeights: plan().weights });
+    expect(engine.deloadEnded).toBeNull();
+    expect(TS.get(PROFILE).mesocycle.activeDeload).not.toBeNull();
+    expect(card(SQUAT).kg).toBe(65);
+  });
+
   it("only the session's main lift counts", () => {
     three();
     accept();
