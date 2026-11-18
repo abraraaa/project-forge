@@ -991,7 +991,9 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             </div>
           )}
           <div style={{margin:"12px 20px 0",display:"flex",gap:12,alignItems:"center"}}>
-            {showRestHint&&!fork&&(
+            {/* The rest ring stays through the fork: rest still runs while
+                the next block is chosen. */}
+            {showRestHint&&(
               <button
                 onClick={()=>{if(restActive){setRestActive(false);setRestRemain(block.rest);}else{setRestRemain(block.rest);setRestActive(true);}}}
                 aria-label={restActive?`Resting, ${restStr} left — tap to skip`:"Start rest timer"}
@@ -1000,7 +1002,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                   border:`1px solid ${restActive?T.dayKey.strength:T.rule}`,
                   background:"transparent",cursor:"pointer",
                   display:"flex",alignItems:"center",justifyContent:"center",
-                  fontFamily:T.measured,fontSize:13,color:restActive?T.ink:T.ink2,
+                  fontFamily:T.measured,fontSize:18,color:restActive?T.ink:T.ink2,
                   transition:`border-color 300ms ${T.ease}, color 300ms ${T.ease}`}}>
                 {restActive?restStr:clock(block.rest)}
               </button>
