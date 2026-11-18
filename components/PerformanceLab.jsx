@@ -479,8 +479,11 @@ function ConsistencyCells({ weeks }) {
       <div style={{display:"flex",gap:10,paddingTop:12,flexWrap:"wrap"}} aria-label={summary}>
         {weeks.map((w) => {
           const filled = Math.min(w.done, w.planned);
+          // A finished week with every planned session kept is underlined.
+          const kept = !w.partial && w.planned > 0 && w.done >= w.planned;
           return (
-            <div key={w.mondayIso} data-week={w.mondayIso} style={{display:"flex",gap:3}}>
+            <div key={w.mondayIso} data-week={w.mondayIso} data-kept={kept ? "" : undefined}
+              style={{display:"flex",gap:3,paddingBottom:4,borderBottom:`1px solid ${kept ? T.ink : "transparent"}`}}>
               {Array.from({ length: w.planned }, (_, i) => {
                 const isDone = i < filled;
                 // Past what was due so far (partial week): still to come.
