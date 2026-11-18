@@ -647,7 +647,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <div style={{margin:"22px 0 0",padding:"12px 24px 12px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
               <span style={{fontSize:13,color:T.ink2}}>Tonnage, six weeks</span>
-              <span style={{fontSize:12,color:T.ink3}}><span style={{fontFamily:T.measured,color:T.heat[3]}}>{formatTonnage(waveSplit.soFar ?? 0)}</span> {SO_FAR.label}</span>
+              <span data-so-far-label="" style={{fontSize:12,color:T.ink2}}><span style={{fontFamily:T.measured,color:T.heat[3]}}>{formatTonnage(waveSplit.soFar ?? 0)}</span> {SO_FAR.label}</span>
             </div>
             <svg width="100%" height="30" viewBox="0 0 342 30" preserveAspectRatio="none" style={{display:"block",overflow:"visible"}} aria-hidden="true">
               <defs>
