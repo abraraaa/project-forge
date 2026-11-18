@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import HomeScreen from "../../components/HomeScreen.jsx";
+import { T } from "../../lib/tokens.js";
 import { WEEK, SESSIONS } from "../../lib/programme.js";
 import { makeDayContext, resolveRange, sessionsFrom } from "../../lib/day-state.js";
 
@@ -43,7 +44,12 @@ describe("Home inside a deload", () => {
   it("today's card carries the session view's tag and the deload weight", () => {
     const { main, ...p } = props(true);
     const { container } = render(<HomeScreen {...p} />);
-    expect(flat(container.textContent)).toContain("deload · day 3 of 5");
+    expect(flat(container.textContent)).toContain("Today · deload, day 3 of 5");
+    // The word itself is ink, underlined 1px in the day's key.
+    const word = [...container.querySelectorAll("span")].find((s) => s.textContent === "deload");
+    expect(word.style).toMatchObject({ color: T.ink, textDecorationLine: "underline", textDecorationColor: T.dayKey.strength, textDecorationThickness: "1px", textUnderlineOffset: "3px" });
+    // Numerals in the mono face; one line, no separate tag.
+    expect(word.parentElement.querySelectorAll(`span[style*="font-family"]`).length).toBe(2);
     expect(rowOf(main)).toContain("at 65 kg");
   });
 
@@ -56,7 +62,7 @@ describe("Home inside a deload", () => {
     fireEvent.click(screen.getByRole("button", { name: "Monday" }));
     expect(flat(container.textContent)).not.toContain("deload");
     fireEvent.click(screen.getByRole("button", { name: "Wednesday, deload" }));
-    expect(flat(container.textContent)).toContain("deload · day 1 of 5");
+    expect(flat(container.textContent)).toContain("deload, day 1 of 5");
   });
 });
 
@@ -68,6 +74,7 @@ describe("Home with no deload", () => {
     const { container } = render(<HomeScreen {...p} />);
     expect(container.textContent.toLowerCase()).not.toContain("deload");
     expect(container.innerHTML.toLowerCase()).not.toContain("deload");
+    expect(container.innerHTML).not.toContain("underline");
     expect(rowOf(main)).toContain("at 100 kg");
   });
 });
@@ -87,5 +94,14 @@ describe("decisions sit above Begin", () => {
     expect(order(headline, unfinished)).toBeTruthy();
     expect(order(unfinished, offer)).toBeTruthy();
     expect(order(offer, begin)).toBeTruthy();
+  });
+});
+
+describe("the deload offer's copy", () => {
+  it("opens with the lift name capitalised, and no em dash", async () => {
+    const { deloadCardCopy } = await import("../../lib/progression.js");
+    const { body } = deloadCardCopy({ type: "stall_convergence", lifts: ["Barbell Back Squat", "Barbell Bench Press"] });
+    expect(body.startsWith("Barbell back squat and barbell bench press have both held")).toBe(true);
+    expect(body).not.toContain("—");
   });
 });
