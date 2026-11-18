@@ -64,6 +64,8 @@ describe("Home's tonnage line", () => {
   it("ends at the last finished week and draws this week as a faint point labelled so far", () => {
     const { container } = render(<HomeScreen {...homeProps()} history={HISTORY} />);
     expect(container.textContent.replace(/\s+/g, " ")).toMatch(/Tonnage, six weeks\S* ?1[.,]5\S* ?\S* so far/);
+    // The label is words: ink-2.
+    expect(container.querySelector("[data-so-far-label]").style.color).toBe("var(--ink-2)");
     const ghost = container.querySelector("circle[data-so-far]");
     expect(ghost.getAttribute("opacity")).toBe("0.45");
     expect(ghost.getAttribute("fill")).toBe("var(--ink-3)");
