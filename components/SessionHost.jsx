@@ -52,7 +52,7 @@ import {
   applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
   WEEK, nextStrengthIdx,
 } from "@/lib/programme";
-import { deloadDayLabel, isFinalSetMiss, lastSessionNote, ADOPT_AFTER_SESSIONS, repTargetRepairs } from "@/lib/progression";
+import { deloadDayLabel, liveDeload, isFinalSetMiss, lastSessionNote, ADOPT_AFTER_SESSIONS, repTargetRepairs } from "@/lib/progression";
 import { SESSION_COPY } from "@/lib/session-copy";
 import { deriveTravelSession } from "@/lib/travel";
 import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, addedLoadFor } from "@/lib/lift-translations";
@@ -401,6 +401,8 @@ export default function SessionHost({ mode = null } = {}) {
     trainingState: { lifts: liftStates, mesocycle: { activeDeload } },
     history,
   }), [workingWeights, workingReps, repRepairs, liftStates, activeDeload, history]);
+  // The deload as today's card reads it: none once time off has done its work.
+  const deloadNow = useMemo(() => liveDeload(activeDeload, history), [activeDeload, history]);
   const prescribedWeights = scheduled.weights;
   const prescribedReps = scheduled.reps;
   const planWeights = useMemo(() => ({ ...prescribedWeights, ...sessionWeights }), [prescribedWeights, sessionWeights]);
@@ -502,7 +504,7 @@ export default function SessionHost({ mode = null } = {}) {
   // nobody yet knows what kind of day it is.
   const REACH_EARLIEST_SET = 3;
   const canReach =
-    readiness === "fresh" && !reachSpent && !reachArmed && !activeDeload && !travel &&
+    readiness === "fresh" && !reachSpent && !reachArmed && !deloadNow && !travel &&
     !isSS && isHeadline && setNum === blockSets && setNum >= REACH_EARLIEST_SET &&
     getLoadType(activeEx) !== "bodyweight" && Number.isFinite(reachWeight);
 
@@ -540,7 +542,7 @@ export default function SessionHost({ mode = null } = {}) {
   // The climb and failure lines explain today's first set, so they go once
   // it is logged. Not on a deload day, whose target is the deload's, nor a
   // cooked day, which never moves the weight.
-  const firstSetOpen = !activeDeload && readiness !== "cooked" && !(draftView?.blocks?.[block.id]?.exercises?.[activeEx?.name]?.sets?.length > 0);
+  const firstSetOpen = !deloadNow && readiness !== "cooked" && !(draftView?.blocks?.[block.id]?.exercises?.[activeEx?.name]?.sets?.length > 0);
   const todayReps = activeEx?.name ? Number.parseInt(String(prescribedReps[activeEx.name] ?? activeEx.reps), 10) : null;
   const coachLine = lastNote?.kind === "adopted" ? SESSION_COPY.adoptedTarget(lastNote.reps, ADOPT_AFTER_SESSIONS)
     : lastNote?.kind === "rep_climb" ? (firstSetOpen && todayReps === lastNote.reps ? SESSION_COPY.repClimb(lastNote) : null)
@@ -685,7 +687,7 @@ export default function SessionHost({ mode = null } = {}) {
     let addLikely = false;
     try {
       // Coached: the engine's state is the client's, so heavier is never promised.
-      if (fullReps && !activeDeload && !coached) {
+      if (fullReps && !deloadNow && !coached) {
         const rir = rpeToRir(rpe);
         addLikely = rir !== null && lifts.every((ex) =>
           rir >= (ADD_THRESHOLD_RIR[getLiftProfile(ex.name).category] ?? 2) && !source.inRecovery(ex.name));
@@ -960,7 +962,7 @@ export default function SessionHost({ mode = null } = {}) {
     addedLoads, setAddedLoad,
     canReach, reachStep, reachArmed, onTakeReach: takeReach, onDeclineReach: declineReach,
     // Coached: the plan says only that a deload is on.
-    deloadDayTag: activeDeload ? (coached ? "deload" : deloadDayLabel(activeDeload)) : null,
+    deloadDayTag: deloadNow ? (coached ? "deload" : deloadDayLabel(deloadNow)) : null,
     // Coached: a lift sends at most ten sets, so no eleventh is offered.
     maxSets: coached ? COACH_MAX_SETS : null,
   };

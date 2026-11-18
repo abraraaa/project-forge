@@ -1001,7 +1001,7 @@ describe("a cooked record is history only", () => {
     deloadFrom102();
     apply(squat("2026-10-22T10:00:00.000Z", 65));
     const before = TS.get("p").lifts[SQUAT];
-    const out = apply(squat("2026-10-27T10:00:00.000Z", 40, "cooked"));
+    const out = apply(squat("2026-10-26T10:00:00.000Z", 40, "cooked"));
     expect(out.justCompletedDeload).toBe(true);
     expect(out.wwUpdates).toEqual({ [SQUAT]: 90 });
     expect(out.wrUpdates).toEqual({});

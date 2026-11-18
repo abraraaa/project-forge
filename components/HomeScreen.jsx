@@ -24,7 +24,7 @@ import ConsentLine from "@/components/ConsentLine";
 import { TrainerSessionCard } from "@/components/TrainerSessionSheet";
 import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
-import { deloadCardCopy, deloadDayLabel, repTargetRepairs } from "@/lib/progression";
+import { deloadCardCopy, deloadDayLabel, liveDeload, repTargetRepairs } from "@/lib/progression";
 import { planStartWeight, isWorkingWeight, scheduledPlan } from "@/lib/programme-resolve";
 import { getLoadType, parseTimedReps, usesOptionalChrome } from "@/lib/lift-translations";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
@@ -244,7 +244,8 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const due = scheduledPlan({ weights: workingWeights, reps: liveReps, trainingState: { lifts: liftStates, mesocycle: { activeDeload } }, history });
   const plan = { reps: due.reps, weights: due.weights, bodyweight, anchors: muscleAnchors };
   // The session view's own tag, for the day in view; null outside a deload.
-  const deloadTag = deloadDayLabel(activeDeload, viewDateStr);
+  const deloadNow = liveDeload(activeDeload, history);
+  const deloadTag = deloadDayLabel(deloadNow, viewDateStr);
 
   // Guidance line under the display name. Strength days lead with the
   // session's own noun; non-strength days keep their modality detail.
@@ -332,7 +333,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             const isDone    = !!weekDone[i];
             // Made up later in the week: a muted tick, not a solid one.
             const isCovered = !isDone && status === "covered";
-            const inDeload  = deloadDayLabel(activeDeload, addDaysIso(new Date(nowMs), i - todayIdx)) !== null;
+            const inDeload  = deloadDayLabel(deloadNow, addDaysIso(new Date(nowMs), i - todayIdx)) !== null;
             return (
               <button key={i} onClick={()=>setViewIdx(i)} className="forge-press"
                 aria-label={`${DAY_NAMES[i]}${isToday ? " (today)" : ""}${isDone ? ", done" : isCovered ? ", made up" : isResting ? ", resting" : ""}${inDeload ? ", deload" : ""}`}
