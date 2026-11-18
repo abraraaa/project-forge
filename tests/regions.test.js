@@ -22,3 +22,12 @@ describe("server routes are pinned beside the data", () => {
     expect(src).toMatch(/export const preferredRegion = "lhr1";/);
   });
 });
+
+// The /mcp profile cache lives on the instance for 30s. That holds only while
+// Fluid compute is on, so the setting lives in config rather than the dashboard.
+describe("Fluid compute is explicit", () => {
+  it("vercel.json enables fluid", () => {
+    const vercel = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
+    expect(vercel.fluid).toBe(true);
+  });
+});
