@@ -304,14 +304,15 @@ describe("bodyweight and assisted lifts on a deload day", () => {
     vi.setSystemTime(at(3));
   };
 
-  it("last session at RPE 7: the reps and the sets stay, and the assisted lift keeps its help", () => {
+  it("an easy last session (RPE 7): the reps stay, one set fewer, and the assisted lift keeps its help", () => {
     before(3);
     // The reps as stored (the RPE 7 session climbed them to 13), not halved.
     expect(P.getReps(PROFILE)[PUSHUP]).toBe(13);
     expect(card(PUSHUP, "bodyweight", 12).reps).toBe(13);
     expect(card(ASSISTED, "assisted_bodyweight", 8)).toMatchObject({ kg: 20, reps: 8 });
-    expect(setsShown(PUSHUP, 3)).toBe(3);
-    expect(setsShown(ASSISTED, 3)).toBe(3);
+    expect(setsShown(PUSHUP, 3)).toBe(2);
+    expect(setsShown(ASSISTED, 3)).toBe(2);
+    expect(setsShown(PUSHUP, 2)).toBe(2);
     // The loaded lift still deloads by load.
     expect(card(SQUAT).kg).toBe(65);
   });
