@@ -249,7 +249,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const due = scheduledPlan({ weights: workingWeights, reps: liveReps, trainingState: { lifts: liftStates, mesocycle: { activeDeload } }, history });
   const plan = { reps: due.reps, weights: due.weights, bodyweight, anchors: muscleAnchors };
   // The set counts the session will open with (deloadSessionSets).
-  const shownSession = deloadSessionSets(viewSession, due.setDrops);
+  const shownSession = deloadSessionSets(viewSession, due.sets);
   // The session view's own tag, for the day in view; null outside a deload.
   const deloadNow = liveDeload(activeDeload, history);
   const deloadDay = deloadDayOf(deloadNow, viewDateStr);

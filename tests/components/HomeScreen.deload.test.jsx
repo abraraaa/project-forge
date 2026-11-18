@@ -50,7 +50,8 @@ describe("Home inside a deload", () => {
     expect(word.style).toMatchObject({ color: T.ink, textDecorationLine: "underline", textDecorationColor: T.dayKey.strength, textDecorationThickness: "1px", textUnderlineOffset: "3px" });
     // Numerals in the mono face; one line, no separate tag.
     expect(word.parentElement.querySelectorAll(`span[style*="font-family"]`).length).toBe(2);
-    expect(rowOf(main)).toContain("at 65 kg");
+    // The deload's two sets at the deload weight.
+    expect(rowOf(main)).toContain("2 × 5 at 65 kg");
   });
 
   it("the week names the deload days, and a day outside it carries no tag", () => {

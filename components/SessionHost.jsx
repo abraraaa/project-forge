@@ -404,9 +404,8 @@ export default function SessionHost({ mode = null } = {}) {
   }), [workingWeights, workingReps, repRepairs, liftStates, activeDeload, history]);
   // The deload as today's card reads it: none once time off has done its work.
   const deloadNow = useMemo(() => liveDeload(activeDeload, history), [activeDeload, history]);
-  // A deload day takes a set off a bodyweight or assisted block after a hard
-  // last session (deloadSessionSets).
-  const activeSession  = deloadSessionSets(scaleForReadiness(travelledSession, readiness), scheduled.setDrops);
+  // A deload day's set counts (deloadSessionSets).
+  const activeSession  = deloadSessionSets(scaleForReadiness(travelledSession, readiness), scheduled.sets);
   const prescribedWeights = scheduled.weights;
   const prescribedReps = scheduled.reps;
   const planWeights = useMemo(() => ({ ...prescribedWeights, ...sessionWeights }), [prescribedWeights, sessionWeights]);
