@@ -105,3 +105,28 @@ describe("the deload offer's copy", () => {
     expect(body).not.toContain("—");
   });
 });
+
+describe("Home for a newcomer and a returner", () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 8, 25, 9, 0)); });
+  const rec = (date) => ({ v: 2, id: `${date}T10:00:00.000Z`, date, session: "strength-a", blocks: [] });
+
+  it("the first three sessions carry one line on what rpe 8 asks", () => {
+    const { main: _m, ...p } = props(false);
+    const gloss = "rpe 8 means about two reps left in the tank.";
+    const { container, rerender } = render(<HomeScreen {...p} historyCount={2} />);
+    expect(flat(container.textContent)).toContain(gloss);
+    const line = [...container.querySelectorAll("div")].find((d) => flat(d.textContent) === gloss);
+    expect(line.style.color).toBe(T.ink2);
+    rerender(<HomeScreen {...p} historyCount={3} />);
+    expect(flat(container.textContent)).not.toContain(gloss);
+  });
+
+  it("the first strength day after 10 or more days off says how long it has been", () => {
+    const { main: _m, ...p } = props(false);
+    const { container, rerender } = render(<HomeScreen {...p} history={[rec("2026-09-10")]} historyCount={9} />);
+    expect(flat(container.textContent)).toContain("Squat & Push. First one in 15 days.");
+    rerender(<HomeScreen {...p} history={[rec("2026-09-16")]} historyCount={9} />);
+    expect(flat(container.textContent)).toContain("Squat & Push.");
+    expect(flat(container.textContent)).not.toContain("First one in");
+  });
+});
