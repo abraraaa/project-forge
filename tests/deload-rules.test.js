@@ -386,3 +386,16 @@ describe("a weekend acceptance still gets a real deload", () => {
     } finally { vi.useRealTimers(); }
   });
 });
+
+describe("ignoring a deload needs a deload that asks for something lighter", () => {
+  it("lifting the card's weight never counts as ignoring when the deload rounds back to the pre-deload weight", async () => {
+    const { ignoresDeload, computeDeloadPrescription } = await import("../lib/progression.js");
+    const rec = (name, kg) => ({ blocks: [{ type: "main", exercises: [{ name, loadType: "barbell", sets: [{ weight: kg, reps: 5 }] }] }] });
+    const OHP = "Barbell Overhead Press";
+    // At 1.25 kg the deload rounds straight back to the pre-deload weight.
+    expect(computeDeloadPrescription(OHP, { currentWeight: 1.25 }, { loadType: "barbell" }).weight).toBe(1.25);
+    expect(ignoresDeload(rec(OHP, 1.25), { preDeloadWeights: { [OHP]: 1.25 } })).toBe(false);
+    expect(ignoresDeload(rec("Barbell Back Squat", 100), { preDeloadWeights: { "Barbell Back Squat": 100 } })).toBe(true);
+    expect(ignoresDeload(rec("Barbell Back Squat", 65), { preDeloadWeights: { "Barbell Back Squat": 100 } })).toBe(false);
+  });
+});
