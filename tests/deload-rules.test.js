@@ -295,7 +295,7 @@ describe("bodyweight and assisted lifts on a deload day", () => {
   const ASSISTED = "Assisted Pull-Up";
   /** A one-block session of `name`, three sets, as the session composes it. */
   const block = (name, sets = 3) => ({ name: "t", blocks: [{ id: "x1", type: "accessory", sets, ex: { name, reps: 10 } }] });
-  const setsShown = (name, sets) => deloadSessionSets(block(name, sets), plan().setDrops).blocks[0].sets;
+  const setsShown = (name, sets) => deloadSessionSets(block(name, sets), plan().sets).blocks[0].sets;
   const before = (rir) => {
     seed({ [PUSHUP]: state(null, 12), [ASSISTED]: state(20, 8), [SQUAT]: state(100) }, { [ASSISTED]: 20, [SQUAT]: 100 });
     P.saveReps(PROFILE, { [PUSHUP]: 12, [ASSISTED]: 8 });
@@ -334,20 +334,55 @@ describe("bodyweight and assisted lifts on a deload day", () => {
     expect(P.getReps(PROFILE)).toEqual(reps);
   });
 
-  it("a superset with a loaded partner keeps its sets", () => {
-    before(1.5);
-    const ss = { name: "t", blocks: [{ id: "s1", type: "superset", sets: 3, exA: { name: PUSHUP }, exB: { name: BENCH } }] };
-    expect(deloadSessionSets(ss, plan().setDrops).blocks[0].sets).toBe(3);
+  it("a superset takes the smaller of its lifts' counts: a loaded partner's deload sets", () => {
+    before(3);
+    const ss = { name: "t", blocks: [{ id: "s1", type: "superset", sets: 4, exA: { name: PUSHUP }, exB: { name: BENCH } }] };
+    expect(deloadSessionSets(ss, plan().sets).blocks[0].sets).toBe(2);
   });
 
   it("with no deload active nothing drops", () => {
     seed({ [PUSHUP]: state(null, 12) }, {});
     session(1, [{ name: PUSHUP, loadType: "bodyweight", reps: 12, rir: 0 }]);
     vi.setSystemTime(at(3));
-    expect(plan().setDrops).toEqual({});
+    expect(plan().sets).toEqual({ day: false, lifts: {} });
     const s = SESSIONS[0];
-    expect(deloadSessionSets(s, plan().setDrops)).toBe(s);
+    expect(deloadSessionSets(s, plan().sets)).toBe(s);
     expect(card(PUSHUP, "bodyweight", 12).reps).toBe(12);
+  });
+});
+
+describe("loaded lifts on a deload day take the deload's set count", () => {
+  const A = SESSIONS[0];
+  const setsOf = (session, id) => session.blocks.find((b) => b.id === id).sets;
+  const shown = () => deloadSessionSets(A, plan().sets);
+
+  it("a 3-set main lift shows 2 sets on a deload day and 3 the day after the window, a loaded superset 2", () => {
+    three();
+    accept();
+    expect([setsOf(A, "a1"), setsOf(A, "ass1")]).toEqual([3, 3]);
+    expect([setsOf(shown(), "a1"), setsOf(shown(), "a2"), setsOf(shown(), "ass1")]).toEqual([2, 2, 2]);
+    vi.setSystemTime(at(8));
+    expect(setsOf(shown(), "a1")).toBe(2);
+    vi.setSystemTime(at(9));
+    expect(setsOf(shown(), "a1")).toBe(3);
+    expect(shown()).toBe(A);
+  });
+
+  it("a 5-set power lift shows 3, and a lift never logged still takes its deload sets", () => {
+    three();
+    accept();
+    const power = { name: "t", blocks: [{ id: "p1", type: "main", sets: 5, ex: { name: "Power Clean" } }, { id: "p2", type: "main", sets: 2, ex: { name: SQUAT } }] };
+    const out = deloadSessionSets(power, plan().sets);
+    expect(out.blocks.map((b) => b.sets)).toEqual([3, 2]);
+    expect(plan().sets.lifts).not.toHaveProperty("Power Clean");
+  });
+
+  it("the deload day writes as before: the load cut, nothing stored beyond the session", () => {
+    three();
+    accept();
+    const before = P.getReps(PROFILE);
+    expect(session(2, [{ name: SQUAT, n: 2 }]).written[SQUAT]).toBe(65);
+    expect(P.getReps(PROFILE)).toEqual(before);
   });
 });
 

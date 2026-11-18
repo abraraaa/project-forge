@@ -54,6 +54,29 @@ describe("one set fewer for a hard bodyweight block", () => {
     expect(line(runTool("programme", {}, { meta: m(deload), history }, now).text)).toMatch(new RegExp(`${HIP} 2 × .* \\+ ${TRX} 2 ×`));
     expect(line(runTool("programme", {}, { meta: m(null), history }, now).text)).toMatch(new RegExp(`${HIP} 3 × .* \\+ ${TRX} 3 ×`));
   });
+
+  it("programme prints a loaded main lift at the deload's two sets, and three without one", () => {
+    const squatLine = (text) => text.split("\n").find((l) => l.includes(`${SQUAT} `));
+    expect(squatLine(runTool("programme", {}, { meta: m(deload), history }, now).text)).toContain(`${SQUAT} 2 × 5 @ 65 kg`);
+    expect(squatLine(runTool("programme", {}, { meta: m(null), history }, now).text)).toContain(`${SQUAT} 3 × 5 @ 100 kg`);
+  });
+});
+
+describe("the coached session", () => {
+  it("reads the trainer plan's deload and plans the client's set counts", async () => {
+    const { coachedSource } = await import("../lib/session-source.js");
+    const { scheduledPlan, deloadSessionSets } = await import("../lib/programme-resolve.js");
+    const { SESSIONS } = await import("../lib/programme.js");
+    const planned = (active) => {
+      const plan = projectPlan({ meta: meta({ [SQUAT]: state(100) }, active), history: [] }, { todayIso: "2026-11-04" });
+      const src = coachedSource(plan, { sessions: [] });
+      const due = scheduledPlan({ weights: src.weights(), reps: src.reps(), history: src.history(),
+        trainingState: { lifts: src.liftStates(), mesocycle: { activeDeload: src.activeDeload() } } });
+      return deloadSessionSets(SESSIONS[0], due.sets).blocks.find((b) => b.id === "a1").sets;
+    };
+    expect(planned(deload)).toBe(2);
+    expect(planned(null)).toBe(3);
+  });
 });
 
 describe("the trainer plan", () => {
@@ -88,7 +111,7 @@ describe("the trainer plan", () => {
 describe("the retro sheet", () => {
   it("prefills from the card's plan, not raw W and R", async () => {
     const { readFileSync: read } = await import("node:fs");
-    expect(read(new URL("../components/ForgeApp.jsx", import.meta.url), "utf8")).toContain("setDrops={retroPlan.setDrops}");
+    expect(read(new URL("../components/ForgeApp.jsx", import.meta.url), "utf8")).toContain("deloadSets={retroPlan.sets}");
     const { readFileSync } = await import("node:fs");
     const src = readFileSync(new URL("../components/ForgeApp.jsx", import.meta.url), "utf8");
     expect(src).toMatch(/const retroPlan = useMemo\(\(\) => scheduledPlan\(\{/);

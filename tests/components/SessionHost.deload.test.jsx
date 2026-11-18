@@ -60,7 +60,8 @@ describe("a session inside a deload", () => {
 
   it("folds the deload day into the kicker, the word in ink underlined in the day's key", () => {
     const { container } = start({ deload: true });
-    expect(flat(container.textContent)).toContain("Set 1 of 3 · Main lift · deload day 1 of 5");
+    // The deload's two sets, not the block's three.
+    expect(flat(container.textContent)).toContain("Set 1 of 2 · Main lift · deload day 1 of 5");
     expect(flat(container.textContent)).not.toContain("deload · day");
     const word = [...container.querySelectorAll("span")].find((s) => s.textContent === "deload");
     expect(word.style).toMatchObject({ color: T.ink, textDecorationLine: "underline", textDecorationColor: T.dayKey.strength, textDecorationThickness: "1px", textUnderlineOffset: "3px" });
