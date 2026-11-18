@@ -183,7 +183,9 @@ describe("the lifter can always lift what they like", () => {
     const day = visit(2, SQUAT, { lifted: 100 });
     expect(day).toMatchObject({ card: 65, written: 65 });
     expect(TS.get(PROFILE).lifts[SQUAT].currentWeight).toBe(100);
-    expect(visit(4, SQUAT, { lifted: 100 }).card).toBe(65);
+    // Followed next time, so the deload runs on (two in a row would end it:
+    // tests/deload-rules.test.js).
+    expect(visit(4, SQUAT).card).toBe(65);
     expect(visit(6, BENCH).closed).toBe(true);
     expect(visit(9, SQUAT).card).toBe(90);
   });

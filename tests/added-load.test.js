@@ -319,7 +319,7 @@ describe("the engine never writes the vest, and never treats it as evidence", ()
     expect(TS.get("p").lifts["Glute Bridge"].e1RM ?? null).toBeNull();
     expect(localStorage.getItem("forge:p:addedLoads")).toBe(before);
     expect(out.wwUpdates["Glute Bridge"]).toBeUndefined();
-    expect(Object.keys(out).sort()).toEqual(["justCompletedDeload", "stillInDeload", "wrUpdates", "wwUpdates"]);
+    expect(Object.keys(out).sort()).toEqual(["deloadEnded", "justCompletedDeload", "stillInDeload", "wrUpdates", "wwUpdates"]);
   });
 
   it("rep progression with a vest keeps the vest, climbs reps", () => {
