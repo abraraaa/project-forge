@@ -12,6 +12,7 @@ vi.mock("@vercel/analytics", () => ({ track: () => {} }));
 
 import SessionHost from "../../components/SessionHost.jsx";
 import { P, D, TS, SessionIntent } from "../../lib/storage.js";
+import { T } from "../../lib/tokens.js";
 
 afterEach(cleanup);
 
@@ -57,9 +58,12 @@ describe("a session inside a deload", () => {
     expect(P.getWeights(WHO)).toEqual({ [SQUAT]: 100 });
   });
 
-  it("carries the deload tag on the workout view", () => {
+  it("folds the deload day into the kicker, the word in ink underlined in the day's key", () => {
     const { container } = start({ deload: true });
-    expect(flat(container.textContent)).toContain("deload · day 1 of 5");
+    expect(flat(container.textContent)).toContain("Set 1 of 3 · Main lift · deload day 1 of 5");
+    expect(flat(container.textContent)).not.toContain("deload · day");
+    const word = [...container.querySelectorAll("span")].find((s) => s.textContent === "deload");
+    expect(word.style).toMatchObject({ color: T.ink, textDecorationLine: "underline", textDecorationColor: T.dayKey.strength, textDecorationThickness: "1px", textUnderlineOffset: "3px" });
   });
 
   it("dials up with the normal controls, nothing in the way", () => {
@@ -77,5 +81,6 @@ describe("a session with no deload", () => {
     logSet();
     expect(loggedSquat().sets[0].weight).toBe(100);
     expect(container.textContent.toLowerCase()).not.toContain("deload");
+    expect(container.innerHTML).not.toContain("underline");
   });
 });

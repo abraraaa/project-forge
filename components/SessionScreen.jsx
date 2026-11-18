@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { T, DISPLAY, heatForRpe, onHeatForRpe, heatMarkHeight, rpeValue } from "@/lib/tokens";
-import { Fade, MonoNums } from "@/components/ui";
+import { Fade, MonoNums, DeloadWord } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import { pressLiftHandlers } from "@/lib/press-lift";
@@ -551,7 +551,7 @@ function RoundRecap({ round, of, label, sides, onEdit }) {
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,planWeights={},setPlanWeights,planReps={},setPlanReps,prescribedReps={},coachLine=null,travel=false,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null,maxSets=null}){
+export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,planWeights={},setPlanWeights,planReps={},setPlanReps,prescribedReps={},coachLine=null,travel=false,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDay=null,maxSets=null}){
   const [swapEx,setSwapEx]=useState(null);
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
   const vidEx    =isSS?(phase==="A"?resolvedExA:resolvedExB):resolvedEx;
@@ -695,6 +695,7 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           {blockDone
             ? <>All <span style={{fontFamily:T.measured}}>{setsDue}</span> {isSS?"rounds":"sets"} logged · {block.label}</>
             : <>{isSS?"Round":"Set"} <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{setsDue}</span> · {block.label}{isSS?` ${phase}`:""}</>}
+          {deloadDay && <> · <DeloadWord keyColour={T.dayKey.strength}/>{deloadDay.day ? <> day <span style={{fontFamily:T.measured}}>{deloadDay.day}</span> of <span style={{fontFamily:T.measured}}>{deloadDay.of}</span></> : null}</>}
         </div>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
           <div onClick={resolveVid(activeEx?.name, activeEx?.vid) ? ()=>setShowVid(true) : undefined}
@@ -725,11 +726,9 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             <span style={{fontSize:11,fontWeight:500,color:T.ink3}}>Swap</span>
           </button>
         </div>
-        {(loadTypeSubtitle || deloadDayTag) && (
+        {loadTypeSubtitle && (
           <div style={{fontSize:13,color:T.ink2,marginTop:10}}>
             {loadTypeSubtitle}
-            {loadTypeSubtitle && deloadDayTag && " · "}
-            {deloadDayTag && <MonoNums>{deloadDayTag}</MonoNums>}
           </div>
         )}
         {/* Travel line — what this slot is standing in for, and what to find

@@ -18,13 +18,13 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
 import { mondayIndex, addDaysIso } from "@/lib/dates";
-import { Fade, Card, Tag, MonoNums } from "@/components/ui";
+import { Fade, Card, Tag, MonoNums, DeloadWord } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import ConsentLine from "@/components/ConsentLine";
 import { TrainerSessionCard } from "@/components/TrainerSessionSheet";
 import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
-import { deloadCardCopy, deloadDayLabel, liveDeload, repTargetRepairs } from "@/lib/progression";
+import { deloadCardCopy, deloadDayOf, liveDeload, repTargetRepairs } from "@/lib/progression";
 import { planStartWeight, isWorkingWeight, scheduledPlan, deloadSessionSets } from "@/lib/programme-resolve";
 import { getLoadType, parseTimedReps, usesOptionalChrome } from "@/lib/lift-translations";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
@@ -248,7 +248,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const shownSession = deloadSessionSets(viewSession, due.setDrops);
   // The session view's own tag, for the day in view; null outside a deload.
   const deloadNow = liveDeload(activeDeload, history);
-  const deloadTag = deloadDayLabel(deloadNow, viewDateStr);
+  const deloadDay = deloadDayOf(deloadNow, viewDateStr);
 
   // Guidance line under the display name. Strength days lead with the
   // session's own noun; non-strength days keep their modality detail.
@@ -340,7 +340,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             const isDone    = !!weekDone[i];
             // Made up later in the week: a muted tick, not a solid one.
             const isCovered = !isDone && status === "covered";
-            const inDeload  = deloadDayLabel(deloadNow, addDaysIso(new Date(nowMs), i - todayIdx)) !== null;
+            const inDeload  = deloadDayOf(deloadNow, addDaysIso(new Date(nowMs), i - todayIdx)) !== null;
             return (
               <button key={i} onClick={()=>setViewIdx(i)} className="forge-press"
                 aria-label={`${DAY_NAMES[i]}${isToday ? " (today)" : ""}${isDone ? ", done" : isCovered ? ", made up" : isResting ? ", resting" : ""}${inDeload ? ", deload" : ""}`}
@@ -387,14 +387,14 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       <Fade d={100} opaque>
         <div className="home-headline" style={{padding:"26px 24px 0",transformOrigin:"left top"}}>
           <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:8}}>
-            <span style={{fontSize:13,color:T.ink2}}>{dayLabel}</span>
+            <span style={{fontSize:13,color:T.ink2}}>
+              {dayLabel}
+              {deloadDay && <> · <DeloadWord keyColour={dayKey}/>, day <span style={{fontFamily:T.measured}}>{deloadDay.day}</span> of <span style={{fontFamily:T.measured}}>{deloadDay.of}</span></>}
+            </span>
             {!isViewingToday && (
               <span style={{fontSize:12,color:T.ink3}}>
                 {viewDate.toLocaleDateString("en-GB",{day:"numeric",month:"short"})}
               </span>
-            )}
-            {deloadTag && (
-              <span style={{fontSize:13,color:T.ink2}}><MonoNums>{deloadTag}</MonoNums></span>
             )}
           </div>
           <h1 style={{...DISPLAY,fontSize:46,color:T.ink,margin:0}}>
