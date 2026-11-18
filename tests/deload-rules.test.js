@@ -2,13 +2,15 @@
 // How a deload ends besides its calendar close, through the real engine
 // (commitSessionRecord) and the card's plan (scheduledPlan): two sessions in
 // a row whose main lift ignored it end it as declined; time off as long as
-// the deload ends it as rested. Nothing stored is deleted; the end is
-// recorded beside the calendar close.
+// the deload ends it as rested. A bodyweight or assisted lift keeps its reps
+// on a deload day and drops one set only after a hard last session. Nothing
+// stored is deleted; the end is recorded beside the calendar close.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { H, TS, P, recordCompletion } from "../lib/storage.js";
 import { commitSessionRecord } from "../lib/session-commit.js";
 import { startDeload, liveDeload, deloadDayLabel } from "../lib/progression.js";
-import { scheduledPlan, planStartWeight } from "../lib/programme-resolve.js";
+import { scheduledPlan, planStartWeight, deloadSessionSets } from "../lib/programme-resolve.js";
+import { SESSIONS } from "../lib/programme.js";
 
 const PROFILE = "p";
 const SQUAT = "Barbell Back Squat";
@@ -227,6 +229,67 @@ describe("a deload taken as a rest week", () => {
     expect(fri.closed).toBe(true);
     vi.setSystemTime(at(9));
     expect(card(SQUAT).kg).toBe(90);
+  });
+});
+
+describe("bodyweight and assisted lifts on a deload day", () => {
+  const PUSHUP = "Push-Up";
+  const ASSISTED = "Assisted Pull-Up";
+  /** A one-block session of `name`, three sets, as the session composes it. */
+  const block = (name, sets = 3) => ({ name: "t", blocks: [{ id: "x1", type: "accessory", sets, ex: { name, reps: 10 } }] });
+  const setsShown = (name, sets) => deloadSessionSets(block(name, sets), plan().setDrops).blocks[0].sets;
+  const before = (rir) => {
+    seed({ [PUSHUP]: state(null, 12), [ASSISTED]: state(20, 8), [SQUAT]: state(100) }, { [ASSISTED]: 20, [SQUAT]: 100 });
+    P.saveReps(PROFILE, { [PUSHUP]: 12, [ASSISTED]: 8 });
+    session(1, [{ name: SQUAT }, { name: PUSHUP, loadType: "bodyweight", reps: 12, rir }, { name: ASSISTED, loadType: "assisted_bodyweight", reps: 8, rir }]);
+    accept();
+    vi.setSystemTime(at(3));
+  };
+
+  it("last session at RPE 7: the reps and the sets stay, and the assisted lift keeps its help", () => {
+    before(3);
+    // The reps as stored (the RPE 7 session climbed them to 13), not halved.
+    expect(P.getReps(PROFILE)[PUSHUP]).toBe(13);
+    expect(card(PUSHUP, "bodyweight", 12).reps).toBe(13);
+    expect(card(ASSISTED, "assisted_bodyweight", 8)).toMatchObject({ kg: 20, reps: 8 });
+    expect(setsShown(PUSHUP, 3)).toBe(3);
+    expect(setsShown(ASSISTED, 3)).toBe(3);
+    // The loaded lift still deloads by load.
+    expect(card(SQUAT).kg).toBe(65);
+  });
+
+  it("last session at RPE 8.5: the reps stay and the block drops one set, never below 2", () => {
+    before(1.5);
+    expect(card(PUSHUP, "bodyweight", 12).reps).toBe(12);
+    expect(setsShown(PUSHUP, 3)).toBe(2);
+    expect(setsShown(PUSHUP, 2)).toBe(2);
+    expect(setsShown(ASSISTED, 4)).toBe(3);
+    expect(card(ASSISTED, "assisted_bodyweight", 8).kg).toBe(20);
+  });
+
+  it("the deload day writes no reps and the help as it was", () => {
+    before(1.5);
+    const reps = P.getReps(PROFILE);
+    const day = session(3, [{ name: SQUAT }, { name: PUSHUP, loadType: "bodyweight", reps: 12 }, { name: ASSISTED, loadType: "assisted_bodyweight", reps: 8 }]);
+    expect(day.written).not.toHaveProperty(PUSHUP);
+    expect(day.written[ASSISTED]).toBe(20);
+    expect(P.getReps(PROFILE)).toEqual(reps);
+  });
+
+  it("a superset with a loaded partner keeps its sets", () => {
+    before(1.5);
+    const ss = { name: "t", blocks: [{ id: "s1", type: "superset", sets: 3, exA: { name: PUSHUP }, exB: { name: BENCH } }] };
+    expect(deloadSessionSets(ss, plan().setDrops).blocks[0].sets).toBe(3);
+  });
+
+  it("with no deload active nothing drops", () => {
+    seed({ [PUSHUP]: state(null, 12) }, {});
+    session(1, [{ name: PUSHUP, loadType: "bodyweight", reps: 12, rir: 0 }]);
+    vi.setSystemTime(at(3));
+    expect(plan().setDrops).toEqual({});
+    const s = SESSIONS[0];
+    expect(deloadSessionSets(s, plan().setDrops)).toBe(s);
+    expect(card(PUSHUP, "bodyweight", 12).reps).toBe(12);
   });
 });
 

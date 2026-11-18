@@ -46,7 +46,7 @@ import {
   CD, coachTrainer, letterIndex, letterOf, sessionNameOf, COACH_MAX_SETS,
 } from "@/lib/session-source";
 import { changeStatus, sessionDayWords } from "@/lib/trainer-change";
-import { catalogueTemplateWeight, scheduledPlan } from "@/lib/programme-resolve";
+import { catalogueTemplateWeight, scheduledPlan, deloadSessionSets } from "@/lib/programme-resolve";
 import {
   SESSIONS, EXERCISE_POOLS,
   applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
@@ -372,7 +372,6 @@ export default function SessionHost({ mode = null } = {}) {
   // Travel converts what focus finished choosing, and readiness still trims
   // on top — a cooked day drops its finisher whether or not you're in a hotel.
   const travelledSession = travel ? deriveTravelSession(focusedSession) : focusedSession;
-  const activeSession  = scaleForReadiness(travelledSession, readiness);
   // The prescription the session shows: R, with any target left below its
   // lift's base read as the base (repTargetRepairs). Templates come from the
   // programme slot as composed before swaps and readiness; a lift placed by a
@@ -403,6 +402,9 @@ export default function SessionHost({ mode = null } = {}) {
   }), [workingWeights, workingReps, repRepairs, liftStates, activeDeload, history]);
   // The deload as today's card reads it: none once time off has done its work.
   const deloadNow = useMemo(() => liveDeload(activeDeload, history), [activeDeload, history]);
+  // A deload day takes a set off a bodyweight or assisted block after a hard
+  // last session (deloadSessionSets).
+  const activeSession  = deloadSessionSets(scaleForReadiness(travelledSession, readiness), scheduled.setDrops);
   const prescribedWeights = scheduled.weights;
   const prescribedReps = scheduled.reps;
   const planWeights = useMemo(() => ({ ...prescribedWeights, ...sessionWeights }), [prescribedWeights, sessionWeights]);

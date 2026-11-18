@@ -52,10 +52,10 @@ describe("engine exports pinned (no behaviour change)", () => {
       const profile = getLiftProfile(name);
       if (!profile.progressesByLoad) continue;
       const rx = computeDeloadPrescription(name, { currentWeight: 100, currentRepRange: { reps: 5, sets: 3 } }, { loadType: lt });
-      // An assisted lift holds its assistance and cuts volume instead.
+      // An assisted lift holds its assistance and its reps.
       if (lt === "assisted_bodyweight") {
         assisted++;
-        expect(rx, name).toMatchObject({ weight: 100, sets: 2, rationale: ["bw_deload_reduced_reps"] });
+        expect(rx, name).toMatchObject({ weight: 100, reps: 5, rationale: ["bw_deload_holds_reps"] });
         continue;
       }
       expect(rx.rationale).toEqual([`deload_${profile.category}_${Math.round(deloadIntensityFor(profile.category) * 100)}pct`]);

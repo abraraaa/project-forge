@@ -17,10 +17,10 @@ const meta = (lifts, activeDeload, weights = { [SQUAT]: 100 }) => ({
 const squatLine = (text) => text.split("\n").find((l) => l.startsWith(`- ${SQUAT}:`) || l.includes(`${SQUAT} `));
 
 describe("the MCP readers", () => {
-  it("current_loads shows the deload weight and the deload reps of a bodyweight lift", () => {
+  it("current_loads shows the deload weight, and a bodyweight lift's reps as they are", () => {
     const text = runTool("current_loads", {}, { meta: meta({ [SQUAT]: state(100), "Nordic Curl": state(null, 8) }, deload), history: [] }, now).text;
     expect(text.split("\n")).toContain(`- ${SQUAT}: 65 kg`);
-    expect(text.split("\n")).toContain("- Nordic Curl: bodyweight × 4");
+    expect(text).not.toContain("Nordic Curl: bodyweight × 4");
   });
 
   it("current_loads shows the re-entry on a lift's first visit after the close", () => {

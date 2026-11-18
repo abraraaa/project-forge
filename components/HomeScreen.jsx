@@ -25,7 +25,7 @@ import { TrainerSessionCard } from "@/components/TrainerSessionSheet";
 import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
 import { deloadCardCopy, deloadDayLabel, liveDeload, repTargetRepairs } from "@/lib/progression";
-import { planStartWeight, isWorkingWeight, scheduledPlan } from "@/lib/programme-resolve";
+import { planStartWeight, isWorkingWeight, scheduledPlan, deloadSessionSets } from "@/lib/programme-resolve";
 import { getLoadType, parseTimedReps, usesOptionalChrome } from "@/lib/lift-translations";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
 import { fetchWithTimeout } from "@/lib/net";
@@ -243,6 +243,8 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // session's card shows them (scheduledPlan).
   const due = scheduledPlan({ weights: workingWeights, reps: liveReps, trainingState: { lifts: liftStates, mesocycle: { activeDeload } }, history });
   const plan = { reps: due.reps, weights: due.weights, bodyweight, anchors: muscleAnchors };
+  // The set counts the session will open with (deloadSessionSets).
+  const shownSession = deloadSessionSets(viewSession, due.setDrops);
   // The session view's own tag, for the day in view; null outside a deload.
   const deloadNow = liveDeload(activeDeload, history);
   const deloadTag = deloadDayLabel(deloadNow, viewDateStr);
@@ -426,7 +428,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 planned proximity to failure in colour AND height, and the
                 number is always printed. */}
             <div style={{padding:"2px 24px 0"}}>
-              {viewSession.blocks.map((b)=>{
+              {shownSession.blocks.map((b)=>{
                 const rpe   = BLOCK_RPE[b.type] ?? 8;
                 const name  = b.type==="main"
                   ? b.ex.name
