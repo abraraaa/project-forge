@@ -576,7 +576,6 @@ describe("a finished block reads as finished when you flip back to it", () => {
     const onLog = vi.fn();
     render(<SessionScreen {...props({ setNum: 4, onLog })} />);
     expect(screen.queryByText(/^Log set/)).toBeNull();
-    expect(screen.queryByLabelText("Start rest timer")).toBeNull();
 
     fireEvent.click(screen.getByText("Add another set").closest("button"));
     expect(onLog).not.toHaveBeenCalled();

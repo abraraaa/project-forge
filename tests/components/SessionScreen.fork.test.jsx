@@ -56,7 +56,14 @@ describe("the finished-block fork", () => {
     expect(add.parentElement).toBe(next.parentElement);   // same row
     expect(next.textContent).toBe("Next: Barbell Bench Press"); // the accessible name
     expect(screen.queryByText(/^Log set/)).toBeNull();
-    expect(screen.queryByLabelText("Start rest timer")).toBeNull();
+  });
+
+  it("keeps the rest ring while the next block is chosen, its countdown in 18px mono", () => {
+    render(<SessionScreen {...props({ setNum: 4, restActive: true, restRemain: 75 })} />);
+    const ring = screen.getByLabelText(/^Resting, 1:15 left/);
+    expect(ring.textContent).toBe("1:15");
+    expect(ring.style.fontSize).toBe("18px");
+    expect(ring.parentElement).toBe(btn("Add another set").parentElement);
   });
 
   it("is not offered while a set is still outstanding", () => {
