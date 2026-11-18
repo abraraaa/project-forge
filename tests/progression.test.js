@@ -1827,12 +1827,12 @@ describe("assisted lifts around the progression", () => {
     expect(reconcileLiftStateWithSession(state, ex([set(null), set(null)]))).toBe(state);
   });
 
-  it("a deload holds the assistance and halves the reps on 2 sets", () => {
+  it("a deload holds the assistance and keeps the reps and sets", () => {
     const rx = computeDeloadPrescription("Assisted Pull-Up", { currentWeight: 20, currentRepRange: { reps: 8, sets: 3 } }, { loadType: ASSISTED });
     expect(rx.weight).toBe(20);
-    expect(rx.sets).toBe(2);
-    expect(rx.reps).toBe(4);
-    expect(rx.rationale).toEqual(["bw_deload_reduced_reps"]);
+    expect(rx.sets).toBe(3);
+    expect(rx.reps).toBe(8);
+    expect(rx.rationale).toEqual(["bw_deload_holds_reps"]);
     expect(rx.decision).toBe("DELOAD");
   });
 

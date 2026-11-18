@@ -144,13 +144,13 @@ describe("a lift with no snapshot entry", () => {
   });
 });
 
-describe("lifts that deload by reps", () => {
-  it("bodyweight: the card halves the reps on a deload day, writes no weight, and the reps return after the close", () => {
+describe("bodyweight and assisted lifts (set counts: tests/deload-rules.test.js)", () => {
+  it("bodyweight: the card keeps the reps on a deload day, writes no weight, and the reps hold after the close", () => {
     seed({ "Push-Up": state(null, 12), [SQUAT]: state(100) }, { [SQUAT]: 100 });
     P.saveReps(PROFILE, { "Push-Up": 12 });
     accept();
     const day = visit(2, "Push-Up", { loadType: "bodyweight", reps: 12 });
-    expect(day.reps).toBe(6);
+    expect(day.reps).toBe(12);
     expect(day.card).toBeNull();
     expect(day.written).toBeUndefined();
     expect(P.getReps(PROFILE)["Push-Up"]).toBe(12);
@@ -159,12 +159,12 @@ describe("lifts that deload by reps", () => {
     expect(card("Push-Up", "bodyweight", 12).reps).toBe(12);
   });
 
-  it("assisted: the card holds the help and halves the reps", () => {
+  it("assisted: the card holds the help and the reps", () => {
     seed({ "Assisted Pull-Up": state(20, 8) }, { "Assisted Pull-Up": 20 });
     P.saveReps(PROFILE, { "Assisted Pull-Up": 8 });
     accept();
     const day = visit(2, "Assisted Pull-Up", { loadType: "assisted_bodyweight", reps: 8 });
-    expect(day).toMatchObject({ card: 20, reps: 4, written: 20 });
+    expect(day).toMatchObject({ card: 20, reps: 8, written: 20 });
   });
 
   it("belted: the card deloads the added load from its snapshot", () => {
