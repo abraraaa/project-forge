@@ -65,11 +65,14 @@ describe("the trainer plan", () => {
     expect(l.basis.w).toBe(100);
   });
 
-  it("a deload rested out reads as no deload, with the normal weight", () => {
+  it("past its window a deload reads as none: the re-entry after a session in it, the normal weight after none", () => {
     const history = [{ v: 2, id: "2026-11-02T10:00:00.000Z", date: "2026-11-02", session: "strength-a", blocks: [] }];
     const plan = projectPlan({ meta: meta({ [SQUAT]: state(100) }, deload), history }, { todayIso: "2026-11-09" });
     expect(plan.deload.active).toBe(false);
-    expect(plan.lifts.find((l) => l.name === SQUAT).w).toBe(100);
+    expect(plan.lifts.find((l) => l.name === SQUAT).w).toBe(90);
+    const rested = projectPlan({ meta: meta({ [SQUAT]: state(100) }, deload), history: [] }, { todayIso: "2026-11-09" });
+    expect(rested.deload.active).toBe(false);
+    expect(rested.lifts.find((l) => l.name === SQUAT).w).toBe(100);
     const during = projectPlan({ meta: meta({ [SQUAT]: state(100) }, deload), history }, { todayIso: "2026-11-04" });
     expect(during.deload.active).toBe(true);
     expect(during.lifts.find((l) => l.name === SQUAT).w).toBe(65);

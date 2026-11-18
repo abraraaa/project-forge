@@ -209,7 +209,9 @@ describe("audit tail nits #54/#55/#35 (code shape)", () => {
   // behaviour in tests/components/HomeScreen.day.test.jsx.
   it("#35: deload math is calendar-day local; dead MAX constant gone", () => {
     const s = readFileSync(resolve(__dirname, "../lib/progression.js"), "utf8");
-    expect(s).toContain("parseLocalDate(sessionDate || todayLocalIso())");
+    // The window compares local calendar days (deloadWindow builds them with localDateStr).
+    expect(s).toContain("(sessionDate || todayLocalIso()) >= w.end");
+    expect(s).toContain("const start = localDateStr(started);");
     expect(s).not.toContain("DELOAD_AUTO_CLOSE_MAX_DAYS      = 10");
     expect(s).not.toMatch(/new Date\(sessionDate/);
   });

@@ -985,7 +985,8 @@ describe("a cooked record is history only", () => {
     seedSquat(100);
     expect(apply(squat("2026-10-20T10:00:00.000Z", 100, "normal", 3)).wwUpdates[SQUAT]).toBe(102.5);
     const ts = startDeload(TS.get("p"), { type: "stall_convergence", lifts: [SQUAT] });
-    TS.replaceState("p", { ...ts, mesocycle: { ...ts.mesocycle, activeDeload: { ...ts.mesocycle.activeDeload, startedAt: "2026-10-21T12:00:00.000Z" } } });
+    // Accepted Wednesday 21 October: the window runs to Monday 26th.
+    TS.replaceState("p", { ...ts, mesocycle: { ...ts.mesocycle, activeDeload: { ...ts.mesocycle.activeDeload, startedAt: "2026-10-21T12:00:00.000Z", plannedDays: 5 } } });
   };
 
   it("a cooked session inside a deload shows the deload weight next, not one from its sets", () => {
@@ -1011,11 +1012,10 @@ describe("a cooked record is history only", () => {
     expect(unscheduled(after)).toEqual(unscheduled(before));
   });
 
-  it("a cooked session after five days off closes the deload as rested: the pre-deload weight, no re-entry", () => {
+  it("a cooked session after a window with no session in it closes the deload as rested: no re-entry", () => {
     deloadFrom102();
-    // The deload day's write, as the commit stores it.
-    P.saveWeights("p", { [SQUAT]: apply(squat("2026-10-22T10:00:00.000Z", 65)).wwUpdates[SQUAT] });
-    expect(P.getWeights("p")[SQUAT]).toBe(65);
+    // A stored weight other than the pre-deload one returns to it.
+    P.saveWeights("p", { [SQUAT]: 65 });
     const out = apply(squat("2026-10-27T10:00:00.000Z", 40, "cooked"));
     expect(out).toMatchObject({ deloadEnded: "rested", justCompletedDeload: false, stillInDeload: false });
     expect(out.wwUpdates).toEqual({ [SQUAT]: 100 });
@@ -1122,15 +1122,16 @@ describe("a deload day's weight is the deload of the pre-deload weight", () => {
     expect(out.wrUpdates).toEqual({});
   });
 
-  it("the closing day re-enters at 90 and the ordinary climb follows", () => {
+  it("the first session after the window re-enters at 90 and the ordinary climb follows", () => {
     deload({ [SQUAT]: state(100) }, { [SQUAT]: 100 });
     expect(written(apply(squat(22, 65)))).toBe(65);
     expect(written(apply(squat(23, 65)))).toBe(65);
-    const closing = apply(squat(25, 65));
+    // Still inside the seven-day window (21 to 27 October).
+    expect(written(apply(squat(27, 65)))).toBe(65);
+    // The re-entry session itself (its card shows 90) closes the deload and climbs as an ordinary one.
+    const closing = apply(squat(28, 90));
     expect(closing.justCompletedDeload).toBe(true);
-    expect(written(closing)).toBe(90);
-    // The re-entry session itself (its card shows 90) climbs as an ordinary one.
-    expect(written(apply(squat(27, 90)))).toBe(92.5);
-    expect(written(apply(squat(29, 92.5)))).toBe(95);
+    expect(written(closing)).toBe(92.5);
+    expect(written(apply(squat(30, 92.5)))).toBe(95);
   });
 });
