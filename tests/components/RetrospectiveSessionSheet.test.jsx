@@ -39,3 +39,21 @@ describe("RetrospectiveSessionSheet", () => {
     expect(sq.weights.every((w) => w === 100)).toBe(true);
   });
 });
+
+describe("RetrospectiveSessionSheet on a deload day", () => {
+  it("a block whose every lift drops a set (deloadSessionSets) prefills one set fewer", () => {
+    const rowsWith = (setDrops) => {
+      const onSubmit = vi.fn();
+      render(<RetrospectiveSessionSheet date="2026-09-21" bodyweight={80} workingWeights={{}} workingReps={{}} history={[]}
+        setDrops={setDrops} onCancel={() => {}} onSubmit={onSubmit} />);
+      fireEvent.click(screen.getByText("Log session"));
+      cleanup();
+      return onSubmit.mock.calls[0][0].exercises;
+    };
+    const finisher = (rows) => rows.find((r) => r.name === "Hanging Leg Raise");
+    expect(finisher(rowsWith({})).prescribed.sets).toBe(4);
+    const dropped = finisher(rowsWith({ "Hanging Leg Raise": true, "Standing Calf Raise": true }));
+    expect(dropped.prescribed.sets).toBe(3);
+    expect(dropped.weights.length).toBe(3);
+  });
+});
