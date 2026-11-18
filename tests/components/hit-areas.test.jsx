@@ -55,7 +55,7 @@ describe("44px hit areas, same pixels", () => {
     expectHit44(screen.getByText("Home").closest("button"));
     const share = screen.getAllByLabelText(/^Share .* trend$/)[0];
     expectHit44(share);
-    // The 15 × 19 box it replaced: 29px and 25px given back.
+    // The margins keep the glyph's right edge and centre.
     expect(share.style.marginLeft).toBe("-29px");
     expect(share.style.marginTop).toBe("-12.5px");
   });

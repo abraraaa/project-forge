@@ -406,8 +406,7 @@ function StrengthRow({ lift, series, best = null, todayIso, expanded = false, on
           const canvas = await renderShareCard({ lift, series });
           await shareCanvas(canvas, `heatwayve-${lift.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-1rm.png`);
         }}
-        // 44 × 44 around the 11px glyph, right edge and centre where the
-        // 15 × 19 box had them.
+        // A 44px hit area; the margins keep the glyph's right edge and centre.
         style={{background:"none",border:"none",padding:0,cursor:"pointer",flexShrink:0,display:"inline-flex",
           alignItems:"center",justifyContent:"flex-end",width:44,height:44,margin:"-12.5px 0 -12.5px -29px"}}
         aria-label={`Share ${lift} trend`}>
