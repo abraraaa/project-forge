@@ -59,7 +59,7 @@ describe("applySessionToEngine", () => {
   });
 
   it("is defensive: null inputs return the empty summary without touching stores", () => {
-    expect(applySessionToEngine(null, null)).toEqual({ wwUpdates: {}, wrUpdates: {}, justCompletedDeload: false, stillInDeload: false });
+    expect(applySessionToEngine(null, null)).toEqual({ wwUpdates: {}, wrUpdates: {}, justCompletedDeload: false, stillInDeload: false, deloadEnded: null });
   });
 });
 

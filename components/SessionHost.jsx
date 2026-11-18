@@ -897,6 +897,8 @@ export default function SessionHost({ mode = null } = {}) {
           if (engine?.justCompletedDeload) {
             setActiveDeload(null);
             setShowDeloadComplete(true);
+          } else if (engine?.deloadEnded) {
+            setActiveDeload(null);
           }
           try {
             // No readiness here: how a session felt is health data, and it
