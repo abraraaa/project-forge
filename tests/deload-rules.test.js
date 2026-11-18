@@ -287,6 +287,35 @@ describe("the deload's window: from the day it was accepted to the next Monday",
     expect(TS.get(PROFILE).mesocycle.activeDeload).not.toBeNull();
   });
 
+  describe("a backfill dated before the deload was accepted", () => {
+    // Accepted Wednesday 4th; logged that day for Tuesday 3rd.
+    it("plans the day without the deload", () => {
+      three();
+      lastSaturday();
+      accept(4);
+      const active = TS.get(PROFILE).mesocycle.activeDeload;
+      expect(liveDeload(active, H.get(PROFILE), iso(3))).toBeNull();
+      const p = scheduledPlan({ weights: P.getWeights(PROFILE), reps: P.getReps(PROFILE), trainingState: TS.get(PROFILE), history: H.get(PROFILE), todayIso: iso(3) });
+      expect(p.weights).toMatchObject({ [SQUAT]: 100, [BENCH]: 100 });
+      expect(p.sets.day).toBe(false);
+      expect(scheduledPlan({ weights: P.getWeights(PROFILE), trainingState: TS.get(PROFILE), history: H.get(PROFILE), todayIso: iso(4) }).weights[SQUAT]).toBe(65);
+    });
+
+    it("is not a deload day, and the deload runs on", () => {
+      three();
+      lastSaturday();
+      accept(4);
+      vi.setSystemTime(at(4, 9));
+      const rec = { v: 2, id: at(4, 9).toISOString(), date: iso(3), readiness: "normal", session: "strength-a",
+        blocks: [{ id: "b0", type: "main", exercises: [{ name: SQUAT, loadType: "barbell", prescribed: { sets: 3, reps: 5, weight: 100 }, sets: sets(100, "barbell", 5, 3, 2) }] }] };
+      const engine = commitSessionRecord(PROFILE, rec, { currentWeights: { [SQUAT]: 100 } });
+      expect(engine.deloadEnded).toBeNull();
+      expect(engine.wwUpdates[SQUAT]).toBe(102.5);
+      expect(TS.get(PROFILE).mesocycle.activeDeload).not.toBeNull();
+      expect(card(SQUAT).kg).toBe(65);
+    });
+  });
+
   it("a backfilled record dated before the deload never closes it as rested", () => {
     three();
     H.append(PROFILE, { v: 2, id: new Date(2026, 9, 24, 10).toISOString(), date: "2026-10-24", session: "strength-b", blocks: [] });
@@ -300,7 +329,9 @@ describe("the deload's window: from the day it was accepted to the next Monday",
     const engine = commitSessionRecord(PROFILE, rec, { currentWeights: plan().weights });
     expect(engine.deloadEnded).toBeNull();
     expect(TS.get(PROFILE).mesocycle.activeDeload).not.toBeNull();
-    expect(P.getWeights(PROFILE)).toMatchObject({ [SQUAT]: 65, [BENCH]: 65 });
+    // Not a deload day: judged on the standard path, and the card keeps the deload.
+    expect(engine.wwUpdates[SQUAT]).not.toBe(65);
+    expect(P.getWeights(PROFILE)[BENCH]).toBe(65);
     expect([card(SQUAT).kg, card(BENCH).kg]).toEqual([65, 65]);
   });
 });
