@@ -77,6 +77,14 @@ export function Card({ children, style = {} }) {
   );
 }
 
+// The word "deload" where a kicker carries it: ink, with a 1px underline in
+// the day's key so it is not lost in the kicker's ink-2.
+export function DeloadWord({ keyColour }) {
+  return (
+    <span style={{ color: T.ink, textDecorationLine: "underline", textDecorationColor: keyColour, textDecorationThickness: "1px", textUnderlineOffset: "3px" }}>deload</span>
+  );
+}
+
 // MonoNums — digits are mono, no exceptions (audit §10.3): every measured
 // value renders in Spline Sans Mono with the surrounding words in the text
 // face. This helper applies the mixed-run pattern to data-driven copy

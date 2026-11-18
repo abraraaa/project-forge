@@ -18,7 +18,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { T, DISPLAY, heatForRpe, onHeatForRpe, heatMarkHeight, rpeValue } from "@/lib/tokens";
-import { Fade, MonoNums } from "@/components/ui";
+import { Fade, MonoNums, DeloadWord } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import { useModalA11y, haptic } from "@/lib/a11y";
 import { pressLiftHandlers } from "@/lib/press-lift";
@@ -29,7 +29,9 @@ import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
 import { WEEK, swapOptionsFor } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
-import { recentForExercise } from "@/lib/analytics";
+import { recentForExercise, sessionSummaryLine, liftBests } from "@/lib/analytics";
+import BestSet from "@/components/BestSet";
+import { isCountedSet } from "@/lib/counted-set";
 import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, usesOptionalChrome, addedLoadFor, loggedAddedKg, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 import { resolveVid } from "@/lib/exercise-videos";
@@ -50,6 +52,13 @@ const linkBtn = {
   fontFamily: T.text, fontSize: 13, color: T.ink3,
   display: "inline-flex", alignItems: "center", gap: 5,
 };
+
+// The rest's closing stretch, in seconds: the ring's border turns to ink.
+export const REST_LAST_SECONDS = 10;
+
+// A 44px hit area around a small control, its pixels where they were: the
+// negative margin gives back the height the minimum adds.
+const HIT_44 = { minHeight: 44, minWidth: 44, marginTop: -14, marginBottom: -14 };
 
 // ─── RPE track ───────────────────────────────────────────────────────────────
 // Drag, not chips. Continuous 6–10 in 0.5 steps. The channel is a bare
@@ -546,7 +555,7 @@ function RoundRecap({ round, of, label, sides, onEdit }) {
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,planWeights={},setPlanWeights,planReps={},setPlanReps,prescribedReps={},coachLine=null,travel=false,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDayTag=null,maxSets=null}){
+export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,planWeights={},setPlanWeights,planReps={},setPlanReps,prescribedReps={},coachLine=null,travel=false,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDay=null,deloadBase=null,maxSets=null}){
   const [swapEx,setSwapEx]=useState(null);
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
   const vidEx    =isSS?(phase==="A"?resolvedExA:resolvedExB):resolvedEx;
@@ -555,6 +564,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   // count includes a reach's bonus set, so that set is logged, not forked past.
   const setsDue = blockSets ?? block.sets;
   const blockDone = setNum > setsDue;
+  // The block's final prescribed set, not yet logged.
+  const lastSet = !blockDone && setNum === setsDue && setsDue > 1;
   // Adding a set is deliberate. Keyed so it resets on any block/set change.
   const [addKey,setAddKey]=useState(null);
   const thisKey=`${block.id}|${setNum}`;
@@ -639,6 +650,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const last = recent[0] || null;
   const lastW = loggedKgFor(last?.topSet ?? null, optionalWeight);
   const delta = (lastW != null && currentW != null) ? Math.round((currentW - lastW) * 100) / 100 : null;
+  const deloadShare = deloadDay && loadType !== "assisted_bodyweight" && Number.isFinite(deloadBase) && deloadBase > 0 && currentW != null
+    ? Math.round((currentW / deloadBase) * 100) : null;
   const lastRpe = rpeValue(last?.topSet?.rpe) ?? rpeValue(last?.effort);
 
   // Rating a superset round: the round just done stands where the next set's
@@ -669,9 +682,9 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         <div style={{height:"100%",width:`${progress}%`,background:T.dayKey.strength,transition:`width 600ms ${T.ease}`}}/>
       </div>
       <div style={{padding:"14px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <button onClick={onQuit} style={{...linkBtn,fontSize:13,color:T.ink2}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Quit</button>
+        <button onClick={onQuit} style={{...linkBtn,...HIT_44,fontSize:13,color:T.ink2}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Quit</button>
         <button onClick={onShowOverview} aria-label="Open session overview"
-          style={{background:"none",border:"none",padding:0,cursor:"pointer",textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",fontFamily:T.text}}>
+          style={{background:"none",border:"none",padding:0,cursor:"pointer",textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",justifyContent:"center",fontFamily:T.text,...HIT_44}}>
           <div style={{fontSize:13,fontWeight:500,color:T.ink2,display:"flex",alignItems:"center",gap:6}}>
             {session.name}
             <Glyph name="chevronDown" size={10} style={{opacity:0.7}}/>
@@ -689,7 +702,10 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
           {blockDone
             ? <>All <span style={{fontFamily:T.measured}}>{setsDue}</span> {isSS?"rounds":"sets"} logged · {block.label}</>
+            : lastSet
+            ? <>{isSS?"Last round":"Last set"} · {block.label}{isSS?` ${phase}`:""}</>
             : <>{isSS?"Round":"Set"} <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{setsDue}</span> · {block.label}{isSS?` ${phase}`:""}</>}
+          {deloadDay && <> · <DeloadWord keyColour={T.dayKey.strength}/>{deloadDay.day ? <> day <span style={{fontFamily:T.measured}}>{deloadDay.day}</span> of <span style={{fontFamily:T.measured}}>{deloadDay.of}</span></> : null}</>}
         </div>
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
           <div onClick={resolveVid(activeEx?.name, activeEx?.vid) ? ()=>setShowVid(true) : undefined}
@@ -720,11 +736,9 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             <span style={{fontSize:11,fontWeight:500,color:T.ink3}}>Swap</span>
           </button>
         </div>
-        {(loadTypeSubtitle || deloadDayTag) && (
+        {loadTypeSubtitle && (
           <div style={{fontSize:13,color:T.ink2,marginTop:10}}>
             {loadTypeSubtitle}
-            {loadTypeSubtitle && deloadDayTag && " · "}
-            {deloadDayTag && <MonoNums>{deloadDayTag}</MonoNums>}
           </div>
         )}
         {/* Travel line — what this slot is standing in for, and what to find
@@ -767,7 +781,12 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               {weightCaption && (
                 <div style={{fontSize:12,color:T.ink2,marginTop:8}}>{weightCaption}</div>
               )}
-              {delta != null && delta !== 0 && (
+              {deloadShare !== null ? (
+                /* A deload day states the plan, not a fall from last time. */
+                <div style={{fontSize:13,color:T.ink2,marginTop:weightCaption?4:9}}>
+                  <span style={{fontFamily:T.measured}}>{deloadShare}%</span> of <span style={{fontFamily:T.measured}}>{deloadBase}</span> kg
+                </div>
+              ) : delta != null && delta !== 0 && (
                 <div style={{fontSize:13,color:T.ink2,marginTop:weightCaption?4:9}}>
                   {loadType === "assisted_bodyweight" ? (
                     /* The kg is help: less of it is progress. */
@@ -887,8 +906,10 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           middle carries the session's state, not empty ground. Day-key
           coloured: a session identifier, not measured data. */}
       <div style={{padding:"14px 20px 0",display:"flex",gap:6}}>
+        {/* The last set's tick shows the day key faintly before it is logged. */}
         {Array.from({length:block.sets}).map((_,i)=>(
-          <div key={i} style={{flex:1,height:3,background:i<setNum-1?T.dayKey.strength:T.rule,transition:`background 300ms ${T.ease}`}}/>
+          <div key={i} data-tick={i} style={{flex:1,height:3,background:i<setNum-1||(lastSet&&i===setNum-1)?T.dayKey.strength:T.rule,
+            opacity:lastSet&&i===setNum-1?0.45:1,transition:`background 300ms ${T.ease}`}}/>
         ))}
       </div>
       </>}
@@ -915,7 +936,9 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                   <span style={{fontFamily:T.measured,fontSize:14}}>{s.reps ?? "—"}</span>
                   {rpe!=null && <> at <span style={{fontFamily:T.measured,fontSize:14}}>{rpe%1===0?rpe:rpe.toFixed(1)}</span></>}
                 </span>
-                {rpe!=null && <span aria-hidden="true" style={{width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe),borderRadius:T.rMark}}/>}
+                {/* The newest row's mark arrives from heat-0 over the bloom. */}
+                {rpe!=null && <span aria-hidden="true" className={idx===0?"hw-heat-arrive":undefined}
+                  style={/** @type {any} */ ({width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe),borderRadius:T.rMark,"--heat-to":heatForRpe(rpe),"--t-bloom":T.tBloom})}/>}
               </span>
             </div>
           ))}
@@ -991,16 +1014,19 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
             </div>
           )}
           <div style={{margin:"12px 20px 0",display:"flex",gap:12,alignItems:"center"}}>
-            {showRestHint&&!fork&&(
+            {/* The rest ring stays through the fork: rest still runs while
+                the next block is chosen. */}
+            {showRestHint&&(
               <button
                 onClick={()=>{if(restActive){setRestActive(false);setRestRemain(block.rest);}else{setRestRemain(block.rest);setRestActive(true);}}}
                 aria-label={restActive?`Resting, ${restStr} left — tap to skip`:"Start rest timer"}
-                className={restActive?"hw-breathe":undefined}
+                className={restActive?"hw-rest-ring hw-breathe":"hw-rest-ring"}
                 style={{width:58,height:58,flexShrink:0,borderRadius:"50%",
-                  border:`1px solid ${restActive?T.dayKey.strength:T.rule}`,
+                  // The last ten seconds step the border from the day key to ink.
+                  border:`1px solid ${restActive?(restRemain<=REST_LAST_SECONDS?T.ink:T.dayKey.strength):T.rule}`,
                   background:"transparent",cursor:"pointer",
                   display:"flex",alignItems:"center",justifyContent:"center",
-                  fontFamily:T.measured,fontSize:13,color:restActive?T.ink:T.ink2,
+                  fontFamily:T.measured,fontSize:18,color:restActive?T.ink:T.ink2,
                   transition:`border-color 300ms ${T.ease}, color 300ms ${T.ease}`}}>
                 {restActive?restStr:clock(block.rest)}
               </button>
@@ -1294,14 +1320,31 @@ const NEXT_DAY_MSG = {
   ],
 };
 
-export function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},userWeek=WEEK,onHome,deloadCompleted=false,returnGapDays=null}){
+export function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},userWeek=WEEK,onHome,deloadCompleted=false,returnGapDays=null,record=null,history=[]}){
   // `base` = what the user lifted at SESSION START (snapshotted at
   // readiness). Falls back to the current working weight if no snapshot.
+  // A main lift with no counted set in the record was not trained today.
   const nudges = session.blocks.filter(b=>b.type==="main").map(b=>{
     const current = workingWeights[b.ex.name] ?? b.ex.weight;
     const base    = sessionStartWeights[b.ex.name] ?? current;
-    return { ex:b.ex.name, base, current, changed: current !== base };
+    const trained = !record || (record.blocks || []).some(rb => (rb.exercises || []).some(e => e.name === b.ex.name && (e.sets || []).some(isCountedSet)));
+    return { ex:b.ex.name, base, current, changed: trained && current !== base, trained };
   });
+  const summaryLine = sessionSummaryLine(record);
+  // A main lift's new best: today's top set beats every earlier one
+  // (liftBests over the history before today's record).
+  const newBests = useMemo(() => {
+    if (!record) return {};
+    const same = (a, b) => !!a && !!b && a.est1RM === b.est1RM && a.weight === b.weight && String(a.reps) === String(b.reps);
+    const prior = liftBests(history), mine = liftBests([record]), all = liftBests([...history, record]);
+    /** @type {Record<string, any>} */
+    const out = {};
+    for (const [name, b] of Object.entries(mine)) {
+      if (b.loadType === "assisted_bodyweight" || !prior[name]) continue;
+      if (same(all[name], b) && !same(prior[name], b)) out[name] = b;
+    }
+    return out;
+  }, [record, history]);
 
   // Pick a random headline pair, stable for this render
   const [hi] = useState(()=>DONE_HEADLINES[Math.floor(Math.random()*DONE_HEADLINES.length)]);
@@ -1328,6 +1371,9 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
         <h1 style={{...DISPLAY,fontWeight:500,fontSize:46,color:T.ink,marginBottom:12}}>
           {hi[0]}<br/>{hi[1]}
         </h1>
+        {summaryLine && (
+          <div style={{fontSize:15,color:T.ink,marginBottom:10}}><MonoNums>{summaryLine}</MonoNums></div>
+        )}
         <p style={{fontSize:14,color:T.ink2,marginBottom:30,lineHeight:1.6}}><MonoNums>{nextMsg}</MonoNums></p>
       </Fade>
       {nudges.length > 0 && (
@@ -1341,8 +1387,13 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
             <div style={{minWidth:0}}>
               <div style={{fontSize:14,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.ex}</div>
               <div style={{fontSize:12,color:T.ink2,marginTop:3}}>
-                {n.changed?"Next time, heavier.":"Hold — grind it smooth."}
+                {!n.trained?"Not trained today":n.changed?"Next time, heavier.":"Hold — grind it smooth."}
               </div>
+              {newBests[n.ex] && (
+                <Fade>
+                  <div style={{fontSize:12,color:T.ink2,marginTop:3}}>Best: <BestSet best={newBests[n.ex]}/> · today</div>
+                </Fade>
+              )}
             </div>
             <div style={{fontFamily:T.measured,fontSize:18,flexShrink:0,color:T.ink}}>
               {n.base}{n.changed&&<span style={{color:T.heat[3]}}> <Glyph name="arrowRight" size={11} color={T.heat[3]}/> {n.current}</span>}<span style={{fontSize:12,color:T.ink3}}> kg</span>
@@ -1377,12 +1428,12 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
       {/* Sync confirmation line */}
       <Fade d={320}>
         <div style={{marginTop:24,textAlign:"center",fontSize:12,color:T.ink2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-          {syncState.state === "idle" || syncState.state === "pushing" ? (
+          {syncState.state === "idle" ? (
             <>
               <span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:T.ink2}}/>
               Synced
             </>
-          ) : syncState.state === "pulling" ? (
+          ) : syncState.state === "pulling" || syncState.state === "pushing" ? (
             <>
               <span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:T.ink3,animation:"pulse 1s ease-in-out infinite"}}/>
               Syncing…

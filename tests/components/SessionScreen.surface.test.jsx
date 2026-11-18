@@ -560,8 +560,12 @@ describe("a finished block reads as finished when you flip back to it", () => {
   const kicker = () => flat(screen.getByText(/Main lift/, { selector: "div" }).textContent);
 
   it("on the last set, one set is still outstanding", () => {
-    render(<SessionScreen {...props({ setNum: 3 })} />);
-    expect(kicker()).toBe("Set 3 of 3 · Main lift");
+    const { container } = render(<SessionScreen {...props({ setNum: 3 })} />);
+    // The last set is named as such, and its tick shows the day key faintly.
+    expect(kicker()).toBe("Last set · Main lift");
+    const ticks = container.querySelectorAll("[data-tick]");
+    expect([...ticks].map((t) => t.style.opacity)).toEqual(["1", "1", "0.45"]);
+    expect(ticks[2].style.background).toBe(ticks[0].style.background);
     expect(screen.getByText("Log set")).toBeTruthy();
     expect(screen.queryByText("Add another set")).toBeNull();
   });
@@ -576,7 +580,6 @@ describe("a finished block reads as finished when you flip back to it", () => {
     const onLog = vi.fn();
     render(<SessionScreen {...props({ setNum: 4, onLog })} />);
     expect(screen.queryByText(/^Log set/)).toBeNull();
-    expect(screen.queryByLabelText("Start rest timer")).toBeNull();
 
     fireEvent.click(screen.getByText("Add another set").closest("button"));
     expect(onLog).not.toHaveBeenCalled();

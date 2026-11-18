@@ -46,13 +46,13 @@ import {
   CD, coachTrainer, letterIndex, letterOf, sessionNameOf, COACH_MAX_SETS,
 } from "@/lib/session-source";
 import { changeStatus, sessionDayWords } from "@/lib/trainer-change";
-import { catalogueTemplateWeight } from "@/lib/programme-resolve";
+import { catalogueTemplateWeight, scheduledPlan, deloadSessionSets } from "@/lib/programme-resolve";
 import {
   SESSIONS, EXERCISE_POOLS,
   applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
   WEEK, nextStrengthIdx,
 } from "@/lib/programme";
-import { deloadDayLabel, isFinalSetMiss, lastSessionNote, ADOPT_AFTER_SESSIONS, repTargetRepairs } from "@/lib/progression";
+import { deloadDayOf, deloadBaseWeight, liveDeload, isFinalSetMiss, lastSessionNote, ADOPT_AFTER_SESSIONS, repTargetRepairs } from "@/lib/progression";
 import { SESSION_COPY } from "@/lib/session-copy";
 import { deriveTravelSession } from "@/lib/travel";
 import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, addedLoadFor } from "@/lib/lift-translations";
@@ -141,7 +141,6 @@ export default function SessionHost({ mode = null } = {}) {
   // prescription. Lost with the session; a resume re-seeds it from the draft.
   const [sessionWeights, setSessionWeights] = useState({});
   const [sessionReps, setSessionReps]       = useState({});
-  const planWeights = useMemo(() => ({ ...workingWeights, ...sessionWeights }), [workingWeights, sessionWeights]);
   // Lift state as the session opened, for the card's note on last session.
   const [liftStates] = useState(() => source.liftStates());
   // Who set each lift's number, as the session opened (device-local marks a
@@ -207,6 +206,8 @@ export default function SessionHost({ mode = null } = {}) {
   useEffect(() => () => clearTimeout(announceTimerRef.current), []);
   const [sessionStartWeights, setSessionStartWeights] = useState({});
   const [showDeloadComplete, setShowDeloadComplete] = useState(false);
+  // The finished session's own record, for the Done screen's stated line.
+  const [doneRecord, setDoneRecord] = useState(null);
   const [returnGapDays, setReturnGapDays] = useState(null);
   const [bwEditOpen, setBwEditOpen] = useState(false);
   const [bwPromptedThisSession, setBwPromptedThisSession] = useState(false);
@@ -373,7 +374,6 @@ export default function SessionHost({ mode = null } = {}) {
   // Travel converts what focus finished choosing, and readiness still trims
   // on top — a cooked day drops its finisher whether or not you're in a hotel.
   const travelledSession = travel ? deriveTravelSession(focusedSession) : focusedSession;
-  const activeSession  = scaleForReadiness(travelledSession, readiness);
   // The prescription the session shows: R, with any target left below its
   // lift's base read as the base (repTargetRepairs). Templates come from the
   // programme slot as composed before swaps and readiness; a lift placed by a
@@ -393,7 +393,23 @@ export default function SessionHost({ mode = null } = {}) {
       exclude: Object.values(sessionSwaps).map((s) => s?.name).filter(Boolean),
     });
   }, [travel, programmeBlock, activeSessionIdx, mainLifts, userFocus, workingReps, liftStates, sessionSwaps]);
-  const prescribedReps = useMemo(() => ({ ...workingReps, ...repRepairs }), [workingReps, repRepairs]);
+  // The prescription as the card shows it: W and R (with repairs), the deload
+  // calendar's weight and reps in their place (scheduledPlan). Never written
+  // to W or R.
+  const scheduled = useMemo(() => scheduledPlan({
+    weights: workingWeights,
+    reps: { ...workingReps, ...repRepairs },
+    trainingState: { lifts: liftStates, mesocycle: { activeDeload } },
+    history,
+    todayIso,
+  }), [workingWeights, workingReps, repRepairs, liftStates, activeDeload, history, todayIso]);
+  // The deload as today's card reads it: none once time off has done its work.
+  const deloadNow = useMemo(() => liveDeload(activeDeload, history, todayIso), [activeDeload, history, todayIso]);
+  // A deload day's set counts (deloadSessionSets).
+  const activeSession  = deloadSessionSets(scaleForReadiness(travelledSession, readiness), scheduled.sets);
+  const prescribedWeights = scheduled.weights;
+  const prescribedReps = scheduled.reps;
+  const planWeights = useMemo(() => ({ ...prescribedWeights, ...sessionWeights }), [prescribedWeights, sessionWeights]);
   const planReps = useMemo(() => ({ ...prescribedReps, ...sessionReps }), [prescribedReps, sessionReps]);
   const block   = activeSession.blocks[blockIdx];
   const isSS    = block.type === "superset" || block.type === "finisher";
@@ -492,7 +508,7 @@ export default function SessionHost({ mode = null } = {}) {
   // nobody yet knows what kind of day it is.
   const REACH_EARLIEST_SET = 3;
   const canReach =
-    readiness === "fresh" && !reachSpent && !reachArmed && !activeDeload && !travel &&
+    readiness === "fresh" && !reachSpent && !reachArmed && !deloadNow && !travel &&
     !isSS && isHeadline && setNum === blockSets && setNum >= REACH_EARLIEST_SET &&
     getLoadType(activeEx) !== "bodyweight" && Number.isFinite(reachWeight);
 
@@ -530,7 +546,7 @@ export default function SessionHost({ mode = null } = {}) {
   // The climb and failure lines explain today's first set, so they go once
   // it is logged. Not on a deload day, whose target is the deload's, nor a
   // cooked day, which never moves the weight.
-  const firstSetOpen = !activeDeload && readiness !== "cooked" && !(draftView?.blocks?.[block.id]?.exercises?.[activeEx?.name]?.sets?.length > 0);
+  const firstSetOpen = !deloadNow && readiness !== "cooked" && !(draftView?.blocks?.[block.id]?.exercises?.[activeEx?.name]?.sets?.length > 0);
   const todayReps = activeEx?.name ? Number.parseInt(String(prescribedReps[activeEx.name] ?? activeEx.reps), 10) : null;
   const coachLine = lastNote?.kind === "adopted" ? SESSION_COPY.adoptedTarget(lastNote.reps, ADOPT_AFTER_SESSIONS)
     : lastNote?.kind === "rep_climb" ? (firstSetOpen && todayReps === lastNote.reps ? SESSION_COPY.repClimb(lastNote) : null)
@@ -578,10 +594,11 @@ export default function SessionHost({ mode = null } = {}) {
     // when none, so a no-vest set is exactly what it always was. W is never
     // read for these lifts (the engine never prescribes one there).
     const resolvedWeight = savedKgFor(ex, { addedLoads, planWeight: getW });
-    // The prescription this set was measured against — W/R, never the drum —
-    // so the engine judges what was done against what was asked.
+    // The prescription this set was measured against — W/R as the card shows
+    // them, never the drum — so the engine judges what was done against what
+    // was asked.
     const prescribedWeight = loadType === "bodyweight" ? null
-      : planStartWeight(ex, { working: workingWeights, bodyweight, anchors: muscleAnchors });
+      : planStartWeight(ex, { working: prescribedWeights, bodyweight, anchors: muscleAnchors });
     logSet(draftLogRef.current, {
       blockId: block.id,
       blockType: block.type,
@@ -612,7 +629,7 @@ export default function SessionHost({ mode = null } = {}) {
       setBwPromptedThisSession(true);
       setTimeout(() => setBwEditOpen(true), 280);
     }
-  }, [getW, block, isSS, phase, sessionSwaps, sessionWeights, sessionReps, workingWeights, prescribedReps, planReps, addedLoads, muscleAnchors, resolveExFn, sinks, bodyweight, bwPromptedThisSession, reachArmed, coached]);
+  }, [getW, block, isSS, phase, sessionSwaps, sessionWeights, sessionReps, prescribedWeights, prescribedReps, planReps, addedLoads, muscleAnchors, resolveExFn, sinks, bodyweight, bwPromptedThisSession, reachArmed, coached]);
 
   // Final-set flash — one quiet line after rating the LAST set of an
   // exercise (lib/set-flash.js: no repeats this session, Easy falls back to
@@ -674,7 +691,7 @@ export default function SessionHost({ mode = null } = {}) {
     let addLikely = false;
     try {
       // Coached: the engine's state is the client's, so heavier is never promised.
-      if (fullReps && !activeDeload && !coached) {
+      if (fullReps && !deloadNow && !coached) {
         const rir = rpeToRir(rpe);
         addLikely = rir !== null && lifts.every((ex) =>
           rir >= (ADD_THRESHOLD_RIR[getLiftProfile(ex.name).category] ?? 2) && !source.inRecovery(ex.name));
@@ -772,7 +789,7 @@ export default function SessionHost({ mode = null } = {}) {
 
   // Readiness "start" — initialise the draft and enter the session.
   const handleReadinessStart = () => {
-    setSessionStartWeights({ ...workingWeights });
+    setSessionStartWeights({ ...prescribedWeights });
     draftLogRef.current = newDraftLog({
       profileName: profile,
       session: SESSION_KEYS[activeSessionIdx],
@@ -858,6 +875,7 @@ export default function SessionHost({ mode = null } = {}) {
       }
 
       const sessionRecord = draftLogRef.current ? finaliseDraft(draftLogRef.current) : null;
+      setDoneRecord(sessionRecord);
       // The finish's writes (lib/session-source.js): the streak; then history,
       // the day, the engine and W/R through commitSessionRecord, THE engine
       // path (lib/session-engine, #16) shared with Keep; then the push of the
@@ -886,6 +904,8 @@ export default function SessionHost({ mode = null } = {}) {
           if (engine?.justCompletedDeload) {
             setActiveDeload(null);
             setShowDeloadComplete(true);
+          } else if (engine?.deloadEnded) {
+            setActiveDeload(null);
           }
           try {
             // No readiness here: how a session felt is health data, and it
@@ -947,7 +967,9 @@ export default function SessionHost({ mode = null } = {}) {
     addedLoads, setAddedLoad,
     canReach, reachStep, reachArmed, onTakeReach: takeReach, onDeclineReach: declineReach,
     // Coached: the plan says only that a deload is on.
-    deloadDayTag: activeDeload ? (coached ? "deload" : deloadDayLabel(activeDeload)) : null,
+    deloadDay: deloadNow ? (coached ? {} : deloadDayOf(deloadNow, todayIso)) : null,
+    // The weight the active lift deloads from, for "65% of 100 kg".
+    deloadBase: deloadNow && !coached && activeEx?.name ? deloadBaseWeight(activeEx.name, liftStates[activeEx.name], deloadNow) : null,
     // Coached: a lift sends at most ten sets, so no eleventh is offered.
     maxSets: coached ? COACH_MAX_SETS : null,
   };
@@ -983,7 +1005,7 @@ export default function SessionHost({ mode = null } = {}) {
           workingWeights={workingWeights} sessionStartWeights={sessionStartWeights}
           userWeek={userWeek || WEEK}
           onHome={() => { setShowDeloadComplete(false); setReturnGapDays(null); withNavTransition(() => router.replace("/"), "nav-back"); }}
-          deloadCompleted={showDeloadComplete} returnGapDays={returnGapDays}
+          deloadCompleted={showDeloadComplete} returnGapDays={returnGapDays} record={doneRecord} history={history}
         />
       )}
       {sessionOverviewOpen && flow === "session" && (

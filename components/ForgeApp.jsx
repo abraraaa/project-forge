@@ -32,6 +32,7 @@ import BreatherModal from "@/components/BreatherModal";
 import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
 import { shouldOfferDeload, startDeload, dismissDeloadOffer, repTargetRepairs } from "@/lib/progression";
 import { applySessionToEngine } from "@/lib/session-engine";
+import { scheduledPlan, deloadSessionSets, NO_DELOAD_SETS } from "@/lib/programme-resolve";
 import { getLiftProfile, sanitiseWorkingWeights, getLoadType, weightStepForLoadType, deriveMuscleAnchors } from "@/lib/lift-translations";
 import { solveRotation } from "@/lib/rotation-solver";
 import {
@@ -248,6 +249,13 @@ export default function ForgeApp(){
   // 3-day rolling window — anything older is archaeology, not gap-filling.
   const [retroPickerOpen,setRetroPickerOpen]=useState(false);
   const [retroDate,setRetroDate]            =useState(null); // ISO YYYY-MM-DD or null
+  // The retro sheet prefills from the prescription as the card showed it on
+  // the day being logged: the deload calendar's weight and reps in place of
+  // W and R (scheduledPlan), judged as of retroDate.
+  const retroPlan = useMemo(() => scheduledPlan({
+    weights: workingWeights, reps: retroReps, trainingState: { lifts: homePlan.lifts, mesocycle: { activeDeload } }, history,
+    todayIso: retroDate || undefined,
+  }), [workingWeights, retroReps, homePlan.lifts, activeDeload, history, retroDate]);
   const [retroToast,setRetroToast]          =useState(null); // { date, sessionName } | null
 
   // Passkey nudge state. PN.stage(profile) returns "chip" | "card" | "hidden",
@@ -1387,10 +1395,10 @@ export default function ForgeApp(){
 
   return (
     <div style={{background:"transparent",minHeight:"100vh",maxWidth:430,margin:"0 auto",fontFamily:T.text,color:T.ink,WebkitFontSmoothing:"antialiased"}}>
-      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={homeWeekDays} strengthDaySessions={homeWeekSessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={homeWeekDone} dayStates={homeWeekStates} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={handleDismissAbsenceNudge} trainerSessions={trainerSessions} onOpenTrainerSession={handleOpenTrainerSession} workingWeights={homePlan.weights} workingReps={homePlan.reps} liftStates={homePlan.lifts} muscleAnchors={homePlan.anchors} bodyweight={bodyweight}/>}
+      {screen==="home"        && <HomeScreen rhythm={rhythm} profileName={activeProfile} userWeek={homeWeekDays} strengthDaySessions={homeWeekSessions} onEditWeek={()=>setWeekEditorOpen(true)} onBegin={beginSession} onProfile={()=>router.push("/profile")} weekDone={homeWeekDone} dayStates={homeWeekStates} onMarkDayDone={handleMarkDayDone} bonusDone={bonusDone} onMarkBonusDone={handleMarkBonusDone} programmeBlock={programmeBlock} weeksOnBlock={weeksOnBlock} onRotate={handleRotate} onResetProgramme={handleResetProgramme} userFocus={userFocus} onEditFocus={()=>setFocusPickerOpen(true)} mainLifts={mainLifts} onPerformance={handleOpenPerformance} onLockerRoom={()=>router.push("/locker-room")} historyCount={history.length} history={history} recoveryNudge={recoveryNudge} onDismissRecovery={()=>setRecoveryDismissed(true)} syncState={syncState} pendingDraft={pendingDraft} onResumeDraft={handleResumeDraft} onDiscardDraft={handleDiscardDraft} showBwCard={bwIsStale && !bwCardDismissed} onOpenBwEdit={()=>setBwEditOpen(true)} onDismissBwCard={()=>setBwCardDismissed(true)} deloadOffer={deloadOffer} onAcceptDeload={handleAcceptDeload} onDismissDeload={handleDismissDeload} untickedDays={untickedDays} onOpenRetroPicker={handleOpenRetroPicker} retroToast={retroToast} onDismissRetroToast={()=>setRetroToast(null)} pnStage={pnStage} pnBusy={pnBusy} pnError={pnError} pnSuccessToast={pnSuccessToast} onPnRegister={handleRegisterPasskeyFromHome} onPnSnooze={handleSnoozeNudge} onPnDismissToast={()=>setPnSuccessToast(false)} tonnageMilestone={pendingMilestone} tonnageTotalKg={totalKg} onDismissTonnageMilestone={handleDismissTonnageMilestone} resting={!!restingBreak} absenceNudge={absenceNudge} onOpenBreather={()=>setBreatherOpen(true)} onDismissAbsenceNudge={handleDismissAbsenceNudge} trainerSessions={trainerSessions} onOpenTrainerSession={handleOpenTrainerSession} workingWeights={homePlan.weights} workingReps={homePlan.reps} liftStates={homePlan.lifts} muscleAnchors={homePlan.anchors} bodyweight={bodyweight} activeDeload={activeDeload}/>}
       {breatherOpen           && <BreatherModal onConfirm={handleStartBreather} onCancel={()=>setBreatherOpen(false)}/>}
       {trainerSheet           && <TrainerSessionSheet key={trainerSheet.id} card={trainerSheet} todayIso={todayIso} felt={trainerFelt[trainerSheet.id] ?? {}} onFelt={(felt)=>handleTrainerFelt(trainerSheet.id, felt)} onKeep={()=>handleKeepTrainerSession(trainerSheet.id)} onDiscard={()=>handleDiscardTrainerSession(trainerSheet.id)} onClose={()=>setTrainerSheetId(null)}/>}
-      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={workingWeights} muscleAnchors={homePlan.anchors} workingReps={retroReps} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} history={history} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
+      {screen==="retro"       && retroDate && <ErrorBoundary><RetrospectiveSessionSheet date={retroDate} bodyweight={bodyweight} workingWeights={retroPlan.weights} muscleAnchors={homePlan.anchors} workingReps={retroPlan.reps} deloadSets={retroPlan.sets} effectiveWeek={W.getEffectiveOn(retroDate) || WEEK} history={history} onCancel={handleCancelRetro} onSubmit={handleSubmitRetro}/></ErrorBoundary>}
       {retroPickerOpen        && <RetroPickerSheet untickedDays={untickedDays} pendingDraft={pendingDraft} onPick={handlePickRetroDate} onTickDate={handleMarkDayDone} onClose={()=>setRetroPickerOpen(false)}/>}
       {rotationSummary        && <RotationSummaryModal summary={rotationSummary} onContinue={handleRotationContinue}/>}
       {rotationPreview        && <RotationPreviewSheet preview={rotationPreview} onConfirm={handleRotationConfirm} onReroll={handleRotationReroll} onCancel={handleRotationCancel}/>}
@@ -1875,9 +1883,10 @@ export function RetroPickerSheet({untickedDays=[], pendingDraft, onPick, onTickD
 // applied to all sets in an exercise.
 // effectiveWeek = the schedule in force ON `date` (resolved by the host via
 // W.getEffectiveOn) — never today's config; see handleSubmitRetro.
-export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, muscleAnchors = null, workingReps, effectiveWeek=WEEK, history=[], onCancel, onSubmit}){
+export function RetrospectiveSessionSheet({date, bodyweight, workingWeights, muscleAnchors = null, workingReps, deloadSets = NO_DELOAD_SETS, effectiveWeek=WEEK, history=[], onCancel, onSubmit}){
   const meta = useMemo(() => sessionMetaForDate(date, effectiveWeek, history), [date, effectiveWeek, history]);
-  const sessionDef = meta?.type === "strength" ? SESSIONS[meta.sessionIdx] : null;
+  // The set counts the session would show (deloadSessionSets).
+  const sessionDef = useMemo(() => (meta?.type === "strength" ? deloadSessionSets(SESSIONS[meta.sessionIdx], deloadSets) : null), [meta, deloadSets]);
 
   // Flatten blocks into a single exercise list, but keep a back-reference to
   // the source block so we can preserve block type/intent in the session record.

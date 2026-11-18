@@ -43,3 +43,18 @@ describe("ConsistencyCells", () => {
     expect(screen.getByLabelText(/2 of 18 planned sessions completed across 8 weeks, 1 still to come this week, 3 set aside for a breather/)).toBeTruthy();
   });
 });
+
+describe("a week fully kept", () => {
+  it("gets a 1px ink underline beneath its cells; a short week and the current one do not", async () => {
+    const { T } = await import("../../lib/tokens.js");
+    W.save(TWO, { effectiveFrom: "2026-01-05" });
+    // Week of 14 Sep: Tue and Sat both kept. Week of 7 Sep: one of two.
+    render(<PerformanceLab history={[rec("2026-09-08"), rec("2026-09-15"), rec("2026-09-19"), rec("2026-09-22")]} onBack={() => {}} />);
+    const week = (iso) => document.querySelector(`[data-week="${iso}"]`);
+    expect(week("2026-09-14").hasAttribute("data-kept")).toBe(true);
+    expect(week("2026-09-14").style.borderBottom).toBe(`1px solid ${T.ink}`);
+    expect(week("2026-09-07").hasAttribute("data-kept")).toBe(false);
+    expect(week("2026-09-07").style.borderBottom).toBe("1px solid transparent");
+    expect(week("2026-09-21").hasAttribute("data-kept")).toBe(false);
+  });
+});

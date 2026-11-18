@@ -56,7 +56,14 @@ describe("the finished-block fork", () => {
     expect(add.parentElement).toBe(next.parentElement);   // same row
     expect(next.textContent).toBe("Next: Barbell Bench Press"); // the accessible name
     expect(screen.queryByText(/^Log set/)).toBeNull();
-    expect(screen.queryByLabelText("Start rest timer")).toBeNull();
+  });
+
+  it("keeps the rest ring while the next block is chosen, its countdown in 18px mono", () => {
+    render(<SessionScreen {...props({ setNum: 4, restActive: true, restRemain: 75 })} />);
+    const ring = screen.getByLabelText(/^Resting, 1:15 left/);
+    expect(ring.textContent).toBe("1:15");
+    expect(ring.style.fontSize).toBe("18px");
+    expect(ring.parentElement).toBe(btn("Add another set").parentElement);
   });
 
   it("is not offered while a set is still outstanding", () => {
@@ -194,5 +201,48 @@ describe("the last-block fork with an earlier block left short", () => {
     expect(btn("Finish session")).toBeTruthy();
     expect(screen.queryByText("Finish anyway")).toBeNull();
     expect(screen.queryByText(/^Back to/)).toBeNull();
+  });
+});
+
+describe("the rest's last ten seconds", () => {
+  const ring = () => screen.getByLabelText(/^Resting,/);
+  it("the ring's border is the day key until ten seconds are left, then ink", async () => {
+    const { T } = await import("../../lib/tokens.js");
+    const { rerender } = render(<SessionScreen {...props({ restActive: true, restRemain: 11 })} />);
+    expect(ring().style.border).toContain(T.dayKey.strength);
+    rerender(<SessionScreen {...props({ restActive: true, restRemain: 10 })} />);
+    expect(ring().style.border).toContain(T.ink);
+    expect(ring().style.transition).toContain("border-color 300ms");
+    expect(ring().className).toContain("hw-rest-ring");
+  });
+
+  it("under reduced motion the step is instant and the ring does not breathe", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const css = readFileSync(resolve(__dirname, "../../app/globals.css"), "utf8").replace(/\s+/g, " ");
+    expect(css).toContain("@media (prefers-reduced-motion: reduce) { .hw-rest-ring { transition: none !important; } }");
+    expect(css).toContain(".lab-scroll-cue, .hw-breathe { animation: none; }");
+  });
+});
+
+describe("a set lands", () => {
+  it("the newest row's heat mark arrives from heat-0 to its own stop over the bloom; older rows stay put", async () => {
+    const { T, heatForRpe } = await import("../../lib/tokens.js");
+    const { container } = render(<SessionScreen {...props({ setNum: 3, loggedSets: [{ weight: 100, reps: 5, rpe: 7 }, { weight: 100, reps: 5, rpe: 9 }] })} />);
+    const marks = container.querySelectorAll("span[aria-hidden='true'][style*='--heat-to']");
+    expect(marks.length).toBe(2);
+    const [newest, older] = marks;
+    expect(newest.className).toBe("hw-heat-arrive");
+    expect(newest.style.getPropertyValue("--heat-to")).toBe(heatForRpe(9));
+    expect(newest.style.getPropertyValue("--t-bloom")).toBe(T.tBloom);
+    expect(older.className).toBe("");
+  });
+
+  it("reduced motion shows the final colour at once", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const css = readFileSync(resolve(__dirname, "../../app/globals.css"), "utf8").replace(/\s+/g, " ");
+    expect(css).toContain("from { background-color: var(--heat-0); } to { background-color: var(--heat-to); }");
+    expect(css).toContain("@media (prefers-reduced-motion: reduce) { .hw-heat-arrive { animation: none; } }");
   });
 });

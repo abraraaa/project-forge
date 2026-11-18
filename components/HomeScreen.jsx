@@ -17,17 +17,19 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
-import { mondayIndex, addDaysIso } from "@/lib/dates";
-import { Fade, Card, Tag, MonoNums } from "@/components/ui";
+import { mondayIndex, addDaysIso, daysBetween } from "@/lib/dates";
+import { isStrengthRecord } from "@/lib/day-state";
+import { Fade, Card, Tag, MonoNums, DeloadWord } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import ConsentLine from "@/components/ConsentLine";
 import { TrainerSessionCard } from "@/components/TrainerSessionSheet";
 import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
-import { deloadCardCopy, repTargetRepairs } from "@/lib/progression";
-import { planStartWeight, isWorkingWeight } from "@/lib/programme-resolve";
+import { deloadCardCopy, deloadDayOf, liveDeload, repTargetRepairs } from "@/lib/progression";
+import { planStartWeight, isWorkingWeight, scheduledPlan, deloadSessionSets } from "@/lib/programme-resolve";
 import { getLoadType, parseTimedReps, usesOptionalChrome } from "@/lib/lift-translations";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
+import { SO_FAR, splitWeekSoFar } from "@/lib/chart-style";
 import { fetchWithTimeout } from "@/lib/net";
 import { resetConfigFor } from "@/lib/profile-actions";
 
@@ -100,8 +102,11 @@ const linkBtn = {
   display: "inline-flex", alignItems: "center", gap: 5,
 };
 
+// Days since the last strength session that make today a return.
+const RETURN_GAP_DAYS = 10;
+
 export default
-function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},dayStates=[],onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,mainLifts={},onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge,trainerSessions=[],onOpenTrainerSession,workingWeights={},workingReps={},liftStates={},muscleAnchors={},bodyweight=null}){
+function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},dayStates=[],onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,mainLifts={},onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge,trainerSessions=[],onOpenTrainerSession,workingWeights={},workingReps={},liftStates={},muscleAnchors={},bodyweight=null,activeDeload=null}){
   // Two-tap reset confirmation: first tap arms, second tap commits, 5s timeout disarms.
   const [resetArmed, setResetArmed] = useState(false);
   const resetTimerRef = useRef(null);
@@ -239,7 +244,16 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const liveReps = viewSession
     ? { ...workingReps, ...repTargetRepairs({ reps: workingReps, lifts: liftStates, sessions: [viewSession] }) }
     : workingReps;
-  const plan = { reps: liveReps, weights: workingWeights, bodyweight, anchors: muscleAnchors };
+  // The deload calendar's weight and reps in place of W and R, as the
+  // session's card shows them on the day in view (scheduledPlan).
+  const due = scheduledPlan({ weights: workingWeights, reps: liveReps, trainingState: { lifts: liftStates, mesocycle: { activeDeload } }, history, todayIso: viewDateStr });
+  const plan = { reps: due.reps, weights: due.weights, bodyweight, anchors: muscleAnchors };
+  // The set counts the session will open with (deloadSessionSets).
+  const shownSession = deloadSessionSets(viewSession, due.sets);
+  // The session view's own tag, for the day in view; null outside a deload.
+  const deloadNow = liveDeload(activeDeload, history);
+  // Windowed on the day in view, as liveDeload reads that day.
+  const deloadDay = deloadDayOf(activeDeload, viewDateStr);
 
   // Guidance line under the display name. Strength days lead with the
   // session's own noun; non-strength days keep their modality detail.
@@ -251,9 +265,15 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // A missed strength day made up later in the week says so instead of
   // prescribing a session that's already been answered for.
   const viewCoveredBy = dayStates[viewIdx]?.status === "covered" ? dayStates[viewIdx].coveredBy : null;
+  // Coming back: today's strength day after RETURN_GAP_DAYS or more since
+  // the last strength session says how long it has been.
+  const todayIsoStr = addDaysIso(new Date(nowMs), 0);
+  const lastStrength = history.reduce((m, r) => (r?.date && r.date < todayIsoStr && isStrengthRecord(r) && (!m || r.date > m) ? r.date : m), null);
+  const returnGap = lastStrength ? daysBetween(lastStrength, todayIsoStr) : null;
+  const welcomeBack = viewIdx === todayIdx && returnGap !== null && returnGap >= RETURN_GAP_DAYS && !weekDone[viewIdx];
   const subText = viewCoveredBy
     ? `Made up on ${DAY_NAMES[mondayIndex(viewCoveredBy)].slice(0, 3)}.`
-    : viewSession ? `${viewSession.subtitle}.` : cfg.sub;
+    : viewSession ? `${viewSession.subtitle}.${welcomeBack ? ` First one in ${returnGap} days.` : ""}` : cfg.sub;
 
   // Negative diff = earlier this week, positive = later this week
   const diffDays = viewIdx - todayIdx;
@@ -274,6 +294,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const wave = useMemo(() => weeklyTonnage(history, 6), [history]);
   const waveMax = Math.max(...wave.map(w => w.kg), 1);
   const hasWave = wave.some(w => w.kg > 0);
+  // The current week is the week so far: off the line (lib/chart-style.js).
+  const waveSplit = splitWeekSoFar(wave.map(w => w.kg));
+  const waveX = (i) => (i*(342/(wave.length-1))).toFixed(1);
+  const waveY = (kg) => (27 - 24*(kg/waveMax)).toFixed(1);
 
   return (
     <div style={{minHeight:"100vh",paddingBottom:48,position:"relative",overflow:"clip"}}>
@@ -327,9 +351,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
             const isDone    = !!weekDone[i];
             // Made up later in the week: a muted tick, not a solid one.
             const isCovered = !isDone && status === "covered";
+            const inDeload  = deloadDayOf(deloadNow, addDaysIso(new Date(nowMs), i - todayIdx)) !== null;
             return (
               <button key={i} onClick={()=>setViewIdx(i)} className="forge-press"
-                aria-label={`${DAY_NAMES[i]}${isToday ? " (today)" : ""}${isDone ? ", done" : isCovered ? ", made up" : isResting ? ", resting" : ""}`}
+                aria-label={`${DAY_NAMES[i]}${isToday ? " (today)" : ""}${isDone ? ", done" : isCovered ? ", made up" : isResting ? ", resting" : ""}${inDeload ? ", deload" : ""}`}
                 aria-current={isView ? "date" : undefined}
                 style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:7,cursor:"pointer",background:"none",border:"none",padding:"6px 0 4px"}}>
                 {/* Weekday glyph carries the day; the key tick below
@@ -373,7 +398,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
       <Fade d={100} opaque>
         <div className="home-headline" style={{padding:"26px 24px 0",transformOrigin:"left top"}}>
           <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:8}}>
-            <span style={{fontSize:13,color:T.ink2}}>{dayLabel}</span>
+            <span style={{fontSize:13,color:T.ink2}}>
+              {dayLabel}
+              {deloadDay && <> · <DeloadWord keyColour={dayKey}/>, day <span style={{fontFamily:T.measured}}>{deloadDay.day}</span> of <span style={{fontFamily:T.measured}}>{deloadDay.of}</span></>}
+            </span>
             {!isViewingToday && (
               <span style={{fontSize:12,color:T.ink3}}>
                 {viewDate.toLocaleDateString("en-GB",{day:"numeric",month:"short"})}
@@ -391,6 +419,63 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           )}
         </div>
       </Fade>
+
+      {/* Decisions sit under the masthead, above Begin. */}
+      {/* Pick up where you left off — an interrupted session from within the
+          last 12 hours. Top priority if it exists. */}
+      {pendingDraft && (
+        <Fade d={160}>
+          <Card style={{margin:"20px 24px 0",padding:"16px 18px 18px"}}>
+            <div style={{fontSize:13,color:T.ink2,marginBottom:6}}>Unfinished session</div>
+            <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.3}}>
+              Pick up where you left off.
+            </div>
+            <div style={{fontSize:13,color:T.ink3,marginTop:6,lineHeight:1.5}}>
+              <span style={{fontFamily:T.measured}}>{pendingDraft.setCount}</span> {pendingDraft.setCount === 1 ? "set" : "sets"} logged · {formatAgo(pendingDraft.ageMs)}
+            </div>
+            <div style={{display:"flex",gap:8,marginTop:14}}>
+              <button className="forge-press" onClick={onResumeDraft}
+                style={{flex:1,height:48,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                Resume <Glyph name="arrowRight" size={12}/>
+              </button>
+              <button className="forge-press" onClick={onDiscardDraft}
+                style={{height:48,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,fontWeight:500,color:T.ink2}}>
+                Discard
+              </button>
+            </div>
+          </Card>
+        </Fade>
+      )}
+
+      {/* Deload offer card. Surfaces only when signals warrant. Acknowledgement
+          voice — an offer, never an alarm. */}
+      {deloadOffer && (() => {
+        const copy = deloadCardCopy(deloadOffer);
+        if (!copy) return null;
+        return (
+          <Fade d={170}>
+            <Card style={{margin:"20px 24px 0",padding:"18px 20px"}}>
+              <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>{copy.kicker}</div>
+              <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.3,marginBottom:8}}>
+                {copy.headline}
+              </div>
+              <div style={{fontSize:13,color:T.ink2,lineHeight:1.55,marginBottom:16}}>
+                {copy.body}
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <button className="forge-press" onClick={onAcceptDeload}
+                  style={{flex:1,height:46,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                  Run the deload <Glyph name="arrowRight" size={12}/>
+                </button>
+                <button className="forge-press" onClick={onDismissDeload}
+                  style={{flexShrink:0,height:46,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,color:T.ink2}}>
+                  Not yet
+                </button>
+              </div>
+            </Card>
+          </Fade>
+        );
+      })()}
 
       {/* Strength day — session stats + list, on the ground between
           hairlines. No card: measured data gets no containers. */}
@@ -411,12 +496,18 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 </div>
               );
             })()}
+            {/* What the rows' rpe asks, until three sessions are logged. */}
+            {historyCount < 3 && (
+              <div style={{margin:"10px 24px 0",fontSize:13,color:T.ink2,lineHeight:1.45}}>
+                <MonoNums>rpe 8 means about two reps left in the tank.</MonoNums>
+              </div>
+            )}
             {/* Session list — every row prints what the session will open
                 with (a superset reads its A lift), the heat mark encodes the
                 planned proximity to failure in colour AND height, and the
                 number is always printed. */}
             <div style={{padding:"2px 24px 0"}}>
-              {viewSession.blocks.map((b)=>{
+              {shownSession.blocks.map((b)=>{
                 const rpe   = BLOCK_RPE[b.type] ?? 8;
                 const name  = b.type==="main"
                   ? b.ex.name
@@ -557,7 +648,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <div style={{margin:"22px 0 0",padding:"12px 24px 12px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
               <span style={{fontSize:13,color:T.ink2}}>Tonnage, six weeks</span>
-              <span style={{fontFamily:T.measured,fontSize:12,color:T.heat[3]}}>{formatTonnage(wave[wave.length-1].kg)}</span>
+              <span data-so-far-label="" style={{fontSize:12,color:T.ink2}}><span style={{fontFamily:T.measured,color:T.heat[3]}}>{formatTonnage(waveSplit.soFar ?? 0)}</span> {SO_FAR.label}</span>
             </div>
             <svg width="100%" height="30" viewBox="0 0 342 30" preserveAspectRatio="none" style={{display:"block",overflow:"visible"}} aria-hidden="true">
               <defs>
@@ -569,38 +660,13 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 </linearGradient>
               </defs>
               <path
-                d={wave.map((w,i)=>`${i===0?"M":"L"} ${(i*(342/(wave.length-1))).toFixed(1)} ${(27 - 24*(w.kg/waveMax)).toFixed(1)}`).join(" ")}
+                d={waveSplit.done.map((kg,i)=>`${i===0?"M":"L"} ${waveX(i)} ${waveY(kg)}`).join(" ")}
                 fill="none" stroke="url(#hwHomeWave)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                 strokeDasharray="400" style={{animation:`hwDraw 1.1s ${T.ease} both`}}/>
-              <circle cx="342" cy={(27 - 24*(wave[wave.length-1].kg/waveMax)).toFixed(1)} r="3.2" fill="var(--heat-3)"/>
+              <circle cx={waveX(waveSplit.done.length-1)} cy={waveY(waveSplit.done[waveSplit.done.length-1])} r="3.2" fill="var(--heat-3)"/>
+              <circle data-so-far="" cx={waveX(waveSplit.done.length)} cy={waveY(waveSplit.soFar ?? 0)} r="3.2" fill={T.ink3} opacity={SO_FAR.opacity}/>
             </svg>
           </div>
-        </Fade>
-      )}
-
-      {/* Pick up where you left off — an interrupted session from within the
-          last 12 hours. Top priority if it exists. */}
-      {pendingDraft && (
-        <Fade d={160}>
-          <Card style={{margin:"20px 24px 0",padding:"16px 18px 18px"}}>
-            <div style={{fontSize:13,color:T.ink2,marginBottom:6}}>Unfinished session</div>
-            <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.3}}>
-              Pick up where you left off.
-            </div>
-            <div style={{fontSize:13,color:T.ink3,marginTop:6,lineHeight:1.5}}>
-              <span style={{fontFamily:T.measured}}>{pendingDraft.setCount}</span> {pendingDraft.setCount === 1 ? "set" : "sets"} logged · {formatAgo(pendingDraft.ageMs)}
-            </div>
-            <div style={{display:"flex",gap:8,marginTop:14}}>
-              <button className="forge-press" onClick={onResumeDraft}
-                style={{flex:1,height:48,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                Resume <Glyph name="arrowRight" size={12}/>
-              </button>
-              <button className="forge-press" onClick={onDiscardDraft}
-                style={{height:48,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,fontWeight:500,color:T.ink2}}>
-                Discard
-              </button>
-            </div>
-          </Card>
         </Fade>
       )}
 
@@ -631,36 +697,6 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         <TrainerSessionCard card={trainerSessions[0]} more={trainerSessions.length - 1}
           todayIso={addDaysIso(new Date(nowMs), 0)} nowMs={nowMs} onReview={onOpenTrainerSession}/>
       )}
-
-      {/* Deload offer card. Surfaces only when signals warrant. Acknowledgement
-          voice — an offer, never an alarm. */}
-      {deloadOffer && (() => {
-        const copy = deloadCardCopy(deloadOffer);
-        if (!copy) return null;
-        return (
-          <Fade d={170}>
-            <Card style={{margin:"20px 24px 0",padding:"18px 20px"}}>
-              <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>{copy.kicker}</div>
-              <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.3,marginBottom:8}}>
-                {copy.headline}
-              </div>
-              <div style={{fontSize:13,color:T.ink2,lineHeight:1.55,marginBottom:16}}>
-                {copy.body}
-              </div>
-              <div style={{display:"flex",gap:10}}>
-                <button className="forge-press" onClick={onAcceptDeload}
-                  style={{flex:1,height:46,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                  Run the deload <Glyph name="arrowRight" size={12}/>
-                </button>
-                <button className="forge-press" onClick={onDismissDeload}
-                  style={{flexShrink:0,height:46,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,color:T.ink2}}>
-                  Not yet
-                </button>
-              </div>
-            </Card>
-          </Fade>
-        );
-      })()}
 
       {/* Lifetime-tonnage milestone — surfaces ONCE per crossed threshold.
           Tap-anywhere dismisses. A small ceremony beat — display face earns

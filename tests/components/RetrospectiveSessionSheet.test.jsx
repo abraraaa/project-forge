@@ -39,3 +39,27 @@ describe("RetrospectiveSessionSheet", () => {
     expect(sq.weights.every((w) => w === 100)).toBe(true);
   });
 });
+
+describe("RetrospectiveSessionSheet on a deload day", () => {
+  it("a block whose every lift drops a set (deloadSessionSets) prefills one set fewer", () => {
+    const rowsWith = (deloadSets) => {
+      const onSubmit = vi.fn();
+      render(<RetrospectiveSessionSheet date="2026-09-21" bodyweight={80} workingWeights={{}} workingReps={{}} history={[]}
+        deloadSets={deloadSets} onCancel={() => {}} onSubmit={onSubmit} />);
+      fireEvent.click(screen.getByText("Log session"));
+      cleanup();
+      return onSubmit.mock.calls[0][0].exercises;
+    };
+    const finisher = (rows) => rows.find((r) => r.name === "Hanging Leg Raise");
+    const squat = (rows) => rows.find((r) => r.name === "Barbell Back Squat");
+    const none = rowsWith({ day: false, lifts: {} });
+    expect([finisher(none).prescribed.sets, squat(none).prescribed.sets]).toEqual([4, 3]);
+    const dropped = finisher(rowsWith({ day: false, lifts: { "Hanging Leg Raise": true, "Standing Calf Raise": true } }));
+    expect(dropped.prescribed.sets).toBe(3);
+    expect(dropped.weights.length).toBe(3);
+    // On a deload day every lift the deload scales by load takes its deload sets.
+    const day = rowsWith({ day: true, lifts: {} });
+    expect(squat(day).prescribed.sets).toBe(2);
+    expect(squat(day).weights.length).toBe(2);
+  });
+});

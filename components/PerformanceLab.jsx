@@ -15,10 +15,11 @@ import {
 } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER, VOLUME_TARGETS } from "@/lib/volume-audit";
 import Glyph from "@/components/Glyph";
+import BestSet from "@/components/BestSet";
 import { InkSpark, LineChart } from "@/components/LiftCharts";
 import { T, DISPLAY, HATCH } from "@/lib/tokens";
+import { SO_FAR, splitWeekSoFar, weekSoFarDelta } from "@/lib/chart-style";
 import { addDaysIso, daysBetween, parseLocalDate } from "@/lib/dates";
-import { isBodyweightMovement } from "@/lib/lift-translations";
 import { haptic } from "@/lib/a11y";
 import GlossarySheet, { GlossaryTrigger } from "@/components/GlossarySheet";
 import { renderShareCard, shareCanvas } from "@/lib/share-card";
@@ -60,6 +61,10 @@ const linkBtn = {
   fontFamily: T.text, fontSize: 13, color: T.ink3,
   display: "inline-flex", alignItems: "center", gap: 5,
 };
+
+// A 44px hit area around a small control, its pixels where they were: the
+// negative margin gives back the height the minimum adds.
+const HIT_44 = { minHeight: 44, minWidth: 44, marginTop: -14, marginBottom: -14 };
 
 const EMPTY = [];
 
@@ -135,7 +140,7 @@ export default function PerformanceLab({ history, onBack, resting = false, break
       {/* Top clearance is self-sufficient: max() guarantees the back nav
           clears the translucent status bar in the installed PWA. */}
       <div style={{padding:"max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
-        <button onClick={onBack} style={{...linkBtn,color:T.ink2}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Home</button>
+        <button onClick={onBack} style={{...linkBtn,...HIT_44,color:T.ink2}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Home</button>
         {!isEmpty && (
           <span style={{fontSize:12,color:T.ink3,textAlign:"right"}}>
             <span style={{fontFamily:T.measured}}>{counts.last7}</span> this week · <span style={{fontFamily:T.measured}}>{counts.total}</span> logged
@@ -401,7 +406,9 @@ function StrengthRow({ lift, series, best = null, todayIso, expanded = false, on
           const canvas = await renderShareCard({ lift, series });
           await shareCanvas(canvas, `heatwayve-${lift.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-1rm.png`);
         }}
-        style={{background:"none",border:"none",padding:"4px 0 4px 4px",cursor:"pointer",flexShrink:0,display:"inline-flex"}}
+        // A 44px hit area; the margins keep the glyph's right edge and centre.
+        style={{background:"none",border:"none",padding:0,cursor:"pointer",flexShrink:0,display:"inline-flex",
+          alignItems:"center",justifyContent:"flex-end",width:44,height:44,margin:"-12.5px 0 -12.5px -29px"}}
         aria-label={`Share ${lift} trend`}>
         <Glyph name="arrowUpRight" size={11} color={T.ink3}/>
       </button>
@@ -430,15 +437,9 @@ function BestLine({ best, todayIso }) {
   const when = d ? (todayIso && todayIso.slice(0, 4) === year ? bestDay.format(d) : `${bestDay.format(d)} ${year}`) : best.date;
   const ago = todayIso ? daysBetween(best.date, todayIso) : null;
   const recent = ago != null && ago >= 0 && ago < 28;
-  const n = (v) => <span style={{fontFamily:T.measured}}>{v}</span>;
-  const set = best.loadType === "bodyweight"
-    ? (typeof best.reps === "number" ? <>{n(best.reps)} reps</> : n(best.reps))
-    : isBodyweightMovement(best.loadType)
-    ? <>bodyweight + {n(best.weight)} kg × {n(best.reps)}</>
-    : <>{n(best.weight)} kg × {n(best.reps)}</>;
   return (
     <div data-testid="lift-best" style={{marginTop:8,fontSize:12,color:T.ink2,lineHeight:1.45}}>
-      Best: {set} · {when}{recent ? " · this block" : ""}
+      Best: <BestSet best={best}/> · {when}{recent ? " · this block" : ""}
     </div>
   );
 }
@@ -477,8 +478,11 @@ function ConsistencyCells({ weeks }) {
       <div style={{display:"flex",gap:10,paddingTop:12,flexWrap:"wrap"}} aria-label={summary}>
         {weeks.map((w) => {
           const filled = Math.min(w.done, w.planned);
+          // A finished week with every planned session kept is underlined.
+          const kept = !w.partial && w.planned > 0 && w.done >= w.planned;
           return (
-            <div key={w.mondayIso} data-week={w.mondayIso} style={{display:"flex",gap:3}}>
+            <div key={w.mondayIso} data-week={w.mondayIso} data-kept={kept ? "" : undefined}
+              style={{display:"flex",gap:3,paddingBottom:4,borderBottom:`1px solid ${kept ? T.ink : "transparent"}`}}>
               {Array.from({ length: w.planned }, (_, i) => {
                 const isDone = i < filled;
                 // Past what was due so far (partial week): still to come.
@@ -639,14 +643,18 @@ function MuscleRow({ muscle, sets, target, status, series, weeks, muted = false,
   // 6-week micro-wave from the 8-week series.
   const wave = (series || []).slice(-6);
   const wMax = Math.max(...wave, 1);
-  const waveD = wave.length > 1
-    ? wave.map((v, i) => `${i===0?"M":"L"} ${(i * (38 / (wave.length - 1))).toFixed(1)} ${(11 - 9 * (v / wMax)).toFixed(1)}`).join(" ")
+  // The current week is the week so far: off the line (lib/chart-style.js).
+  const { done: waveDone, soFar } = splitWeekSoFar(wave);
+  const waveXAt = (i) => (i * (38 / Math.max(wave.length - 1, 1))).toFixed(1);
+  const waveYAt = (v) => (11 - 9 * (v / wMax)).toFixed(1);
+  const waveD = waveDone.length > 1
+    ? waveDone.map((v, i) => `${i===0?"M":"L"} ${waveXAt(i)} ${waveYAt(v)}`).join(" ")
     : null;
 
-  // Week-over-week trend for the right column (§13.1: "+2 vs last wk").
-  const wkDelta = series && series.length >= 2
-    ? Math.round(series[series.length - 1] - series[series.length - 2])
-    : null;
+  // Week-over-week trend for the right column (§13.1: "+2 vs last wk"),
+  // never a drop while the week runs.
+  const wkDelta = weekSoFarDelta(series);
+  const behindSoFar = wkDelta === null && Array.isArray(series) && series.length >= 2;
   const emptyWithTarget = sets === 0 && target;
 
   return (
@@ -666,7 +674,8 @@ function MuscleRow({ muscle, sets, target, status, series, weeks, muted = false,
         <span style={{flex:1,minWidth:0,fontSize:15,color:muted?T.ink2:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayName}</span>
         <svg width="44" height="13" viewBox="0 0 44 13" style={{overflow:"visible",flexShrink:0}} aria-hidden="true">
           {waveD && <path d={waveD} fill="none" stroke={muted?T.ink3:"var(--ink-2)"} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>}
-          {wave.length > 0 && <circle cx="38" cy={(11 - 9 * (wave[wave.length-1] / wMax)).toFixed(1)} r="1.7" fill={muted?T.ink3:"var(--ink-2)"}/>}
+          {waveDone.length > 0 && <circle cx={waveXAt(waveDone.length - 1)} cy={waveYAt(waveDone[waveDone.length - 1])} r="1.7" fill={muted?T.ink3:"var(--ink-2)"}/>}
+          {soFar !== null && <circle data-so-far="" cx="38" cy={waveYAt(soFar)} r="1.7" fill={T.ink3} opacity={SO_FAR.opacity}/>}
         </svg>
         <span style={{minWidth:40,textAlign:"right",fontSize:13,color:T.ink,flexShrink:0}}>
           {emptyWithTarget
@@ -685,7 +694,9 @@ function MuscleRow({ muscle, sets, target, status, series, weeks, muted = false,
           )}
         </div>
         <span style={{minWidth:78,textAlign:"right",fontSize:11,color:T.ink3,flexShrink:0}} aria-hidden="true">
-          {wkDelta == null || muted ? "" :
+          {muted ? "" :
+            behindSoFar ? SO_FAR.label :
+            wkDelta == null ? "" :
             wkDelta === 0 ? "level vs last wk" :
             <><span style={{fontFamily:T.measured,color:wkDelta>0?T.ink2:T.ink3}}>{wkDelta>0?`+${wkDelta}`:wkDelta}</span> vs last wk</>}
         </span>
