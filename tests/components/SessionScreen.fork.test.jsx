@@ -224,3 +224,25 @@ describe("the rest's last ten seconds", () => {
     expect(css).toContain(".lab-scroll-cue, .hw-breathe { animation: none; }");
   });
 });
+
+describe("a set lands", () => {
+  it("the newest row's heat mark arrives from heat-0 to its own stop over the bloom; older rows stay put", async () => {
+    const { T, heatForRpe } = await import("../../lib/tokens.js");
+    const { container } = render(<SessionScreen {...props({ setNum: 3, loggedSets: [{ weight: 100, reps: 5, rpe: 7 }, { weight: 100, reps: 5, rpe: 9 }] })} />);
+    const marks = container.querySelectorAll("span[aria-hidden='true'][style*='--heat-to']");
+    expect(marks.length).toBe(2);
+    const [newest, older] = marks;
+    expect(newest.className).toBe("hw-heat-arrive");
+    expect(newest.style.getPropertyValue("--heat-to")).toBe(heatForRpe(9));
+    expect(newest.style.getPropertyValue("--t-bloom")).toBe(T.tBloom);
+    expect(older.className).toBe("");
+  });
+
+  it("reduced motion shows the final colour at once", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const css = readFileSync(resolve(__dirname, "../../app/globals.css"), "utf8").replace(/\s+/g, " ");
+    expect(css).toContain("from { background-color: var(--heat-0); } to { background-color: var(--heat-to); }");
+    expect(css).toContain("@media (prefers-reduced-motion: reduce) { .hw-heat-arrive { animation: none; } }");
+  });
+});
