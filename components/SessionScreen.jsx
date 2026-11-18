@@ -551,7 +551,7 @@ function RoundRecap({ round, of, label, sides, onEdit }) {
 }
 
 // ─── Session ──────────────────────────────────────────────────────────────────
-export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,planWeights={},setPlanWeights,planReps={},setPlanReps,prescribedReps={},coachLine=null,travel=false,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDay=null,maxSets=null}){
+export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,isSS,blockSets,nextExName=null,onNext,backTo=null,onJumpToBlock,activeEx,resolvedExA,resolvedExB,resolvedEx,swapKey,onSwap,showVid,setShowVid,getW,getR,editTarget,setEditTarget,planWeights={},setPlanWeights,planReps={},setPlanReps,prescribedReps={},coachLine=null,travel=false,history=[],loggedSets=[],awaitRpe,ssRoundDone,restActive,restRemain,setRestActive,setRestRemain,onCommit,onLog,onQuit,onShowOverview,bodyweight,addedLoads={},setAddedLoad,canReach=false,reachStep=2.5,reachArmed=false,onTakeReach,onDeclineReach,deloadDay=null,deloadBase=null,maxSets=null}){
   const [swapEx,setSwapEx]=useState(null);
   const partnerEx=isSS?(phase==="A"?resolvedExB:resolvedExA):null;
   const vidEx    =isSS?(phase==="A"?resolvedExA:resolvedExB):resolvedEx;
@@ -644,6 +644,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   const last = recent[0] || null;
   const lastW = loggedKgFor(last?.topSet ?? null, optionalWeight);
   const delta = (lastW != null && currentW != null) ? Math.round((currentW - lastW) * 100) / 100 : null;
+  const deloadShare = deloadDay && loadType !== "assisted_bodyweight" && Number.isFinite(deloadBase) && deloadBase > 0 && currentW != null
+    ? Math.round((currentW / deloadBase) * 100) : null;
   const lastRpe = rpeValue(last?.topSet?.rpe) ?? rpeValue(last?.effort);
 
   // Rating a superset round: the round just done stands where the next set's
@@ -771,7 +773,12 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               {weightCaption && (
                 <div style={{fontSize:12,color:T.ink2,marginTop:8}}>{weightCaption}</div>
               )}
-              {delta != null && delta !== 0 && (
+              {deloadShare !== null ? (
+                /* A deload day states the plan, not a fall from last time. */
+                <div style={{fontSize:13,color:T.ink2,marginTop:weightCaption?4:9}}>
+                  <span style={{fontFamily:T.measured}}>{deloadShare}%</span> of <span style={{fontFamily:T.measured}}>{deloadBase}</span> kg
+                </div>
+              ) : delta != null && delta !== 0 && (
                 <div style={{fontSize:13,color:T.ink2,marginTop:weightCaption?4:9}}>
                   {loadType === "assisted_bodyweight" ? (
                     /* The kg is help: less of it is progress. */

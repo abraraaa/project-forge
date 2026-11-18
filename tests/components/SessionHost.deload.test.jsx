@@ -66,6 +66,14 @@ describe("a session inside a deload", () => {
     expect(word.style).toMatchObject({ color: T.ink, textDecorationLine: "underline", textDecorationColor: T.dayKey.strength, textDecorationThickness: "1px", textUnderlineOffset: "3px" });
   });
 
+  it("states the deload as a share of the pre-deload weight, in ink-2", () => {
+    const { container } = start({ deload: true });
+    const line = [...container.querySelectorAll("div")].find((d) => flat(d.textContent) === "65% of 100 kg");
+    expect(line).toBeTruthy();
+    expect(line.style.color).toBe(T.ink2);
+    expect(line.innerHTML).not.toContain("heat");
+  });
+
   it("dials up with the normal controls, nothing in the way", () => {
     start({ deload: true });
     for (let i = 0; i < 4; i++) fireEvent.click(screen.getByLabelText("Add 1.25 kg"));
@@ -81,6 +89,7 @@ describe("a session with no deload", () => {
     logSet();
     expect(loggedSquat().sets[0].weight).toBe(100);
     expect(container.textContent.toLowerCase()).not.toContain("deload");
+    expect(container.textContent).not.toMatch(/\d+% of/);
     expect(container.innerHTML).not.toContain("underline");
   });
 });
