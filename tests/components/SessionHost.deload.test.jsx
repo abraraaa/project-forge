@@ -5,7 +5,7 @@
 // Text queries, not getByRole: see SessionScreen.surface.test.jsx.
 
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: () => {}, push: () => {} }) }));
 vi.mock("@vercel/analytics", () => ({ track: () => {} }));
@@ -23,7 +23,7 @@ const state = (currentWeight) => ({
   consecutiveLightMisses: 0, stallSignal: null, history: [], currentRepRange: { reps: 5, sets: 3, baseReps: 5 },
 });
 
-function start({ deload }) {
+function start({ deload, plannedDays = 5 }) {
   P.setActive(WHO);
   P.saveWeights(WHO, { [SQUAT]: 100 });
   P.saveReps(WHO, {});
@@ -31,7 +31,7 @@ function start({ deload }) {
   if (deload) {
     TS.updateMesocycle(WHO, {
       ...TS.get(WHO).mesocycle, currentPhase: "deload",
-      activeDeload: { startedAt: new Date().toISOString(), plannedDays: 5, triggeredBy: "stall_convergence", triggeredLifts: [SQUAT], preDeloadWeights: { [SQUAT]: 100 } },
+      activeDeload: { startedAt: new Date().toISOString(), plannedDays, triggeredBy: "stall_convergence", triggeredLifts: [SQUAT], preDeloadWeights: { [SQUAT]: 100 } },
     });
   }
   SessionIntent.stash(WHO, { sessionIdx: 0 });
@@ -81,6 +81,23 @@ describe("a session inside a deload", () => {
     logSet();
     expect(loggedSquat().sets[0].weight).toBe(70);
     expect(loggedSquat().prescribed).toMatchObject({ weight: 65 });
+  });
+});
+
+describe("a session left open past the deload's last day", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("drops the deload at midnight", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 18, 23, 50));
+    const { container } = start({ deload: true, plannedDays: 1 });
+    expect(flat(container.textContent)).toContain("deload day 1 of 1");
+    vi.setSystemTime(new Date(2026, 10, 19, 0, 5));
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    expect(flat(container.textContent)).not.toContain("deload");
+    expect(container.textContent).not.toMatch(/\d+% of/);
+    logSet();
+    expect(loggedSquat().sets[0].weight).toBe(100);
   });
 });
 
