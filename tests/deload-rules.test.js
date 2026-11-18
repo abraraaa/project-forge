@@ -197,25 +197,55 @@ describe("a deload taken as a rest week", () => {
     expect([card(SQUAT).kg, card(BENCH).kg, card(DEADLIFT).kg]).toEqual([102.5, 100, 100]);
   });
 
-  it("no session at all through the deload: a late return sees the normal weights, not one more deload card", () => {
+  it("no session at all through the deload: the days count from the day it was accepted, and a late return sees the normal weights", () => {
     three();
     lastSaturday();
     accept();
+    // Thursday: five days since Saturday but three since the opt-in, so the deload runs.
     vi.setSystemTime(at(5));
+    expect(card(SQUAT).kg).toBe(65);
+    vi.setSystemTime(at(7));
     expect(card(SQUAT).kg).toBe(100);
     expect(tag()).toBeNull();
-    const thu = session(5, [{ name: SQUAT }]);
-    expect(thu.ended).toBe("rested");
-    expect(thu.written[SQUAT]).toBe(102.5);
+    const sat = session(7, [{ name: SQUAT }]);
+    expect(sat.ended).toBe("rested");
+    expect(sat.written[SQUAT]).toBe(102.5);
+  });
+
+  it("a deload accepted after a long gap runs from the day it was accepted", () => {
+    three();
+    H.append(PROFILE, { v: 2, id: new Date(2026, 9, 20, 10).toISOString(), date: "2026-10-20", session: "strength-a", blocks: [] });
+    accept();
+    const mon = session(2, [{ name: SQUAT }]);
+    expect(mon.cards[SQUAT].kg).toBe(65);
+    expect(mon.ended).toBeNull();
+    expect(TS.get(PROFILE).mesocycle.activeDeload).not.toBeNull();
   });
 
   it("a conditioning tick is not a strength session: it does not shorten the gap", () => {
     three();
     lastSaturday();
     accept();
-    recordCompletion(PROFILE, iso(3), { kind: "tick" });
-    vi.setSystemTime(at(5));
+    recordCompletion(PROFILE, iso(5), { kind: "tick" });
+    vi.setSystemTime(at(7));
     expect(card(SQUAT).kg).toBe(100);
+  });
+
+  it("a backfilled record dated before the deload never closes it as rested", () => {
+    three();
+    H.append(PROFILE, { v: 2, id: new Date(2026, 9, 24, 10).toISOString(), date: "2026-10-24", session: "strength-b", blocks: [] });
+    lastSaturday();
+    accept();
+    session(2, [{ name: SQUAT }, { name: BENCH }]);
+    // Logged on Tuesday 3rd for Friday 30 October.
+    vi.setSystemTime(at(3, 9));
+    const rec = { v: 2, id: "2026-10-30T12:00:00.000Z", date: "2026-10-30", readiness: "normal", session: "strength-a",
+      blocks: [{ id: "b0", type: "main", exercises: [{ name: SQUAT, loadType: "barbell", prescribed: { sets: 3, reps: 5, weight: 100 }, sets: sets(100, "barbell", 5, 3, 2) }] }] };
+    const engine = commitSessionRecord(PROFILE, rec, { currentWeights: plan().weights });
+    expect(engine.deloadEnded).toBeNull();
+    expect(TS.get(PROFILE).mesocycle.activeDeload).not.toBeNull();
+    expect(P.getWeights(PROFILE)).toMatchObject({ [SQUAT]: 65, [BENCH]: 65 });
+    expect([card(SQUAT).kg, card(BENCH).kg]).toEqual([65, 65]);
   });
 
   it("a 4-day gap is the calendar close: a deload card that day, then the re-entry", () => {
