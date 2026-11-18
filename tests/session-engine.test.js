@@ -1011,6 +1011,18 @@ describe("a cooked record is history only", () => {
     expect(unscheduled(after)).toEqual(unscheduled(before));
   });
 
+  it("a cooked session after five days off closes the deload as rested: the pre-deload weight, no re-entry", () => {
+    deloadFrom102();
+    // The deload day's write, as the commit stores it.
+    P.saveWeights("p", { [SQUAT]: apply(squat("2026-10-22T10:00:00.000Z", 65)).wwUpdates[SQUAT] });
+    expect(P.getWeights("p")[SQUAT]).toBe(65);
+    const out = apply(squat("2026-10-27T10:00:00.000Z", 40, "cooked"));
+    expect(out).toMatchObject({ deloadEnded: "rested", justCompletedDeload: false, stillInDeload: false });
+    expect(out.wwUpdates).toEqual({ [SQUAT]: 100 });
+    expect(TS.get("p").mesocycle.activeDeload).toBeNull();
+    expect(TS.get("p").lifts[SQUAT].inRecoveryUntil ?? 0).toBe(0);
+  });
+
   it("a cooked first session after the deload closed elsewhere writes the re-entry and keeps the count", () => {
     seedSquat(65);
     TS.save("p", { ...TS.get("p"), lifts: { [SQUAT]: { ...TS.get("p").lifts[SQUAT], inRecoveryUntil: 3, preDeloadWeight: 100 } } });
