@@ -62,6 +62,10 @@ const linkBtn = {
   display: "inline-flex", alignItems: "center", gap: 5,
 };
 
+// A 44px hit area around a small control, its pixels where they were: the
+// negative margin gives back the height the minimum adds.
+const HIT_44 = { minHeight: 44, minWidth: 44, marginTop: -14, marginBottom: -14 };
+
 const EMPTY = [];
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -136,7 +140,7 @@ export default function PerformanceLab({ history, onBack, resting = false, break
       {/* Top clearance is self-sufficient: max() guarantees the back nav
           clears the translucent status bar in the installed PWA. */}
       <div style={{padding:"max(52px, calc(env(safe-area-inset-top, 0px) + 12px)) 24px 0", display:"flex", alignItems:"center", justifyContent:"space-between"}}>
-        <button onClick={onBack} style={{...linkBtn,color:T.ink2}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Home</button>
+        <button onClick={onBack} style={{...linkBtn,...HIT_44,color:T.ink2}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Home</button>
         {!isEmpty && (
           <span style={{fontSize:12,color:T.ink3,textAlign:"right"}}>
             <span style={{fontFamily:T.measured}}>{counts.last7}</span> this week · <span style={{fontFamily:T.measured}}>{counts.total}</span> logged
@@ -402,7 +406,10 @@ function StrengthRow({ lift, series, best = null, todayIso, expanded = false, on
           const canvas = await renderShareCard({ lift, series });
           await shareCanvas(canvas, `heatwayve-${lift.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-1rm.png`);
         }}
-        style={{background:"none",border:"none",padding:"4px 0 4px 4px",cursor:"pointer",flexShrink:0,display:"inline-flex"}}
+        // 44 × 44 around the 11px glyph, right edge and centre where the
+        // 15 × 19 box had them.
+        style={{background:"none",border:"none",padding:0,cursor:"pointer",flexShrink:0,display:"inline-flex",
+          alignItems:"center",justifyContent:"flex-end",width:44,height:44,margin:"-12.5px 0 -12.5px -29px"}}
         aria-label={`Share ${lift} trend`}>
         <Glyph name="arrowUpRight" size={11} color={T.ink3}/>
       </button>

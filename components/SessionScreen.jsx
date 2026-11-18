@@ -52,6 +52,10 @@ const linkBtn = {
   display: "inline-flex", alignItems: "center", gap: 5,
 };
 
+// A 44px hit area around a small control, its pixels where they were: the
+// negative margin gives back the height the minimum adds.
+const HIT_44 = { minHeight: 44, minWidth: 44, marginTop: -14, marginBottom: -14 };
+
 // ─── RPE track ───────────────────────────────────────────────────────────────
 // Drag, not chips. Continuous 6–10 in 0.5 steps. The channel is a bare
 // 10px bed (square ends, heat-0 ground, hairline ticks at 7/8/9) inside a
@@ -670,9 +674,9 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         <div style={{height:"100%",width:`${progress}%`,background:T.dayKey.strength,transition:`width 600ms ${T.ease}`}}/>
       </div>
       <div style={{padding:"14px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <button onClick={onQuit} style={{...linkBtn,fontSize:13,color:T.ink2}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Quit</button>
+        <button onClick={onQuit} style={{...linkBtn,...HIT_44,fontSize:13,color:T.ink2}}><Glyph name="arrowLeft" size={12} color={T.ink3}/> Quit</button>
         <button onClick={onShowOverview} aria-label="Open session overview"
-          style={{background:"none",border:"none",padding:0,cursor:"pointer",textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",fontFamily:T.text}}>
+          style={{background:"none",border:"none",padding:0,cursor:"pointer",textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",justifyContent:"center",fontFamily:T.text,...HIT_44}}>
           <div style={{fontSize:13,fontWeight:500,color:T.ink2,display:"flex",alignItems:"center",gap:6}}>
             {session.name}
             <Glyph name="chevronDown" size={10} style={{opacity:0.7}}/>
