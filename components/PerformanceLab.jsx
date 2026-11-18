@@ -17,6 +17,7 @@ import { auditHistoryVolume, AUDIT_MUSCLE_ORDER, VOLUME_TARGETS } from "@/lib/vo
 import Glyph from "@/components/Glyph";
 import { InkSpark, LineChart } from "@/components/LiftCharts";
 import { T, DISPLAY, HATCH } from "@/lib/tokens";
+import { SO_FAR, splitWeekSoFar, weekSoFarDelta } from "@/lib/chart-style";
 import { addDaysIso, daysBetween, parseLocalDate } from "@/lib/dates";
 import { isBodyweightMovement } from "@/lib/lift-translations";
 import { haptic } from "@/lib/a11y";
@@ -639,14 +640,18 @@ function MuscleRow({ muscle, sets, target, status, series, weeks, muted = false,
   // 6-week micro-wave from the 8-week series.
   const wave = (series || []).slice(-6);
   const wMax = Math.max(...wave, 1);
-  const waveD = wave.length > 1
-    ? wave.map((v, i) => `${i===0?"M":"L"} ${(i * (38 / (wave.length - 1))).toFixed(1)} ${(11 - 9 * (v / wMax)).toFixed(1)}`).join(" ")
+  // The current week is the week so far: off the line (lib/chart-style.js).
+  const { done: waveDone, soFar } = splitWeekSoFar(wave);
+  const waveXAt = (i) => (i * (38 / Math.max(wave.length - 1, 1))).toFixed(1);
+  const waveYAt = (v) => (11 - 9 * (v / wMax)).toFixed(1);
+  const waveD = waveDone.length > 1
+    ? waveDone.map((v, i) => `${i===0?"M":"L"} ${waveXAt(i)} ${waveYAt(v)}`).join(" ")
     : null;
 
-  // Week-over-week trend for the right column (§13.1: "+2 vs last wk").
-  const wkDelta = series && series.length >= 2
-    ? Math.round(series[series.length - 1] - series[series.length - 2])
-    : null;
+  // Week-over-week trend for the right column (§13.1: "+2 vs last wk"),
+  // never a drop while the week runs.
+  const wkDelta = weekSoFarDelta(series);
+  const behindSoFar = wkDelta === null && Array.isArray(series) && series.length >= 2;
   const emptyWithTarget = sets === 0 && target;
 
   return (
@@ -666,7 +671,8 @@ function MuscleRow({ muscle, sets, target, status, series, weeks, muted = false,
         <span style={{flex:1,minWidth:0,fontSize:15,color:muted?T.ink2:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayName}</span>
         <svg width="44" height="13" viewBox="0 0 44 13" style={{overflow:"visible",flexShrink:0}} aria-hidden="true">
           {waveD && <path d={waveD} fill="none" stroke={muted?T.ink3:"var(--ink-2)"} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>}
-          {wave.length > 0 && <circle cx="38" cy={(11 - 9 * (wave[wave.length-1] / wMax)).toFixed(1)} r="1.7" fill={muted?T.ink3:"var(--ink-2)"}/>}
+          {waveDone.length > 0 && <circle cx={waveXAt(waveDone.length - 1)} cy={waveYAt(waveDone[waveDone.length - 1])} r="1.7" fill={muted?T.ink3:"var(--ink-2)"}/>}
+          {soFar !== null && <circle data-so-far="" cx="38" cy={waveYAt(soFar)} r="1.7" fill={T.ink3} opacity={SO_FAR.opacity}/>}
         </svg>
         <span style={{minWidth:40,textAlign:"right",fontSize:13,color:T.ink,flexShrink:0}}>
           {emptyWithTarget
@@ -685,7 +691,9 @@ function MuscleRow({ muscle, sets, target, status, series, weeks, muted = false,
           )}
         </div>
         <span style={{minWidth:78,textAlign:"right",fontSize:11,color:T.ink3,flexShrink:0}} aria-hidden="true">
-          {wkDelta == null || muted ? "" :
+          {muted ? "" :
+            behindSoFar ? SO_FAR.label :
+            wkDelta == null ? "" :
             wkDelta === 0 ? "level vs last wk" :
             <><span style={{fontFamily:T.measured,color:wkDelta>0?T.ink2:T.ink3}}>{wkDelta>0?`+${wkDelta}`:wkDelta}</span> vs last wk</>}
         </span>

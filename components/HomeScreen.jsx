@@ -28,6 +28,7 @@ import { deloadCardCopy, deloadDayLabel, liveDeload, repTargetRepairs } from "@/
 import { planStartWeight, isWorkingWeight, scheduledPlan, deloadSessionSets } from "@/lib/programme-resolve";
 import { getLoadType, parseTimedReps, usesOptionalChrome } from "@/lib/lift-translations";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
+import { SO_FAR, splitWeekSoFar } from "@/lib/chart-style";
 import { fetchWithTimeout } from "@/lib/net";
 import { resetConfigFor } from "@/lib/profile-actions";
 
@@ -282,6 +283,10 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const wave = useMemo(() => weeklyTonnage(history, 6), [history]);
   const waveMax = Math.max(...wave.map(w => w.kg), 1);
   const hasWave = wave.some(w => w.kg > 0);
+  // The current week is the week so far: off the line (lib/chart-style.js).
+  const waveSplit = splitWeekSoFar(wave.map(w => w.kg));
+  const waveX = (i) => (i*(342/(wave.length-1))).toFixed(1);
+  const waveY = (kg) => (27 - 24*(kg/waveMax)).toFixed(1);
 
   return (
     <div style={{minHeight:"100vh",paddingBottom:48,position:"relative",overflow:"clip"}}>
@@ -569,7 +574,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           <div style={{margin:"22px 0 0",padding:"12px 24px 12px",borderTop:`1px solid ${T.rule}`,borderBottom:`1px solid ${T.rule}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
               <span style={{fontSize:13,color:T.ink2}}>Tonnage, six weeks</span>
-              <span style={{fontFamily:T.measured,fontSize:12,color:T.heat[3]}}>{formatTonnage(wave[wave.length-1].kg)}</span>
+              <span style={{fontSize:12,color:T.ink3}}><span style={{fontFamily:T.measured,color:T.heat[3]}}>{formatTonnage(waveSplit.soFar ?? 0)}</span> {SO_FAR.label}</span>
             </div>
             <svg width="100%" height="30" viewBox="0 0 342 30" preserveAspectRatio="none" style={{display:"block",overflow:"visible"}} aria-hidden="true">
               <defs>
@@ -581,10 +586,11 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 </linearGradient>
               </defs>
               <path
-                d={wave.map((w,i)=>`${i===0?"M":"L"} ${(i*(342/(wave.length-1))).toFixed(1)} ${(27 - 24*(w.kg/waveMax)).toFixed(1)}`).join(" ")}
+                d={waveSplit.done.map((kg,i)=>`${i===0?"M":"L"} ${waveX(i)} ${waveY(kg)}`).join(" ")}
                 fill="none" stroke="url(#hwHomeWave)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                 strokeDasharray="400" style={{animation:`hwDraw 1.1s ${T.ease} both`}}/>
-              <circle cx="342" cy={(27 - 24*(wave[wave.length-1].kg/waveMax)).toFixed(1)} r="3.2" fill="var(--heat-3)"/>
+              <circle cx={waveX(waveSplit.done.length-1)} cy={waveY(waveSplit.done[waveSplit.done.length-1])} r="3.2" fill="var(--heat-3)"/>
+              <circle data-so-far="" cx={waveX(waveSplit.done.length)} cy={waveY(waveSplit.soFar ?? 0)} r="3.2" fill={T.ink3} opacity={SO_FAR.opacity}/>
             </svg>
           </div>
         </Fade>
