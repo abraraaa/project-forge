@@ -935,7 +935,9 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
                   <span style={{fontFamily:T.measured,fontSize:14}}>{s.reps ?? "—"}</span>
                   {rpe!=null && <> at <span style={{fontFamily:T.measured,fontSize:14}}>{rpe%1===0?rpe:rpe.toFixed(1)}</span></>}
                 </span>
-                {rpe!=null && <span aria-hidden="true" style={{width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe),borderRadius:T.rMark}}/>}
+                {/* The newest row's mark arrives from heat-0 over the bloom. */}
+                {rpe!=null && <span aria-hidden="true" className={idx===0?"hw-heat-arrive":undefined}
+                  style={/** @type {any} */ ({width:24,height:heatMarkHeight(rpe),background:heatForRpe(rpe),borderRadius:T.rMark,"--heat-to":heatForRpe(rpe),"--t-bloom":T.tBloom})}/>}
               </span>
             </div>
           ))}

@@ -472,6 +472,17 @@ body.forge-diag-no-pluslighter ::view-transition-new(root) {
   100% { opacity: 1; transform: translateY(0); }
 }
 
+/* A logged set's heat mark arrives from heat-0 to its own stop (--heat-to),
+   over the bloom. Reduced motion: it appears at its final colour. */
+@keyframes hwHeatArrive {
+  from { background-color: var(--heat-0); }
+  to   { background-color: var(--heat-to); }
+}
+.hw-heat-arrive { animation: hwHeatArrive var(--t-bloom, 900ms) cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .hw-heat-arrive { animation: none; }
+}
+
 /* breathe — rest ring ±3.5% scale on a 5.4s cycle. Felt, not seen. */
 @keyframes hwBreathe {
   0%, 100% { transform: scale(1); }
