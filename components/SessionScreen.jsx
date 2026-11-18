@@ -29,7 +29,8 @@ import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
 import { WEEK, swapOptionsFor } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
-import { recentForExercise } from "@/lib/analytics";
+import { recentForExercise, sessionSummaryLine } from "@/lib/analytics";
+import { isCountedSet } from "@/lib/counted-set";
 import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, usesOptionalChrome, addedLoadFor, loggedAddedKg, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 import { resolveVid } from "@/lib/exercise-videos";
@@ -1296,14 +1297,17 @@ const NEXT_DAY_MSG = {
   ],
 };
 
-export function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},userWeek=WEEK,onHome,deloadCompleted=false,returnGapDays=null}){
+export function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},userWeek=WEEK,onHome,deloadCompleted=false,returnGapDays=null,record=null}){
   // `base` = what the user lifted at SESSION START (snapshotted at
   // readiness). Falls back to the current working weight if no snapshot.
+  // A main lift with no counted set in the record was not trained today.
   const nudges = session.blocks.filter(b=>b.type==="main").map(b=>{
     const current = workingWeights[b.ex.name] ?? b.ex.weight;
     const base    = sessionStartWeights[b.ex.name] ?? current;
-    return { ex:b.ex.name, base, current, changed: current !== base };
+    const trained = !record || (record.blocks || []).some(rb => (rb.exercises || []).some(e => e.name === b.ex.name && (e.sets || []).some(isCountedSet)));
+    return { ex:b.ex.name, base, current, changed: trained && current !== base, trained };
   });
+  const summaryLine = sessionSummaryLine(record);
 
   // Pick a random headline pair, stable for this render
   const [hi] = useState(()=>DONE_HEADLINES[Math.floor(Math.random()*DONE_HEADLINES.length)]);
@@ -1330,6 +1334,9 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
         <h1 style={{...DISPLAY,fontWeight:500,fontSize:46,color:T.ink,marginBottom:12}}>
           {hi[0]}<br/>{hi[1]}
         </h1>
+        {summaryLine && (
+          <div style={{fontSize:15,color:T.ink,marginBottom:10}}><MonoNums>{summaryLine}</MonoNums></div>
+        )}
         <p style={{fontSize:14,color:T.ink2,marginBottom:30,lineHeight:1.6}}><MonoNums>{nextMsg}</MonoNums></p>
       </Fade>
       {nudges.length > 0 && (
@@ -1343,7 +1350,7 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
             <div style={{minWidth:0}}>
               <div style={{fontSize:14,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.ex}</div>
               <div style={{fontSize:12,color:T.ink2,marginTop:3}}>
-                {n.changed?"Next time, heavier.":"Hold — grind it smooth."}
+                {!n.trained?"Not trained today":n.changed?"Next time, heavier.":"Hold — grind it smooth."}
               </div>
             </div>
             <div style={{fontFamily:T.measured,fontSize:18,flexShrink:0,color:T.ink}}>
@@ -1379,12 +1386,12 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
       {/* Sync confirmation line */}
       <Fade d={320}>
         <div style={{marginTop:24,textAlign:"center",fontSize:12,color:T.ink2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-          {syncState.state === "idle" || syncState.state === "pushing" ? (
+          {syncState.state === "idle" ? (
             <>
               <span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:T.ink2}}/>
               Synced
             </>
-          ) : syncState.state === "pulling" ? (
+          ) : syncState.state === "pulling" || syncState.state === "pushing" ? (
             <>
               <span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:T.ink3,animation:"pulse 1s ease-in-out infinite"}}/>
               Syncing…

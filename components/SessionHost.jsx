@@ -206,6 +206,8 @@ export default function SessionHost({ mode = null } = {}) {
   useEffect(() => () => clearTimeout(announceTimerRef.current), []);
   const [sessionStartWeights, setSessionStartWeights] = useState({});
   const [showDeloadComplete, setShowDeloadComplete] = useState(false);
+  // The finished session's own record, for the Done screen's stated line.
+  const [doneRecord, setDoneRecord] = useState(null);
   const [returnGapDays, setReturnGapDays] = useState(null);
   const [bwEditOpen, setBwEditOpen] = useState(false);
   const [bwPromptedThisSession, setBwPromptedThisSession] = useState(false);
@@ -873,6 +875,7 @@ export default function SessionHost({ mode = null } = {}) {
       }
 
       const sessionRecord = draftLogRef.current ? finaliseDraft(draftLogRef.current) : null;
+      setDoneRecord(sessionRecord);
       // The finish's writes (lib/session-source.js): the streak; then history,
       // the day, the engine and W/R through commitSessionRecord, THE engine
       // path (lib/session-engine, #16) shared with Keep; then the push of the
@@ -1000,7 +1003,7 @@ export default function SessionHost({ mode = null } = {}) {
           workingWeights={workingWeights} sessionStartWeights={sessionStartWeights}
           userWeek={userWeek || WEEK}
           onHome={() => { setShowDeloadComplete(false); setReturnGapDays(null); withNavTransition(() => router.replace("/"), "nav-back"); }}
-          deloadCompleted={showDeloadComplete} returnGapDays={returnGapDays}
+          deloadCompleted={showDeloadComplete} returnGapDays={returnGapDays} record={doneRecord}
         />
       )}
       {sessionOverviewOpen && flow === "session" && (
