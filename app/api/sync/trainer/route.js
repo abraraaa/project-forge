@@ -9,7 +9,7 @@ import { freshCeremony, json, noStore } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
 import { dbReadProfile, dbExpireToken } from "@/lib/db";
 import { dbMarkSeen } from "@/lib/notices";
-import { trainerToday } from "@/lib/trainer-view";
+import { trainerDay } from "@/lib/server-time";
 import { shareVersionsFor } from "@/lib/trainer-terms";
 import { changeStatus, isUndoable, SESSION_KIND, sessionPreview } from "@/lib/trainer-change";
 import { dbChangesForClient, dbUndoChanges, dbAckChanges, dbEditsOff, dbEditsOn, cleanAcks, isIsoInstant } from "@/lib/trainer-changes-store";
@@ -97,7 +97,7 @@ export async function GET(request) {
       dbClientShare(identity.accountId), dbTrainerApplication(identity.accountId), dbChangesForClient(identity.accountId, now),
     ]);
     const trainer = entitled(identity, "trainer.dashboard");
-    const today = trainerToday(new URL(request.url).searchParams.get("today"), now);
+    const today = trainerDay(new URL(request.url).searchParams.get("today"), now);
     const changes = list?.rows.length ? await clientChanges(list.rows, identity.storageKey, today) : [];
     return json({
       open: shareOpenFor(identity),
@@ -245,7 +245,7 @@ async function changesWrite(verb, body, identity, request) {
   const open = targets.filter((r) => r.undoneAt == null);
   // Undone already: nothing to do, and that's fine.
   if (!open.length) return json({ ok: true, undone: [] });
-  const state = await trainingState(identity.storageKey, trainerToday(new URL(request.url).searchParams.get("today"), now));
+  const state = await trainingState(identity.storageKey, trainerDay(new URL(request.url).searchParams.get("today"), now));
   const ids = open.filter((r) => {
     const st = changeStatus(r, { ...state, editsLive: r.editsLive });
     // A week in their plan goes back through their own week editor first.

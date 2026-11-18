@@ -145,11 +145,11 @@ describe("cookie shape", () => {
     // offered. 30 days covers real absence; the 90-day absolute ceiling
     // still bounds a lost phone. Photos keep the tighter 7 — different
     // sensitivity, deliberately not parity.
-    expect(route).toContain("const SYNC_TTL_MS = 30 * 86400000;");
-    expect(route).toContain("maxAge: 30 * 86400");
+    expect(route).toContain("const SYNC_TTL_MS = durationMs({ days: 30 });");
+    expect(route).toContain("maxAge: durationSeconds({ days: 30 })");
     const photos = readFileSync(resolve(root, "app/api/photos/route.js"), "utf8");
-    expect(photos).toContain("const PHOTO_TTL_MS = 7 * 86400000;");
-    expect(photos).toContain("maxAge: 7 * 86400");
+    expect(photos).toContain("const PHOTO_TTL_MS = durationMs({ days: 7 });");
+    expect(photos).toContain("maxAge: durationSeconds({ days: 7 })");
   });
 
   // The lapse above is only survivable if some tap re-auths: with a passkey
@@ -162,7 +162,7 @@ describe("cookie shape", () => {
     expect(route).toContain("data.authAt");
     const auth = readFileSync(resolve(root, "lib/auth-server.js"), "utf8");
     // authAt must survive rotation — carried forward, never re-stamped.
-    expect(auth).toContain("authAt: authAt || new Date().toISOString()");
+    expect(auth).toContain("authAt: authAt || isoInstant()");
   });
 
   it("both ceremonies mint it, so a fresh passkey syncs without a second prompt", () => {

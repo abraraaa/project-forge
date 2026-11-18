@@ -40,8 +40,8 @@ describe("privacy notice stays true", () => {
   it("cookie lifetimes match the notice (sync 30 days, photos 7)", () => {
     expect(page).toMatch(/30 days \(sync\)/);
     expect(page).toMatch(/7 days \(photos\)/);
-    expect(read("app/api/photos/route.js")).toContain("maxAge: 7 * 86400");
-    expect(read("app/api/sync/route.js")).toContain("maxAge: 30 * 86400");
+    expect(read("app/api/photos/route.js")).toContain("maxAge: durationSeconds({ days: 7 })");
+    expect(read("app/api/sync/route.js")).toContain("maxAge: durationSeconds({ days: 30 })");
   });
 
   it("the trainer cookie matches the notice (14 days unused, 30 at most)", () => {
@@ -234,7 +234,7 @@ describe("privacy notice stays true", () => {
     const db = read("lib/db.js");
     // Terms acceptance: a version, when, and the 18+ attestation, stamped by the grant (self-grant or approval).
     expect(read("lib/identity-store.js")).toContain("const rec = { version: terms.version, at: terms.at, adult: true };");
-    expect(read("app/api/trainer/upgrade/route.js")).toContain("dbGrantTrainerRole(c.identity.accountId, { version, at: new Date().toISOString(), adult: true })");
+    expect(read("app/api/trainer/upgrade/route.js")).toContain("dbGrantTrainerRole(c.identity.accountId, { version, at: isoInstant(), adult: true })");
     expect(db).toContain("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS trainer_terms JSONB");
     // The invite slot holds the code's hash and never the code.
     const invites = db.slice(db.indexOf("CREATE TABLE IF NOT EXISTS trainer_invites"), db.indexOf(")`;", db.indexOf("CREATE TABLE IF NOT EXISTS trainer_invites")));

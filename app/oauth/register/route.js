@@ -3,11 +3,12 @@ import { registerClient } from "@/lib/oauth";
 import { neonOAuthStore } from "@/lib/oauth-store";
 import { oauthJson, preflight } from "@/lib/oauth-http";
 import { serverError } from "@/lib/api-errors";
+import { durationMs } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
 
-const DAY_MS = 86_400_000;
+const DAY_MS = durationMs({ days: 1 });
 
 // RFC 7591 dynamic client registration. Public clients only (PKCE, no
 // secret). Registering grants nothing: every connection still needs the

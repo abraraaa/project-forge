@@ -3,12 +3,13 @@ import { entitled } from "@/lib/entitlements";
 import { issueInvite, dbCancelInvite, dbInviteStatus } from "@/lib/trainer-store";
 import { trainerGate, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
+import { durationMs } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
 export const dynamic = "force-dynamic";
 
-const HOUR_MS = 3_600_000;
+const HOUR_MS = durationMs({ hours: 1 });
 
 /** Carry the gate's daily slide, if any, on whatever the route answers. */
 const slid = (gate, res) => (gate.refresh ? setTrainerCookie(res, gate.refresh) : res);

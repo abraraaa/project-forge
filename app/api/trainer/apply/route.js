@@ -7,6 +7,7 @@ import { acceptedTrainerTermsVersion, TRAINER_TERMS_VERSION } from "@/lib/traine
 import { APPLY_BODY_MAX, APPLY_COPY, applyBlock, cleanAbout, cleanLink, queueFull } from "@/lib/trainer-apply";
 import { freshCeremony, json, noStore } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
+import { isoInstant } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -53,7 +54,7 @@ export async function POST(request) {
     // caller's own withdrawn or long-denied row; then UPDATE
     // auth_tokens.expires on the ceremony token.
     const written = await dbApplyTrainer(c.identity.accountId,
-      { about: a.about, link: l.link, terms: { version, at: new Date(now).toISOString(), adult: true } }, now);
+      { about: a.about, link: l.link, terms: { version, at: isoInstant(now), adult: true } }, now);
     if (!written) {
       // Another request got there first.
       return json(applyBlock(await dbTrainerApplication(c.identity.accountId), now) || { status: "applied" }, 409);

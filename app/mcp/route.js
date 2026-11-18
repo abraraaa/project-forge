@@ -5,6 +5,7 @@ import { credentialExists, grantIdentity } from "@/lib/oauth-credentials";
 import { handleMcp } from "@/lib/mcp-server";
 import { dbReadProfile } from "@/lib/db";
 import { ISSUER } from "@/lib/oauth-http";
+import { durationMs } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -64,7 +65,7 @@ export async function POST(request) {
   // Per connection, not just per IP: one AI can't hammer the database.
   const limited = rateLimit(request, `mcp:${who.grantId}`, 60)
     || await rateLimitShared(request, "mcp", 60, { id: who.grantId })
-    || await rateLimitShared(request, "mcp-day", 2000, { windowMs: 86_400_000, id: who.grantId });
+    || await rateLimitShared(request, "mcp-day", 2000, { windowMs: durationMs({ days: 1 }), id: who.grantId });
   if (limited) return limited;
 
   const msg = await request.json().catch(() => undefined);

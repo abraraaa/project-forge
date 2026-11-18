@@ -6,12 +6,13 @@ import { acceptedShareConsentVersion, SHARE_CONSENT_VERSION } from "@/lib/traine
 import { publicName } from "@/lib/trainer-view";
 import { freshCeremony, json, noStore } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
+import { durationMs } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
 export const dynamic = "force-dynamic";
 
-const HOUR_MS = 3_600_000;
+const HOUR_MS = durationMs({ hours: 1 });
 const MISS = { error: "That code didn't work. Check it, or ask your trainer for a fresh one." };
 const TOO_MANY = "Too many tries. Ask your trainer for a fresh code, then try again in an hour.";
 const UNAVAILABLE = "Sharing is unavailable right now. Try again in a bit.";

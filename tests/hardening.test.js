@@ -196,7 +196,7 @@ describe("sliding cookies cannot renew themselves forever", () => {
   });
 
   it("mintAuthToken preserves an inherited authAt rather than re-stamping", () => {
-    expect(read("lib/auth-server.js")).toContain("authAt: authAt || new Date().toISOString()");
+    expect(read("lib/auth-server.js")).toContain("authAt: authAt || isoInstant()");
   });
 });
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { planIdentityBackfill } from "@/lib/identity-backfill";
 import { gatherBackfillInputs, backfillLogLine } from "@/lib/identity-backfill-inputs";
+import { isoInstant } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -27,7 +28,7 @@ export async function GET(request) {
   }
 
   try {
-    const { db, input } = await gatherBackfillInputs(new Date().toISOString());
+    const { db, input } = await gatherBackfillInputs(isoInstant());
     const plan = planIdentityBackfill(input);
     console.log(backfillLogLine(plan));
     return NextResponse.json({ dryRun: true, writes: "none — enumeration, reads and SELECTs only", db, ...plan });

@@ -8,7 +8,8 @@ import {
 } from "@/lib/trainer-change";
 import { shareCovers } from "@/lib/trainer-terms";
 import { TYPE_LABEL, stableStringify } from "@/lib/sync-merge";
-import { trainerToday, SELF_REF } from "@/lib/trainer-view";
+import { SELF_REF } from "@/lib/trainer-view";
+import { durationMs, msAfter, trainerDay, utcDayLabel } from "@/lib/server-time";
 import { trainerGate, faceIdFresh, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
 
@@ -16,7 +17,7 @@ import { serverError } from "@/lib/api-errors";
 export const preferredRegion = "lhr1";
 export const dynamic = "force-dynamic";
 
-const DAY_MS = 86_400_000;
+const DAY_MS = durationMs({ days: 1 });
 const LABEL = "trainer-change";
 /** A change id or a set id to take back. */
 const WITHDRAW_MAX = 64;
@@ -26,7 +27,6 @@ const slid = (gate, res) => (gate.refresh ? setTrainerCookie(res, gate.refresh) 
 // One answer for revoked, closed, a dead passkey, another trainer's client, unknown and "me".
 const notShared = () => json({ error: "Not shared with you now." }, 404);
 const unavailable = (e) => noStore(serverError(e, { status: 503, label: LABEL }));
-const DAY_LABEL = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 const stale = () => json({ stale: true, error: "They've trained or changed it since you looked. Refresh." }, 409);
 // The set id was sent before with other changes: the pane mints a new id.
 const mismatch = () => json({ error: "That didn't send. Try again.", code: "replay_mismatch" }, 409);
@@ -160,7 +160,7 @@ export async function POST(request) {
         } catch (e) {
           return slid(g, unavailable(e));
         }
-        const state = { meta: data?.meta, history: data?.history ?? [], todayIso: trainerToday(b.today, now) };
+        const state = { meta: data?.meta, history: data?.history ?? [], todayIso: trainerDay(b.today, now) };
         if (data) inForce = landed.filter((r) => changeStatus(r, state).status === "in_force").map((r) => r.id);
       }
       const ids = await dbWithdrawChanges(ref, me, x, inForce, now);
@@ -207,7 +207,7 @@ export async function POST(request) {
     // Nothing on the server to check against: the pane's view is out of date.
     if (!data) return slid(g, stale());
     // The trainer's today: the record must be dated today or yesterday on it.
-    const todayIso = trainerToday(b.today, now);
+    const todayIso = trainerDay(b.today, now);
 
     /** @type {{ kind: string, target: string, before: any, after: any, basis: any, warnings: string[] | null, from: string | null }[]} */
     let rows;
@@ -256,7 +256,7 @@ export async function POST(request) {
     if (!res) return slid(g, unavailable(new Error("no store")));
     if ("inserted" in res) {
       // The first in the window frees up a week from now.
-      const after = { ...budget, used: budget.used + 1, freeAt: budget.freeAt ?? now + BUDGET_WINDOW_MS };
+      const after = { ...budget, used: budget.used + 1, freeAt: budget.freeAt ?? msAfter(now, BUDGET_WINDOW_MS) };
       return slid(g, json({ sent: { set: set.id, ids: res.inserted }, budget: after }));
     }
     if ("replay" in res) return slid(g, json({ sent: { set: set.id, ids: [] }, replay: true, budget }));
@@ -265,7 +265,7 @@ export async function POST(request) {
     const counted = { used: res.used, of: budget.of, freeAt: res.freeAt };
     // Another device sent this day and letter first (the INSERT's own guard).
     if ("alreadySent" in res && standing) return slid(g, standing(counted));
-    const more = res.freeAt == null ? "" : ` More from ${DAY_LABEL.format(new Date(res.freeAt))}.`;
+    const more = res.freeAt == null ? "" : ` More from ${utcDayLabel(res.freeAt)}.`;
     return slid(g, json({ error: `${full}${more}`, budget: counted }, 429));
   } catch (e) {
     return noStore(serverError(e, { label: LABEL }));

@@ -8,6 +8,7 @@ import { dbResolveHandle } from "@/lib/identity-store";
 import { readCredentialSet, reclaimUserId } from "@/lib/credential-store";
 import { newWebauthnUserId } from "@/lib/identity";
 import { entitled } from "@/lib/entitlements";
+import { durationMs, msAfter } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -64,7 +65,7 @@ export async function POST(request) {
       if (lapsed) webauthnUserId = newWebauthnUserId();
       const { put } = await import("@vercel/blob");
       await put(`forge/challenges/${userId}`, JSON.stringify({
-        challenge, profile: normalise(profile), expires: Date.now() + 120000, ...(lapsed ? { userId: webauthnUserId } : null),
+        challenge, profile: normalise(profile), expires: msAfter(Date.now(), durationMs({ minutes: 2 })), ...(lapsed ? { userId: webauthnUserId } : null),
       }), {
         access: "private",
         contentType: "application/json",

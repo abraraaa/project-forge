@@ -3,7 +3,8 @@ import { dbReadProfile } from "@/lib/db";
 import { dbPrimaryHandle } from "@/lib/identity-store";
 import { dbTrainerGrants, dbLogFullLook } from "@/lib/trainer-store";
 import { dbChangesForTrainer } from "@/lib/trainer-changes-store";
-import { trainerToday, publicName, SELF_REF } from "@/lib/trainer-view";
+import { publicName, SELF_REF } from "@/lib/trainer-view";
+import { durationMs, trainerDay } from "@/lib/server-time";
 import { projectForTrainer, editsStatus } from "@/lib/trainer-plan";
 import { trainerGate, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
@@ -12,7 +13,7 @@ import { serverError } from "@/lib/api-errors";
 export const preferredRegion = "lhr1";
 export const dynamic = "force-dynamic";
 
-const DAY_MS = 86_400_000;
+const DAY_MS = durationMs({ days: 1 });
 const LABEL = "trainer-client";
 
 /** Carry the gate's daily slide, if any, on whatever the route answers. */
@@ -83,7 +84,7 @@ export async function POST(request) {
     }
     // The trainer's own training has no grant: no edits status, no plan.
     const status = grant ? editsStatus(grant, changes) : null;
-    const view = projectForTrainer(data, { todayIso: trainerToday(body.today, now), edits: changes, status });
+    const view = projectForTrainer(data, { todayIso: trainerDay(body.today, now), edits: changes, status });
     return slid(g, json(self ? { client, view, self: true } : { client, view }));
   } catch (e) {
     return noStore(serverError(e, { label: LABEL }));

@@ -245,7 +245,7 @@ describe("P5 — the sliding 7-day photo cookie (code shape)", () => {
   it("login-verify mints a 7-day photo-scope token and sets a hardened, path-scoped cookie", () => {
     const s = readFileSync(resolve(root, "app/api/auth/login-verify/route.js"), "utf8");
     expect(s).toContain('scope: "photos"');
-    expect(s).toContain("7 * 86400000");
+    expect(s).toContain("ttlMs: durationMs({ days: 7 }), scope: \"photos\"");
     expect(s).toMatch(/httpOnly: true, secure: true, sameSite: "strict", path: "\/api\/photos"/);
   });
   it("the photos gate SLIDES the window: rotates cookie-carried tokens on active use", () => {

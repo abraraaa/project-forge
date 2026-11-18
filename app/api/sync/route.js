@@ -11,6 +11,7 @@ import { dbResolveHandle, dbAccountByStorageKey, dbClaimHandle, dbCloseAccount, 
 import { countIndexedCredentials, readCredentialSet } from "@/lib/credential-store";
 import { IDENTITY_BLOB_FALLBACK, RESERVED_HANDLE_RE } from "@/lib/identity";
 import { dbOpenChangesFor, dbWipeReportTrainerChanges } from "@/lib/trainer-changes-store";
+import { durationMs, durationSeconds, isoInstant, readInstantMs, slides } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -191,17 +192,17 @@ async function safeReadJson(request) {
 // Sliding window, matching the photo cookie. Because any active day rotates
 // it, lengthening this buys a regularly-used device nothing and only extends
 // the window on a lost one. Keep the two values consistent.
-const SYNC_TTL_MS = 30 * 86400000;
-const SYNC_ROTATE_AFTER_MS = 86400000;   // any active day slides it
+const SYNC_TTL_MS = durationMs({ days: 30 });
+const SYNC_ROTATE_AFTER_MS = durationMs({ days: 1 });   // any active day slides it
 // ...but the chain is not infinite: rotation stops at 90 days from the
 // ORIGINAL ceremony, so a credential used daily forever still comes back to a
 // passkey once a quarter. Without a ceiling, one captured cookie renews itself
 // for life (deep audit finding against the photo cookie — not repeated here).
-const SYNC_ABSOLUTE_CAP_MS = 90 * 86400000;
+const SYNC_ABSOLUTE_CAP_MS = durationMs({ days: 90 });
 export const SYNC_COOKIE = "hw_sync";
 const SYNC_COOKIE_OPTS = {
   httpOnly: true, secure: true, sameSite: "strict",
-  path: "/api/sync", maxAge: 30 * 86400,
+  path: "/api/sync", maxAge: durationSeconds({ days: 30 }),
 };
 
 /** Attach a rotated sync cookie (if the gate minted one) to a success response. */
@@ -252,10 +253,7 @@ async function syncGate(request, profile) {
   // sliding and lapses on its own, so the next visit runs one ceremony.
   let refresh = null;
   if (data.scope === "sync" && token === cookieToken) {
-    const age = Date.now() - new Date(data.createdAt || 0).getTime();
-    const authAge = Date.now() - new Date(data.authAt || data.createdAt || 0).getTime();
-    const withinCap = Number.isFinite(authAge) && authAge < SYNC_ABSOLUTE_CAP_MS;
-    if ((!Number.isFinite(age) || age > SYNC_ROTATE_AFTER_MS) && withinCap) {
+    if (slides(data, Date.now(), { rotateAfterMs: SYNC_ROTATE_AFTER_MS, capMs: SYNC_ABSOLUTE_CAP_MS })) {
       refresh = await mintAuthToken({
         identity, ttlMs: SYNC_TTL_MS, scope: "sync",
         authAt: data.authAt || data.createdAt || null,
@@ -314,7 +312,7 @@ async function readJson(pathname) {
 async function readLatestLegacy(blobs, kindRe) {
   const matches = blobs.filter(b => kindRe.test(b.pathname));
   if (!matches.length) return null;
-  const latest = matches.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())[0];
+  const latest = matches.sort((a, b) => readInstantMs(b.uploadedAt) - readInstantMs(a.uploadedAt))[0];
   return readJson(latest.pathname);
 }
 
@@ -579,7 +577,7 @@ export async function PUT(request) {
         mergedMeta = await writeMetaGuarded(norm, async () => {
           const base = await dbReadMetaBase(norm, null);
           return Object.keys(base.meta).length ? base : { meta: seedMeta, revs: base.revs };
-        }, (base) => ({ ...mergeMeta(base, data.meta), syncedAt: new Date().toISOString() }));
+        }, (base) => ({ ...mergeMeta(base, data.meta), syncedAt: isoInstant() }));
         if (!mergedMeta) return withSyncCookie(staleWrite(), gate);
       }
       return withSyncCookie(NextResponse.json({
@@ -633,7 +631,7 @@ export async function PUT(request) {
       const mergedMeta = existingMeta && typeof existingMeta === "object"
         ? mergeMeta(existingMeta, data.meta)
         : data.meta;
-      const stamped = { ...mergedMeta, syncedAt: new Date().toISOString() };
+      const stamped = { ...mergedMeta, syncedAt: isoInstant() };
       await put(
         metaPath(gate.profile),
         JSON.stringify(stamped),
@@ -707,14 +705,14 @@ const blobsHoldName = () => IDENTITY_BLOB_FALLBACK || !hasDb() || CLAIM_MODE !==
 // nothing under its prefix and no passkey indexed. Anything older or used
 // stays taken: the account's webauthn user id and consent must never pass to
 // whoever claims next.
-const CLAIM_RETRY_WINDOW_MS = 15 * 60 * 1000;
+const CLAIM_RETRY_WINDOW_MS = durationMs({ minutes: 15 });
 /** @param {{ id: string, origin: string, kind: string, storageKey: string, handle: string, consent?: any, createdAt?: string | null }} held */
 async function unfinishedClaim(held) {
   const ownKey = (held.origin === "claim" && held.storageKey === held.id)
     || (held.origin === "precutover_claim" && held.storageKey === held.handle);
   if (!ownKey || held.kind !== "primary") return false;
   if (held.consent != null) return false;
-  const age = Date.now() - Date.parse(String(held.createdAt));
+  const age = Date.now() - readInstantMs(String(held.createdAt));
   if (!(age >= 0 && age <= CLAIM_RETRY_WINDOW_MS)) return false;
   const { blobs } = await list({ prefix: profileDir(held.storageKey) });
   if (blobs.length > 0) return false;
@@ -792,7 +790,7 @@ export async function POST(request) {
       metaPath(sk),
       JSON.stringify({
         displayName: resolvedDisplay,
-        claimedAt: new Date().toISOString(),
+        claimedAt: isoInstant(),
         weights: {},
         reps: {},
         streak: { count: 0, lastDate: null },

@@ -544,7 +544,7 @@ describe("source pins", () => {
     const notices = read("lib/notices.js");
     expect(flat(notices)).toContain(`${LIVE} WHERE g.kind = 'trainer' AND g.trainer_account_id = \${me} AND g.revoked_at IS NULL`);
     // The window is the share's 24 weeks, in SQL.
-    expect(notices).toContain("const from = addDaysIso(today, -DETAIL_DAYS);");
+    expect(notices).toContain("const from = addDays(today, -DETAIL_DAYS);");
     expect(notices).toContain("AND s.record->>'date' BETWEEN ${from} AND ${to}");
   });
 

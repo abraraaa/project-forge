@@ -9,6 +9,7 @@ import { hasDb, dbUpsertPhoto, dbListPhotos, dbDeletePhoto, dbGetPhoto, dbHasRet
 import { isJpegBytes, jpegWithinBounds, PHOTO_MAX_UPLOAD_BYTES } from "@/lib/photos";
 import { normaliseProfile } from "@/lib/profile-name";
 import { photoPath, photosPrefix } from "@/lib/storage-keys";
+import { durationMs, durationSeconds, slides } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -64,10 +65,10 @@ const ownsPath = (g, path) => typeof path === "string" && path.startsWith(photos
 // never deleted mid-flight, so a lost Set-Cookie can't strand the user;
 // expired token blobs are inert (checked at read), same posture as legacy
 // suffixed orphans.
-const PHOTO_TTL_MS = 7 * 86400000;
-const ROTATE_AFTER_MS = 86400000; // any active day slides the window
-const PHOTO_ABSOLUTE_CAP_MS = 90 * 86400000; // ...but the chain is not infinite
-const COOKIE_OPTS = { httpOnly: true, secure: true, sameSite: "strict", path: "/api/photos", maxAge: 7 * 86400 };
+const PHOTO_TTL_MS = durationMs({ days: 7 });
+const ROTATE_AFTER_MS = durationMs({ days: 1 }); // any active day slides the window
+const PHOTO_ABSOLUTE_CAP_MS = durationMs({ days: 90 }); // ...but the chain is not infinite
+const COOKIE_OPTS = { httpOnly: true, secure: true, sameSite: "strict", path: "/api/photos", maxAge: durationSeconds({ days: 7 }) };
 
 // Attach a rotated cookie (if the gate minted one) to any success response.
 const withCookie = (res, g) => {
@@ -102,7 +103,6 @@ async function gate(request) {
   // Sliding rotation — cookie-carried photo-scope tokens only.
   let refresh = null;
   if (data.scope === "photos" && token === cookieToken) {
-    const age = Date.now() - new Date(data.createdAt || 0).getTime();
     // Absolute ceiling from the ORIGINAL ceremony (deep audit 2026-07-26).
     // Rotation used to be uncapped: each refresh minted a fresh 7-day token
     // with a new createdAt, so ONE captured cookie, used once a week, renewed
@@ -110,9 +110,7 @@ async function gate(request) {
     // authAt is carried forward unchanged through every rotation (createdAt
     // resets), so past the cap the cookie simply stops sliding and lapses,
     // costing an active user one Face ID per quarter.
-    const authAge = Date.now() - new Date(data.authAt || data.createdAt || 0).getTime();
-    const withinCap = Number.isFinite(authAge) && authAge < PHOTO_ABSOLUTE_CAP_MS;
-    if ((!Number.isFinite(age) || age > ROTATE_AFTER_MS) && withinCap) {
+    if (slides(data, Date.now(), { rotateAfterMs: ROTATE_AFTER_MS, capMs: PHOTO_ABSOLUTE_CAP_MS })) {
       refresh = await mintAuthToken({
         identity, ttlMs: PHOTO_TTL_MS, scope: "photos",
         authAt: data.authAt || data.createdAt || null,

@@ -7,6 +7,7 @@ import { acceptedTrainerTermsVersion, TRAINER_TERMS_VERSION } from "@/lib/traine
 import { publicName } from "@/lib/trainer-view";
 import { freshCeremony, mintTrainerSession, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
+import { isoInstant } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -37,7 +38,7 @@ export async function POST(request) {
     // Writes: UPDATE accounts.roles / trainer_terms (the caller's own row; terms
     // overwritten in place on re-acceptance), INSERT auth_tokens (the session),
     // UPDATE auth_tokens.expires on the ceremony token.
-    const granted = await dbGrantTrainerRole(c.identity.accountId, { version, at: new Date().toISOString(), adult: true });
+    const granted = await dbGrantTrainerRole(c.identity.accountId, { version, at: isoInstant(), adult: true });
     if (!granted) return json({ error: "Face ID didn't go through. Try again.", requiresAuth: true }, 401);
     const session = await mintTrainerSession(c.identity, c);
     await dbExpireToken(authToken);

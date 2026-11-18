@@ -27,6 +27,7 @@ import { put, list } from "@vercel/blob";
 import { readJsonDirect } from "@/lib/blob-utils";
 import { snapshotPaths } from "@/lib/storage-keys";
 import { hasDb, sql, ensureSchema, dbReadProfile } from "@/lib/db";
+import { isoInstant, utcWeekday } from "@/lib/server-time";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -68,7 +69,7 @@ export async function GET(request) {
     const profiles = [...new Set(rows.map((r) => r.profile))];
     // Weekly generation refreshes on Sundays (UTC — cadence, not user data;
     // the lib/dates local-day doctrine governs user-facing calendar math).
-    const isWeeklyDay = new Date().getUTCDay() === 0;
+    const isWeeklyDay = utcWeekday() === 7;
 
     const written = [];
     const guarded = [];
@@ -101,7 +102,7 @@ export async function GET(request) {
 
       const body = JSON.stringify({
         profile,
-        snappedAt: new Date().toISOString(),
+        snappedAt: isoInstant(),
         meta: data.meta,
         history: data.history,
       });
