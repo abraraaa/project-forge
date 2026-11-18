@@ -409,6 +409,63 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         </div>
       </Fade>
 
+      {/* Decisions sit under the masthead, above Begin. */}
+      {/* Pick up where you left off — an interrupted session from within the
+          last 12 hours. Top priority if it exists. */}
+      {pendingDraft && (
+        <Fade d={160}>
+          <Card style={{margin:"20px 24px 0",padding:"16px 18px 18px"}}>
+            <div style={{fontSize:13,color:T.ink2,marginBottom:6}}>Unfinished session</div>
+            <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.3}}>
+              Pick up where you left off.
+            </div>
+            <div style={{fontSize:13,color:T.ink3,marginTop:6,lineHeight:1.5}}>
+              <span style={{fontFamily:T.measured}}>{pendingDraft.setCount}</span> {pendingDraft.setCount === 1 ? "set" : "sets"} logged · {formatAgo(pendingDraft.ageMs)}
+            </div>
+            <div style={{display:"flex",gap:8,marginTop:14}}>
+              <button className="forge-press" onClick={onResumeDraft}
+                style={{flex:1,height:48,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                Resume <Glyph name="arrowRight" size={12}/>
+              </button>
+              <button className="forge-press" onClick={onDiscardDraft}
+                style={{height:48,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,fontWeight:500,color:T.ink2}}>
+                Discard
+              </button>
+            </div>
+          </Card>
+        </Fade>
+      )}
+
+      {/* Deload offer card. Surfaces only when signals warrant. Acknowledgement
+          voice — an offer, never an alarm. */}
+      {deloadOffer && (() => {
+        const copy = deloadCardCopy(deloadOffer);
+        if (!copy) return null;
+        return (
+          <Fade d={170}>
+            <Card style={{margin:"20px 24px 0",padding:"18px 20px"}}>
+              <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>{copy.kicker}</div>
+              <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.3,marginBottom:8}}>
+                {copy.headline}
+              </div>
+              <div style={{fontSize:13,color:T.ink2,lineHeight:1.55,marginBottom:16}}>
+                {copy.body}
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <button className="forge-press" onClick={onAcceptDeload}
+                  style={{flex:1,height:46,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                  Run the deload <Glyph name="arrowRight" size={12}/>
+                </button>
+                <button className="forge-press" onClick={onDismissDeload}
+                  style={{flexShrink:0,height:46,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,color:T.ink2}}>
+                  Not yet
+                </button>
+              </div>
+            </Card>
+          </Fade>
+        );
+      })()}
+
       {/* Strength day — session stats + list, on the ground between
           hairlines. No card: measured data gets no containers. */}
       {cfg.canBegin && viewSession && (
@@ -596,32 +653,6 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         </Fade>
       )}
 
-      {/* Pick up where you left off — an interrupted session from within the
-          last 12 hours. Top priority if it exists. */}
-      {pendingDraft && (
-        <Fade d={160}>
-          <Card style={{margin:"20px 24px 0",padding:"16px 18px 18px"}}>
-            <div style={{fontSize:13,color:T.ink2,marginBottom:6}}>Unfinished session</div>
-            <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.3}}>
-              Pick up where you left off.
-            </div>
-            <div style={{fontSize:13,color:T.ink3,marginTop:6,lineHeight:1.5}}>
-              <span style={{fontFamily:T.measured}}>{pendingDraft.setCount}</span> {pendingDraft.setCount === 1 ? "set" : "sets"} logged · {formatAgo(pendingDraft.ageMs)}
-            </div>
-            <div style={{display:"flex",gap:8,marginTop:14}}>
-              <button className="forge-press" onClick={onResumeDraft}
-                style={{flex:1,height:48,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:15,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                Resume <Glyph name="arrowRight" size={12}/>
-              </button>
-              <button className="forge-press" onClick={onDiscardDraft}
-                style={{height:48,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,fontWeight:500,color:T.ink2}}>
-                Discard
-              </button>
-            </div>
-          </Card>
-        </Fade>
-      )}
-
       {/* BW re-prompt card — surfaces when bodyweight is stale (>14 days or never set) */}
       {showBwCard && (
         <Fade d={180}>
@@ -649,36 +680,6 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
         <TrainerSessionCard card={trainerSessions[0]} more={trainerSessions.length - 1}
           todayIso={addDaysIso(new Date(nowMs), 0)} nowMs={nowMs} onReview={onOpenTrainerSession}/>
       )}
-
-      {/* Deload offer card. Surfaces only when signals warrant. Acknowledgement
-          voice — an offer, never an alarm. */}
-      {deloadOffer && (() => {
-        const copy = deloadCardCopy(deloadOffer);
-        if (!copy) return null;
-        return (
-          <Fade d={170}>
-            <Card style={{margin:"20px 24px 0",padding:"18px 20px"}}>
-              <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>{copy.kicker}</div>
-              <div style={{fontSize:17,fontWeight:500,color:T.ink,lineHeight:1.3,marginBottom:8}}>
-                {copy.headline}
-              </div>
-              <div style={{fontSize:13,color:T.ink2,lineHeight:1.55,marginBottom:16}}>
-                {copy.body}
-              </div>
-              <div style={{display:"flex",gap:10}}>
-                <button className="forge-press" onClick={onAcceptDeload}
-                  style={{flex:1,height:46,background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                  Run the deload <Glyph name="arrowRight" size={12}/>
-                </button>
-                <button className="forge-press" onClick={onDismissDeload}
-                  style={{flexShrink:0,height:46,padding:"0 16px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:13,color:T.ink2}}>
-                  Not yet
-                </button>
-              </div>
-            </Card>
-          </Fade>
-        );
-      })()}
 
       {/* Lifetime-tonnage milestone — surfaces ONCE per crossed threshold.
           Tap-anywhere dismisses. A small ceremony beat — display face earns

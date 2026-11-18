@@ -71,3 +71,21 @@ describe("Home with no deload", () => {
     expect(rowOf(main)).toContain("at 100 kg");
   });
 });
+
+describe("decisions sit above Begin", () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 8, 25, 9, 0)); });
+
+  it("the Unfinished session card and the deload offer come just under the masthead, before the session and Begin", () => {
+    const { main: _main, ...p } = props(false);
+    render(<HomeScreen {...p} pendingDraft={{ setCount: 2, ageMs: 60000 }}
+      deloadOffer={{ type: "stall_convergence", lifts: ["Barbell Back Squat", "Barbell Bench Press"] }} />);
+    const order = (a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING;
+    const headline = screen.getByRole("heading", { level: 1 });
+    const unfinished = screen.getByText("Unfinished session");
+    const offer = screen.getByText("Run the deload");
+    const begin = screen.getByText("Begin");
+    expect(order(headline, unfinished)).toBeTruthy();
+    expect(order(unfinished, offer)).toBeTruthy();
+    expect(order(offer, begin)).toBeTruthy();
+  });
+});
