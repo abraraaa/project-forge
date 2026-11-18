@@ -17,7 +17,8 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
-import { mondayIndex, addDaysIso } from "@/lib/dates";
+import { mondayIndex, addDaysIso, daysBetween } from "@/lib/dates";
+import { isStrengthRecord } from "@/lib/day-state";
 import { Fade, Card, Tag, MonoNums, DeloadWord } from "@/components/ui";
 import Glyph from "@/components/Glyph";
 import ConsentLine from "@/components/ConsentLine";
@@ -100,6 +101,9 @@ const linkBtn = {
   fontFamily: T.text, fontSize: 13, color: T.ink3,
   display: "inline-flex", alignItems: "center", gap: 5,
 };
+
+// Days since the last strength session that make today a return.
+const RETURN_GAP_DAYS = 10;
 
 export default
 function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,onBegin,onProfile,weekDone={},dayStates=[],onMarkDayDone,bonusDone={},onMarkBonusDone,programmeBlock,weeksOnBlock,onRotate,onResetProgramme,userFocus="Forged",onEditFocus,mainLifts={},onPerformance,onLockerRoom,historyCount=0,history=[],recoveryNudge=null,onDismissRecovery,syncState="idle",pendingDraft=null,onResumeDraft,onDiscardDraft,showBwCard=false,onOpenBwEdit,onDismissBwCard,deloadOffer=null,onAcceptDeload,onDismissDeload,untickedDays=[],onOpenRetroPicker,retroToast=null,onDismissRetroToast,pnStage="hidden",pnBusy=false,pnError=null,pnSuccessToast=false,onPnRegister,onPnSnooze,onPnDismissToast,tonnageMilestone=null,tonnageTotalKg=0,onDismissTonnageMilestone,resting=false,absenceNudge=null,onOpenBreather,onDismissAbsenceNudge,trainerSessions=[],onOpenTrainerSession,workingWeights={},workingReps={},liftStates={},muscleAnchors={},bodyweight=null,activeDeload=null}){
@@ -260,9 +264,15 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   // A missed strength day made up later in the week says so instead of
   // prescribing a session that's already been answered for.
   const viewCoveredBy = dayStates[viewIdx]?.status === "covered" ? dayStates[viewIdx].coveredBy : null;
+  // Coming back: today's strength day after RETURN_GAP_DAYS or more since
+  // the last strength session says how long it has been.
+  const todayIsoStr = addDaysIso(new Date(nowMs), 0);
+  const lastStrength = history.reduce((m, r) => (r?.date && r.date < todayIsoStr && isStrengthRecord(r) && (!m || r.date > m) ? r.date : m), null);
+  const returnGap = lastStrength ? daysBetween(lastStrength, todayIsoStr) : null;
+  const welcomeBack = viewIdx === todayIdx && returnGap !== null && returnGap >= RETURN_GAP_DAYS && !weekDone[viewIdx];
   const subText = viewCoveredBy
     ? `Made up on ${DAY_NAMES[mondayIndex(viewCoveredBy)].slice(0, 3)}.`
-    : viewSession ? `${viewSession.subtitle}.` : cfg.sub;
+    : viewSession ? `${viewSession.subtitle}.${welcomeBack ? ` First one in ${returnGap} days.` : ""}` : cfg.sub;
 
   // Negative diff = earlier this week, positive = later this week
   const diffDays = viewIdx - todayIdx;
@@ -485,6 +495,12 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 </div>
               );
             })()}
+            {/* What the rows' rpe asks, until three sessions are logged. */}
+            {historyCount < 3 && (
+              <div style={{margin:"10px 24px 0",fontSize:13,color:T.ink2,lineHeight:1.45}}>
+                <MonoNums>rpe 8 means about two reps left in the tank.</MonoNums>
+              </div>
+            )}
             {/* Session list — every row prints what the session will open
                 with (a superset reads its A lift), the heat mark encodes the
                 planned proximity to failure in colour AND height, and the
