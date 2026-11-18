@@ -401,9 +401,10 @@ export default function SessionHost({ mode = null } = {}) {
     reps: { ...workingReps, ...repRepairs },
     trainingState: { lifts: liftStates, mesocycle: { activeDeload } },
     history,
-  }), [workingWeights, workingReps, repRepairs, liftStates, activeDeload, history]);
+    todayIso,
+  }), [workingWeights, workingReps, repRepairs, liftStates, activeDeload, history, todayIso]);
   // The deload as today's card reads it: none once time off has done its work.
-  const deloadNow = useMemo(() => liveDeload(activeDeload, history), [activeDeload, history]);
+  const deloadNow = useMemo(() => liveDeload(activeDeload, history, todayIso), [activeDeload, history, todayIso]);
   // A deload day's set counts (deloadSessionSets).
   const activeSession  = deloadSessionSets(scaleForReadiness(travelledSession, readiness), scheduled.sets);
   const prescribedWeights = scheduled.weights;
@@ -966,7 +967,7 @@ export default function SessionHost({ mode = null } = {}) {
     addedLoads, setAddedLoad,
     canReach, reachStep, reachArmed, onTakeReach: takeReach, onDeclineReach: declineReach,
     // Coached: the plan says only that a deload is on.
-    deloadDay: deloadNow ? (coached ? {} : deloadDayOf(deloadNow)) : null,
+    deloadDay: deloadNow ? (coached ? {} : deloadDayOf(deloadNow, todayIso)) : null,
     // The weight the active lift deloads from, for "65% of 100 kg".
     deloadBase: deloadNow && !coached && activeEx?.name ? deloadBaseWeight(activeEx.name, liftStates[activeEx.name], deloadNow) : null,
     // Coached: a lift sends at most ten sets, so no eleventh is offered.
