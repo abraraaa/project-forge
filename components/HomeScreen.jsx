@@ -245,14 +245,15 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
     ? { ...workingReps, ...repTargetRepairs({ reps: workingReps, lifts: liftStates, sessions: [viewSession] }) }
     : workingReps;
   // The deload calendar's weight and reps in place of W and R, as the
-  // session's card shows them (scheduledPlan).
-  const due = scheduledPlan({ weights: workingWeights, reps: liveReps, trainingState: { lifts: liftStates, mesocycle: { activeDeload } }, history });
+  // session's card shows them on the day in view (scheduledPlan).
+  const due = scheduledPlan({ weights: workingWeights, reps: liveReps, trainingState: { lifts: liftStates, mesocycle: { activeDeload } }, history, todayIso: viewDateStr });
   const plan = { reps: due.reps, weights: due.weights, bodyweight, anchors: muscleAnchors };
   // The set counts the session will open with (deloadSessionSets).
   const shownSession = deloadSessionSets(viewSession, due.sets);
   // The session view's own tag, for the day in view; null outside a deload.
   const deloadNow = liveDeload(activeDeload, history);
-  const deloadDay = deloadDayOf(deloadNow, viewDateStr);
+  // Windowed on the day in view, as liveDeload reads that day.
+  const deloadDay = deloadDayOf(activeDeload, viewDateStr);
 
   // Guidance line under the display name. Strength days lead with the
   // session's own noun; non-strength days keep their modality detail.

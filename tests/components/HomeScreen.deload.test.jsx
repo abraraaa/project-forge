@@ -67,6 +67,28 @@ describe("Home inside a deload", () => {
   });
 });
 
+describe("Home previewing a day after the deload", () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 8, 25, 9, 0)); });
+
+  it("Saturday, past a deload that ends Friday, shows that day's weights", () => {
+    const weekTypes = wk("strength", "rest", "strength", "rest", "strength", "strength", "rest");
+    const ctx = makeDayContext({ todayIso: "2026-09-25", weekFor: () => weekTypes });
+    const week = resolveRange(ctx, "2026-09-21", "2026-09-27");
+    const strengthDaySessions = sessionsFrom(week);
+    const sat = SESSIONS[strengthDaySessions[5]].blocks.find((b) => b.type === "main").ex.name;
+    const lift = { currentWeight: 100, history: [], currentRepRange: { reps: 5, sets: 3, baseReps: 5 } };
+    const { container } = render(<HomeScreen rhythm={{ completed: 0, expected: 0, ratio: 0 }} profileName="t"
+      userWeek={week.map((d) => d.shown)} strengthDaySessions={strengthDaySessions}
+      dayStates={week.map((d) => ({ status: d.status, coveredBy: d.coveredBy }))}
+      workingWeights={{ [sat]: 100 }} liftStates={{ [sat]: lift }}
+      activeDeload={{ startedAt: new Date(2026, 8, 23, 8, 0).toISOString(), plannedDays: 3, preDeloadWeights: { [sat]: 100 } }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Saturday" }));
+    expect(flat(container.textContent)).not.toContain("deload, day");
+    expect(rowOf(sat)).toContain("at 100 kg");
+    expect(rowOf(sat)).not.toContain("65 kg");
+  });
+});
+
 describe("Home with no deload", () => {
   beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 8, 25, 9, 0)); });
 
