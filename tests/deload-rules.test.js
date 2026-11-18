@@ -361,3 +361,28 @@ describe("no deload active", () => {
     expect(TS.get(PROFILE).mesocycle.deloadSignals?.history ?? []).toEqual([]);
   });
 });
+
+describe("a weekend acceptance still gets a real deload", () => {
+  it("runs to the next Monday, or the one after when fewer than three days are left", async () => {
+    const { deloadWindowDays, deloadUntilWords } = await import("../lib/progression.js");
+    // 16 Nov 2026 is a Monday.
+    const day = (d) => new Date(2026, 10, d, 9, 0);
+    expect([16, 17, 18, 19, 20, 21, 22].map((d) => deloadWindowDays(day(d)))).toEqual([7, 6, 5, 4, 3, 9, 8]);
+    expect(deloadUntilWords(day(20))).toBe("until Monday");
+    expect(deloadUntilWords(day(21))).toBe("until a week on Monday");
+    expect(deloadUntilWords(day(22))).toBe("until a week on Monday");
+  });
+
+  it("a Sunday acceptance stores the eight-day window and the offer names it", async () => {
+    const { startDeload, deloadCardCopy } = await import("../lib/progression.js");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date(2026, 10, 22, 9, 0));
+      const ts = startDeload({ mesocycle: {}, lifts: {} }, { type: "stall_convergence", lifts: ["Barbell Back Squat"] });
+      expect(ts.mesocycle.activeDeload.plannedDays).toBe(8);
+      expect(deloadCardCopy({ type: "other" }).body).toBe("Lighter loads and reduced volume until a week on Monday. You'll come back stronger.");
+      vi.setSystemTime(new Date(2026, 10, 19, 9, 0));
+      expect(deloadCardCopy({ type: "other" }).body).toBe("Lighter loads and reduced volume until Monday. You'll come back stronger.");
+    } finally { vi.useRealTimers(); }
+  });
+});
