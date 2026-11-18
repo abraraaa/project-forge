@@ -29,7 +29,8 @@ import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
 import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
 import { WEEK, swapOptionsFor } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
-import { recentForExercise, sessionSummaryLine } from "@/lib/analytics";
+import { recentForExercise, sessionSummaryLine, liftBests } from "@/lib/analytics";
+import BestSet from "@/components/BestSet";
 import { isCountedSet } from "@/lib/counted-set";
 import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, usesOptionalChrome, addedLoadFor, loggedAddedKg, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
@@ -1319,7 +1320,7 @@ const NEXT_DAY_MSG = {
   ],
 };
 
-export function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},userWeek=WEEK,onHome,deloadCompleted=false,returnGapDays=null,record=null}){
+export function DoneScreen({session,profileName,workingWeights,sessionStartWeights={},userWeek=WEEK,onHome,deloadCompleted=false,returnGapDays=null,record=null,history=[]}){
   // `base` = what the user lifted at SESSION START (snapshotted at
   // readiness). Falls back to the current working weight if no snapshot.
   // A main lift with no counted set in the record was not trained today.
@@ -1330,6 +1331,20 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
     return { ex:b.ex.name, base, current, changed: trained && current !== base, trained };
   });
   const summaryLine = sessionSummaryLine(record);
+  // A main lift's new best: today's top set beats every earlier one
+  // (liftBests over the history before today's record).
+  const newBests = useMemo(() => {
+    if (!record) return {};
+    const same = (a, b) => !!a && !!b && a.est1RM === b.est1RM && a.weight === b.weight && String(a.reps) === String(b.reps);
+    const prior = liftBests(history), mine = liftBests([record]), all = liftBests([...history, record]);
+    /** @type {Record<string, any>} */
+    const out = {};
+    for (const [name, b] of Object.entries(mine)) {
+      if (b.loadType === "assisted_bodyweight" || !prior[name]) continue;
+      if (same(all[name], b) && !same(prior[name], b)) out[name] = b;
+    }
+    return out;
+  }, [record, history]);
 
   // Pick a random headline pair, stable for this render
   const [hi] = useState(()=>DONE_HEADLINES[Math.floor(Math.random()*DONE_HEADLINES.length)]);
@@ -1374,6 +1389,11 @@ export function DoneScreen({session,profileName,workingWeights,sessionStartWeigh
               <div style={{fontSize:12,color:T.ink2,marginTop:3}}>
                 {!n.trained?"Not trained today":n.changed?"Next time, heavier.":"Hold — grind it smooth."}
               </div>
+              {newBests[n.ex] && (
+                <Fade>
+                  <div style={{fontSize:12,color:T.ink2,marginTop:3}}>Best: <BestSet best={newBests[n.ex]}/> · today</div>
+                </Fade>
+              )}
             </div>
             <div style={{fontFamily:T.measured,fontSize:18,flexShrink:0,color:T.ink}}>
               {n.base}{n.changed&&<span style={{color:T.heat[3]}}> <Glyph name="arrowRight" size={11} color={T.heat[3]}/> {n.current}</span>}<span style={{fontSize:12,color:T.ink3}}> kg</span>

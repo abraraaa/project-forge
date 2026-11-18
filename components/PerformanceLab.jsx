@@ -15,11 +15,11 @@ import {
 } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER, VOLUME_TARGETS } from "@/lib/volume-audit";
 import Glyph from "@/components/Glyph";
+import BestSet from "@/components/BestSet";
 import { InkSpark, LineChart } from "@/components/LiftCharts";
 import { T, DISPLAY, HATCH } from "@/lib/tokens";
 import { SO_FAR, splitWeekSoFar, weekSoFarDelta } from "@/lib/chart-style";
 import { addDaysIso, daysBetween, parseLocalDate } from "@/lib/dates";
-import { isBodyweightMovement } from "@/lib/lift-translations";
 import { haptic } from "@/lib/a11y";
 import GlossarySheet, { GlossaryTrigger } from "@/components/GlossarySheet";
 import { renderShareCard, shareCanvas } from "@/lib/share-card";
@@ -438,15 +438,9 @@ function BestLine({ best, todayIso }) {
   const when = d ? (todayIso && todayIso.slice(0, 4) === year ? bestDay.format(d) : `${bestDay.format(d)} ${year}`) : best.date;
   const ago = todayIso ? daysBetween(best.date, todayIso) : null;
   const recent = ago != null && ago >= 0 && ago < 28;
-  const n = (v) => <span style={{fontFamily:T.measured}}>{v}</span>;
-  const set = best.loadType === "bodyweight"
-    ? (typeof best.reps === "number" ? <>{n(best.reps)} reps</> : n(best.reps))
-    : isBodyweightMovement(best.loadType)
-    ? <>bodyweight + {n(best.weight)} kg × {n(best.reps)}</>
-    : <>{n(best.weight)} kg × {n(best.reps)}</>;
   return (
     <div data-testid="lift-best" style={{marginTop:8,fontSize:12,color:T.ink2,lineHeight:1.45}}>
-      Best: {set} · {when}{recent ? " · this block" : ""}
+      Best: <BestSet best={best}/> · {when}{recent ? " · this block" : ""}
     </div>
   );
 }
