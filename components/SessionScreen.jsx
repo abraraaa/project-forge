@@ -52,6 +52,9 @@ const linkBtn = {
   display: "inline-flex", alignItems: "center", gap: 5,
 };
 
+// The rest's closing stretch, in seconds: the ring's border turns to ink.
+export const REST_LAST_SECONDS = 10;
+
 // A 44px hit area around a small control, its pixels where they were: the
 // negative margin gives back the height the minimum adds.
 const HIT_44 = { minHeight: 44, minWidth: 44, marginTop: -14, marginBottom: -14 };
@@ -560,6 +563,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   // count includes a reach's bonus set, so that set is logged, not forked past.
   const setsDue = blockSets ?? block.sets;
   const blockDone = setNum > setsDue;
+  // The block's final prescribed set, not yet logged.
+  const lastSet = !blockDone && setNum === setsDue && setsDue > 1;
   // Adding a set is deliberate. Keyed so it resets on any block/set change.
   const [addKey,setAddKey]=useState(null);
   const thisKey=`${block.id}|${setNum}`;
@@ -696,6 +701,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
         <div style={{fontSize:13,color:T.ink2,marginBottom:8}}>
           {blockDone
             ? <>All <span style={{fontFamily:T.measured}}>{setsDue}</span> {isSS?"rounds":"sets"} logged · {block.label}</>
+            : lastSet
+            ? <>{isSS?"Last round":"Last set"} · {block.label}{isSS?` ${phase}`:""}</>
             : <>{isSS?"Round":"Set"} <span style={{fontFamily:T.measured}}>{setNum}</span> of <span style={{fontFamily:T.measured}}>{setsDue}</span> · {block.label}{isSS?` ${phase}`:""}</>}
           {deloadDay && <> · <DeloadWord keyColour={T.dayKey.strength}/>{deloadDay.day ? <> day <span style={{fontFamily:T.measured}}>{deloadDay.day}</span> of <span style={{fontFamily:T.measured}}>{deloadDay.of}</span></> : null}</>}
         </div>
@@ -898,8 +905,10 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
           middle carries the session's state, not empty ground. Day-key
           coloured: a session identifier, not measured data. */}
       <div style={{padding:"14px 20px 0",display:"flex",gap:6}}>
+        {/* The last set's tick shows the day key faintly before it is logged. */}
         {Array.from({length:block.sets}).map((_,i)=>(
-          <div key={i} style={{flex:1,height:3,background:i<setNum-1?T.dayKey.strength:T.rule,transition:`background 300ms ${T.ease}`}}/>
+          <div key={i} data-tick={i} style={{flex:1,height:3,background:i<setNum-1||(lastSet&&i===setNum-1)?T.dayKey.strength:T.rule,
+            opacity:lastSet&&i===setNum-1?0.45:1,transition:`background 300ms ${T.ease}`}}/>
         ))}
       </div>
       </>}
@@ -1008,9 +1017,10 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
               <button
                 onClick={()=>{if(restActive){setRestActive(false);setRestRemain(block.rest);}else{setRestRemain(block.rest);setRestActive(true);}}}
                 aria-label={restActive?`Resting, ${restStr} left — tap to skip`:"Start rest timer"}
-                className={restActive?"hw-breathe":undefined}
+                className={restActive?"hw-rest-ring hw-breathe":"hw-rest-ring"}
                 style={{width:58,height:58,flexShrink:0,borderRadius:"50%",
-                  border:`1px solid ${restActive?T.dayKey.strength:T.rule}`,
+                  // The last ten seconds step the border from the day key to ink.
+                  border:`1px solid ${restActive?(restRemain<=REST_LAST_SECONDS?T.ink:T.dayKey.strength):T.rule}`,
                   background:"transparent",cursor:"pointer",
                   display:"flex",alignItems:"center",justifyContent:"center",
                   fontFamily:T.measured,fontSize:18,color:restActive?T.ink:T.ink2,

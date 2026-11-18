@@ -203,3 +203,24 @@ describe("the last-block fork with an earlier block left short", () => {
     expect(screen.queryByText(/^Back to/)).toBeNull();
   });
 });
+
+describe("the rest's last ten seconds", () => {
+  const ring = () => screen.getByLabelText(/^Resting,/);
+  it("the ring's border is the day key until ten seconds are left, then ink", async () => {
+    const { T } = await import("../../lib/tokens.js");
+    const { rerender } = render(<SessionScreen {...props({ restActive: true, restRemain: 11 })} />);
+    expect(ring().style.border).toContain(T.dayKey.strength);
+    rerender(<SessionScreen {...props({ restActive: true, restRemain: 10 })} />);
+    expect(ring().style.border).toContain(T.ink);
+    expect(ring().style.transition).toContain("border-color 300ms");
+    expect(ring().className).toContain("hw-rest-ring");
+  });
+
+  it("under reduced motion the step is instant and the ring does not breathe", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const css = readFileSync(resolve(__dirname, "../../app/globals.css"), "utf8").replace(/\s+/g, " ");
+    expect(css).toContain("@media (prefers-reduced-motion: reduce) { .hw-rest-ring { transition: none !important; } }");
+    expect(css).toContain(".lab-scroll-cue, .hw-breathe { animation: none; }");
+  });
+});
