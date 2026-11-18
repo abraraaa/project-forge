@@ -237,11 +237,6 @@ export default function ForgeApp(){
   //   showDeloadComplete: one-shot flag for "Deload complete. Welcome back." on Done screen.
   const [activeDeload,setActiveDeload]=useState(null); // { startedAt, plannedDays, ... } | null
   const [deloadOffer,setDeloadOffer]=useState(null);   // signal object | null
-  // The retro sheet prefills from the prescription as the card shows it: the
-  // deload calendar's weight and reps in place of W and R (scheduledPlan).
-  const retroPlan = useMemo(() => scheduledPlan({
-    weights: workingWeights, reps: retroReps, trainingState: { lifts: homePlan.lifts, mesocycle: { activeDeload } }, history,
-  }), [workingWeights, retroReps, homePlan.lifts, activeDeload, history]);
   // One-shot for the Done screen's "Back at it" praise: days since the
   // PREVIOUS strength session, computed in the done effect BEFORE the new
   // record is appended (afterwards the newest record is today's and the gap
@@ -254,6 +249,13 @@ export default function ForgeApp(){
   // 3-day rolling window — anything older is archaeology, not gap-filling.
   const [retroPickerOpen,setRetroPickerOpen]=useState(false);
   const [retroDate,setRetroDate]            =useState(null); // ISO YYYY-MM-DD or null
+  // The retro sheet prefills from the prescription as the card showed it on
+  // the day being logged: the deload calendar's weight and reps in place of
+  // W and R (scheduledPlan), judged as of retroDate.
+  const retroPlan = useMemo(() => scheduledPlan({
+    weights: workingWeights, reps: retroReps, trainingState: { lifts: homePlan.lifts, mesocycle: { activeDeload } }, history,
+    todayIso: retroDate || undefined,
+  }), [workingWeights, retroReps, homePlan.lifts, activeDeload, history, retroDate]);
   const [retroToast,setRetroToast]          =useState(null); // { date, sessionName } | null
 
   // Passkey nudge state. PN.stage(profile) returns "chip" | "card" | "hidden",

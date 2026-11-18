@@ -92,6 +92,8 @@ describe("the retro sheet", () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync(new URL("../components/ForgeApp.jsx", import.meta.url), "utf8");
     expect(src).toMatch(/const retroPlan = useMemo\(\(\) => scheduledPlan\(\{/);
+    // Judged as of the day being logged, not today.
+    expect(src).toMatch(/const retroPlan = useMemo\(\(\) => scheduledPlan\(\{[\s\S]{0,400}?todayIso: retroDate \|\| undefined/);
     expect(src).toContain("workingWeights={retroPlan.weights}");
     expect(src).toContain("workingReps={retroPlan.reps}");
   });
