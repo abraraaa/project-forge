@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-// How a deload ends besides its calendar close, through the real engine
+// How a deload runs and ends, through the real engine
 // (commitSessionRecord) and the card's plan (scheduledPlan): two sessions in
-// a row whose main lift ignored it end it as declined; time off as long as
-// the deload ends it as rested. A bodyweight or assisted lift keeps its reps
-// on a deload day and drops one set only after a hard last session. Nothing
-// stored is deleted; the end is recorded beside the calendar close.
+// a row whose main lift ignored it end it as declined. Its window runs from
+// the day it was accepted to the next Monday: every session in it is a deload
+// day, the first one after re-enters, or, with none in it, finds it rested.
+// A bodyweight or assisted lift keeps its reps on a deload day and drops one
+// set only after a hard last session. Nothing stored is deleted; the end is
+// recorded beside the calendar close.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { H, TS, P, recordCompletion } from "../lib/storage.js";
 import { commitSessionRecord } from "../lib/session-commit.js";
@@ -67,9 +69,9 @@ const session = (day, lifts, { readiness = "normal" } = {}) => {
   return { cards, written: engine.wwUpdates, ended: engine.deloadEnded, closed: engine.justCompletedDeload };
 };
 
-/** Accept the offer on Monday 2 November, before that day's session. */
-const accept = () => {
-  vi.setSystemTime(at(2, 7));
+/** Accept the offer on `day` November (Monday 2nd by default), before that day's session. */
+const accept = (day = 2) => {
+  vi.setSystemTime(at(day, 7));
   TS.replaceState(PROFILE, startDeload(TS.get(PROFILE), { type: "stall_convergence", lifts: [SQUAT] }));
 };
 
@@ -165,51 +167,99 @@ describe("ignoring a deload", () => {
   });
 });
 
-describe("a deload taken as a rest week", () => {
+describe("the deload's window: from the day it was accepted to the next Monday", () => {
   // The last strength session before the offer: Saturday 31 October.
   const lastSaturday = () => H.append(PROFILE, { v: 2, id: new Date(2026, 9, 31, 10).toISOString(), date: "2026-10-31", session: "strength-c", blocks: [] });
   const tag = () => deloadDayLabel(liveDeload(TS.get(PROFILE).mesocycle.activeDeload, H.get(PROFILE)));
 
-  it("a 5-day gap after a deload session: the next card shows the pre-deload weights and its session closes the deload as rested", () => {
+  it("accepted Monday, trained Monday and Sunday: both deload days, and the next Monday re-enters at 90", () => {
     three();
     lastSaturday();
     accept();
-    expect(session(2, [{ name: SQUAT }, { name: BENCH }]).written).toMatchObject({ [SQUAT]: 65, [BENCH]: 65 });
-    vi.setSystemTime(at(6));
-    expect(card(SQUAT).kg).toBe(65);
-    expect(tag()).toBe("deload · day 5 of 5");
-    vi.setSystemTime(at(7));
-    expect(card(SQUAT).kg).toBe(100);
-    expect(card(BENCH).kg).toBe(100);
-    expect(tag()).toBeNull();
-
-    const sat = session(7, [{ name: SQUAT }]);
-    expect(sat.cards[SQUAT].kg).toBe(100);
-    expect(sat.ended).toBe("rested");
-    expect(sat.closed).toBe(false);
-    expect(sat.written[SQUAT]).toBe(102.5);
-    expect(sat.written[BENCH]).toBe(100);
-    expect(TS.get(PROFILE).mesocycle.activeDeload).toBeNull();
-    expect(lastEvent()).toMatchObject({ event: "deload_completed", reason: "rested" });
-    for (const name of [SQUAT, BENCH, DEADLIFT]) expect(TS.get(PROFILE).lifts[name].inRecoveryUntil ?? 0).toBe(0);
-
+    expect(TS.get(PROFILE).mesocycle.activeDeload.plannedDays).toBe(7);
+    expect(tag()).toBe("deload · day 1 of 7");
+    const mon = session(2, [{ name: SQUAT }, { name: BENCH }]);
+    expect([mon.cards[SQUAT].kg, mon.written[SQUAT], mon.ended, mon.closed]).toEqual([65, 65, null, false]);
+    vi.setSystemTime(at(8));
+    expect(tag()).toBe("deload · day 7 of 7");
+    const sun = session(8, [{ name: SQUAT }]);
+    expect([sun.cards[SQUAT].kg, sun.written[SQUAT], sun.ended, sun.closed]).toEqual([65, 65, null, false]);
     vi.setSystemTime(at(9));
-    expect([card(SQUAT).kg, card(BENCH).kg, card(DEADLIFT).kg]).toEqual([102.5, 100, 100]);
+    expect(tag()).toBeNull();
+    expect([card(SQUAT).kg, card(BENCH).kg]).toEqual([90, 90]);
+    const next = session(9, [{ name: SQUAT }]);
+    expect([next.cards[SQUAT].kg, next.written[SQUAT], next.ended, next.closed]).toEqual([90, 92.5, null, true]);
+    expect(TS.get(PROFILE).mesocycle.activeDeload).toBeNull();
+    vi.setSystemTime(at(11));
+    expect(card(BENCH).kg).toBe(90);
   });
 
-  it("no session at all through the deload: the days count from the day it was accepted, and a late return sees the normal weights", () => {
+  it("accepted Thursday: four days to Monday, a Saturday session is a deload day, and the Monday session re-enters", () => {
+    three();
+    lastSaturday();
+    accept(5);
+    expect(TS.get(PROFILE).mesocycle.activeDeload.plannedDays).toBe(4);
+    expect(tag()).toBe("deload · day 1 of 4");
+    const sat = session(7, [{ name: SQUAT }]);
+    expect([sat.cards[SQUAT].kg, sat.written[SQUAT], sat.ended, sat.closed]).toEqual([65, 65, null, false]);
+    vi.setSystemTime(at(8));
+    expect(tag()).toBe("deload · day 4 of 4");
+    const mon = session(9, [{ name: SQUAT }]);
+    expect([mon.cards[SQUAT].kg, mon.written[SQUAT], mon.closed]).toEqual([90, 92.5, true]);
+  });
+
+  it("accepted Monday, no session until the next Tuesday: closed as rested, with the normal weights", () => {
     three();
     lastSaturday();
     accept();
-    // Thursday: five days since Saturday but three since the opt-in, so the deload runs.
-    vi.setSystemTime(at(5));
-    expect(card(SQUAT).kg).toBe(65);
-    vi.setSystemTime(at(7));
-    expect(card(SQUAT).kg).toBe(100);
+    vi.setSystemTime(at(10));
     expect(tag()).toBeNull();
-    const sat = session(7, [{ name: SQUAT }]);
-    expect(sat.ended).toBe("rested");
-    expect(sat.written[SQUAT]).toBe(102.5);
+    expect([card(SQUAT).kg, card(BENCH).kg]).toEqual([100, 100]);
+    const tue = session(10, [{ name: SQUAT }]);
+    expect(tue.cards[SQUAT].kg).toBe(100);
+    expect(tue.ended).toBe("rested");
+    expect(tue.closed).toBe(false);
+    expect(tue.written[SQUAT]).toBe(102.5);
+    expect(lastEvent()).toMatchObject({ event: "deload_completed", reason: "rested" });
+    for (const name of [SQUAT, BENCH, DEADLIFT]) expect(TS.get(PROFILE).lifts[name].inRecoveryUntil ?? 0).toBe(0);
+  });
+
+  it("a conditioning tick inside the window is not a strength session", () => {
+    three();
+    lastSaturday();
+    accept();
+    recordCompletion(PROFILE, iso(5), { kind: "tick" });
+    vi.setSystemTime(at(9));
+    expect(card(SQUAT).kg).toBe(100);
+  });
+
+  describe("a deload stored with only plannedDays (accepted before the window)", () => {
+    // Accepted Monday 2 November with the old five-day count: its window is 2 to 6 November.
+    const legacy = () => {
+      vi.setSystemTime(at(2, 7));
+      const ts = TS.get(PROFILE);
+      TS.replaceState(PROFILE, { ...ts, mesocycle: { ...ts.mesocycle, currentPhase: "deload", activeDeload: {
+        startedAt: at(2, 7).toISOString(), plannedDays: 5, triggeredBy: "stall_convergence", triggeredLifts: [SQUAT],
+        preDeloadWeights: { [SQUAT]: 100, [BENCH]: 100, [DEADLIFT]: 100 } } } });
+    };
+
+    it("its days count to 5, a session in them is a deload day, and the first one after re-enters and closes it", () => {
+      three();
+      legacy();
+      expect(tag()).toBe("deload · day 1 of 5");
+      expect(session(2, [{ name: SQUAT }]).written[SQUAT]).toBe(65);
+      expect(session(6, [{ name: BENCH }])).toMatchObject({ closed: false, ended: null });
+      const sat = session(7, [{ name: SQUAT }]);
+      expect([sat.cards[SQUAT].kg, sat.written[SQUAT], sat.closed]).toEqual([90, 92.5, true]);
+    });
+
+    it("with no session in its days, it closes as rested", () => {
+      three();
+      lastSaturday();
+      legacy();
+      const sat = session(7, [{ name: SQUAT }]);
+      expect([sat.cards[SQUAT].kg, sat.ended]).toEqual([100, "rested"]);
+    });
   });
 
   it("a deload accepted after a long gap runs from the day it was accepted", () => {
@@ -220,15 +270,6 @@ describe("a deload taken as a rest week", () => {
     expect(mon.cards[SQUAT].kg).toBe(65);
     expect(mon.ended).toBeNull();
     expect(TS.get(PROFILE).mesocycle.activeDeload).not.toBeNull();
-  });
-
-  it("a conditioning tick is not a strength session: it does not shorten the gap", () => {
-    three();
-    lastSaturday();
-    accept();
-    recordCompletion(PROFILE, iso(5), { kind: "tick" });
-    vi.setSystemTime(at(7));
-    expect(card(SQUAT).kg).toBe(100);
   });
 
   it("a backfilled record dated before the deload never closes it as rested", () => {
@@ -246,19 +287,6 @@ describe("a deload taken as a rest week", () => {
     expect(TS.get(PROFILE).mesocycle.activeDeload).not.toBeNull();
     expect(P.getWeights(PROFILE)).toMatchObject({ [SQUAT]: 65, [BENCH]: 65 });
     expect([card(SQUAT).kg, card(BENCH).kg]).toEqual([65, 65]);
-  });
-
-  it("a 4-day gap is the calendar close: a deload card that day, then the re-entry", () => {
-    three();
-    lastSaturday();
-    accept();
-    session(2, [{ name: SQUAT }]);
-    const fri = session(6, [{ name: BENCH }]);
-    expect(fri.cards[BENCH].kg).toBe(65);
-    expect(fri.ended).toBeNull();
-    expect(fri.closed).toBe(true);
-    vi.setSystemTime(at(9));
-    expect(card(SQUAT).kg).toBe(90);
   });
 });
 

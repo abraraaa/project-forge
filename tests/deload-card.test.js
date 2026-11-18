@@ -95,13 +95,12 @@ describe("a three-day week through a deload accepted on Monday", () => {
       ["Fri", visit(20, BENCH)],
     ].map(([d, v]) => [d, v.card, v.written, v.closed]);
     expect(rows).toEqual([
-      // The deload week: every lift's first visit shows the deload.
+      // The deload's window runs Monday to Sunday: every session in it is a deload day.
       ["Mon", 65, 65, false],
       ["Wed", 65, 65, false],
-      // Friday closes it: its card is still a deload day; the write is the re-entry.
-      ["Fri", 65, 90, true],
-      // First visit after the close: the re-entry, anchored on 100.
-      ["Mon", 90, 92.5, false],
+      ["Fri", 65, 65, false],
+      // The next Monday, after the window: the re-entry, anchored on 100; it closes the deload.
+      ["Mon", 90, 92.5, true],
       ["Wed", 90, 92.5, false],
       ["Fri", 90, 91.25, false],
       // Then the ordinary climb from what was lifted.
@@ -138,9 +137,9 @@ describe("a lift with no snapshot entry", () => {
     expect(third.card).toBe(52.5);
     expect(third.written).toBe(52.5);
     // The close anchors its re-entry on that base: 90% of 80.
-    expect(visit(6, SQUAT).closed).toBe(true);
+    expect(visit(9, SQUAT).closed).toBe(true);
     expect(TS.get(PROFILE).lifts[DEADLIFT]).toMatchObject({ inRecoveryUntil: 3, preDeloadWeight: 80 });
-    expect(visit(9, DEADLIFT).card).toBe(72.5);
+    expect(visit(11, DEADLIFT).card).toBe(72.5);
   });
 });
 
@@ -154,8 +153,8 @@ describe("bodyweight and assisted lifts (set counts: tests/deload-rules.test.js)
     expect(day.card).toBeNull();
     expect(day.written).toBeUndefined();
     expect(P.getReps(PROFILE)["Push-Up"]).toBe(12);
-    expect(visit(6, SQUAT).closed).toBe(true);
-    vi.setSystemTime(at(9));
+    expect(visit(9, SQUAT).closed).toBe(true);
+    vi.setSystemTime(at(11));
     expect(card("Push-Up", "bodyweight", 12).reps).toBe(12);
   });
 
@@ -186,8 +185,8 @@ describe("the lifter can always lift what they like", () => {
     // Followed next time, so the deload runs on (two in a row would end it:
     // tests/deload-rules.test.js).
     expect(visit(4, SQUAT).card).toBe(65);
-    expect(visit(6, BENCH).closed).toBe(true);
-    expect(visit(9, SQUAT).card).toBe(90);
+    expect(visit(9, BENCH).closed).toBe(true);
+    expect(visit(11, SQUAT).card).toBe(90);
   });
 
   it("a cooked deload day shows 65 and writes 65", () => {
