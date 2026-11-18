@@ -52,7 +52,7 @@ import {
   applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
   WEEK, nextStrengthIdx,
 } from "@/lib/programme";
-import { deloadDayOf, liveDeload, isFinalSetMiss, lastSessionNote, ADOPT_AFTER_SESSIONS, repTargetRepairs } from "@/lib/progression";
+import { deloadDayOf, deloadBaseWeight, liveDeload, isFinalSetMiss, lastSessionNote, ADOPT_AFTER_SESSIONS, repTargetRepairs } from "@/lib/progression";
 import { SESSION_COPY } from "@/lib/session-copy";
 import { deriveTravelSession } from "@/lib/travel";
 import { getLiftProfile, getLoadType, parseTimedReps, ADD_THRESHOLD_RIR, STEP_SIZES, addedLoadFor } from "@/lib/lift-translations";
@@ -968,6 +968,8 @@ export default function SessionHost({ mode = null } = {}) {
     canReach, reachStep, reachArmed, onTakeReach: takeReach, onDeclineReach: declineReach,
     // Coached: the plan says only that a deload is on.
     deloadDay: deloadNow ? (coached ? {} : deloadDayOf(deloadNow)) : null,
+    // The weight the active lift deloads from, for "65% of 100 kg".
+    deloadBase: deloadNow && !coached && activeEx?.name ? deloadBaseWeight(activeEx.name, liftStates[activeEx.name], deloadNow) : null,
     // Coached: a lift sends at most ten sets, so no eleventh is offered.
     maxSets: coached ? COACH_MAX_SETS : null,
   };
