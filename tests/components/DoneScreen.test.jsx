@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // The Done screen states what was done from the session's own record:
 // "Synced" only once the sync is idle, a main lift not trained today says
-// so, and one line gives sets, tonnage and minutes.
+// so, one line gives sets, tonnage and minutes, and a main lift's new best
+// is stated in the Lab's BestLine wording.
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, act } from "@testing-library/react";
 import { DoneScreen } from "../../components/SessionScreen.jsx";
@@ -53,5 +54,26 @@ describe("the Done screen", () => {
     expect(container.textContent).toContain("Syncing");
     act(() => SyncStatus._set({ state: "idle" }));
     expect(container.textContent).toContain("Synced");
+  });
+});
+
+describe("a new best on Done", () => {
+  const earlier = (date, weight) => ({ v: 2, id: `${date}T10:00:00.000Z`, date, blocks: [{ id: "a1", type: "main",
+    exercises: [{ name: SQUAT, loadType: "barbell", sets: [set(weight, 5)] }] }] });
+
+  it("today's top set beating the lift's best reads Best: 100 kg × 5 · today", () => {
+    const { container } = done({ history: [earlier("2026-11-10", 97.5)] });
+    const row = screen.getByText(SQUAT).parentElement;
+    expect(flat(row.textContent)).toContain("Best: 100 kg × 5 · today");
+    expect(row.querySelector("[data-testid]")).toBeNull();
+    expect(flat(container.textContent)).not.toContain(`${BENCH}Best`);
+  });
+
+  it("nothing when it ties or falls short of the best, or with no earlier best", () => {
+    for (const history of [[earlier("2026-11-10", 100)], [earlier("2026-11-10", 110)], []]) {
+      const { container, unmount } = done({ history });
+      expect(container.textContent).not.toContain("Best:");
+      unmount();
+    }
   });
 });

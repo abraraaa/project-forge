@@ -1005,7 +1005,7 @@ export default function SessionHost({ mode = null } = {}) {
           workingWeights={workingWeights} sessionStartWeights={sessionStartWeights}
           userWeek={userWeek || WEEK}
           onHome={() => { setShowDeloadComplete(false); setReturnGapDays(null); withNavTransition(() => router.replace("/"), "nav-back"); }}
-          deloadCompleted={showDeloadComplete} returnGapDays={returnGapDays} record={doneRecord}
+          deloadCompleted={showDeloadComplete} returnGapDays={returnGapDays} record={doneRecord} history={history}
         />
       )}
       {sessionOverviewOpen && flow === "session" && (
