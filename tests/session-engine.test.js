@@ -986,7 +986,7 @@ describe("a cooked record is history only", () => {
     expect(apply(squat("2026-10-20T10:00:00.000Z", 100, "normal", 3)).wwUpdates[SQUAT]).toBe(102.5);
     const ts = startDeload(TS.get("p"), { type: "stall_convergence", lifts: [SQUAT] });
     // Accepted Wednesday 21 October: the window runs to Monday 26th.
-    TS.replaceState("p", { ...ts, mesocycle: { ...ts.mesocycle, activeDeload: { ...ts.mesocycle.activeDeload, startedAt: "2026-10-21T12:00:00.000Z", plannedDays: 5 } } });
+    TS.replaceState("p", { ...ts, mesocycle: { ...ts.mesocycle, activeDeload: { ...ts.mesocycle.activeDeload, startedAt: "2026-10-21T12:00:00.000Z", startDate: "2026-10-21", plannedDays: 5 } } });
   };
 
   it("a cooked session inside a deload shows the deload weight next, not one from its sets", () => {

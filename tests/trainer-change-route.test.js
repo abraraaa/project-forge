@@ -592,6 +592,23 @@ describe("dry run and send", () => {
     expect(inserts()).toEqual([]);
   });
 
+  it("a deload refusal names its last day on the client's calendar, not the server's", async () => {
+    // Accepted Monday 2 November 2026, 08:00 in Auckland: Sunday 19:00 UTC. Stored before startDate.
+    const activeDeload = { startedAt: "2026-11-01T19:00:00.000Z", plannedDays: 7, preDeloadWeights: { [SQUAT]: 100 } };
+    db.meta.push({ profile: "sk-abe", field: "trainingState", value: { lifts: {}, mesocycle: { activeDeload } } });
+    db.sessions[0].record = { ...db.sessions[0].record, loggedTz: "Pacific/Auckland", loggedTzOffset: 780 };
+    const was = process.env.TZ;
+    process.env.TZ = "UTC";
+    try {
+      const res = await post(tia, body());
+      expect(res.status).toBe(422);
+      expect(await res.json()).toEqual({ refusals: [{ i: 0, code: "deload", until: "2026-11-09" }] });
+    } finally {
+      if (was === undefined) delete process.env.TZ; else process.env.TZ = was;
+    }
+    expect(inserts()).toEqual([]);
+  });
+
   it("a stale basis is 409, and nothing is written", async () => {
     const stale = body();
     stale.basis.lifts[SQUAT].w = 95;

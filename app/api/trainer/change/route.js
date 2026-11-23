@@ -9,7 +9,7 @@ import {
 import { shareCovers } from "@/lib/trainer-terms";
 import { TYPE_LABEL, stableStringify } from "@/lib/sync-merge";
 import { SELF_REF } from "@/lib/trainer-view";
-import { durationMs, msAfter, trainerDay } from "@/lib/server-time";
+import { durationMs, msAfter, trainerDay, withLifterDeloadDate } from "@/lib/server-time";
 import { trainerGate, faceIdFresh, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
 
@@ -208,6 +208,8 @@ export async function POST(request) {
     if (!data) return slid(g, stale());
     // The trainer's today: the record must be dated today or yesterday on it.
     const todayIso = trainerDay(b.today, now);
+    // A deload's last day reads on the client's calendar, not the server's zone.
+    const meta = withLifterDeloadDate(data.meta, data.history);
 
     /** @type {{ kind: string, target: string, before: any, after: any, basis: any, warnings: string[] | null, from: string | null }[]} */
     let rows;
@@ -216,7 +218,7 @@ export async function POST(request) {
     /** @type {((count: { used: number, of: number, freeAt: number | null }) => Response) | null} */
     let standing = null;
     if (session) {
-      const v = validateSessionSet(set, { meta: data.meta, history: data.history, todayIso, phase: "write" });
+      const v = validateSessionSet(set, { meta, history: data.history, todayIso, phase: "write" });
       // Refused: the iPad names each code. Stale: the plan moved since it composed the session.
       if (!v.ok || !v.change || !v.preview) return slid(g, v.stale ? stale() : json({ refusals: v.refusals }, 422));
       const { change, preview } = v;
@@ -231,7 +233,7 @@ export async function POST(request) {
       full = `That's this week's sessions for ${who}.`;
     } else {
       const v = validateChangeSet(set, {
-        meta: data.meta, history: data.history, todayIso,
+        meta, history: data.history, todayIso,
         phase: "write", basis: b.basis && typeof b.basis === "object" ? b.basis : {},
       });
       // Refused: the pane names each code. Stale: it showed something that has moved since.
