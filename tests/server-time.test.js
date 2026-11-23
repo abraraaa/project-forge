@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import {
   durationMs, durationSeconds, isoInstant, msAfter, msBefore, readInstantMs, wholeDaysBetweenMs, slides,
-  dayIn, utcDay, utcWeekday, addDays, daysBetween, trainerDay, utcDayLabel,
+  dayIn, utcDay, utcWeekday, addDays, daysBetween, trainerDay,
 } from "@/lib/server-time";
 import { addDaysIso, daysBetween as localDaysBetween } from "@/lib/dates";
 
@@ -251,11 +251,5 @@ describe("days", () => {
     expect(trainerDay("2026-02-31", now)).toBe("2026-10-03");
     expect(trainerDay("2026-10-03T00:00", now)).toBe("2026-10-03");
     expect(trainerDay(undefined, now)).toBe("2026-10-03");
-  });
-
-  it("utcDayLabel is the route's en-GB UTC label", () => {
-    const label = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-    expect(diff(INSTANTS.map((ms) => [ms]), (ms) => label.format(new Date(ms)), utcDayLabel)).toEqual([]);
-    expect(utcDayLabel(Date.parse("2028-02-29T23:30:00.000Z"))).toBe("Tue 29 Feb");
   });
 });

@@ -9,7 +9,7 @@ import {
 import { shareCovers } from "@/lib/trainer-terms";
 import { TYPE_LABEL, stableStringify } from "@/lib/sync-merge";
 import { SELF_REF } from "@/lib/trainer-view";
-import { durationMs, msAfter, trainerDay, utcDayLabel } from "@/lib/server-time";
+import { durationMs, msAfter, trainerDay } from "@/lib/server-time";
 import { trainerGate, faceIdFresh, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { serverError } from "@/lib/api-errors";
 
@@ -265,8 +265,8 @@ export async function POST(request) {
     const counted = { used: res.used, of: budget.of, freeAt: res.freeAt };
     // Another device sent this day and letter first (the INSERT's own guard).
     if ("alreadySent" in res && standing) return slid(g, standing(counted));
-    const more = res.freeAt == null ? "" : ` More from ${utcDayLabel(res.freeAt)}.`;
-    return slid(g, json({ error: `${full}${more}`, budget: counted }, 429));
+    // Names no day: the device words "more from" from freeAt on its own clock.
+    return slid(g, json({ error: full, budget: counted }, 429));
   } catch (e) {
     return noStore(serverError(e, { label: LABEL }));
   }

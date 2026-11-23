@@ -566,10 +566,8 @@ describe("dry run and send", () => {
     const out = await res.json();
     expect(out.budget).toMatchObject({ used: 10, of: 10 });
     expect(out.budget.freeAt).toBe(Math.min(...db.changes.map((c) => c.created_at)) + 7 * DAY);
-    // The UTC day freeAt falls on, as en-GB writes it ("Wed 9 Sept" in September).
-    const day = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })
-      .format(new Date(out.budget.freeAt));
-    expect(out.error).toBe(`That's this week's changes for Abe. More from ${day}.`);
+    // No day named: the trainer's screen words "more from" from freeAt on their own clock.
+    expect(out.error).toBe("That's this week's changes for Abe.");
     expect(db.changes.some((c) => c.set_id === setId("p"))).toBe(false);
     // Withdrawn sets still count.
     await post(tia, { ref: "hwg_abe", withdraw: setId("b") });
@@ -1050,8 +1048,7 @@ describe("coached sessions: sending one", () => {
     expect(res.status).toBe(429);
     const out = await res.json();
     const oldest = Math.min(...db.changes.filter((c) => c.kind === "session").map((c) => c.created_at));
-    const day = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(oldest + 7 * DAY));
-    expect(out).toEqual({ error: `That's this week's sessions for Abe. More from ${day}.`, budget: { used: 7, of: 7, freeAt: oldest + 7 * DAY } });
+    expect(out).toEqual({ error: "That's this week's sessions for Abe.", budget: { used: 7, of: 7, freeAt: oldest + 7 * DAY } });
     expect(db.changes.some((c) => c.set_id === S1)).toBe(false);
     // Out of the window, it frees up.
     for (const c of db.changes) if (c.kind === "session") c.created_at -= 8 * DAY;
