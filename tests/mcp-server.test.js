@@ -301,6 +301,17 @@ describe("dates: the lifter's own calendar, never the server's clock or zone", (
     }
   });
 
+  it("read through a day before the last session, no section shows a session after it", () => {
+    const lines = snapshot({ asOf: "2026-09-04" }).split("\n");
+    // Only the header names the later session.
+    expect(lines.slice(2).join("\n")).not.toContain(LAST);
+    expect(lines.find((l) => l.startsWith("2026-07-13: ")).split(" · ").at(-1)).toBe("2026-08-31: 2/2 through 2026-09-04 (3 planned)");
+    expect(lines).toContain("## Last 2 sessions");
+    const one = { meta: {}, history: [data.history[2]] };
+    expect(snapshot({ asOf: "2026-09-04" }, one)).toContain("No sessions logged through 2026-09-04.");
+    expect(snapshot({ asOf: "2026-09-04" }, one)).not.toContain("## Last");
+  });
+
   it("with no sessions, any real asOf counts; without one there is no date at all", () => {
     const none = { meta: {}, history: [] };
     expect(snapshot({ asOf: "2031-02-01" }, none).split("\n").slice(0, 2)).toEqual([
