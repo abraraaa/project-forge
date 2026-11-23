@@ -16,7 +16,7 @@ vi.mock("../lib/identity-store.js", () => ({
 }));
 vi.mock("../lib/blob-utils.js", () => ({ readJsonByPrefix: vi.fn(async () => route.doc) }));
 vi.mock("../lib/db.js", async (orig) => ({ ...(await orig()), dbReadProfile: vi.fn(async () => ({ meta: {}, history: [] })) }));
-import { handleMcp, runTool, weekOn, validMainLifts, resolvedProgramme, loadTypeOfName, PROTOCOL_VERSIONS } from "../lib/mcp-server.js";
+import { handleMcp, runTool, readingDay, weekOn, validMainLifts, resolvedProgramme, loadTypeOfName, PROTOCOL_VERSIONS } from "../lib/mcp-server.js";
 import {
   SESSIONS, EXERCISE_POOLS, SWAP_DB, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS,
   applyRotationToSession, applyMainLiftsToSession, applyFocusToSession,
@@ -270,14 +270,35 @@ describe("dates: the lifter's own calendar, never the server's clock or zone", (
     expect(snapshot({ asOf: LAST }).split("\n")[1]).toMatch(/My last session was on 2026-09-05\.$/);
   });
 
-  it("asOf counts only as a real date from a day before the last session to 366 days after it; otherwise it is as if absent", () => {
+  it("asOf counts only as a real date from a day before the last session to 366 days after it; a malformed one is as if absent", () => {
     const plain = snapshot();
-    for (const asOf of ["2026-09-03", "2027-09-07", "2026-02-30", "2026-9-5", "2026-09-05T00:00", "", 20260905, null, "tomorrow"]) {
+    for (const asOf of ["2026-02-30", "2026-9-5", "2026-09-05T00:00", "", 20260905, null, "tomorrow"]) {
       expect(snapshot({ asOf }), String(asOf)).toBe(plain);
       for (const name of ["programme", "current_loads"]) expect(tool(name, { asOf }, deloaded), `${name} ${asOf}`).toBe(tool(name, {}, deloaded));
     }
     expect(snapshot({ asOf: "2027-09-06" }).split("\n")[0]).toBe("# My training — Heatwayve snapshot through 2027-09-06");
     expect(snapshot({ asOf: "2026-09-04" }).split("\n")[0]).toBe("# My training — Heatwayve snapshot through 2026-09-04");
+  });
+
+  it("a real asOf outside that range is set aside: the snapshot, programme and current_loads say so once, and why", () => {
+    const cases = [
+      ["2026-09-03", `asOf 2026-09-03 is more than a day before my last session (${LAST}), so this reads on ${LAST}.`],
+      ["2027-09-07", `asOf 2027-09-07 is more than a year after my last session (${LAST}), so this reads on ${LAST}.`],
+    ];
+    expect(readingDay(data.history, "2027-09-07")).toEqual({ day: LAST, asOf: false, last: LAST, rejected: { asOf: "2027-09-07", after: true } });
+    expect(readingDay(data.history, "2026-09-03").rejected).toEqual({ asOf: "2026-09-03", after: false });
+    expect(readingDay(data.history, "2026-09-04").rejected).toBe(null);
+    expect(readingDay(data.history, "2026-9-3").rejected).toBe(null);
+    for (const [asOf, said] of cases) {
+      const lines = snapshot({ asOf }).split("\n");
+      expect(lines[2], asOf).toBe(said);
+      expect(lines.filter((l) => l !== said).join("\n")).toBe(snapshot());
+      for (const name of ["programme", "current_loads"]) {
+        const text = tool(name, { asOf }, deloaded);
+        expect(text.split("\n").filter((l) => l === said), `${name} ${asOf}`).toHaveLength(1);
+        expect(text.match(/asOf /g), `${name} ${asOf}`).toHaveLength(1);
+      }
+    }
   });
 
   it("with no sessions, any real asOf counts; without one there is no date at all", () => {
