@@ -74,11 +74,32 @@ describe("a deload stored before startDate, read on the server in the zone of th
     expect(plan("2026-11-09", LAX, lax).deload.active).toBe(false);
   });
 
-  it("the newest session's zone wins", () => {
+  it("the newest session's zone at or before acceptance wins", () => {
     const m = meta(deload(AKL));
     const history = [rec("Pacific/Auckland", 780, "2026-10-28"), rec("UTC", 0, "2026-10-30")];
     expect(inDeload("2026-11-01", m, history)).toBe(true);
     expect(inDeload("2026-11-01", m, [...history].reverse())).toBe(true);
+  });
+
+  // The MCP reads asOf no earlier than the day before the last session; the trainer plan reads any day.
+  const plan = (todayIso, history) => onServer(() => projectPlan({ meta: meta(deload(AKL)), history }, { todayIso })).deload;
+
+  it("accepted in Auckland, a session since in London: still Monday", () => {
+    const m = meta(deload(AKL));
+    const history = [rec("Pacific/Auckland", 780), rec("Europe/London", 0, "2026-11-04")];
+    for (const h of [history, [...history].reverse()]) {
+      expect(plan("2026-11-01", h).active).toBe(false);
+      expect(plan("2026-11-02", h)).toEqual({ active: true, until: "2026-11-09" });
+      expect(inDeload("2026-11-08", m, h)).toBe(true);
+      expect(inDeload("2026-11-09", m, h)).toBe(false);
+    }
+  });
+
+  it("with no zoned session that old, the newest zoned session after it", () => {
+    const history = [rec(null, null), rec("Europe/London", 0, "2026-11-03"), rec("Pacific/Auckland", 780, "2026-11-04")];
+    expect(plan("2026-11-01", history).active).toBe(false);
+    expect(plan("2026-11-02", history)).toEqual({ active: true, until: "2026-11-09" });
+    expect(inDeload("2026-11-08", meta(deload(AKL)), history)).toBe(true);
   });
 
   it("a session with only its offset, or a zone the runtime doesn't know, reads by its offset", () => {
