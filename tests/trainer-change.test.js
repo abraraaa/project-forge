@@ -1485,6 +1485,7 @@ describe("coached session: validateSessionSet, S1-S14", () => {
     expect(vs(edit(record, (r) => { r.id = `${addDaysIso(TODAY, 1)}T02:00:00.000Z`; }))).toBe("ok");
     expect(vs(edit(record, (r) => { r.id = `${addDaysIso(TODAY, 2)}T02:00:00.000Z`; }))).toBe("S4:date");
     expect(vs(edit(record, (r) => { r.id = `${TODAY}T10:00:00Z`; }))).toBe("S4:date");
+    expect(vs(edit(record, (r) => { r.id = "2026-13-05T10:00:00.000Z"; }))).toBe("S4:date");
     expect(vs(edit(record, (r) => { r.date = "2026-02-30"; }))).toBe("S4:date");
     expect(vs(edit(record, (r) => { r.dow = (r.dow + 1) % 7; }))).toBe("S4:date");
     expect(vs(edit(record, (r) => { r.weekStart = ago(7); }))).toBe("S4:date");
