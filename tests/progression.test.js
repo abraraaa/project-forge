@@ -14,7 +14,7 @@
 //   7. Edge cases — null history, missing fields, parse failures
 // ────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   computeNextPrescription,
   updateLiftStateFromSession,
@@ -879,8 +879,14 @@ describe("Phase 3 — startDeload + completeDeload + dismissDeloadOffer", () => 
       lifts: { "Squat": { currentWeight: 100, stallSignal: "stall" } },
       mesocycle: { deloadSignals: {} },
     };
-    const signal = { type: "stall_convergence", detectedAt: new Date().toISOString(), severity: 0.7 };
-    const next = startDeload(ts, signal);
+    // Accepted on a Wednesday: the window runs to Monday, five days.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 18, 9, 0));
+    let next;
+    try {
+      const signal = { type: "stall_convergence", detectedAt: new Date().toISOString(), severity: 0.7 };
+      next = startDeload(ts, signal);
+    } finally { vi.useRealTimers(); }
     expect(next.mesocycle.activeDeload).toBeTruthy();
     expect(next.mesocycle.activeDeload.plannedDays).toBe(5);
     // preDeloadWeights is a map keyed by lift name on the mesocycle subtree,
