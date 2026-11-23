@@ -311,7 +311,23 @@ describe("dates: the lifter's own calendar, never the server's clock or zone", (
     expect(t).toContain("No sessions logged yet.");
   });
 
+  it("programme and current_loads name the day they read on, once", () => {
+    const none = { meta: {}, history: [] };
+    for (const [name, at] of [["programme", 1], ["current_loads", 0]]) {
+      const read = (args, d = deloaded) => tool(name, args, d).split("\n");
+      expect(read({})[at], name).toBe(`Read on ${LAST} (my last logged session).`);
+      expect(read({ asOf: "2026-11-18" })[at], name).toBe("Read on 2026-11-18.");
+      expect(read({ asOf: "2026-09-04" })[at], name).toBe("Read on 2026-09-04.");
+      for (const args of [{}, { asOf: "2026-11-18" }]) expect(read(args).filter((l) => l.startsWith("Read on")), name).toHaveLength(1);
+      // Set aside: its own line names the day instead.
+      expect(read({ asOf: "2027-09-07" }).some((l) => l.startsWith("Read on")), name).toBe(false);
+      expect(read({}, none).some((l) => l.startsWith("Read on")), name).toBe(false);
+      expect(read({ asOf: "2031-02-01" }, none)[at], name).toBe("Read on 2031-02-01.");
+    }
+  });
+
   it("programme and current_loads read the deload calendar on asOf, else on the last session's date", () => {
+    const tool = (name, args, d) => runTool(name, args, d).text.split("\n").filter((l) => !l.startsWith("Read on")).join("\n");
     // The deload runs 2026-09-03 to 2026-09-07 on the lifter's calendar; the last session is in it.
     const inWindow = tool("programme", {}, deloaded);
     expect(inWindow).toContain("Deload week");
@@ -590,7 +606,9 @@ describe("resolvedProgramme behind describeProgramme (E8)", () => {
   // and again for that day's pool edits and load types.
   const BEFORE = { undefined: "3cb1f70048934ff3", Forged: "1f1ed1f00d78b35b", Strong: "808c7f291ffe98fc", Sculpt: "b19e5e99b4ffd0be" };
   const fixtures = e8Fixtures();
-  const texts = fixtures.map((f) => [runTool("programme", {}, f).text, runTool("current_loads", {}, f).text]);
+  // The day line came later; the rest of each text is pinned as it was.
+  const undated = (text) => text.split("\n").filter((l) => !l.startsWith("Read on ")).join("\n");
+  const texts = fixtures.map((f) => [undated(runTool("programme", {}, f).text), undated(runTool("current_loads", {}, f).text)]);
 
   it("tool output is byte-identical to the pre-extraction output", () => {
     /** @type {Record<string, string[]>} */
