@@ -14,7 +14,7 @@
 //   7. Edge cases — null history, missing fields, parse failures
 // ────────────────────────────────────────────────────────────────────────────
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   computeNextPrescription,
   updateLiftStateFromSession,
@@ -875,18 +875,26 @@ describe("Phase 3 — computeDeloadPrescription", () => {
 
 describe("Phase 3 — startDeload + completeDeload + dismissDeloadOffer", () => {
   it("startDeload creates activeDeload subtree, snapshots preDeloadWeights map", () => {
-    const ts = {
-      lifts: { "Squat": { currentWeight: 100, stallSignal: "stall" } },
-      mesocycle: { deloadSignals: {} },
-    };
-    const signal = { type: "stall_convergence", detectedAt: new Date().toISOString(), severity: 0.7 };
-    const next = startDeload(ts, signal);
-    expect(next.mesocycle.activeDeload).toBeTruthy();
-    expect(next.mesocycle.activeDeload.plannedDays).toBe(5);
-    // preDeloadWeights is a map keyed by lift name on the mesocycle subtree,
-    // NOT a per-lift field. This is so completeDeload() can rebuild from a
-    // single source rather than walking every lift's individual snapshot.
-    expect(next.mesocycle.activeDeload.preDeloadWeights.Squat).toBe(100);
+    // plannedDays runs to the next Monday, so pin the clock to a Wednesday
+    // (local noon) where that is 5 days.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 25, 12, 0, 0));
+    try {
+      const ts = {
+        lifts: { "Squat": { currentWeight: 100, stallSignal: "stall" } },
+        mesocycle: { deloadSignals: {} },
+      };
+      const signal = { type: "stall_convergence", detectedAt: new Date().toISOString(), severity: 0.7 };
+      const next = startDeload(ts, signal);
+      expect(next.mesocycle.activeDeload).toBeTruthy();
+      expect(next.mesocycle.activeDeload.plannedDays).toBe(5);
+      // preDeloadWeights is a map keyed by lift name on the mesocycle subtree,
+      // NOT a per-lift field. This is so completeDeload() can rebuild from a
+      // single source rather than walking every lift's individual snapshot.
+      expect(next.mesocycle.activeDeload.preDeloadWeights.Squat).toBe(100);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("completeDeload clears activeDeload and sets inRecoveryUntil per lift", () => {
