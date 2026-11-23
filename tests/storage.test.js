@@ -25,7 +25,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-import { P, getLocalProfile, pushNow, backgroundSync } from "../lib/storage.js";
+import { P, getLocalProfile, pushNow, backgroundSync, weeksSince } from "../lib/storage.js";
 import { DeltaSync } from "../lib/sync-delta.js";
 
 const __dirname  = dirname(fileURLToPath(import.meta.url));
@@ -287,5 +287,33 @@ describe("unset of one lift's weight or reps", () => {
     expect(P.getWeightStamps(PROFILE)[SQUAT]).toBe(NOON.toISOString());
     expect(P.getReps(PROFILE)[SQUAT]).toBeUndefined();
     expect(P.getRepsRaw(PROFILE)[SQUAT]).toBeNull();
+  });
+});
+
+describe("weeksSince counts calendar days on this device's calendar, floored to weeks", () => {
+  /** Run `fn` with the device's clock at `ms` and its zone `zone`. */
+  function onDevice(ms, zone, fn) {
+    const was = process.env.TZ;
+    process.env.TZ = zone;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(ms);
+    try { return fn(); } finally {
+      vi.useRealTimers();
+      if (was === undefined) delete process.env.TZ; else process.env.TZ = was;
+    }
+  }
+  const START = "2026-12-01";
+
+  it("San Francisco at 20:00 on day 6 is 0 weeks; Tokyo at 08:00 on day 7 is 1", () => {
+    // 20:00 on 7 December in San Francisco is already 8 December in UTC.
+    expect(onDevice(Date.parse("2026-12-08T04:00:00.000Z"), "America/Los_Angeles", () => weeksSince(START))).toBe(0);
+    // 08:00 on 8 December in Tokyo is still 7 December in UTC.
+    expect(onDevice(Date.parse("2026-12-07T23:00:00.000Z"), "Asia/Tokyo", () => weeksSince(START))).toBe(1);
+  });
+
+  it("whole weeks, by calendar day; an unreadable date is NaN", () => {
+    const at = Date.parse("2026-12-22T12:00:00.000Z");
+    expect(onDevice(at, "UTC", () => [START, "2026-12-15", "2026-12-16", "2026-12-22", "2026-12-29"].map(weeksSince))).toEqual([3, 1, 0, 0, -1]);
+    for (const bad of [undefined, null, "", "garbage", "12/01/2026"]) expect(onDevice(at, "UTC", () => weeksSince(bad)), String(bad)).toBeNaN();
   });
 });
