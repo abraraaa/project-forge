@@ -3,7 +3,7 @@ import { dbPrimaryHandle } from "@/lib/identity-store";
 import { dbTrainerGrants, dbRemoveByTrainer, dbRosterSignals } from "@/lib/trainer-store";
 import { dbRosterWaiting } from "@/lib/trainer-changes-store";
 import { publicName, rosterSignal } from "@/lib/trainer-view";
-import { durationMs, londonDay, trainerDay } from "@/lib/server-time";
+import { durationMs, trainerDay } from "@/lib/server-time";
 import { trainerGate, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { dbMarkSeen } from "@/lib/notices";
 import { serverError } from "@/lib/api-errors";
@@ -30,7 +30,7 @@ const byName = (a, b) => (a.name === null ? 1 : b.name === null ? -1 : a.name.lo
 async function roster(me, refs, rawToday, now = Date.now()) {
   const today = trainerDay(rawToday, now);
   try {
-    const rows = await dbRosterSignals(me, refs, { day: londonDay(now), today, now });
+    const rows = await dbRosterSignals(me, refs, { today, now });
     if (!rows) return null;
     return new Map([...rows].map(([ref, row]) => [ref, rosterSignal(row, today)]));
   } catch (e) {

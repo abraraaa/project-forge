@@ -4,6 +4,7 @@
 // Your clients (trainer). For trainers keeps its application-state sublines.
 // No answer (offline, 401, a failure) means the rows read as they always have.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { todayLocalIso } from "@/lib/dates";
 import { render, screen, cleanup, waitFor, within, act } from "@testing-library/react";
 
 vi.mock("@/lib/webauthn", () => ({
@@ -136,7 +137,7 @@ describe("ProfileView fetches the notices once per visit", () => {
     await waitFor(() => expect(sub("Your clients")).toBe("A client trained since you looked"));
     const calls = spy.mock.calls.filter(([url]) => notices(url));
     expect(calls).toHaveLength(1);
-    expect(calls[0][0]).toBe("/api/sync/notices?profile=sam");
+    expect(calls[0][0]).toBe(`/api/sync/notices?profile=sam&today=${todayLocalIso()}`);
   });
 
   it.each([

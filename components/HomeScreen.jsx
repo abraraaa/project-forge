@@ -17,7 +17,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
-import { mondayIndex, addDaysIso, daysBetween } from "@/lib/dates";
+import { mondayIndex, addDaysIso, daysBetween, todayLocalIso } from "@/lib/dates";
 import { isStrengthRecord } from "@/lib/day-state";
 import { Fade, Card, Tag, MonoNums, DeloadWord } from "@/components/ui";
 import Glyph from "@/components/Glyph";
@@ -88,7 +88,8 @@ const NOTICE_FLOOR_MS = 60_000;
 // read as "nothing to show" (absence of evidence, not "all clear").
 async function fetchNoticeLit(profile) {
   try {
-    const res = await fetchWithTimeout(`/api/sync/notices?profile=${encodeURIComponent(profile)}`, { cache: "no-store" });
+    // today: this device's date, which the clients window reads on.
+    const res = await fetchWithTimeout(`/api/sync/notices?profile=${encodeURIComponent(profile)}&today=${todayLocalIso()}`, { cache: "no-store" });
     if (res.status !== 200) return false;
     const body = await res.json();
     return !!body?.dots && typeof body.dots === "object" && Object.keys(body.dots).length > 0;

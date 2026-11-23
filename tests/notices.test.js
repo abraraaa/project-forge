@@ -334,6 +334,49 @@ describe("GET /api/sync/notices: the kinds", () => {
       expect(await dots("tok-nia", "nia")).toEqual({ dots: { clients: true } });
     });
 
+    const atToday = (today) => GET(new NextRequest(`${URL_BASE}?profile=tia&today=${today}`, { headers: { "x-hw-auth": "tok-tia" } }));
+    const windowSent = () => calls.find((x) => flat(x.q) === SQL.clients).v.slice(2);
+
+    it("the window reads on the trainer's own date, which the device sends", async () => {
+      for (const today of [addDaysIso(TODAY, -1), TODAY, addDaysIso(TODAY, 1)]) {
+        calls.length = 0;
+        expect((await atToday(today)).status).toBe(200);
+        expect(windowSent(), today).toEqual([addDaysIso(today, -DETAIL_DAYS), addDaysIso(today, 1)]);
+      }
+    });
+
+    it("a malformed, impossible or far-off date falls back to the server's UTC date", async () => {
+      for (const today of ["", "2026-2-1", "2026-02-30", "garbage", addDaysIso(TODAY, 2), addDaysIso(TODAY, -2), addDaysIso(TODAY, 400)]) {
+        calls.length = 0;
+        await atToday(today);
+        expect(windowSent(), today).toEqual([addDaysIso(TODAY, -DETAIL_DAYS), addDaysIso(TODAY, 1)]);
+      }
+    });
+
+    // Tokyo is UTC+9 and San Francisco UTC-8 in December.
+    for (const [where, at, day] of [
+      ["Tokyo at 08:00", Date.parse("2026-12-01T23:00:00.000Z"), "2026-12-02"],
+      ["San Francisco at 17:00", Date.parse("2026-12-02T01:00:00.000Z"), "2026-12-01"],
+    ]) {
+      it(`a trainer in ${where}: lit by exactly the sessions dated in the window around their date`, async () => {
+        vi.useFakeTimers({ toFake: ["Date"] });
+        vi.setSystemTime(at);
+        try {
+          db.grants = [grant("cara", C, T, "cC", { created_at: at - 30 * DAY })];
+          const litBy = async (date) => {
+            db.sessions = [session("sk-cara", date, at - 3600_000)];
+            return (await (await atToday(day)).json()).dots.clients === true;
+          };
+          expect(await litBy(addDaysIso(day, 1))).toBe(true);
+          expect(await litBy(addDaysIso(day, 2))).toBe(false);
+          expect(await litBy(addDaysIso(day, -DETAIL_DAYS))).toBe(true);
+          expect(await litBy(addDaysIso(day, -DETAIL_DAYS - 1))).toBe(false);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+    }
+
     it("a trainer the launch switch does not open, or a lifter: no clients read at all", async () => {
       switchLive.value = false;
       db.sessions = [session("sk-oli", daysAgo(1), NOW - 3600_000)];

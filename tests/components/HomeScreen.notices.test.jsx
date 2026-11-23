@@ -5,6 +5,7 @@
 // Anything but a 200 with dots reads as nothing new.
 import { StrictMode } from "react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { todayLocalIso } from "@/lib/dates";
 import { render, screen, cleanup, within, act, waitFor } from "@testing-library/react";
 import HomeScreen from "../../components/HomeScreen.jsx";
 import { T } from "../../lib/tokens.js";
@@ -62,8 +63,24 @@ describe("home — the notice dot", () => {
     render(home({ profileName: "sam & co" }));
     await screen.findByRole("button", { name: "Profile, sam & co, something new" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/sync/notices?profile=sam%20%26%20co");
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/sync/notices?profile=sam%20%26%20co&today=${todayLocalIso()}`);
     expect(fetchMock.mock.calls[0][1]?.method ?? "GET").toBe("GET");
+  });
+
+  it("sends this device's date: in Tokyo at 08:00 on 2 December it is 2 December, whatever the UTC date", async () => {
+    const was = process.env.TZ;
+    process.env.TZ = "Asia/Tokyo";
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.parse("2026-12-01T23:00:00.000Z"));
+    try {
+      fetchMock.mockReturnValue(reply(200, { dots: {} }));
+      render(home());
+      await flush();
+      expect(fetchMock.mock.calls[0][0]).toBe("/api/sync/notices?profile=sam&today=2026-12-02");
+    } finally {
+      vi.useRealTimers();
+      if (was === undefined) delete process.env.TZ; else process.env.TZ = was;
+    }
   });
 
   it("the dot is a still 6px ink dot after the word, hidden from assistive tech", async () => {
@@ -168,7 +185,7 @@ describe("home — the notice dot", () => {
     fetchMock.mockReturnValueOnce(new Promise((r) => { resolveNext = r; }));
     rerender(home({ profileName: "alex" }));
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/sync/notices?profile=alex");
+    expect(fetchMock.mock.calls[1][0]).toBe(`/api/sync/notices?profile=alex&today=${todayLocalIso()}`);
     expect(screen.getByRole("button", { name: "Profile, alex" })).toBeTruthy();
     expect(noticeDot()).toBeNull();
     await act(async () => { resolveNext(await reply(200, { dots: { clients: true } })); });

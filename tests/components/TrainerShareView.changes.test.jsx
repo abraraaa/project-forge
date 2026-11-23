@@ -30,6 +30,7 @@ vi.mock("@/lib/net", () => ({
 import TrainerShareView from "../../components/TrainerShareView.jsx";
 import { P } from "@/lib/storage";
 import { authenticatePasskey } from "@/lib/webauthn";
+import { fetchWithTimeout } from "@/lib/net";
 import { SHARE_CONSENT_VERSION } from "@/lib/trainer-terms";
 import { keepsAtWords } from "../../components/TrainerSessionSheet.jsx";
 
@@ -247,6 +248,9 @@ describe("Undo", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Undo Barbell Back Squat · 105 kg, was 102.5" })); });
     expect(confirm).not.toHaveBeenCalled();
     expect(posts()).toEqual([{ profile: "sam", undo: `${S1}.0` }]);
+    // today: this device's date, which the server reads the change's status against.
+    expect(vi.mocked(fetchWithTimeout).mock.calls.filter(([, o]) => o?.method === "POST" && "undo" in JSON.parse(o.body)).map(([u]) => u))
+      .toEqual(["/api/sync/trainer?today=2026-10-14"]);
     const line = screen.getByText("Undone. Back to 102.5 kg next time you open the app.");
     expect(line.getAttribute("role")).toBe("status");
     expect(document.activeElement).toBe(line);

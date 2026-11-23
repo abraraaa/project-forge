@@ -2,7 +2,7 @@
 // tiers), the schedule as runs, and the look ring's JS mirror. Pure; no DB.
 import { describe, it, expect } from "vitest";
 import {
-  projectForTrainer, projectBreaks, scheduleRuns, runsWeekFor, nextLooks, trainerToday, rosterSignal, shownSetWeight,
+  projectForTrainer, projectBreaks, scheduleRuns, runsWeekFor, nextLooks, rosterSignal, shownSetWeight,
   VIEW_KEYS, DETAIL_DAYS, TREND_DAYS, SELF_REF,
 } from "@/lib/trainer-view";
 import { mainLiftTrend, readinessBreakdown } from "@/lib/analytics";
@@ -526,18 +526,6 @@ describe("nextLooks: the ring's JS mirror", () => {
       }
       expect(count).toBe(expected);
     }
-  });
-});
-
-describe("trainerToday", () => {
-  const now = Date.parse("2026-10-03T23:30:00Z");
-  it("takes the device's date within a day of the server's UTC date, else the UTC date", () => {
-    expect(trainerToday("2026-10-04", now)).toBe("2026-10-04");
-    expect(trainerToday("2026-10-02", now)).toBe("2026-10-02");
-    expect(trainerToday("2026-10-05", now)).toBe("2026-10-03");
-    expect(trainerToday("2026-02-31", now)).toBe("2026-10-03");
-    expect(trainerToday("2026-10-03T00:00", now)).toBe("2026-10-03");
-    expect(trainerToday(undefined, now)).toBe("2026-10-03");
   });
 });
 

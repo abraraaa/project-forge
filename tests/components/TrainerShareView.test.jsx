@@ -111,6 +111,34 @@ describe("TrainerShareView: sharing", () => {
     expect(screen.getByText("1 look so far.")).toBeTruthy();
   });
 
+  // A check-in reads from its instant on this device's calendar; the stored day is the trainer's date.
+  for (const [what, look, viewer, zone, want] of [
+    ["a Tokyo trainer's 08:00 check-in, seen in San Francisco after midnight",
+      { kind: "roster", at: Date.parse("2026-12-01T23:00:00.000Z"), day: "2026-12-02" }, Date.parse("2026-12-02T09:00:00.000Z"), "America/Los_Angeles", "yesterday"],
+    ["a Tokyo trainer's 08:00 check-in, seen in Tokyo that morning",
+      { kind: "roster", at: Date.parse("2026-12-01T23:00:00.000Z"), day: "2026-12-02" }, Date.parse("2026-12-02T01:00:00.000Z"), "Asia/Tokyo", "today"],
+    ["a San Francisco trainer's 17:00 check-in, seen in Tokyo at noon",
+      { kind: "roster", at: Date.parse("2026-12-02T01:00:00.000Z"), day: "2026-12-01" }, Date.parse("2026-12-02T03:00:00.000Z"), "Asia/Tokyo", "today"],
+    ["a San Francisco trainer's 17:00 check-in, seen in San Francisco the next evening",
+      { kind: "roster", at: Date.parse("2026-12-02T01:00:00.000Z"), day: "2026-12-01" }, Date.parse("2026-12-03T02:00:00.000Z"), "America/Los_Angeles", "yesterday"],
+  ]) {
+    it(`${what}: ${want}`, async () => {
+      const was = process.env.TZ;
+      process.env.TZ = zone;
+      try {
+        server.status = status({ sharing: sharing({ looks: [look], lookCount: 1 }) });
+        vi.useFakeTimers({ toFake: ["Date"] });
+        vi.setSystemTime(viewer);
+        P.setActive("sam");
+        await act(async () => { render(<TrainerShareView />); });
+        const row = screen.getByRole("list", { name: "When Jo looked" }).querySelector("li");
+        expect(row?.textContent).toBe(`Jo checked in on the roster${want}`);
+      } finally {
+        if (was === undefined) delete process.env.TZ; else process.env.TZ = was;
+      }
+    });
+  }
+
   it("Stop sharing is one tap: no dialog, one POST, then says it stopped", async () => {
     const confirm = vi.spyOn(window, "confirm");
     server.status = status({ sharing: sharing() });

@@ -842,7 +842,7 @@ const { SESSIONS, EXERCISE_POOLS, applyRotationToSession, applyMainLiftsToSessio
 const { repTargets, planStartWeight, validMainLifts } = await import("@/lib/programme-resolve");
 const { getLoadType } = await import("@/lib/lift-translations");
 const { addDaysIso, jsDow, mondayOfWeekIso } = await import("@/lib/dates");
-const { trainerToday } = await import("@/lib/trainer-view");
+const { trainerDay } = await import("@/lib/server-time");
 
 const LETTERS = ["strength-a", "strength-b", "strength-c"];
 /** Abe's profile as the route reads it. */
@@ -982,10 +982,10 @@ describe("coached sessions: sending one", () => {
       expect(await res.json()).toEqual({ refusals: [{ i: 0, code: "day", rule: "S4", field: "date" }] });
     }
     // The window is the trainer's today as sent (held within a day of UTC by
-    // trainerToday): from tomorrow's today, yesterday's record is two days back.
+    // trainerDay): from tomorrow's today, yesterday's record is two days back.
     const tomorrow = addDaysIso(DAY0, 1);
     const ahead = await post(tia, { ...sbody(coached(2, { date: addDaysIso(DAY0, -1) }), { set: setId("r") }), today: tomorrow });
-    expect(ahead.status).toBe(trainerToday(tomorrow) === tomorrow ? 422 : 200);
+    expect(ahead.status).toBe(trainerDay(tomorrow) === tomorrow ? 422 : 200);
     expect(db.changes.filter((c) => c.target.endsWith(":B")).map((c) => c.target)).toEqual([`${addDaysIso(DAY0, -1)}:B`]);
   });
 
