@@ -289,12 +289,16 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   const [picked, setPicked] = useState(/** @type {string | null} */ (null));
   const tab = picked && tabs.some((t) => t.key === picked) ? picked : plan ? "plan" : "sessions";
   const changesWord = edits === "on" || edits === "unavailable" ? "changes on" : "changes off";
+  const glance = kickerText(self ? null : signal);
 
   return (
     <div style={{ fontFamily: T.text, color: T.ink }}>
       {/* 1. Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-        <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.ink2 }}>{self ? "Your training" : "Shared with you"}</div>
+        {/* The kicker carries the roster signal: this week and the last session. */}
+        <div data-kicker="" style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.ink2 }}>
+          {self ? "Your training" : glance ? <Nums text={glance}/> : "Shared with you"}
+        </div>
         {/* From 640 the roster stays beside the pane, so the pane closes itself. */}
         {onClose && (
           <span className="forge-wide-mw-only" style={{ flexShrink: 0 }}>
@@ -317,7 +321,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
         </div>
       )}
 
-      <ClientSummary signal={self ? null : signal} weeks={weeks} under={under} waiting={waitingChanges} onPhone={onPhone}
+      <ClientSummary weeks={weeks} under={under} waiting={waitingChanges} onPhone={onPhone}
         name={name} run={runState} unsent={unsent} onRunSession={onRunSession}/>
 
       {/* 2. The tabs: depth, one view at a time */}
@@ -525,9 +529,9 @@ function RhythmCell({ week }) {
 // ── The summary: the client at a glance, then the one commit ───────────────
 
 /**
- * The glance strip's parts, from the roster signal: "2 of 3 this week",
- * "rhythm 86%", "last trained yesterday". Paused reads "Paused" and the
- * last session only. None without a signal.
+ * The glance's parts, from the roster signal: "2 of 3 this week" and "last
+ * trained yesterday". Paused reads "Paused" and the last session only. None
+ * without a signal. The rhythm reads off the eight cells under the name.
  * @param {any} signal
  * @returns {string[]}
  */
@@ -541,9 +545,18 @@ export function glanceParts(signal) {
   if (signal.paused) return ["Paused", last];
   const parts = [];
   if (signal.weekPlanned > 0) parts.push(`${signal.weekDone} of ${signal.weekPlanned} this week`);
-  if (signal.rhythmPct != null) parts.push(`rhythm ${signal.rhythmPct}%`);
   parts.push(last);
   return parts;
+}
+
+/**
+ * The pane's kicker for a client: the glance as one line, "2 of 3 this week ·
+ * last trained yesterday", its first letter capitalised. Null without a signal.
+ * @param {any} signal
+ */
+export function kickerText(signal) {
+  const text = glanceParts(signal).join(" · ");
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : null;
 }
 
 /** @type {import("react").CSSProperties} */
@@ -552,13 +565,12 @@ const summaryRow = { marginTop: 14 };
 const RUN_MAX = 440;
 
 /**
- * Above the sections: the glance strip (the roster signal), the latest eight
- * weeks, what is waiting, then the pane's one commit. Every part drops out
- * when it has nothing to say; the commit shows only when a session can run.
- * Each lift's trend lives on Lifts and how each session felt on Sessions.
+ * Under the name: the latest eight weeks, then the pane's one commit, then
+ * what is waiting. Every part drops out when it has nothing to say; the
+ * commit shows only when a session can run. The roster signal is the kicker;
+ * each lift's trend lives on Lifts and how each session felt on Sessions.
  */
-function ClientSummary({ signal, weeks, under, waiting, onPhone, name, run, unsent, onRunSession }) {
-  const glance = glanceParts(signal);
+function ClientSummary({ weeks, under, waiting, onPhone, name, run, unsent, onRunSession }) {
   const recent = weeks.slice(-8);
   const [choosing, setChoosing] = useState(false);
   const canContinue = !!onRunSession && !!unsent;
@@ -571,25 +583,11 @@ function ClientSummary({ signal, weeks, under, waiting, onPhone, name, run, unse
 
   return (
     <div data-summary="">
-      {glance.length > 0 && (
-        <div data-glance="" style={{ marginTop: 16, borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}`, padding: "10px 0", fontSize: 13, color: T.ink2, display: "flex", gap: "4px 14px", flexWrap: "wrap" }}>
-          {glance.map((g) => <span key={g}><Nums text={g}/></span>)}
-        </div>
-      )}
-
       {recent.length > 0 && (
         <ol data-summary-rhythm="" className="forge-summary-rhythm" aria-label="Weekly sessions against plan, the latest 8 weeks, oldest first"
           style={{ ...summaryRow, display: "grid", gap: 4, listStyle: "none", padding: 0, marginBottom: 0 }}>
           {recent.map((w) => <RhythmCell key={w.mondayIso} week={w}/>)}
         </ol>
-      )}
-
-      {tags.length > 0 && (
-        <div data-pending="" style={{ ...summaryRow, display: "flex", flexWrap: "wrap", gap: "6px 16px" }}>
-          {tags.map((t) => (
-            <Tag key={t.key} color={t.color}><span data-tag={t.key}><Nums text={t.text}/></span></Tag>
-          ))}
-        </div>
       )}
 
       {canContinue ? (
@@ -621,6 +619,14 @@ function ClientSummary({ signal, weeks, under, waiting, onPhone, name, run, unse
               {run.freeAt ? <> · <Nums text={`more from ${msDayLabel(run.freeAt)}`}/></> : null}
             </div>
           )}
+        </div>
+      )}
+
+      {tags.length > 0 && (
+        <div data-pending="" style={{ ...summaryRow, display: "flex", flexWrap: "wrap", gap: "6px 16px" }}>
+          {tags.map((t) => (
+            <Tag key={t.key} color={t.color}><span data-tag={t.key}><Nums text={t.text}/></span></Tag>
+          ))}
         </div>
       )}
 

@@ -1357,17 +1357,17 @@ describe("TrainerView: one way back at each level", () => {
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 
-  it("the open client's roster signal reaches the pane's glance strip; your own training has none", async () => {
+  it("the open client's roster signal reaches the pane's kicker; your own training has none", async () => {
     signedIn();
     await mount();
     fireEvent.click(screen.getByText("Alex"));
     await flush();
     expect(panes.props.at(-1).signal).toEqual(SIGNALS[0].signal);
-    expect(document.querySelector("[data-glance]").textContent).toBe("2 of 3 this weekrhythm 86%last trained 2 days ago");
+    expect(document.querySelector("[data-kicker]").textContent).toBe("2 of 3 this week · last trained 2 days ago");
     fireEvent.click(screen.getByText("Your training"));
     await flush();
     expect(panes.props.at(-1).signal).toBeNull();
-    expect(document.querySelector("[data-glance]")).toBeNull();
+    expect(document.querySelector("[data-kicker]").textContent).toBe("Your training");
   });
 
   it("the invite sheet closes from Done, Escape and the scrim", async () => {

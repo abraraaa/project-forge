@@ -57,7 +57,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import TrainerClientView, {
   setsLine, rhythmCellText, refusalText, noHistoryText, leadLine, warningText, sessionStatusText, sessionRunLine, trainerStatusText,
-  glanceParts,
+  glanceParts, kickerText,
 } from "../../components/TrainerClientView.jsx";
 import Glyph from "../../components/Glyph.jsx";
 import { T } from "../../lib/tokens.js";
@@ -367,8 +367,8 @@ describe("TrainerClientView", () => {
     expect(text).not.toMatch(/Stop seeing|can stop sharing/);
     expect(screen.queryByRole("button", { name: /Stop|^Sharing/ })).toBeNull();
     expect(screen.queryByRole("group", { name: "How you felt, last 24 weeks" })).toBeNull();
-    // No roster signal for your own training: no glance strip, and nothing to run.
-    expect(document.querySelector("[data-glance]")).toBeNull();
+    // No roster signal for your own training: the kicker names it, and nothing to run.
+    expect(document.querySelector("[data-kicker]").textContent).toBe("Your training");
     expect(document.querySelector("[data-run]")).toBeNull();
     expect(document.querySelectorAll("[data-summary-rhythm] li")).toHaveLength(8);
     // The training itself shows as for any client: no plan, so no Plan or Sent tab.
@@ -1942,27 +1942,40 @@ describe("TrainerClientView: the house buttons", () => {
 
 describe("TrainerClientView: the summary", () => {
   const SIGNAL = { lastTrainedDaysAgo: 1, weekDone: 2, weekPlanned: 3, rhythmPct: 86, paused: false };
-  const glance = () => /** @type {HTMLElement | null} */ (document.querySelector("[data-glance]"));
+  const kicker = () => /** @type {HTMLElement} */ (document.querySelector("[data-kicker]"));
 
-  it("the glance strip reads the roster signal, numerals in the measured face; paused says so; no signal, no strip", () => {
+  it("the kicker reads the roster signal in place of Shared with you, numerals in the measured face; paused says so; no strip below", () => {
     render(<TrainerClientView client={client} view={view()} signal={SIGNAL}/>);
-    expect([...glance().children].map((c) => c.textContent)).toEqual(["2 of 3 this week", "rhythm 86%", "last trained yesterday"]);
-    expect([...glance().querySelectorAll("span span")].map((n) => [n.textContent, n.style.fontFamily]))
-      .toEqual(["2", "3", "86"].map((d) => [d, T.measured]));
-    expect(glance().closest("[data-summary]")).toBeTruthy();
+    expect(kicker().textContent).toBe("2 of 3 this week · last trained yesterday");
+    expect([...kicker().querySelectorAll("span")].map((n) => [n.textContent, n.style.fontFamily])).toEqual(["2", "3"].map((d) => [d, T.measured]));
+    expect(document.querySelector("[data-glance]")).toBeNull();
+    expect(document.body.textContent).not.toContain("Shared with you");
+    expect(document.body.textContent).not.toContain("rhythm 86%");
     cleanup();
     render(<TrainerClientView client={client} view={view()} signal={{ ...SIGNAL, paused: true, lastTrainedDaysAgo: 9 }}/>);
-    expect([...glance().children].map((c) => c.textContent)).toEqual(["Paused", "last trained 9 days ago"]);
+    expect(kicker().textContent).toBe("Paused · last trained 9 days ago");
     cleanup();
     render(<TrainerClientView client={client} view={view()}/>);
-    expect(glance()).toBeNull();
+    expect(kicker().textContent).toBe("Shared with you");
     expect(document.querySelectorAll("[data-summary-rhythm] li")).toHaveLength(8);
   });
 
-  it("glanceParts: today, never, and a week with no plan", () => {
+  it("glanceParts and kickerText: today, never, and a week with no plan", () => {
     expect(glanceParts(null)).toEqual([]);
-    expect(glanceParts({ ...SIGNAL, lastTrainedDaysAgo: 0 })).toEqual(["2 of 3 this week", "rhythm 86%", "trained today"]);
-    expect(glanceParts({ ...SIGNAL, lastTrainedDaysAgo: null, weekPlanned: 0, rhythmPct: null })).toEqual(["no sessions in the last year"]);
+    expect(kickerText(null)).toBeNull();
+    expect(glanceParts({ ...SIGNAL, lastTrainedDaysAgo: 0 })).toEqual(["2 of 3 this week", "trained today"]);
+    expect(kickerText({ ...SIGNAL, lastTrainedDaysAgo: null, weekPlanned: 0, rhythmPct: null })).toBe("No sessions in the last year");
+  });
+
+  it("Run sits right under the name and the eight cells, ahead of anything else in the summary", () => {
+    const at = Date.now();
+    const v = planView(planData());
+    v.plan.changes = [...v.plan.changes, { id: "s1.0", set: "s1", kind: "weight", target: "Barbell Back Squat", before: 100, after: 102.5, from: null, status: "waiting", reason: null, date: null, at, warnings: [] }];
+    render(<TrainerClientView client={client} view={v} signal={SIGNAL} onRunSession={vi.fn()}/>);
+    const cells = /** @type {HTMLElement} */ (document.querySelector("[data-summary-rhythm]"));
+    expect(cells.nextElementSibling?.hasAttribute("data-run")).toBe(true);
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1.compareDocumentPosition(cells) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("no lifts table in the summary: each main lift, its spark and e1RM live on Lifts alone", () => {
