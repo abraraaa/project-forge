@@ -60,6 +60,12 @@ const { server, auth, panes, nav } = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => nav }));
+// The real transitions, with how deep inside one the page is, so a push can say if it rode one.
+const nt = vi.hoisted(() => ({ depth: 0, types: /** @type {any[]} */ ([]) }));
+vi.mock("@/lib/nav-transitions", async (importOriginal) => {
+  const real = /** @type {any} */ (await importOriginal());
+  return { ...real, withNavTransition: (fn, type) => { nt.types.push(type); nt.depth++; try { real.withNavTransition(fn, type); } finally { nt.depth--; } } };
+});
 
 // The real pane, with the props TrainerView hands it kept for a look.
 vi.mock("@/components/TrainerClientView", async (importOriginal) => {
@@ -696,12 +702,18 @@ describe("TrainerView: the invite sheet", () => {
     expect(gets("/api/trainer/invite")).toHaveLength(1);
     expect(within(dialog).getByRole("status").textContent).toBe("Waiting for them…");
 
+    signedIn([...SIGNALS, { ref: "hwg_sam", name: "Sam", since: issuedAt, lastLooked: null, signal: null }]);
     Object.assign(reply, { status: "used", usedBy: "Sam" });
     const before = posts("/api/trainer/clients").length;
     await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
     await flush();
     expect(within(dialog).getByRole("status").textContent).toBe("Sam is in.");
     expect(posts("/api/trainer/clients").length).toBe(before + 1);
+    // The new card enters once with the house fade; the cards already there stay still.
+    const arrived = [...document.querySelectorAll("[data-arrived]")];
+    expect(arrived.map((li) => li.textContent?.slice(0, 3))).toEqual(["Sam"]);
+    expect(/** @type {HTMLElement} */ (arrived[0].firstElementChild).style.transition).toContain("opacity 260ms");
+    expect(document.querySelectorAll('ul[aria-label="Clients"] > li').length).toBe(SIGNALS.length + 1);
     expect(within(dialog).getByText("New code")).toBeTruthy();
     // Polling stopped with the final status, and coming back to the tab
     // does not start it again.
@@ -1146,6 +1158,21 @@ describe("TrainerView: changing a client's plan", () => {
     await act(async () => { fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Refresh" })); });
     await flush();
     expect(document.querySelector('[data-section="plan"] > [role="status"]').textContent).toBe("Showing their latest.");
+  });
+
+  it("Run a session moves as Home to a session: the push rides an untyped (forward) nav transition", async () => {
+    const pushedInside = [];
+    const push = vi.spyOn(nav, "push").mockImplementation(() => { pushedInside.push(nt.depth > 0); });
+    await openAlex();
+    nt.types = [];
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Run Strength B with Alex" })); });
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    expect(pushedInside).toEqual([true]);
+    expect(nt.types).toEqual([undefined]);
+    push.mockRestore();
+    // The way back is the next test's; spend it so it doesn't reach another.
+    cleanup();
+    await mount();
   });
 
   it("Run a session: the signed-in name for the coach page, then /trainer/coach with the ref in the fragment only", async () => {

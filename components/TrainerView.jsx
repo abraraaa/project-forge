@@ -28,7 +28,7 @@ import { withNavTransition } from "@/lib/nav-transitions";
 import { pressLiftHandlers } from "@/lib/press-lift";
 import { useInlineModalA11y } from "@/lib/a11y";
 import Glyph from "@/components/Glyph";
-import { BTN, Card } from "@/components/ui";
+import { BTN, Card, Fade, prefersReducedMotion } from "@/components/ui";
 import { authenticatePasskey } from "@/lib/webauthn";
 import { fetchWithTimeout } from "@/lib/net";
 import { todayLocalIso } from "@/lib/dates";
@@ -250,6 +250,9 @@ export default function TrainerView() {
   const [me, setMe] = useState(null);
   const [clients, setClients] = useState([]);
   const [loadedAt, setLoadedAt] = useState(0);
+  // The refs on the first roster this visit: a card past them has just
+  // arrived (a code used), and enters once with the house fade.
+  const [known, setKnown] = useState(/** @type {Set<string> | null} */ (null));
   // The open client (or SELF_ROW, i -1): { i, ref, name, lastLooked } and its pane state.
   const [open, setOpen] = useState(null);
   const [pane, setPane] = useState(null); // { ref, state: 'loading' | 'missing' | 'error' } | { ref, state: 'ready', client, view, self }
@@ -268,7 +271,7 @@ export default function TrainerView() {
   const inviteSeq = useRef(0);
 
   const reset = () => {
-    setMe(null); setClients([]); setOpen(null); setPane(null); setInvite(null); setApplyResult(null);
+    setMe(null); setClients([]); setKnown(null); setOpen(null); setPane(null); setInvite(null); setApplyResult(null);
     ceremony.current = null; paneSeq.current += 1; inviteSeq.current += 1; entryRef.current = null;
   };
 
@@ -285,7 +288,9 @@ export default function TrainerView() {
   const applyRoster = (r) => {
     if (r.status === 200) {
       setMe(r.body.me?.name ?? null);
-      setClients(Array.isArray(r.body.clients) ? r.body.clients : []);
+      const list = Array.isArray(r.body.clients) ? r.body.clients : [];
+      setClients(list);
+      setKnown((k) => k ?? new Set(list.map((c) => c?.ref)));
       setLoadedAt(Date.now());
       setPhase("roster");
     } else if (r.status === 401) {
@@ -569,7 +574,8 @@ export default function TrainerView() {
     } catch {
       // Offline before the page loaded: the coach page asks for Face ID by name, and says when it can't.
     }
-    router.push(`/trainer/coach#${new URLSearchParams({ ref, letter })}`);
+    // Untyped: the forward slide, as Home to a session.
+    withNavTransition(() => router.push(`/trainer/coach#${new URLSearchParams({ ref, letter })}`));
   };
 
   // ── The invite ────────────────────────────────────────────────────────────
@@ -717,24 +723,29 @@ export default function TrainerView() {
               const line = rosterLine(c);
               const pct = rosterRhythm(c.signal);
               const current = i === selected;
+              const arrived = !!known && !known.has(c.ref);
+              const card = (
+                <Card style={{ overflow: "hidden" }}>
+                  <button type="button" onClick={() => openClient(i)} aria-current={current ? "true" : undefined}
+                    className="forge-press forge-tint" style={cardButton}>
+                    {current && <span aria-hidden="true" style={openMark}/>}
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={cardTitle}>{c.name || "Your client"}</span>
+                      <span className="forge-wide-signal" title={line} style={cardLine}>
+                        <Nums text={line}/>
+                      </span>
+                    </span>
+                    {pct !== null && <RhythmMark pct={pct}/>}
+                    <span className="forge-wide-n-only" style={{ flexShrink: 0, lineHeight: 0 }}>
+                      <Glyph name="arrowRight" size={12} color={T.ink3}/>
+                    </span>
+                  </button>
+                </Card>
+              );
+              // Reduced motion: it appears.
               return (
-                <li key={c.ref}>
-                  <Card style={{ overflow: "hidden" }}>
-                    <button type="button" onClick={() => openClient(i)} aria-current={current ? "true" : undefined}
-                      className="forge-press forge-tint" style={cardButton}>
-                      {current && <span aria-hidden="true" style={openMark}/>}
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={cardTitle}>{c.name || "Your client"}</span>
-                        <span className="forge-wide-signal" title={line} style={cardLine}>
-                          <Nums text={line}/>
-                        </span>
-                      </span>
-                      {pct !== null && <RhythmMark pct={pct}/>}
-                      <span className="forge-wide-n-only" style={{ flexShrink: 0, lineHeight: 0 }}>
-                        <Glyph name="arrowRight" size={12} color={T.ink3}/>
-                      </span>
-                    </button>
-                  </Card>
+                <li key={c.ref} data-arrived={arrived ? "" : undefined}>
+                  {arrived ? <Fade opaque={prefersReducedMotion()}>{card}</Fade> : card}
                 </li>
               );
             })}

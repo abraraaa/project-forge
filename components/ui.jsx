@@ -34,7 +34,7 @@ import { rovingIndex } from "@/lib/a11y";
 // Under prefers-reduced-motion the rise is dropped and only the fade runs.
 // Read during render: every consumer mounts client-only (ssr:false shells in
 // components/client-shells.jsx), so no server markup can disagree with it.
-const prefersReducedMotion = () =>
+export const prefersReducedMotion = () =>
   typeof window !== "undefined" && typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
