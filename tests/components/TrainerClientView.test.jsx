@@ -4,7 +4,8 @@
 // from the real projection (projectForTrainer) of a generated history.
 //
 // Locks in:
-//   - "How they felt" and every session's readiness word always show;
+//   - every session's readiness word always shows; the summary carries no
+//     felt marks and no lifts table (Sessions and Lifts carry them);
 //   - sessions page by 10, newest first;
 //   - a record from the trend tier (day 200) is never listed as a session;
 //   - set lines: "100 × 5, 5, 5 · RPE 8, 8, 8.5", RIR when RPE is missing,
@@ -56,10 +57,10 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import TrainerClientView, {
   setsLine, rhythmCellText, refusalText, noHistoryText, leadLine, warningText, sessionStatusText, sessionRunLine, trainerStatusText,
-  glanceParts, liftDelta,
+  glanceParts,
 } from "../../components/TrainerClientView.jsx";
 import Glyph from "../../components/Glyph.jsx";
-import { T, heatForRpe, heatMarkHeight } from "../../lib/tokens.js";
+import { T } from "../../lib/tokens.js";
 import { projectForTrainer } from "../../lib/trainer-plan.js";
 import { EXERCISE_POOLS } from "../../lib/programme.js";
 import { addDaysIso, todayLocalIso } from "../../lib/dates.js";
@@ -129,21 +130,13 @@ function sharing() {
 }
 
 describe("TrainerClientView", () => {
-  it("shows how they felt as heat marks with their counts printed, and every session's readiness word", () => {
+  it("every session's readiness word shows; the summary carries no felt marks, so the ramp means plan done only", () => {
     const hist = history();
     hist[0].readiness = null; // the newest session has no check-in
     render(<TrainerClientView client={client} view={view(hist)}/>);
-    const felt = screen.getByRole("group", { name: "How they felt, last 24 weeks" });
-    // 24 sessions with a check-in in the detail tier, a third each.
-    expect([...felt.querySelectorAll("[data-felt-band]")].map((b) => b.textContent)).toEqual(["Fresh 8", "Normal 8", "Cooked 8"]);
-    // Colour and height both carry the band, and the number is in the measured face.
-    const marks = [...felt.querySelectorAll('[aria-hidden="true"]')];
-    expect(marks.map((m) => [m.style.width, m.style.height, m.style.background])).toEqual([
-      ["24px", `${heatMarkHeight(6)}px`, heatForRpe(6)], ["24px", `${heatMarkHeight(8)}px`, heatForRpe(8)], ["24px", `${heatMarkHeight(10)}px`, heatForRpe(10)],
-    ]);
-    for (const b of felt.querySelectorAll("[data-felt-band]")) expect(/** @type {HTMLElement} */ (b.lastElementChild?.lastElementChild).style.fontFamily).toBe(T.measured);
-    // The words line is gone.
-    expect(document.body.textContent).not.toMatch(/Fresh \d+ · Normal/);
+    expect(screen.queryByRole("group", { name: "How they felt, last 24 weeks" })).toBeNull();
+    expect(document.querySelector("[data-felt], [data-felt-band]")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Fresh \d+|Normal \d+|Cooked \d+/);
     const rows = tab("Sessions").querySelectorAll("[data-session]");
     expect(rows.length).toBe(10);
     const heads = [...rows].map((r) => r.firstChild.textContent);
@@ -373,7 +366,7 @@ describe("TrainerClientView", () => {
     expect(text).not.toContain("Shared with you");
     expect(text).not.toMatch(/Stop seeing|can stop sharing/);
     expect(screen.queryByRole("button", { name: /Stop|^Sharing/ })).toBeNull();
-    expect(screen.getByRole("group", { name: "How you felt, last 24 weeks" })).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "How you felt, last 24 weeks" })).toBeNull();
     // No roster signal for your own training: no glance strip, and nothing to run.
     expect(document.querySelector("[data-glance]")).toBeNull();
     expect(document.querySelector("[data-run]")).toBeNull();
@@ -1972,21 +1965,13 @@ describe("TrainerClientView: the summary", () => {
     expect(glanceParts({ ...SIGNAL, lastTrainedDaysAgo: null, weekPlanned: 0, rhythmPct: null })).toEqual(["no sessions in the last year"]);
   });
 
-  it("a row per main lift: name, spark, e1RM and the change against 28 days", () => {
+  it("no lifts table in the summary: each main lift, its spark and e1RM live on Lifts alone", () => {
     render(<TrainerClientView client={client} view={view()}/>);
-    const rows = [...document.querySelectorAll("[data-summary-lift]")];
-    expect(rows.map((r) => r.getAttribute("data-summary-lift"))).toEqual(["Barbell Back Squat"]);
-    expect(rows[0].querySelector("svg")).toBeTruthy();
-    expect(rows[0].textContent).toMatch(/^Barbell Back Squat[\d.]+ kg(level|[+-][\d.]+ kg)$/);
-  });
-
-  it("liftDelta: the newest e1RM against the first in the last 28 days", () => {
-    const s = [{ date: "2026-10-01", est1RM: 100 }, { date: "2026-10-20", est1RM: 105 }, { date: "2026-11-10", est1RM: 110 }];
-    expect(liftDelta(s, "2026-11-16")).toEqual({ now: 110, delta: 5, text: "+5" });
-    expect(liftDelta(s.slice(0, 2), "2026-10-25")).toEqual({ now: 105, delta: 5, text: "+5" });
-    expect(liftDelta([{ date: "2026-11-01", est1RM: 100 }, { date: "2026-11-10", est1RM: 97.5 }], "2026-11-16")?.text).toBe("-2.5");
-    expect(liftDelta([{ date: "2026-11-10", est1RM: 100 }], "2026-11-16")?.text).toBe("level");
-    expect(liftDelta([], "2026-11-16")).toBeNull();
+    expect(document.querySelector("[data-summary-lifts], [data-summary-lift]")).toBeNull();
+    expect(document.querySelector("[data-summary]").textContent).not.toContain("Barbell Back Squat");
+    const row = /** @type {HTMLElement} */ (tab("Lifts").querySelector('[data-lift="Barbell Back Squat"] > button'));
+    expect(row.querySelector("svg")).toBeTruthy();
+    expect(row.textContent).toMatch(/^Barbell Back Squat[\d.]+ kg$/);
   });
 
   it("pending marks as tags: changes waiting, sessions on their phone, and the steel under minimum only when flagged", () => {

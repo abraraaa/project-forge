@@ -18,13 +18,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Fragment, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
-import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
+import { T, DISPLAY } from "@/lib/tokens";
 import { pressLiftHandlers } from "@/lib/press-lift";
 import { useInlineModalA11y } from "@/lib/a11y";
 import Glyph from "@/components/Glyph";
 import { BTN, Tag, TabStrip, TabPanel } from "@/components/ui";
 import { InkSpark, LineChart } from "@/components/LiftCharts";
-import { mainLiftTrend, readinessBreakdown } from "@/lib/analytics";
+import { mainLiftTrend } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
 import { makeDayContext, weeklyStrength } from "@/lib/day-state";
 import { isResting } from "@/lib/breaks";
@@ -179,7 +179,6 @@ const tabTop = { marginTop: 24 };
 export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false, onChange, onFaceId, onChanged, clientRef = null, onExport, onRunSession, unsent: unsentProp = null, signal = null, onClose }) {
   const name = client?.name || null;
   const title = self ? "You" : name || "Your client";
-  const they = self ? "you" : "they";
   const todayIso = view?.window?.to;
   const from = view?.window?.from;
   const sessions = useMemo(() => (Array.isArray(view?.sessions) ? view.sessions : []), [view]);
@@ -196,7 +195,6 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   const lifts = Object.keys(all);
   // Each main lift's ledger: every set over 24 weeks, then top sets to 12 months.
   const ledgers = useMemo(() => Object.fromEntries(Object.keys(all).map((l) => [l, ledgerFor(view, l)])), [view, all]);
-  const felt = useMemo(() => readinessBreakdown(sessions), [sessions]);
   const audit = useMemo(() => auditHistoryVolume(sessions, { weeks: 2 }), [sessions]);
   const under = audit && !audit.away
     ? AUDIT_MUSCLE_ORDER.filter((m) => audit.perMuscle?.[m]?.status === "under_mev")
@@ -319,8 +317,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
         </div>
       )}
 
-      <ClientSummary signal={self ? null : signal} weeks={weeks} felt={felt} they={they} lifts={lifts} line={line} all={all}
-        todayIso={todayIso} under={under} waiting={waitingChanges} onPhone={onPhone}
+      <ClientSummary signal={self ? null : signal} weeks={weeks} under={under} waiting={waitingChanges} onPhone={onPhone}
         name={name} run={runState} unsent={unsent} onRunSession={onRunSession}/>
 
       {/* 2. The tabs: depth, one view at a time */}
@@ -549,24 +546,6 @@ export function glanceParts(signal) {
   return parts;
 }
 
-/**
- * A main lift's e1RM now against the first point in the last 28 days, as
- * the Lab's strength row reads it: "+2.5", "-5" or "level".
- * @param {Array<{ date: string, est1RM: number }>} series
- * @param {string | undefined} todayIso
- */
-export function liftDelta(series, todayIso) {
-  const cur = series[series.length - 1];
-  if (!cur) return null;
-  const cut = todayIso ? addDaysIso(todayIso, -28) : null;
-  const base = (cut && series.find((p) => p.date >= cut)) || series[0];
-  const delta = Math.round((cur.est1RM - base.est1RM) * 10) / 10;
-  return { now: cur.est1RM, delta, text: delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : "level" };
-}
-
-/** The readiness bands on the effort scale: cool, middle and hot. */
-const FELT_MARKS = /** @type {const} */ ([["fresh", "Fresh", 6], ["normal", "Normal", 8], ["cooked", "Cooked", 10]]);
-
 /** @type {import("react").CSSProperties} */
 const summaryRow = { marginTop: 14 };
 /** The commit stays a button's width beside the wide pane. */
@@ -574,11 +553,11 @@ const RUN_MAX = 440;
 
 /**
  * Above the sections: the glance strip (the roster signal), the latest eight
- * weeks, how they felt as heat marks with their counts, a row per main lift,
- * what is waiting, then the pane's one commit. Every part drops out when it
- * has nothing to say; the commit shows only when a session can run.
+ * weeks, what is waiting, then the pane's one commit. Every part drops out
+ * when it has nothing to say; the commit shows only when a session can run.
+ * Each lift's trend lives on Lifts and how each session felt on Sessions.
  */
-function ClientSummary({ signal, weeks, felt, they, lifts, line, all, todayIso, under, waiting, onPhone, name, run, unsent, onRunSession }) {
+function ClientSummary({ signal, weeks, under, waiting, onPhone, name, run, unsent, onRunSession }) {
   const glance = glanceParts(signal);
   const recent = weeks.slice(-8);
   const [choosing, setChoosing] = useState(false);
@@ -603,39 +582,6 @@ function ClientSummary({ signal, weeks, felt, they, lifts, line, all, todayIso, 
           style={{ ...summaryRow, display: "grid", gap: 4, listStyle: "none", padding: 0, marginBottom: 0 }}>
           {recent.map((w) => <RhythmCell key={w.mondayIso} week={w}/>)}
         </ol>
-      )}
-
-      {felt.total > 0 && (
-        <div data-felt="" role="group" aria-label={`How ${they} felt, last 24 weeks`}
-          style={{ ...summaryRow, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 18px" }}>
-          {FELT_MARKS.map(([key, word, rpe]) => (
-            <span key={key} data-felt-band={key} style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: T.ink2 }}>
-              <span aria-hidden="true" style={{ width: 24, height: heatMarkHeight(rpe), background: heatForRpe(rpe), borderRadius: T.rMark, flexShrink: 0 }}/>
-              <span>{word} <span style={{ fontFamily: T.measured, color: T.ink }}>{felt[key]}</span></span>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {lifts.length > 0 && (
-        <div data-summary-lifts="" style={summaryRow}>
-          <div style={{ fontSize: 12, color: T.ink2, paddingBottom: 6 }}>Main lifts · e1RM vs <Nums text="28"/> days</div>
-          {lifts.map((lift) => {
-            const series = (line[lift] && line[lift].length ? line[lift] : all[lift]) || [];
-            const d = liftDelta(series, todayIso);
-            if (!d) return null;
-            return (
-              <div key={lift} data-summary-lift={lift} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>
-                <span style={{ flex: 1, minWidth: 0, fontSize: 15, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lift}</span>
-                <InkSpark values={series.slice(-8).map((p) => p.est1RM)}/>
-                <span style={{ fontFamily: T.measured, fontSize: 15, color: T.ink, flexShrink: 0 }}>{d.now}<span style={{ fontFamily: T.text, fontSize: 11, color: T.ink3 }}> kg</span></span>
-                <span style={{ width: 58, textAlign: "right", fontSize: 11, color: T.ink2, flexShrink: 0 }}>
-                  {d.delta !== 0 ? <><span style={{ fontFamily: T.measured }}>{d.text}</span> kg</> : "level"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
       )}
 
       {tags.length > 0 && (
