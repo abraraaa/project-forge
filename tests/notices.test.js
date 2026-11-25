@@ -305,7 +305,7 @@ describe("GET /api/sync/notices: the kinds", () => {
       db.sessions = [session("sk-cara", daysAgo(1), NOW - 3600_000)];
       expect(await dots("tok-tia", "tia")).toEqual({ dots: { clients: true }, admin: true });
       const c = calls.find((x) => flat(x.q) === SQL.clients);
-      expect(c.v).toEqual([T, T, addDaysIso(TODAY, -DETAIL_DAYS), addDaysIso(TODAY, 1)]);
+      expect(c.v).toEqual([T, T, addDaysIso(TODAY, -DETAIL_DAYS), addDaysIso(TODAY, 2)]);
       expect(writes()).toEqual([]);
     });
 
@@ -316,7 +316,7 @@ describe("GET /api/sync/notices: the kinds", () => {
       db.marks = new Map();
       db.sessions = [session("sk-cara", daysAgo(1), NOW - 31 * DAY)]; // synced before the client shared
       expect(await lit()).toBe(false);
-      db.sessions = [session("sk-cara", daysAgo(DETAIL_DAYS + 1), NOW - 3600_000), session("sk-cara", addDaysIso(TODAY, 2), NOW - 3600_000)];
+      db.sessions = [session("sk-cara", daysAgo(DETAIL_DAYS + 1), NOW - 3600_000), session("sk-cara", addDaysIso(TODAY, 3), NOW - 3600_000)];
       expect(await lit()).toBe(false);
       db.sessions = [session("sk-cara", daysAgo(DETAIL_DAYS), NOW - 3600_000)];
       expect(await lit()).toBe(true);
@@ -341,7 +341,7 @@ describe("GET /api/sync/notices: the kinds", () => {
       for (const today of [addDaysIso(TODAY, -1), TODAY, addDaysIso(TODAY, 1)]) {
         calls.length = 0;
         expect((await atToday(today)).status).toBe(200);
-        expect(windowSent(), today).toEqual([addDaysIso(today, -DETAIL_DAYS), addDaysIso(today, 1)]);
+        expect(windowSent(), today).toEqual([addDaysIso(today, -DETAIL_DAYS), addDaysIso(today, 2)]);
       }
     });
 
@@ -349,7 +349,7 @@ describe("GET /api/sync/notices: the kinds", () => {
       for (const today of ["", "2026-2-1", "2026-02-30", "garbage", addDaysIso(TODAY, 2), addDaysIso(TODAY, -2), addDaysIso(TODAY, 400)]) {
         calls.length = 0;
         await atToday(today);
-        expect(windowSent(), today).toEqual([addDaysIso(TODAY, -DETAIL_DAYS), addDaysIso(TODAY, 1)]);
+        expect(windowSent(), today).toEqual([addDaysIso(TODAY, -DETAIL_DAYS), addDaysIso(TODAY, 2)]);
       }
     });
 
@@ -368,7 +368,9 @@ describe("GET /api/sync/notices: the kinds", () => {
             return (await (await atToday(day)).json()).dots.clients === true;
           };
           expect(await litBy(addDaysIso(day, 1))).toBe(true);
-          expect(await litBy(addDaysIso(day, 2))).toBe(false);
+          // A client across the date line can be two days ahead (UTC+14 against UTC-12).
+          expect(await litBy(addDaysIso(day, 2))).toBe(true);
+          expect(await litBy(addDaysIso(day, 3))).toBe(false);
           expect(await litBy(addDaysIso(day, -DETAIL_DAYS))).toBe(true);
           expect(await litBy(addDaysIso(day, -DETAIL_DAYS - 1))).toBe(false);
         } finally {
