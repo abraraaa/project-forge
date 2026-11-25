@@ -246,6 +246,8 @@ export default function TrainerShareView() {
   const [undoing, setUndoing] = useState(/** @type {string | null} */ (null));
   const [setsShown, setSetsShown] = useState(SETS_SHOWN);
   const [undoLine, setUndoLine] = useState(/** @type {string | null} */ (null));
+  // "What <name> sees": the consent rows, one tap away under the changes.
+  const [seesOpen, setSeesOpen] = useState(false);
   const undoLineRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const markedSeen = useRef(false);
   const hasChanges = !!(state?.ok && Array.isArray(state.body?.changes) && state.body.changes.length > 0);
@@ -485,29 +487,44 @@ export default function TrainerShareView() {
         <Fade d={0}>
           {kicker}
           {h1(who, arrived ? focusOnMount : headRef)}
-          {sharing.live ? (
-            <>
+          {!sharing.live && (
+            <p style={{ ...line, marginBottom: 28 }}>Paused. {who} can&apos;t see your training right now. Stop sharing, or ask {who} for a fresh code.</p>
+          )}
+        </Fade>
+
+        {/* Live: the changes they came to see lead, under the name. */}
+        {sharing.live && changesList(who)}
+
+        <Fade d={sharing.live ? 70 : 0}>
+          {sharing.live && (
+            <div style={{ marginTop: 28, marginBottom: 20 }}>
+              <button type="button" onClick={() => setSeesOpen((o) => !o)} aria-expanded={seesOpen} aria-controls="hw-share-sees"
+                className="forge-press forge-tint" data-sees-row=""
+                style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 52, padding: "12px 2px", background: "none", border: "none", borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}`, cursor: "pointer", textAlign: "left", fontFamily: T.text, fontSize: 14, color: T.ink }}>
+                <span style={{ flex: 1, minWidth: 0 }}>What {who} sees</span>
+                <Glyph name={seesOpen ? "chevronUp" : "chevronDown"} size={12} color={T.ink3}/>
+              </button>
               {/* What this share is now, in the approval's own rows: the
                   sessions, trend and client list always; with changes on,
                   also the plan, the top sets and what they can change; with
-                  them off, that they can't. */}
-              <ul aria-label={`What ${who} sees`} style={{ listStyle: "none", margin: "0 0 12px", padding: 0, borderTop: `1px solid ${T.rule}` }}>
-                {(edits?.on
-                  ? [0, 1, 2, 7, 8, 9].map((i) => SHARE_COPY.rows[i])
-                  : [SHARE_COPY.rows[0], SHARE_COPY.rows[1], SHARE_COPY.rows[2], ...(edits ? ["Can't change your plan."] : [])]
-                ).map((row) => (
-                  <li key={row} style={{ padding: "12px 2px", borderBottom: `1px solid ${T.rule}`, fontSize: 14, color: T.ink, lineHeight: 1.5 }}>{row}</li>
-                ))}
-              </ul>
-              <p style={{ ...line, marginBottom: 28 }}>Sharing since {longDate.format(new Date(sharing.since))}.</p>
-            </>
-          ) : (
-            <p style={{ ...line, marginBottom: 28 }}>Paused. {who} can&apos;t see your training right now. Stop sharing, or ask {who} for a fresh code.</p>
+                  them off, that they can't. Behind the row, never removed. */}
+              <div id="hw-share-sees" hidden={!seesOpen}>
+                <ul aria-label={`What ${who} sees`} style={{ listStyle: "none", margin: "0 0 12px", padding: 0 }}>
+                  {(edits?.on
+                    ? [0, 1, 2, 7, 8, 9].map((i) => SHARE_COPY.rows[i])
+                    : [SHARE_COPY.rows[0], SHARE_COPY.rows[1], SHARE_COPY.rows[2], ...(edits ? ["Can't change your plan."] : [])]
+                  ).map((row) => (
+                    <li key={row} style={{ padding: "12px 2px", borderBottom: `1px solid ${T.rule}`, fontSize: 14, color: T.ink, lineHeight: 1.5 }}>{row}</li>
+                  ))}
+                </ul>
+                <p style={{ ...line, margin: 0 }}>Sharing since {longDate.format(new Date(sharing.since))}.</p>
+              </div>
+            </div>
           )}
           {/* One tap, no confirm: stopping only takes access away. */}
           {/* aria-disabled, not disabled: the button keeps focus while it works. */}
           <button type="button" onClick={onStop} aria-disabled={stopping} className="forge-press forge-tint"
-            style={{ width: "100%", height: 52, background: "none", border: `1px solid ${T.rule}`, borderRadius: T.r, cursor: "pointer", fontFamily: T.text, fontSize: 15, fontWeight: 500, color: T.ink, opacity: stopping ? 0.6 : 1 }}>
+            style={{ ...BTN.quiet, width: "100%", opacity: stopping ? 0.6 : 1 }}>
             {stopping ? "One moment" : "Stop sharing"}
           </button>
           <div role="status" aria-live="polite" style={{ fontSize: 12, color: T.ink2, marginTop: 10, minHeight: 16 }}>{stopError || ""}</div>
@@ -535,7 +552,7 @@ export default function TrainerShareView() {
           )}
         </Fade>
 
-        {changesList(who)}
+        {!sharing.live && changesList(who)}
 
         <Fade d={80}>
           <div style={{ marginTop: 28, marginBottom: 6, fontSize: 13, color: T.ink2 }}>When {who} looked</div>

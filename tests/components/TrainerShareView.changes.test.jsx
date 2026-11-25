@@ -68,6 +68,31 @@ async function renderView() {
 const posts = () => server.posts.filter((p) => !p.seenChanges);
 const rowOf = (text) => screen.getByText(text).closest("li");
 
+describe("the page's order", () => {
+  it("the changes lead under the name; the consent rows sit behind What Jo sees; Stop sharing stays on the page", async () => {
+    server.status = status({ changes: [change()] });
+    await renderView();
+    const h1 = screen.getByRole("heading", { level: 1 });
+    const changes = screen.getByRole("heading", { name: "Changes from Jo" });
+    const row = screen.getByRole("button", { name: "What Jo sees" });
+    const stop = screen.getByRole("button", { name: "Stop sharing" });
+    const after = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(after(h1, changes) && after(changes, row) && after(row, stop)).toBe(true);
+    // Behind the row, never removed: hidden until tapped, then all of it.
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("list", { name: "What Jo sees" })).toBeNull();
+    const region = /** @type {HTMLElement} */ (document.getElementById(/** @type {string} */ (row.getAttribute("aria-controls"))));
+    expect(region.hidden).toBe(true);
+    expect(region.textContent).toContain("They can change your working weights");
+    fireEvent.click(row);
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("list", { name: "What Jo sees" }).querySelectorAll("li")).toHaveLength(6);
+    expect(screen.getByText("Sharing since 3 September.")).toBeTruthy();
+    // Stop sharing is a house quiet button, one tap away throughout.
+    expect([stop.className, stop.style.height, stop.style.fontSize, stop.style.color]).toEqual(["forge-press forge-tint", "46px", "14px", "var(--ink)"]);
+  });
+});
+
 describe("the list", () => {
   it("groups by set, says what changed and where it stands, with warnings in words", async () => {
     server.status = status({ changes: [
@@ -127,7 +152,11 @@ describe("the list", () => {
   it("with changes on, the live line says what they see and can change; off, that they can't", async () => {
     server.status = status();
     await renderView();
-    const sees = () => [...screen.getByRole("list", { name: "What Jo sees" }).querySelectorAll("li")].map((li) => li.textContent);
+    const sees = () => {
+      const row = screen.getByRole("button", { name: "What Jo sees" });
+      if (row.getAttribute("aria-expanded") !== "true") fireEvent.click(row);
+      return [...screen.getByRole("list", { name: "What Jo sees" }).querySelectorAll("li")].map((li) => li.textContent);
+    };
     expect(sees()).toEqual([
       "Your sessions, sets, RPE and how you felt, from the last 24 weeks.",
       "Your main-lift trend and bests over the last 12 months.",

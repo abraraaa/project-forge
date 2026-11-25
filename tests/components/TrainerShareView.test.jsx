@@ -78,6 +78,7 @@ describe("TrainerShareView: sharing", () => {
     expect(fetchWithTimeout).toHaveBeenCalledWith("/api/sync/trainer?profile=sam&today=2026-10-01");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Jo");
     // A reply with no changes switch makes no claim about changes either way.
+    fireEvent.click(screen.getByRole("button", { name: "What Jo sees" }));
     expect([...screen.getByRole("list", { name: "What Jo sees" }).querySelectorAll("li")].map((li) => li.textContent)).toEqual([
       "Your sessions, sets, RPE and how you felt, from the last 24 weeks.",
       "Your main-lift trend and bests over the last 12 months.",
