@@ -280,9 +280,14 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   // keys the pane by client, so another client starts at the default.
   const idBase = useId();
   const hasSent = !!plan || ranRows.length > 0 || !!unsent;
+  // What has not landed yet, counted on the Sent tab: changes waiting and sessions on their phone.
+  const inFlight = waitingChanges + onPhone;
+  const sentLabel = inFlight > 0 ? (
+    <>Sent<span aria-hidden="true" data-sent-count="" style={{ fontFamily: T.measured, marginLeft: 6 }}>{inFlight}</span><span style={SR_ONLY}>, {inFlight} waiting</span></>
+  ) : "Sent";
   const tabs = [
     plan && { key: "plan", label: "Plan" },
-    hasSent && { key: "sent", label: "Sent" },
+    hasSent && { key: "sent", label: sentLabel },
     { key: "lifts", label: "Lifts" },
     { key: "sessions", label: "Sessions" },
   ].filter(Boolean);
@@ -322,7 +327,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
         </div>
       )}
 
-      <ClientSummary weeks={weeks} under={under} waiting={waitingChanges} onPhone={onPhone}
+      <ClientSummary weeks={weeks}
         name={name} run={runState} unsent={unsent} onRunSession={onRunSession}/>
 
       {/* 2. The tabs: depth, one view at a time */}
@@ -569,20 +574,15 @@ const summaryRow = { marginTop: 14 };
 const RUN_MAX = 440;
 
 /**
- * Under the name: the latest eight weeks, then the pane's one commit, then
- * what is waiting. Every part drops out when it has nothing to say; the
- * commit shows only when a session can run. The roster signal is the kicker;
- * each lift's trend lives on Lifts and how each session felt on Sessions.
+ * Under the name: the latest eight weeks, then the pane's one commit, which
+ * shows only when a session can run. The roster signal is the kicker; what
+ * is waiting is the Sent tab's count; each lift's trend lives on Lifts, and
+ * how each session felt and under minimum on Sessions.
  */
-function ClientSummary({ weeks, under, waiting, onPhone, name, run, unsent, onRunSession }) {
+function ClientSummary({ weeks, name, run, unsent, onRunSession }) {
   const recent = weeks.slice(-8);
   const [choosing, setChoosing] = useState(false);
   const canContinue = !!onRunSession && !!unsent;
-  const tags = [
-    waiting > 0 && { key: "changes", color: T.ink3, text: `${waiting} change${waiting === 1 ? "" : "s"} waiting` },
-    onPhone > 0 && { key: "phone", color: T.ink3, text: `${onPhone} session${onPhone === 1 ? "" : "s"} on their phone` },
-    under.length > 0 && { key: "under", color: T.under, text: "Under minimum" },
-  ].filter(Boolean);
   const runLabel = (letter) => `Run ${sessionName(letter)}${name ? ` with ${name}` : ""}`;
 
   return (
@@ -623,14 +623,6 @@ function ClientSummary({ weeks, under, waiting, onPhone, name, run, unsent, onRu
               {run.freeAt ? <> · <Nums text={`more from ${msDayLabel(run.freeAt)}`}/></> : null}
             </div>
           )}
-        </div>
-      )}
-
-      {tags.length > 0 && (
-        <div data-pending="" style={{ ...summaryRow, display: "flex", flexWrap: "wrap", gap: "6px 16px" }}>
-          {tags.map((t) => (
-            <Tag key={t.key} color={t.color}><span data-tag={t.key}><Nums text={t.text}/></span></Tag>
-          ))}
         </div>
       )}
 

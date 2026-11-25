@@ -116,8 +116,9 @@ function history() {
 const view = (hist = history(), meta = {}) => projectForTrainer({ meta, history: hist }, { todayIso: today });
 const client = { name: "Sam", since: Date.UTC(2026, 9, 3, 12) };
 
-/** Opens one of the pane's tabs by name and hands back its panel, the only one shown. */
+/** Opens one of the pane's tabs by name and hands back its panel, the only one shown. Sent may carry a count. */
 function tab(name) {
+  if (name === "Sent") name = /^Sent(, \d+ waiting)?$/;
   fireEvent.click(screen.getByRole("tab", { name }));
   const panel = screen.getByRole("tabpanel", { name });
   expect(panel.hidden).toBe(false);
@@ -1992,24 +1993,27 @@ describe("TrainerClientView: the summary", () => {
     expect(row.textContent).toMatch(/^Barbell Back Squat[\d.]+ kg$/);
   });
 
-  it("pending marks as tags: changes waiting, sessions on their phone, and the steel under minimum only when flagged", () => {
-    const tags = () => [...document.querySelectorAll("[data-pending] [data-tag]")].map((t) => [t.getAttribute("data-tag"), t.textContent]);
-    // Flagged under minimum, nothing sent: the one steel tag.
+  it("no tags in the summary: what is waiting is a count on the Sent tab, and under minimum stays in Sessions", () => {
+    // Flagged under minimum, nothing sent: no tag, no Sent tab; the steel flag is in Sessions.
     render(<TrainerClientView client={client} view={view()}/>);
-    expect(tags()).toEqual([["under", "Under minimum"]]);
-    const bar = /** @type {HTMLElement} */ (document.querySelector("[data-pending] [data-tag]")?.parentElement?.firstElementChild);
-    expect(bar.style.background).toBe("var(--under)");
+    expect(document.querySelector("[data-pending], [data-tag]")).toBeNull();
+    expect(document.querySelector("[data-summary]").textContent).not.toContain("Under minimum");
+    expect(/** @type {HTMLElement} */ (tab("Sessions").querySelector('[data-section="under"] span')).style.color).toBe("var(--under)");
     cleanup();
     const at = Date.now();
     const hourAgo = new Date(at - 3600e3).toISOString();
     const v = planView(planData(), { rows: [ranRow("seen.00", "B", today, at, { deliveredAt: hourAgo })] });
     v.plan.changes = [...v.plan.changes, { id: "s1.0", set: "s1", kind: "weight", target: "Barbell Back Squat", before: 100, after: 102.5, from: null, status: "waiting", reason: null, date: null, at, warnings: [] }];
     render(<TrainerClientView client={client} view={v}/>);
-    expect(tags().filter(([k]) => k !== "under")).toEqual([["changes", "1 change waiting"], ["phone", "1 session on their phone"]]);
+    expect(document.querySelector("[data-pending], [data-tag]")).toBeNull();
+    // One change waiting and one session on their phone: Sent 2, the figure in the measured face.
+    const sent = screen.getByRole("tab", { name: "Sent, 2 waiting" });
+    const count = /** @type {HTMLElement} */ (sent.querySelector("[data-sent-count]"));
+    expect([count.textContent, count.style.fontFamily, count.getAttribute("aria-hidden")]).toEqual(["2", T.measured, "true"]);
     cleanup();
-    // Nothing waiting and nothing flagged: no tags at all.
-    render(<TrainerClientView client={client} view={view(history().filter((r) => r.date < ago(14)))}/>);
-    expect(document.querySelector("[data-pending]")).toBeNull();
+    // Nothing waiting: the tab is the word alone.
+    render(<TrainerClientView client={client} view={planView()}/>);
+    expect(screen.getByRole("tab", { name: "Sent" }).textContent).toBe("Sent");
   });
 });
 

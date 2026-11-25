@@ -161,7 +161,7 @@ export function Tag({ children, color, style = {} }) {
 export const tabIds = (base, key) => ({ tab: `${base}-tab-${key}`, panel: `${base}-panel-${key}` });
 
 /**
- * @param {{ label: string, idBase: string, tabs: Array<{ key: string, label: string }>, selected: string, onSelect: (key: string) => void, style?: import("react").CSSProperties }} props
+ * @param {{ label: string, idBase: string, tabs: Array<{ key: string, label: import("react").ReactNode }>, selected: string, onSelect: (key: string) => void, style?: import("react").CSSProperties }} props
  */
 export function TabStrip({ label, idBase, tabs, selected, onSelect, style = {} }) {
   /** @param {import("react").KeyboardEvent<HTMLDivElement>} e */
