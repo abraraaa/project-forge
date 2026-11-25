@@ -6,10 +6,21 @@
 import { describe, it, expect } from "vitest";
 import {
   durationMs, durationSeconds, isoInstant, msAfter, msBefore, readInstantMs, wholeDaysBetweenMs, slides,
-  dayIn, utcDay, londonDay, utcWeekday, addDays, daysBetween, trainerDay, utcDayLabel, LONDON,
+  dayIn, utcDay, utcWeekday, addDays, daysBetween, trainerDay,
 } from "@/lib/server-time";
 import { addDaysIso, daysBetween as localDaysBetween } from "@/lib/dates";
-import { trainerToday, rosterDay } from "@/lib/trainer-view";
+
+const LONDON = "Europe/London";
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const UTC_FORMAT = new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" });
+
+/** The trainer's today as the server read it before Temporal: the oracle for trainerDay. */
+function trainerToday(raw, now = Date.now()) {
+  const utc = UTC_FORMAT.format(new Date(now));
+  if (typeof raw !== "string" || !ISO.test(raw) || addDaysIso(raw, 0) !== raw) return utc;
+  const d = localDaysBetween(utc, raw);
+  return d !== null && Math.abs(d) <= 1 ? raw : utc;
+}
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
@@ -174,21 +185,23 @@ describe("slides", () => {
 describe("days", () => {
   const utcFormat = new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" });
 
-  it("utcDay is the en-CA UTC format and trainerToday's fallback", () => {
+  it("utcDay is the en-CA UTC format and trainerDay's fallback", () => {
     expect(diff(INSTANTS.map((ms) => [ms]), (ms) => utcFormat.format(new Date(ms)), utcDay)).toEqual([]);
-    expect(diff(INSTANTS.map((ms) => [ms]), (ms) => trainerToday(null, ms), utcDay)).toEqual([]);
+    expect(diff(INSTANTS.map((ms) => [ms]), (ms) => trainerDay(null, ms), utcDay)).toEqual([]);
   });
 
-  it("londonDay is rosterDay", () => {
-    expect(diff(INSTANTS.map((ms) => [ms]), rosterDay, londonDay)).toEqual([]);
-    expect(diff(INSTANTS.map((ms) => [ms, LONDON]), (ms) => rosterDay(ms), dayIn)).toEqual([]);
-  });
+  for (const zone of ZONES) {
+    it(`dayIn is the en-CA format in ${zone}`, () => {
+      const f = new Intl.DateTimeFormat("en-CA", { timeZone: zone });
+      expect(diff(INSTANTS.map((ms) => [ms, zone]), (ms) => f.format(new Date(ms)), dayIn)).toEqual([]);
+    });
+  }
 
-  it("London's day turns at local midnight on both sides of a clock change", () => {
-    expect(londonDay(Date.parse("2026-03-28T23:59:59.999Z"))).toBe("2026-03-28");
-    expect(londonDay(Date.parse("2026-03-29T00:00:00.000Z"))).toBe("2026-03-29");
-    expect(londonDay(Date.parse("2026-10-24T22:59:59.999Z"))).toBe("2026-10-24");
-    expect(londonDay(Date.parse("2026-10-24T23:00:00.000Z"))).toBe("2026-10-25");
+  it("a zone's day turns at its local midnight on both sides of a clock change", () => {
+    expect(dayIn(Date.parse("2026-03-28T23:59:59.999Z"), LONDON)).toBe("2026-03-28");
+    expect(dayIn(Date.parse("2026-03-29T00:00:00.000Z"), LONDON)).toBe("2026-03-29");
+    expect(dayIn(Date.parse("2026-10-24T22:59:59.999Z"), LONDON)).toBe("2026-10-24");
+    expect(dayIn(Date.parse("2026-10-24T23:00:00.000Z"), LONDON)).toBe("2026-10-25");
   });
 
   it("utcWeekday is getUTCDay, ISO numbered", () => {
@@ -224,15 +237,19 @@ describe("days", () => {
     for (const now of INSTANTS) {
       const utc = utcFormat.format(new Date(now));
       const raws = [null, undefined, 42, "", "today", "2026-2-1", "2026-02-30", "2027-02-29", "2028-02-29", "0026-01-01",
-        rosterDay(now), ...[-3, -2, -1, 0, 1, 2, 3].map((n) => addDaysIso(utc, n))];
+        dayIn(now, LONDON), dayIn(now, "Asia/Tokyo"), dayIn(now, "America/Los_Angeles"), ...[-3, -2, -1, 0, 1, 2, 3].map((n) => addDaysIso(utc, n))];
       for (const raw of raws) cases.push([raw, now]);
     }
     for (const zone of ZONES) expect(inZone(zone, () => diff(cases, trainerToday, trainerDay))).toEqual([]);
   });
 
-  it("utcDayLabel is the route's en-GB UTC label", () => {
-    const label = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-    expect(diff(INSTANTS.map((ms) => [ms]), (ms) => label.format(new Date(ms)), utcDayLabel)).toEqual([]);
-    expect(utcDayLabel(Date.parse("2028-02-29T23:30:00.000Z"))).toBe("Tue 29 Feb");
+  it("trainerDay takes the device's date within a day of the server's UTC date, else the UTC date", () => {
+    const now = Date.parse("2026-10-03T23:30:00Z");
+    expect(trainerDay("2026-10-04", now)).toBe("2026-10-04");
+    expect(trainerDay("2026-10-02", now)).toBe("2026-10-02");
+    expect(trainerDay("2026-10-05", now)).toBe("2026-10-03");
+    expect(trainerDay("2026-02-31", now)).toBe("2026-10-03");
+    expect(trainerDay("2026-10-03T00:00", now)).toBe("2026-10-03");
+    expect(trainerDay(undefined, now)).toBe("2026-10-03");
   });
 });

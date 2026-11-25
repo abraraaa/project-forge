@@ -6,7 +6,8 @@ import { runTool } from "../lib/mcp-server.js";
 import { projectPlan } from "../lib/trainer-plan.js";
 
 const SQUAT = "Barbell Back Squat";
-const now = new Date(2026, 10, 4, 9, 0);
+// The day the AI reads on, inside the deload (2 to 6 November).
+const ON = "2026-11-04";
 const state = (currentWeight, reps = 5, over = {}) => ({
   currentWeight, history: [], currentRepRange: { reps, sets: 3, baseReps: reps }, ...over,
 });
@@ -18,23 +19,23 @@ const squatLine = (text) => text.split("\n").find((l) => l.startsWith(`- ${SQUAT
 
 describe("the MCP readers", () => {
   it("current_loads shows the deload weight, and a bodyweight lift's reps as they are", () => {
-    const text = runTool("current_loads", {}, { meta: meta({ [SQUAT]: state(100), "Nordic Curl": state(null, 8) }, deload), history: [] }, now).text;
+    const text = runTool("current_loads", { asOf: ON }, { meta: meta({ [SQUAT]: state(100), "Nordic Curl": state(null, 8) }, deload), history: [] }).text;
     expect(text.split("\n")).toContain(`- ${SQUAT}: 65 kg`);
     expect(text).not.toContain("Nordic Curl: bodyweight × 4");
   });
 
   it("current_loads shows the re-entry on a lift's first visit after the close", () => {
     const lifts = { [SQUAT]: state(65, 5, { inRecoveryUntil: 3, preDeloadWeight: 100 }) };
-    const text = runTool("current_loads", {}, { meta: meta(lifts, null, { [SQUAT]: 65 }), history: [] }, now).text;
+    const text = runTool("current_loads", { asOf: ON }, { meta: meta(lifts, null, { [SQUAT]: 65 }), history: [] }).text;
     expect(text.split("\n")).toContain(`- ${SQUAT}: 90 kg`);
     expect(text.toLowerCase()).not.toContain("deload");
   });
 
   it("programme shows the deload weight and says it is a deload week, and neither without one", () => {
-    const on = runTool("programme", {}, { meta: meta({ [SQUAT]: state(100) }, deload), history: [] }, now).text;
+    const on = runTool("programme", { asOf: ON }, { meta: meta({ [SQUAT]: state(100) }, deload), history: [] }).text;
     expect(squatLine(on)).toContain("@ 65 kg");
     expect(on).toContain("Deload week: the weights and reps below are the deload's.");
-    const off = runTool("programme", {}, { meta: meta({ [SQUAT]: state(100) }, null), history: [] }, now).text;
+    const off = runTool("programme", { asOf: ON }, { meta: meta({ [SQUAT]: state(100) }, null), history: [] }).text;
     expect(squatLine(off)).toContain("@ 100 kg");
     expect(off.toLowerCase()).not.toContain("deload");
   });
@@ -51,14 +52,14 @@ describe("one set fewer for a hard bodyweight block", () => {
   const line = (text) => text.split("\n").find((l) => l.includes(`${HIP} `));
 
   it("programme prints the block at one set fewer during a deload, and as composed without one", () => {
-    expect(line(runTool("programme", {}, { meta: m(deload), history }, now).text)).toMatch(new RegExp(`${HIP} 2 × .* \\+ ${TRX} 2 ×`));
-    expect(line(runTool("programme", {}, { meta: m(null), history }, now).text)).toMatch(new RegExp(`${HIP} 3 × .* \\+ ${TRX} 3 ×`));
+    expect(line(runTool("programme", { asOf: ON }, { meta: m(deload), history }).text)).toMatch(new RegExp(`${HIP} 2 × .* \\+ ${TRX} 2 ×`));
+    expect(line(runTool("programme", { asOf: ON }, { meta: m(null), history }).text)).toMatch(new RegExp(`${HIP} 3 × .* \\+ ${TRX} 3 ×`));
   });
 
   it("programme prints a loaded main lift at the deload's two sets, and three without one", () => {
     const squatLine = (text) => text.split("\n").find((l) => l.includes(`${SQUAT} `));
-    expect(squatLine(runTool("programme", {}, { meta: m(deload), history }, now).text)).toContain(`${SQUAT} 2 × 5 @ 65 kg`);
-    expect(squatLine(runTool("programme", {}, { meta: m(null), history }, now).text)).toContain(`${SQUAT} 3 × 5 @ 100 kg`);
+    expect(squatLine(runTool("programme", { asOf: ON }, { meta: m(deload), history }).text)).toContain(`${SQUAT} 2 × 5 @ 65 kg`);
+    expect(squatLine(runTool("programme", { asOf: ON }, { meta: m(null), history }).text)).toContain(`${SQUAT} 3 × 5 @ 100 kg`);
   });
 });
 

@@ -25,7 +25,7 @@ import { withNavTransition } from "@/lib/nav-transitions";
 import { ago } from "@/lib/coach-connect";
 import { fetchWithTimeout } from "@/lib/net";
 import { authenticatePasskey } from "@/lib/webauthn";
-import { todayLocalIso } from "@/lib/dates";
+import { todayLocalIso, localDateStr, addDaysIso } from "@/lib/dates";
 import { timedTargetFor } from "@/lib/programme";
 import { SHARE_COPY, shareCovers } from "@/lib/trainer-terms";
 import { keepsAtWords } from "@/components/TrainerSessionSheet";
@@ -44,18 +44,18 @@ const focusOnMount = (el) => { el?.focus(); };
 const JSON_POST = { method: "POST", headers: { "Content-Type": "application/json" } };
 
 const longDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long" });
-// Roster looks carry a London calendar day ("2026-09-29"), read as that day.
+// A calendar day ("2026-09-29") in words, read as that day.
 const dayLabel = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-const londonDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" });
 const sentDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
 
-/** "today", "yesterday" or "Mon 29 Sep", for a roster check-in's London day. */
-function rosterDayLabel(day, now) {
-  const today = londonDay.format(new Date(now));
+/** "today", "yesterday" or "Mon 29 Sep": a roster check-in's instant, on this device's calendar. */
+function rosterDayLabel(at, now) {
+  if (!Number.isFinite(at)) return "";
+  const day = localDateStr(new Date(at));
+  const today = localDateStr(new Date(now));
   if (day === today) return "today";
-  if (day === londonDay.format(new Date(Date.parse(`${today}T12:00:00Z`) - 86_400_000))) return "yesterday";
-  const t = Date.parse(`${day}T12:00:00Z`);
-  return Number.isFinite(t) ? dayLabel.format(new Date(t)) : "";
+  if (day === addDaysIso(today, -1)) return "yesterday";
+  return dayLabel.format(new Date(Date.parse(`${day}T12:00:00Z`)));
 }
 
 /**
@@ -391,7 +391,8 @@ export default function TrainerShareView() {
     let res = null;
     let out = null;
     try {
-      res = await fetchWithTimeout("/api/sync/trainer", { ...JSON_POST, body: JSON.stringify({ profile: current, undo: x }) });
+      // today: this device's date, which the server reads the change's status against.
+      res = await fetchWithTimeout(`/api/sync/trainer?today=${todayLocalIso()}`, { ...JSON_POST, body: JSON.stringify({ profile: current, undo: x }) });
       out = await res.json().catch(() => ({}));
     } catch { /* said below */ }
     if (res?.ok) {
@@ -547,7 +548,7 @@ export default function TrainerShareView() {
                     {l.kind === "roster" ? `${who} checked in on the roster` : `${who} looked at your training`}
                   </span>
                   <span style={{ flexShrink: 0, fontSize: 12, color: T.ink3 }}>
-                    {l.kind === "roster" ? rosterDayLabel(l.day || londonDay.format(new Date(l.at)), now) : ago(l.at, now)}
+                    {l.kind === "roster" ? rosterDayLabel(l.at, now) : ago(l.at, now)}
                   </span>
                 </li>
               ))}

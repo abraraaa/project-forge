@@ -29,6 +29,16 @@ describe("buildCoachContext", () => {
     expect(text).toMatch(/Consistency beats novelty/);
     expect(text).toMatch(/MEV/);
   });
+  it("a snapshot that leaves a later session out does not carry the current stall signal", () => {
+    const capped = buildCoachContext({
+      history: [rec("2026-09-14", 100), rec("2026-09-17", 102.5), rec("2026-09-21", 105)],
+      trainingState: { lifts: { "Barbell Back Squat": { stallSignal: "stall" } } },
+      focus: "Strong", mainLifts: {}, week, now,
+      on: { day: "2026-09-20", asOf: "2026-09-20", last: "2026-09-21" },
+    });
+    expect(capped).toMatch(/Barbell Back Squat: .* kg est\. 1RM over 2 sessions/);
+    expect(capped).not.toMatch(/· stall/);
+  });
   it("describes setup, lifts, volume and recent sessions", () => {
     expect(text).toContain("Focus: Strong");
     expect(text).toContain("Strength days: Mon, Wed, Fri");

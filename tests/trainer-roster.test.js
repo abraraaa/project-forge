@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { createHash } from "node:crypto";
 import {
-  rosterSignal, rosterDay, nextLooks, SIGNAL_KEYS, ROSTER_RECENT_DAYS, TREND_DAYS,
+  rosterSignal, nextLooks, SIGNAL_KEYS, ROSTER_RECENT_DAYS, TREND_DAYS,
 } from "@/lib/trainer-view";
 import { makeDayContext, weeklyStrength, strengthRhythm } from "@/lib/day-state";
 import { ensureScheduleHistory, scheduleEntryOn, normaliseWeek } from "@/lib/sync-merge";
@@ -434,14 +434,6 @@ describe("rosterSignal on the roster read's slice equals the full-history number
   });
 });
 
-describe("rosterDay", () => {
-  it("is the London calendar date: 23:30 UTC on a summer date is already tomorrow; in winter it is today", () => {
-    expect(rosterDay(Date.parse("2026-07-15T23:30:00.000Z"))).toBe("2026-07-16");
-    expect(rosterDay(Date.parse("2026-07-15T22:59:59.000Z"))).toBe("2026-07-15");
-    expect(rosterDay(Date.parse("2026-01-15T23:30:00.000Z"))).toBe("2026-01-15");
-  });
-});
-
 // ── The route and the store ─────────────────────────────────────────────────
 
 describe("POST /api/trainer/clients: the roster", () => {
@@ -482,7 +474,7 @@ describe("POST /api/trainer/clients: the roster", () => {
     expect(writes().map((c) => c.q.trim().split(/\s+/).slice(0, 3).join(" "))).toEqual(["UPDATE oauth_grants SET", "INSERT INTO notice_marks"]);
   });
 
-  it("logs once per London day: a second load writes nothing new; the next day adds one entry", async () => {
+  it("logs once per trainer's day: a second load writes nothing new; the next day adds one entry", async () => {
     const t = session(T, "cT");
     await list(t, { today: TODAY });
     vi.setSystemTime(NOW + 3 * 3600_000);
@@ -507,21 +499,42 @@ describe("POST /api/trainer/clients: the roster", () => {
     expect(nextLooks(full, { k: "r", d: TODAY }, NOW)).toEqual({ looks: G("hwg_abe").looks, added: 1 });
   });
 
-  it("the roster day is London's: at 23:30 UTC on a summer date the look is dated tomorrow, the windows stay on the trainer's today", async () => {
-    const late = Date.parse("2026-07-15T23:30:00.000Z");
-    vi.setSystemTime(late);
-    await list(session(T, "cT"), { today: "2026-07-15" });
-    const log = calls.find((c) => /^\s*UPDATE oauth_grants/.test(c.q));
-    expect([log.v[0], log.v[1], log.v[4]]).toEqual(["2026-07-16", late, "2026-07-16"]);
-    expect(G("hwg_abe").looks).toEqual([{ k: "r", d: "2026-07-16", at: late }]);
-    const read = calls.find((c) => /^\s*SELECT g\.id AS ref,/.test(c.q));
-    expect(read.v).toEqual(["2026-06-10", "2026-07-15", "2025-07-15", "2026-07-15", ["hwg_abe", "hwg_cara"], T]);
+  // Tokyo is UTC+9 and San Francisco UTC-8 in December; each device sends its own date.
+  const TOKYO_8AM = Date.parse("2026-12-01T23:00:00.000Z"); // 08:00 on 2 December in Tokyo
+  const SF_5PM = Date.parse("2026-12-02T01:00:00.000Z"); // 17:00 on 1 December in San Francisco
+
+  for (const [where, at, day] of [["Tokyo at 08:00", TOKYO_8AM, "2026-12-02"], ["San Francisco at 17:00", SF_5PM, "2026-12-01"]]) {
+    it(`a trainer in ${where}: the look is dated and the windows read on their own date`, async () => {
+      vi.setSystemTime(at);
+      await list(session(T, "cT"), { today: day });
+      const log = calls.find((c) => /^\s*UPDATE oauth_grants/.test(c.q));
+      expect([log.v[0], log.v[1], log.v[4]]).toEqual([day, at, day]);
+      expect(G("hwg_abe").looks).toEqual([{ k: "r", d: day, at }]);
+      const read = calls.find((c) => /^\s*SELECT g\.id AS ref,/.test(c.q));
+      expect(read.v).toEqual([addDaysIso(day, -35), day, addDaysIso(day, -365), day, ["hwg_abe", "hwg_cara"], T]);
+    });
+  }
+
+  it("a malformed, impossible or far-off today falls back to the server's UTC date, for the look and the windows", async () => {
+    vi.setSystemTime(TOKYO_8AM);
+    for (const today of ["2027-01-01", "2026-11-29", "2026-12-03", "2026-12-1", "2026-02-30", "12/02/2026", 20261202, null]) {
+      calls.length = 0;
+      for (const g of db.grants) g.looks = [];
+      await list(session(T, "cT"), { today });
+      const log = calls.find((c) => /^\s*UPDATE oauth_grants/.test(c.q));
+      expect([log.v[0], log.v[4]], String(today)).toEqual(["2026-12-01", "2026-12-01"]);
+      const read = calls.find((c) => /^\s*SELECT g\.id AS ref,/.test(c.q));
+      expect(read.v.slice(0, 4), String(today)).toEqual(["2026-10-27", "2026-12-01", "2025-12-01", "2026-12-01"]);
+    }
   });
 
-  it("an implausible today falls back to the server's UTC date for the windows", async () => {
-    await list(session(T, "cT"), { today: "2027-01-01" });
-    const read = calls.find((c) => /^\s*SELECT g\.id AS ref,/.test(c.q));
-    expect(read.v.slice(0, 4)).toEqual([addDaysIso(TODAY, -35), TODAY, addDaysIso(TODAY, -365), TODAY]);
+  it("a stored roster entry's day is compared as stored: one already dated the trainer's today adds nothing", async () => {
+    vi.setSystemTime(TOKYO_8AM);
+    const older = { k: "r", d: "2026-12-02", at: TOKYO_8AM - 3600_000 };
+    Object.assign(G("hwg_abe"), { looks: [older], look_count: 1 });
+    await list(session(T, "cT"), { today: "2026-12-02" });
+    expect(G("hwg_abe").looks).toEqual([older]);
+    expect(G("hwg_abe").look_count).toBe(1);
   });
 
   it("a log that throws: names and dates only, every signal null, nothing read, nothing written", async () => {
@@ -562,7 +575,7 @@ describe("POST /api/trainer/clients: the roster", () => {
     expect(await res.json()).toEqual({ me: { name: null }, clients: [] });
     expect(txns).toEqual([]);
     expect(rosterWrites()).toEqual([]);
-    expect(await dbRosterSignals(T, [], { day: TODAY, today: TODAY, now: NOW })).toEqual(new Map());
+    expect(await dbRosterSignals(T, [], { today: TODAY, now: NOW })).toEqual(new Map());
     expect(txns).toEqual([]);
   });
 
@@ -602,8 +615,8 @@ describe("POST /api/trainer/clients: the roster", () => {
 describe("SQL pins", () => {
   const norm = (s) => s.replace(/\s+/g, " ").trim();
 
-  it("the roster ring statement: once per London day by the @> guard, ring of 20, this trainer's live listed grants only", async () => {
-    await dbRosterSignals(T, ["hwg_abe"], { day: TODAY, today: TODAY, now: NOW });
+  it("the roster ring statement: once per day by the @> guard, ring of 20, this trainer's live listed grants only", async () => {
+    await dbRosterSignals(T, ["hwg_abe"], { today: TODAY, now: NOW });
     const c = calls.find((x) => /^\s*UPDATE oauth_grants/.test(x.q));
     expect(norm(c.q)).toBe(norm(`UPDATE oauth_grants SET
       looks = jsonb_path_query_array(
@@ -617,7 +630,7 @@ describe("SQL pins", () => {
   });
 
   it("the read: one aggregate SELECT; sessions give only id, date, session and letter, over 35 days and 12 months", async () => {
-    await dbRosterSignals(T, ["hwg_abe"], { day: TODAY, today: TODAY, now: NOW });
+    await dbRosterSignals(T, ["hwg_abe"], { today: TODAY, now: NOW });
     const c = calls.find((x) => /^\s*SELECT g\.id AS ref,/.test(x.q));
     expect(norm(c.q)).toBe(norm(`SELECT g.id AS ref,
       (SELECT COALESCE(jsonb_agg(jsonb_build_object('id', s.id, 'date', s.record->>'date',

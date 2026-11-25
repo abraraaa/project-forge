@@ -16,7 +16,7 @@ vi.mock("../lib/identity-store.js", () => ({
 }));
 vi.mock("../lib/blob-utils.js", () => ({ readJsonByPrefix: vi.fn(async () => route.doc) }));
 vi.mock("../lib/db.js", async (orig) => ({ ...(await orig()), dbReadProfile: vi.fn(async () => ({ meta: {}, history: [] })) }));
-import { handleMcp, runTool, weekOn, validMainLifts, resolvedProgramme, loadTypeOfName, PROTOCOL_VERSIONS } from "../lib/mcp-server.js";
+import { handleMcp, runTool, readingDay, weekOn, validMainLifts, resolvedProgramme, loadTypeOfName, PROTOCOL_VERSIONS } from "../lib/mcp-server.js";
 import {
   SESSIONS, EXERCISE_POOLS, SWAP_DB, MAIN_LIFT_FUNCTIONAL_EQUIVALENTS,
   applyRotationToSession, applyMainLiftsToSession, applyFocusToSession,
@@ -30,9 +30,8 @@ const data = {
   meta: { userFocus: "Sculpt", bodyweight: { kg: 70 }, trainingState: null },
   history: [rec("2026-09-01", "Barbell Bench Press", 60, 8, 8), rec("2026-09-03", "Barbell Hip Thrust", 100, 10, 7), rec("2026-09-05", "Barbell Bench Press", 62.5, 8, 8)],
 };
-const now = new Date("2026-09-24T12:00:00Z");
 const T1 = "2026-09-20T10:00:00.000Z";
-const call = (msg, load = async () => data) => handleMcp({ jsonrpc: "2.0", ...msg }, { load, now });
+const call = (msg, load = async () => data) => handleMcp({ jsonrpc: "2.0", ...msg }, { load });
 
 describe("MCP handshake", () => {
   it("negotiates a supported version and advertises tools only", async () => {
@@ -62,7 +61,7 @@ describe("MCP handshake", () => {
 
 describe("tools", () => {
   it("snapshot carries the primer, focus and sessions but no profile name or main-lift guess", () => {
-    const t = runTool("training_snapshot", {}, data, now).text;
+    const t = runTool("training_snapshot", {}, data).text;
     expect(t).toContain("How Heatwayve programmes");
     expect(t).toContain("Focus: Sculpt");
     expect(t).not.toContain("Main lifts: programme defaults");
@@ -70,7 +69,7 @@ describe("tools", () => {
   it("recent_sessions: a trainer-logged session says so, without the name or account; the description says it does", async () => {
     const withTrainer = { ...data, history: [...data.history, { ...rec("2026-09-07", "Barbell Bench Press", 65, 8, 8),
       loggedBy: { name: "Sam Price", accountId: "hwa_" + "t".repeat(26) } }] };
-    const text = runTool("recent_sessions", {}, withTrainer, now).text;
+    const text = runTool("recent_sessions", {}, withTrainer).text;
     expect(text.split("\n").at(-1)).toMatch(/^- 2026-09-07 · fresh · logged with your trainer: /);
     expect(text.split("\n").filter((l) => l.includes("trainer"))).toHaveLength(1);
     expect(text).not.toMatch(/Sam|hwa_/);
@@ -78,17 +77,17 @@ describe("tools", () => {
     expect(r.result.tools.find((t) => t.name === "recent_sessions").description).toMatch(/whether a trainer logged it with them/);
   });
   it("recent_sessions clamps its limit", () => {
-    expect(runTool("recent_sessions", { limit: 1 }, data, now).text.split("\n")).toHaveLength(1);
-    expect(runTool("recent_sessions", { limit: 999 }, data, now).text.split("\n")).toHaveLength(3);
+    expect(runTool("recent_sessions", { limit: 1 }, data).text.split("\n")).toHaveLength(1);
+    expect(runTool("recent_sessions", { limit: 999 }, data).text.split("\n")).toHaveLength(3);
   });
   it("lift_history matches by name, oldest first", () => {
-    const t = runTool("lift_history", { lifts: ["bench"] }, data, now).text.split("\n");
+    const t = runTool("lift_history", { lifts: ["bench"] }, data).text.split("\n");
     expect(t).toHaveLength(3); // heading + two sessions
     expect(t[1]).toContain("2026-09-01");
     expect(t[2]).toContain("62.5×8 @8");
   });
   it("lift_history answers several lifts in one call and names the misses", () => {
-    const t = runTool("lift_history", { lifts: ["bench", "hip thrust", "curl"] }, data, now).text;
+    const t = runTool("lift_history", { lifts: ["bench", "hip thrust", "curl"] }, data).text;
     expect(t).toContain("## bench");
     expect(t).toContain("## hip thrust");
     expect(t).toContain("No logged sets match: curl.");
@@ -96,7 +95,7 @@ describe("tools", () => {
   });
   it("current_loads covers every exercise in one call", () => {
     const d = { meta: { weights: { "Barbell Bench Press": 62.5, "Barbell Hip Thrust": 100 }, reps: { "Barbell Bench Press": "8", "Plank": "45s" } }, history: [] };
-    expect(runTool("current_loads", {}, d, now).text.split("\n")).toEqual([
+    expect(runTool("current_loads", {}, d).text.split("\n")).toEqual([
       "- Barbell Bench Press: 62.5 kg × 8",
       "- Barbell Hip Thrust: 100 kg",
       "- Plank: bodyweight × 45s",
@@ -104,7 +103,7 @@ describe("tools", () => {
   });
   it("current_loads reads a corrupt stored W as no W", () => {
     const d = { meta: { weights: { "Barbell Bench Press": 9000, "Barbell Hip Thrust": -5, "Hex Bar Deadlift": 300 } }, history: [] };
-    expect(runTool("current_loads", {}, d, now).text.split("\n")).toEqual(["- Hex Bar Deadlift: 300 kg"]);
+    expect(runTool("current_loads", {}, d).text.split("\n")).toEqual(["- Hex Bar Deadlift: 300 kg"]);
   });
   it("current_loads: pure-BW lifts show the added load, never a phantom W", () => {
     // "Barbell Glute Bridge" name-matches the bodyweight pattern but is a
@@ -114,7 +113,7 @@ describe("tools", () => {
       reps: { "Glute Bridge": 12 },
       addedLoads: { "Glute Bridge": { kg: 10, updatedAt: T1 } },
     }, history: [] };
-    expect(runTool("current_loads", {}, d, now).text.split("\n")).toEqual([
+    expect(runTool("current_loads", {}, d).text.split("\n")).toEqual([
       "- 45-Degree Hip Extension: bodyweight",
       "- Barbell Glute Bridge: 60 kg",
       "- Glute Bridge: bodyweight + 10 kg × 12",
@@ -131,7 +130,7 @@ describe("tools", () => {
         "Deficit Push-Up": { kg: 5, updatedAt: T1 },
       },
     }, history: [] };
-    expect(runTool("current_loads", {}, d, now).text.split("\n")).toEqual([
+    expect(runTool("current_loads", {}, d).text.split("\n")).toEqual([
       "- Bulgarian Split Squat: 18 kg",
       "- Deficit Push-Up: bodyweight + 5 kg",
     ]);
@@ -143,14 +142,14 @@ describe("tools", () => {
         { weight: null, reps: 12, rpe: 8, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 80 },
         { weight: 40, reps: 15, rpe: 8, loadType: "bodyweight", bodyweightUsed: 80, effectiveLoad: 80 }] },
       { name: "Pull-Up", loadType: "loaded_bodyweight", sets: [{ weight: 10, reps: 8, rpe: 8, loadType: "loaded_bodyweight" }] }] }] }];
-    const t = runTool("lift_history", { lifts: ["glute bridge", "pull-up"] }, { meta: {}, history: h }, now).text;
+    const t = runTool("lift_history", { lifts: ["glute bridge", "pull-up"] }, { meta: {}, history: h }).text;
     expect(t).toContain("BW+10×12 @8, BW×12 @8, BW×15 @8");
     expect(t).toContain("BW+10×8 @8");
     expect(t).not.toContain("BW+40");
     expect(t).not.toContain("40×15");
   });
   it("an empty profile reads as empty, not an error", () => {
-    expect(runTool("recent_sessions", {}, null, now).text).toBe("No sessions logged yet.");
+    expect(runTool("recent_sessions", {}, null).text).toBe("No sessions logged yet.");
   });
   it("weekOn picks the latest schedule in force, and reads the legacy bare-array shape", () => {
     const wk = (strengthIdx) => Array.from({ length: 7 }, (_, i) => ({ type: i === strengthIdx ? "strength" : "rest" }));
@@ -162,6 +161,196 @@ describe("tools", () => {
     expect(weekOn(h, "2026-09-24").findIndex((d) => d.type === "strength")).toBe(2);
     expect(weekOn(wk(1), "2026-09-24").findIndex((d) => d.type === "strength")).toBe(1);
     expect(weekOn("garbage", "2026-09-24")).toHaveLength(7); // falls back to the default week
+  });
+});
+
+describe("dates: the lifter's own calendar, never the server's clock or zone", () => {
+  const LAST = "2026-09-05";
+  const snapshot = (args = {}, d = data) => runTool("training_snapshot", args, d).text;
+  const tool = (name, args = {}, d = data) => runTool(name, args, d).text;
+  const SINCE = ["training_snapshot", "programme", "current_loads"];
+
+  /** Run `fn` with the server's clock at `ms` and its zone `zone`. */
+  function atServer(ms, zone, fn) {
+    const was = process.env.TZ;
+    process.env.TZ = zone;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(ms);
+    try { return fn(); } finally {
+      vi.useRealTimers();
+      if (was === undefined) delete process.env.TZ; else process.env.TZ = was;
+    }
+  }
+  const CLOCKS = [Date.parse("2026-09-05T23:30:00Z"), Date.parse("2026-11-18T08:00:00Z"), Date.parse("2031-02-01T12:00:00Z")];
+  const ZONES = ["UTC", "Asia/Tokyo", "America/Los_Angeles", "Pacific/Kiritimati"];
+  const deloaded = {
+    ...data,
+    meta: { ...data.meta, trainingState: { lifts: {}, mesocycle: { currentPhase: "deload",
+      activeDeload: { startedAt: "2026-09-03T12:00:00.000Z", plannedDays: 5, triggeredBy: "stall_convergence", triggeredLifts: [], preDeloadWeights: {} } } } },
+  };
+
+  it("the instructions and the three dated tools' schemas say dates are YYYY-MM-DD on the user's calendar", async () => {
+    const init = await call({ id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } });
+    expect(init.result.instructions).toMatch(/YYYY-MM-DD on the user's own calendar/);
+    expect(init.result.instructions).toMatch(/asOf/);
+    const tools = (await call({ id: 2, method: "tools/list" })).result.tools;
+    for (const t of tools) {
+      const props = Object.keys(t.inputSchema.properties);
+      if (SINCE.includes(t.name)) {
+        expect(t.inputSchema.properties.asOf, t.name).toMatchObject({ type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" });
+        expect(t.inputSchema.properties.asOf.description, t.name).toMatch(/today's date/i);
+        expect(t.inputSchema.required ?? [], t.name).not.toContain("asOf");
+      } else {
+        expect(props, t.name).not.toContain("asOf");
+      }
+    }
+    expect(tools.filter((t) => !SINCE.includes(t.name)).map((t) => t.name).sort()).toEqual(["chart_style", "lift_history", "recent_sessions"]);
+  });
+
+  it("without asOf, every tool's output is the same whatever the server's clock or zone", () => {
+    for (const d of [data, deloaded, { meta: {}, history: [] }]) {
+      for (const name of [...SINCE, "recent_sessions", "chart_style", "lift_history"]) {
+        const args = name === "lift_history" ? { lifts: ["bench"] } : {};
+        const outs = new Set(CLOCKS.flatMap((ms) => ZONES.map((z) => atServer(ms, z, () => tool(name, args, d)))));
+        expect(outs.size, name).toBe(1);
+      }
+    }
+  });
+
+  it("with asOf, the output is the same whatever the server's clock or zone", () => {
+    for (const name of SINCE) {
+      const outs = new Set(CLOCKS.flatMap((ms) => ZONES.map((z) => atServer(ms, z, () => tool(name, { asOf: "2026-11-18" }, deloaded)))));
+      expect(outs.size, name).toBe(1);
+    }
+  });
+
+  it("without asOf, the snapshot reads as of the last logged session and names no other day", () => {
+    const t = atServer(CLOCKS[2], "Asia/Tokyo", () => snapshot());
+    expect(t.split("\n").slice(0, 2)).toEqual([
+      `# My training — Heatwayve snapshot as of ${LAST}, my last logged session`,
+      `Dates are my own calendar's. It shows what I'd done by my last session, ${LAST}; it doesn't say how long ago that was.`,
+    ]);
+    const days = new Set(t.match(/\d{4}-\d{2}-\d{2}/g));
+    for (const day of days) expect(day <= LAST, day).toBe(true);
+    expect(t).not.toMatch(/this week|in progress|2031-|last 2 weeks/);
+  });
+
+  it("with asOf, the snapshot reads through it, states the gap, names weeks by their Mondays and ends the volume window there", () => {
+    const t = snapshot({ asOf: "2026-11-18" });
+    const lines = t.split("\n");
+    expect(lines.slice(0, 2)).toEqual([
+      "# My training — Heatwayve snapshot through 2026-11-18",
+      "Dates are my own calendar's. It shows what I'd done through 2026-11-18, nothing after. My last session was 2026-09-05, 74 days before 2026-11-18.",
+    ]);
+    const head = lines.findIndex((l) => l.startsWith("## Consistency"));
+    expect(lines[head]).toBe("## Consistency, 8 weeks to 2026-11-18 (strength days done/planned, oldest first, each week named by its Monday)");
+    const cells = lines[head + 2].split(" · ");
+    expect(cells).toHaveLength(8);
+    expect(cells.map((c) => c.slice(0, 12))).toEqual(["2026-09-28: ", "2026-10-05: ", "2026-10-12: ", "2026-10-19: ", "2026-10-26: ", "2026-11-02: ", "2026-11-09: ", "2026-11-16: "]);
+    expect(cells[7]).toMatch(/^2026-11-16: 0\/\d+ through 2026-11-18 \(\d+ planned\)$/);
+    // Nothing in the two weeks to 2026-11-18: the volume section stands down.
+    expect(t).not.toContain("## Weekly volume");
+  });
+
+  it("the volume window is the two weeks to asOf: a session after it is left out", () => {
+    const at = (asOf) => {
+      const t = snapshot(asOf ? { asOf } : {});
+      const lines = t.split("\n");
+      const i = lines.findIndex((l) => l.startsWith("## Weekly volume"));
+      return [lines[i], lines.slice(i + 1).find((l) => l.startsWith("- Chest:"))];
+    };
+    expect(at(null)[0]).toBe(`## Weekly volume vs landmarks, 2 weeks to ${LAST} (sets per week)`);
+    const before = at("2026-09-04");
+    expect(before[0]).toBe("## Weekly volume vs landmarks, 2 weeks to 2026-09-04 (sets per week)");
+    const chest = (line) => Number(line.match(/^- Chest: ([\d.]+)/)[1]);
+    expect(chest(before[1]) * 2).toBeCloseTo(chest(at(null)[1]), 5);
+    expect(snapshot({ asOf: "2026-09-04" }).split("\n")[1]).toBe(
+      "Dates are my own calendar's. It shows what I'd done through 2026-09-04, nothing after. My last session was 2026-09-05, the day after 2026-09-04.");
+    expect(snapshot({ asOf: "2026-09-06" }).split("\n")[1]).toMatch(/My last session was 2026-09-05, the day before 2026-09-06\.$/);
+    expect(snapshot({ asOf: LAST }).split("\n")[1]).toMatch(/My last session was on 2026-09-05\.$/);
+  });
+
+  it("asOf counts only as a real date from a day before the last session to 366 days after it; a malformed one is as if absent", () => {
+    const plain = snapshot();
+    for (const asOf of ["2026-02-30", "2026-9-5", "2026-09-05T00:00", "", 20260905, null, "tomorrow"]) {
+      expect(snapshot({ asOf }), String(asOf)).toBe(plain);
+      for (const name of ["programme", "current_loads"]) expect(tool(name, { asOf }, deloaded), `${name} ${asOf}`).toBe(tool(name, {}, deloaded));
+    }
+    expect(snapshot({ asOf: "2027-09-06" }).split("\n")[0]).toBe("# My training — Heatwayve snapshot through 2027-09-06");
+    expect(snapshot({ asOf: "2026-09-04" }).split("\n")[0]).toBe("# My training — Heatwayve snapshot through 2026-09-04");
+  });
+
+  it("a real asOf outside that range is set aside: the snapshot, programme and current_loads say so once, and why", () => {
+    const cases = [
+      ["2026-09-03", `asOf 2026-09-03 is more than a day before my last session (${LAST}), so this reads on ${LAST}.`],
+      ["2027-09-07", `asOf 2027-09-07 is more than a year after my last session (${LAST}), so this reads on ${LAST}.`],
+    ];
+    expect(readingDay(data.history, "2027-09-07")).toEqual({ day: LAST, asOf: false, last: LAST, rejected: { asOf: "2027-09-07", after: true } });
+    expect(readingDay(data.history, "2026-09-03").rejected).toEqual({ asOf: "2026-09-03", after: false });
+    expect(readingDay(data.history, "2026-09-04").rejected).toBe(null);
+    expect(readingDay(data.history, "2026-9-3").rejected).toBe(null);
+    for (const [asOf, said] of cases) {
+      const lines = snapshot({ asOf }).split("\n");
+      expect(lines[2], asOf).toBe(said);
+      expect(lines.filter((l) => l !== said).join("\n")).toBe(snapshot());
+      for (const name of ["programme", "current_loads"]) {
+        const text = tool(name, { asOf }, deloaded);
+        expect(text.split("\n").filter((l) => l === said), `${name} ${asOf}`).toHaveLength(1);
+        expect(text.match(/asOf /g), `${name} ${asOf}`).toHaveLength(1);
+      }
+    }
+  });
+
+  it("read through a day before the last session, no section shows a session after it", () => {
+    const lines = snapshot({ asOf: "2026-09-04" }).split("\n");
+    // Only the header names the later session.
+    expect(lines.slice(2).join("\n")).not.toContain(LAST);
+    expect(lines.find((l) => l.startsWith("2026-07-13: ")).split(" · ").at(-1)).toBe("2026-08-31: 2/2 through 2026-09-04 (3 planned)");
+    expect(lines).toContain("## Last 2 sessions");
+    const one = { meta: {}, history: [data.history[2]] };
+    expect(snapshot({ asOf: "2026-09-04" }, one)).toContain("No sessions logged through 2026-09-04.");
+    expect(snapshot({ asOf: "2026-09-04" }, one)).not.toContain("## Last");
+  });
+
+  it("with no sessions, any real asOf counts; without one there is no date at all", () => {
+    const none = { meta: {}, history: [] };
+    expect(snapshot({ asOf: "2031-02-01" }, none).split("\n").slice(0, 2)).toEqual([
+      "# My training — Heatwayve snapshot through 2031-02-01", "Dates are my own calendar's. It shows what I'd done through 2031-02-01, nothing after."]);
+    const t = snapshot({}, none);
+    expect(t.split("\n").slice(0, 2)).toEqual(["# My training — Heatwayve snapshot", "Dates are my own calendar's."]);
+    expect(t).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(t).toContain("No sessions logged yet.");
+  });
+
+  it("programme and current_loads name the day they read on, once", () => {
+    const none = { meta: {}, history: [] };
+    for (const [name, at] of [["programme", 1], ["current_loads", 0]]) {
+      const read = (args, d = deloaded) => tool(name, args, d).split("\n");
+      expect(read({})[at], name).toBe(`Read on ${LAST} (my last logged session).`);
+      expect(read({ asOf: "2026-11-18" })[at], name).toBe("Read on 2026-11-18.");
+      expect(read({ asOf: "2026-09-04" })[at], name).toBe("Read on 2026-09-04.");
+      for (const args of [{}, { asOf: "2026-11-18" }]) expect(read(args).filter((l) => l.startsWith("Read on")), name).toHaveLength(1);
+      // Set aside: its own line names the day instead.
+      expect(read({ asOf: "2027-09-07" }).some((l) => l.startsWith("Read on")), name).toBe(false);
+      expect(read({}, none).some((l) => l.startsWith("Read on")), name).toBe(false);
+      expect(read({ asOf: "2031-02-01" }, none)[at], name).toBe("Read on 2031-02-01.");
+    }
+  });
+
+  it("programme and current_loads read the deload calendar on asOf, else on the last session's date", () => {
+    const tool = (name, args, d) => runTool(name, args, d).text.split("\n").filter((l) => !l.startsWith("Read on")).join("\n");
+    // The deload runs 2026-09-03 to 2026-09-07 on the lifter's calendar; the last session is in it.
+    const inWindow = tool("programme", {}, deloaded);
+    expect(inWindow).toContain("Deload week");
+    expect(tool("programme", { asOf: "2026-09-06" }, deloaded)).toBe(inWindow);
+    expect(tool("programme", { asOf: "2026-09-20" }, deloaded)).not.toContain("Deload week");
+    expect(tool("current_loads", { asOf: "2026-09-06" }, deloaded)).toBe(tool("current_loads", {}, deloaded));
+  });
+
+  it("recent_sessions, lift_history and chart_style ignore an asOf", () => {
+    for (const [name, args] of [["recent_sessions", {}], ["lift_history", { lifts: ["bench"] }], ["chart_style", {}]]) {
+      expect(tool(name, { ...args, asOf: "2026-11-18" }), name).toBe(tool(name, args));
+    }
   });
 });
 
@@ -203,7 +392,7 @@ describe("programme tool", () => {
     weights: { "Front Squat": 60 },
     reps: {},
   };
-  const text = runTool("programme", {}, { meta, history: [] }, now).text;
+  const text = runTool("programme", {}, { meta, history: [] }).text;
 
   it("lists every exercise the app would show, in the app's composition order", () => {
     for (const template of SESSIONS) {
@@ -223,7 +412,7 @@ describe("programme tool", () => {
     expect(text).toMatch(/Barbell Bench Press 3 × 5 @ \d+ kg \(suggested start\)/);
   });
   it("says so when main lifts were never synced, rather than guessing defaults", () => {
-    const t = runTool("programme", {}, { meta: { ...meta, mainLifts: undefined }, history: [] }, now).text;
+    const t = runTool("programme", {}, { meta: { ...meta, mainLifts: undefined }, history: [] }).text;
     expect(t).toContain("not synced from this user's app yet");
   });
   it("drops choices that aren't listed equivalents", () => {
@@ -232,14 +421,14 @@ describe("programme tool", () => {
     expect(validMainLifts({})).toBeNull();
   });
   it("the snapshot names main lifts once they sync", () => {
-    const t = runTool("training_snapshot", {}, { meta, history: data.history }, now).text;
+    const t = runTool("training_snapshot", {}, { meta, history: data.history }).text;
     expect(t).toContain("Main lifts: Front Squat (for Barbell Back Squat)");
   });
 });
 
 describe("programme loads read the way the session screen reads them", () => {
   const base = { programmeBlock: { number: 1, config: {} }, userFocus: "Forged", reps: {} };
-  const run = (meta) => runTool("programme", {}, { meta: { ...base, ...meta }, history: [] }, now).text;
+  const run = (meta) => runTool("programme", {}, { meta: { ...base, ...meta }, history: [] }).text;
 
   it("a chosen main lift with no weight yet is a new lift, not bodyweight", () => {
     const t = run({ mainLifts: { "Barbell Back Squat": "Front Squat" }, weights: {} });
@@ -262,7 +451,7 @@ describe("programme loads read the way the session screen reads them", () => {
     const t = runTool("programme", {}, {
       meta: { ...base, programmeBlock: { number: 1, config: { "afin-A": lsit } }, mainLifts: {}, weights: {}, reps: { "L-Sit Hold": 30 } },
       history: [],
-    }, now).text;
+    }).text;
     expect(t).toContain("L-Sit Hold 4 × 30s hold");
   });
   it("a pure-BW slot ignores a phantom W", () => {
@@ -271,7 +460,7 @@ describe("programme loads read the way the session screen reads them", () => {
     const t = runTool("programme", {}, {
       meta: { ...base, programmeBlock: { number: 1, config: { "ass2-A": hx } }, mainLifts: {}, weights: { "45-Degree Hip Extension": 40 } },
       history: [],
-    }, now).text;
+    }).text;
     expect(t).toMatch(/45-Degree Hip Extension \d+ × \S+ @ bodyweight/);
     expect(t).not.toMatch(/45-Degree Hip Extension \d+ × \S+ @ 40 kg/);
   });
@@ -284,13 +473,13 @@ describe("programme loads read the way the session screen reads them", () => {
         addedLoads: { "45-Degree Hip Extension": { kg: 10, updatedAt: T1 } },
       },
       history: [],
-    }, now).text;
+    }).text;
     expect(t).toMatch(/45-Degree Hip Extension \d+ × \S+ @ bodyweight \+ 10 kg/);
   });
   it("malformed synced data is a tool error, never a thrown request", async () => {
     const r = await handleMcp(
       { jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "recent_sessions" } },
-      { load: async () => ({ meta: {}, history: [{ date: "x", blocks: "abc" }] }), now },
+      { load: async () => ({ meta: {}, history: [{ date: "x", blocks: "abc" }] }) },
     );
     expect(r.result.isError).toBe(true);
   });
@@ -385,24 +574,24 @@ describe("an unset (a stored null weight or reps) reads as no stored value", () 
 
   it("no tool prints null, NaN or undefined, or throws", () => {
     for (const t of tools) {
-      const text = runTool(t, {}, { meta: planted, history: data.history }, now).text;
+      const text = runTool(t, {}, { meta: planted, history: data.history }).text;
       expect(text, t).not.toMatch(/null|NaN|undefined/);
     }
   });
   it("the programme reads exactly as with the key absent: the squat a suggested start at its template reps", () => {
-    const a = runTool("programme", {}, { meta: planted, history: [] }, now).text;
-    expect(a).toBe(runTool("programme", {}, { meta: absent, history: [] }, now).text);
+    const a = runTool("programme", {}, { meta: planted, history: [] }).text;
+    expect(a).toBe(runTool("programme", {}, { meta: absent, history: [] }).text);
     expect(a).toContain(`${SQ} 3 × 5 @ 60 kg (suggested start)`);
     expect(a).toContain(`${BENCH} 3 × 8 @ 60 kg`);
   });
   it("current_loads reads exactly as with the key absent", () => {
-    const a = runTool("current_loads", {}, { meta: planted, history: [] }, now).text;
-    expect(a).toBe(runTool("current_loads", {}, { meta: absent, history: [] }, now).text);
+    const a = runTool("current_loads", {}, { meta: planted, history: [] }).text;
+    expect(a).toBe(runTool("current_loads", {}, { meta: absent, history: [] }).text);
     expect(a).toBe(`- ${BENCH}: 60 kg × 8`);
   });
   it("current_loads with only unsets reads as no working weights", () => {
     const onlyUnsets = { ...base, weights: { [SQ]: null }, weightStamps: { [SQ]: T1 }, reps: { [SQ]: null }, repStamps: { [SQ]: T1 } };
-    expect(runTool("current_loads", {}, { meta: onlyUnsets, history: [] }, now).text).toBe("No working weights set yet.");
+    expect(runTool("current_loads", {}, { meta: onlyUnsets, history: [] }).text).toBe("No working weights set yet.");
   });
   it("resolvedProgramme: w null, start the planned number", () => {
     const l = resolvedProgramme(planted).find((x) => x.name === SQ);
@@ -428,7 +617,9 @@ describe("resolvedProgramme behind describeProgramme (E8)", () => {
   // and again for that day's pool edits and load types.
   const BEFORE = { undefined: "3cb1f70048934ff3", Forged: "1f1ed1f00d78b35b", Strong: "808c7f291ffe98fc", Sculpt: "b19e5e99b4ffd0be" };
   const fixtures = e8Fixtures();
-  const texts = fixtures.map((f) => [runTool("programme", {}, f, now).text, runTool("current_loads", {}, f, now).text]);
+  // The day line came later; the rest of each text is pinned as it was.
+  const undated = (text) => text.split("\n").filter((l) => !l.startsWith("Read on ")).join("\n");
+  const texts = fixtures.map((f) => [undated(runTool("programme", {}, f).text), undated(runTool("current_loads", {}, f).text)]);
 
   it("tool output is byte-identical to the pre-extraction output", () => {
     /** @type {Record<string, string[]>} */

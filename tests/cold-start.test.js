@@ -167,7 +167,7 @@ describe("MCP tools read the same start", () => {
   });
   it("current_loads shows 112.5 for the glute bridge with a target and no working weight", () => {
     const d = { meta: meta({ reps: { "Barbell Glute Bridge": 12 } }), history: [HIP_THRUST] };
-    expect(runTool("current_loads", {}, d, now).text).toBe("- Barbell Glute Bridge: 112.5 kg (suggested start) × 12");
+    expect(runTool("current_loads", {}, d, now).text).toBe("Read on 2026-09-20 (my last logged session).\n- Barbell Glute Bridge: 112.5 kg (suggested start) × 12");
   });
   it("current_loads without the anchor shows the template, never 'bodyweight'", () => {
     const d = { meta: { reps: { "Barbell Glute Bridge": 12 }, programmeBlock: { config: { "ass2-A": BRIDGE } } }, history: [] };
@@ -194,7 +194,7 @@ describe("MCP tools read the same start", () => {
   });
   it("a stored null reads as no working weight in both tools, as the resolver reads it", () => {
     const d = { meta: meta({ weights: { "Barbell Glute Bridge": null }, reps: { "Barbell Glute Bridge": 12 }, programmeBlock: { number: 1, config: { "ass2-A": BRIDGE } } }), history: [HIP_THRUST] };
-    expect(runTool("current_loads", {}, d, now).text).toBe("- Barbell Glute Bridge: 112.5 kg (suggested start) × 12");
+    expect(runTool("current_loads", {}, d, now).text).toBe("Read on 2026-09-20 (my last logged session).\n- Barbell Glute Bridge: 112.5 kg (suggested start) × 12");
     expect(runTool("programme", {}, d, now).text).toContain("Barbell Glute Bridge 3 × 12 @ 112.5 kg (suggested start)");
   });
   it("the programme plans the rotated-in glute bridge at 112.5", () => {

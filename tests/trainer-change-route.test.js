@@ -566,10 +566,8 @@ describe("dry run and send", () => {
     const out = await res.json();
     expect(out.budget).toMatchObject({ used: 10, of: 10 });
     expect(out.budget.freeAt).toBe(Math.min(...db.changes.map((c) => c.created_at)) + 7 * DAY);
-    // The UTC day freeAt falls on, as en-GB writes it ("Wed 9 Sept" in September).
-    const day = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })
-      .format(new Date(out.budget.freeAt));
-    expect(out.error).toBe(`That's this week's changes for Abe. More from ${day}.`);
+    // No day named: the trainer's screen words "more from" from freeAt on their own clock.
+    expect(out.error).toBe("That's this week's changes for Abe.");
     expect(db.changes.some((c) => c.set_id === setId("p"))).toBe(false);
     // Withdrawn sets still count.
     await post(tia, { ref: "hwg_abe", withdraw: setId("b") });
@@ -591,6 +589,23 @@ describe("dry run and send", () => {
     expect(inserts()).toEqual([]);
     expect((await post(tia, { ...body(), set: { id: "nope", ops: [] } })).status).toBe(422);
     expect((await post(tia, { ref: "hwg_abe", today: TODAY })).status).toBe(422);
+    expect(inserts()).toEqual([]);
+  });
+
+  it("a deload refusal names its last day on the client's calendar, not the server's", async () => {
+    // Accepted Monday 2 November 2026, 08:00 in Auckland: Sunday 19:00 UTC. Stored before startDate.
+    const activeDeload = { startedAt: "2026-11-01T19:00:00.000Z", plannedDays: 7, preDeloadWeights: { [SQUAT]: 100 } };
+    db.meta.push({ profile: "sk-abe", field: "trainingState", value: { lifts: {}, mesocycle: { activeDeload } } });
+    db.sessions[0].record = { ...db.sessions[0].record, loggedTz: "Pacific/Auckland", loggedTzOffset: 780 };
+    const was = process.env.TZ;
+    process.env.TZ = "UTC";
+    try {
+      const res = await post(tia, body());
+      expect(res.status).toBe(422);
+      expect(await res.json()).toEqual({ refusals: [{ i: 0, code: "deload", until: "2026-11-09" }] });
+    } finally {
+      if (was === undefined) delete process.env.TZ; else process.env.TZ = was;
+    }
     expect(inserts()).toEqual([]);
   });
 
@@ -842,7 +857,7 @@ const { SESSIONS, EXERCISE_POOLS, applyRotationToSession, applyMainLiftsToSessio
 const { repTargets, planStartWeight, validMainLifts } = await import("@/lib/programme-resolve");
 const { getLoadType } = await import("@/lib/lift-translations");
 const { addDaysIso, jsDow, mondayOfWeekIso } = await import("@/lib/dates");
-const { trainerToday } = await import("@/lib/trainer-view");
+const { trainerDay } = await import("@/lib/server-time");
 
 const LETTERS = ["strength-a", "strength-b", "strength-c"];
 /** Abe's profile as the route reads it. */
@@ -982,10 +997,10 @@ describe("coached sessions: sending one", () => {
       expect(await res.json()).toEqual({ refusals: [{ i: 0, code: "day", rule: "S4", field: "date" }] });
     }
     // The window is the trainer's today as sent (held within a day of UTC by
-    // trainerToday): from tomorrow's today, yesterday's record is two days back.
+    // trainerDay): from tomorrow's today, yesterday's record is two days back.
     const tomorrow = addDaysIso(DAY0, 1);
     const ahead = await post(tia, { ...sbody(coached(2, { date: addDaysIso(DAY0, -1) }), { set: setId("r") }), today: tomorrow });
-    expect(ahead.status).toBe(trainerToday(tomorrow) === tomorrow ? 422 : 200);
+    expect(ahead.status).toBe(trainerDay(tomorrow) === tomorrow ? 422 : 200);
     expect(db.changes.filter((c) => c.target.endsWith(":B")).map((c) => c.target)).toEqual([`${addDaysIso(DAY0, -1)}:B`]);
   });
 
@@ -1050,8 +1065,7 @@ describe("coached sessions: sending one", () => {
     expect(res.status).toBe(429);
     const out = await res.json();
     const oldest = Math.min(...db.changes.filter((c) => c.kind === "session").map((c) => c.created_at));
-    const day = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(oldest + 7 * DAY));
-    expect(out).toEqual({ error: `That's this week's sessions for Abe. More from ${day}.`, budget: { used: 7, of: 7, freeAt: oldest + 7 * DAY } });
+    expect(out).toEqual({ error: "That's this week's sessions for Abe.", budget: { used: 7, of: 7, freeAt: oldest + 7 * DAY } });
     expect(db.changes.some((c) => c.set_id === S1)).toBe(false);
     // Out of the window, it frees up.
     for (const c of db.changes) if (c.kind === "session") c.created_at -= 8 * DAY;

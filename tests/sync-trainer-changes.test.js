@@ -196,6 +196,7 @@ describe("POST undo: one tap, the caller's own changes, only while it can be und
     store.list.rows = [row({ id, kind: "week", target: "week", before: null, after: [], from: "2026-10-05", outcome: "applied", appliedAt: "2026-10-05T07:00:00.000Z" })];
     expect((await post({ profile: "abe", undo: id })).status).toBe(409);
     expect((await post({ profile: "abe", undo: id, reverted: "not-an-instant" })).status).toBe(400);
+    expect((await post({ profile: "abe", undo: id, reverted: "2026-13-05T10:00:00.000Z" })).status).toBe(400);
     const put = "2026-10-05T10:00:00.000Z";
     expect((await post({ profile: "abe", undo: id, reverted: put })).status).toBe(200);
     expect(store.undo.mock.calls.map((c) => c.slice(0, 3))).toEqual([[A, id, put]]);

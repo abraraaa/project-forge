@@ -118,6 +118,38 @@ describe("raw day-mutation methods live only in lib/dates.js", () => {
   });
 });
 
+describe("a calendar day is never parsed by new Date", () => {
+  // `new Date("2026-10-19")` is UTC midnight, so counting days from it is off
+  // by one for anyone not at UTC+0. A value named as a day (a name, or the
+  // last name of a member chain, ending in date, Iso or Str) goes through
+  // parseLocalDate, daysBetween or addDaysIso instead.
+  const DAY_PARSE = /\bnew Date\(\s*(?:[A-Za-z_$][\w$]*\s*\??\.\s*)*(?:[A-Za-z_$][\w$]*)?(?:date|Date|Iso|Str)\s*\)/;
+
+  it("catches a day-named value, and only that", () => {
+    const catches = [
+      "new Date(dateStr)", "new Date(todayIso)", "new Date(startDate)", "new Date(date)", "new Date( mondayIso )",
+      "new Date(rec.date)", "new Date(rec?.date)", "new Date(meta.programmeBlock.startDate)", "x = new Date(fromStr).getTime()",
+    ];
+    const passes = [
+      "new Date()", "new Date(ms)", "new Date(now)", "new Date(at)", "new Date(iso)", "new Date(updatedAt)", "new Date(dateMs)",
+      "new Date(d.getTime())", "new Date(Date.parse(dateStr))", "new Date(`${dateStr}T12:00:00`)", "new Date(dateStr + \"T12:00\")",
+      "new Date(y, m - 1, d)", "new Date(rec.date, 0)", "parseLocalDate(dateStr)", "newDate(dateStr)",
+    ];
+    for (const c of catches) expect(DAY_PARSE.test(c), c).toBe(true);
+    for (const p of passes) expect(DAY_PARSE.test(p), p).toBe(false);
+  });
+
+  it("no module outside lib/dates.js calls new Date on a day-named value", () => {
+    const offenders = [];
+    for (const f of sourceFiles()) {
+      if (f === join("lib", "dates.js")) continue;
+      const src = code(readFileSync(resolve(root, f), "utf8"));
+      if (DAY_PARSE.test(src)) offenders.push(f);
+    }
+    expect(offenders, `use parseLocalDate/daysBetween/addDaysIso from lib/dates.js instead:\n${offenders.join("\n")}`).toEqual([]);
+  });
+});
+
 describe("the behaviour the guard protects", () => {
   it("a week scaffold built the local way survives a DST transition", () => {
     // Europe/London clocks went back 2026-10-25. Building columns back from

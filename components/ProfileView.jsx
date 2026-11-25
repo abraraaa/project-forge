@@ -32,6 +32,7 @@ import FocusPickerSheet from "@/components/FocusPickerSheet";
 import BreatherModal from "@/components/BreatherModal";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { fetchWithTimeout } from "@/lib/net";
+import { todayLocalIso } from "@/lib/dates";
 
 /** The trainer share for the Profile row, or null (signed out, offline). */
 async function fetchTrainerShare(profile) {
@@ -44,7 +45,8 @@ async function fetchTrainerShare(profile) {
 /** What is new for the Profile sublines (the home dot's read), or null. */
 async function fetchNoticeDots(profile) {
   try {
-    const res = await fetchWithTimeout(`/api/sync/notices?profile=${encodeURIComponent(profile)}`, { cache: "no-store" });
+    // today: this device's date, which the clients window reads on.
+    const res = await fetchWithTimeout(`/api/sync/notices?profile=${encodeURIComponent(profile)}&today=${todayLocalIso()}`, { cache: "no-store" });
     if (!res.ok) return null;
     const body = await res.json();
     return body && typeof body.dots === "object" ? body.dots : null;

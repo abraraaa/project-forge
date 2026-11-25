@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { rateLimit, rateLimitShared, failureGate, sharedBucket, clientIp, _resetRateLimiter } from "../lib/rate-limit.js";
+import { rateLimit, rateLimitShared, failureGate, sharedBucket, clientIp, windowStartOf, _resetRateLimiter } from "../lib/rate-limit.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -108,6 +108,27 @@ describe("rateLimitShared (Neon-backed, bounded)", () => {
     expect(Number(res?.headers.get("Retry-After"))).toBeGreaterThan(0);
     expect(await rateLimitShared(req("1.1.1.1"), "t", 3, { q, now: now + 60_000 })).toBeNull();
     expect(rows.size).toBe(1);
+  });
+
+  it("a day window opens at UTC midnight, whatever the hour or the process's zone", async () => {
+    const DAY = 86_400_000;
+    const midnight = Date.UTC(2026, 10, 23);
+    for (const at of [midnight, midnight + 1, Date.parse("2026-11-23T08:59:59.999Z"), Date.parse("2026-11-23T23:59:59.999Z")]) {
+      expect(windowStartOf(at, DAY)).toBe(midnight);
+    }
+    expect(windowStartOf(midnight - 1, DAY)).toBe(midnight - DAY);
+    const was = process.env.TZ;
+    for (const zone of ["Asia/Tokyo", "America/Los_Angeles", "Europe/London"]) {
+      process.env.TZ = zone;
+      const calls = [];
+      const { q } = fakeDb();
+      const spy = (strings, ...v) => { calls.push(v); return q(strings, ...v); };
+      const now = Date.parse("2026-11-23T23:30:00.000Z");
+      const res = await rateLimitShared(req("3.3.3.3"), "d", 0, { q: spy, now, windowMs: DAY });
+      expect(calls.find((v) => v.length)?.[1]).toBe(midnight);
+      expect(res?.headers.get("Retry-After")).toBe(String(30 * 60));
+    }
+    if (was === undefined) delete process.env.TZ; else process.env.TZ = was;
   });
 
   it("keys hash into a bounded bucket space per route", () => {

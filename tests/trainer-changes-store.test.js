@@ -566,6 +566,9 @@ describe("acks and reverts (the client's device)", () => {
       [{ id: "a.0" }, []], [Array.from({ length: 65 }, (_, i) => ({ id: `a.${i}`, outcome: "applied", at: AT })), []],
     ]) expect(cleanAcks(...bad)).toBeNull();
     expect(isIsoInstant(new Date(NOW).toISOString())).toBe(true);
+    for (const bad of ["2026-13-05T10:00:00.000Z", "2026-00-05T10:00:00.000Z", "2026-10-05T25:00:00.000Z", "2026-02-30T10:00:00.000Z"]) {
+      expect(isIsoInstant(bad), bad).toBe(false);
+    }
   });
 
   it("the first report stands; applied_at only for applied; their own rows only", async () => {
