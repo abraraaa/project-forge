@@ -4,7 +4,8 @@
 // from the real projection (projectForTrainer) of a generated history.
 //
 // Locks in:
-//   - "How they felt" and every session's readiness word always show;
+//   - every session's readiness word always shows; the summary carries no
+//     felt marks and no lifts table (Sessions and Lifts carry them);
 //   - sessions page by 10, newest first;
 //   - a record from the trend tier (day 200) is never listed as a session;
 //   - set lines: "100 × 5, 5, 5 · RPE 8, 8, 8.5", RIR when RPE is missing,
@@ -56,10 +57,10 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import TrainerClientView, {
   setsLine, rhythmCellText, refusalText, noHistoryText, leadLine, warningText, sessionStatusText, sessionRunLine, trainerStatusText,
-  glanceParts, liftDelta,
+  glanceParts, kickerText, isNewBest,
 } from "../../components/TrainerClientView.jsx";
 import Glyph from "../../components/Glyph.jsx";
-import { T, heatForRpe, heatMarkHeight } from "../../lib/tokens.js";
+import { T } from "../../lib/tokens.js";
 import { projectForTrainer } from "../../lib/trainer-plan.js";
 import { EXERCISE_POOLS } from "../../lib/programme.js";
 import { addDaysIso, todayLocalIso } from "../../lib/dates.js";
@@ -115,8 +116,9 @@ function history() {
 const view = (hist = history(), meta = {}) => projectForTrainer({ meta, history: hist }, { todayIso: today });
 const client = { name: "Sam", since: Date.UTC(2026, 9, 3, 12) };
 
-/** Opens one of the pane's tabs by name and hands back its panel, the only one shown. */
+/** Opens one of the pane's tabs by name and hands back its panel, the only one shown. Sent may carry a count. */
 function tab(name) {
+  if (name === "Sent") name = /^Sent(, \d+ waiting)?$/;
   fireEvent.click(screen.getByRole("tab", { name }));
   const panel = screen.getByRole("tabpanel", { name });
   expect(panel.hidden).toBe(false);
@@ -129,21 +131,13 @@ function sharing() {
 }
 
 describe("TrainerClientView", () => {
-  it("shows how they felt as heat marks with their counts printed, and every session's readiness word", () => {
+  it("every session's readiness word shows; the summary carries no felt marks, so the ramp means plan done only", () => {
     const hist = history();
     hist[0].readiness = null; // the newest session has no check-in
     render(<TrainerClientView client={client} view={view(hist)}/>);
-    const felt = screen.getByRole("group", { name: "How they felt, last 24 weeks" });
-    // 24 sessions with a check-in in the detail tier, a third each.
-    expect([...felt.querySelectorAll("[data-felt-band]")].map((b) => b.textContent)).toEqual(["Fresh 8", "Normal 8", "Cooked 8"]);
-    // Colour and height both carry the band, and the number is in the measured face.
-    const marks = [...felt.querySelectorAll('[aria-hidden="true"]')];
-    expect(marks.map((m) => [m.style.width, m.style.height, m.style.background])).toEqual([
-      ["24px", `${heatMarkHeight(6)}px`, heatForRpe(6)], ["24px", `${heatMarkHeight(8)}px`, heatForRpe(8)], ["24px", `${heatMarkHeight(10)}px`, heatForRpe(10)],
-    ]);
-    for (const b of felt.querySelectorAll("[data-felt-band]")) expect(/** @type {HTMLElement} */ (b.lastElementChild?.lastElementChild).style.fontFamily).toBe(T.measured);
-    // The words line is gone.
-    expect(document.body.textContent).not.toMatch(/Fresh \d+ · Normal/);
+    expect(screen.queryByRole("group", { name: "How they felt, last 24 weeks" })).toBeNull();
+    expect(document.querySelector("[data-felt], [data-felt-band]")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Fresh \d+|Normal \d+|Cooked \d+/);
     const rows = tab("Sessions").querySelectorAll("[data-session]");
     expect(rows.length).toBe(10);
     const heads = [...rows].map((r) => r.firstChild.textContent);
@@ -373,14 +367,35 @@ describe("TrainerClientView", () => {
     expect(text).not.toContain("Shared with you");
     expect(text).not.toMatch(/Stop seeing|can stop sharing/);
     expect(screen.queryByRole("button", { name: /Stop|^Sharing/ })).toBeNull();
-    expect(screen.getByRole("group", { name: "How you felt, last 24 weeks" })).toBeTruthy();
-    // No roster signal for your own training: no glance strip, and nothing to run.
-    expect(document.querySelector("[data-glance]")).toBeNull();
+    expect(screen.queryByRole("group", { name: "How you felt, last 24 weeks" })).toBeNull();
+    // No roster signal for your own training: the kicker names it, and nothing to run.
+    expect(document.querySelector("[data-kicker]").textContent).toBe("Your training");
     expect(document.querySelector("[data-run]")).toBeNull();
     expect(document.querySelectorAll("[data-summary-rhythm] li")).toHaveLength(8);
     // The training itself shows as for any client: no plan, so no Plan or Sent tab.
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Lifts", "Sessions"]);
     expect(tab("Sessions").querySelectorAll("[data-session]").length).toBe(10);
+  });
+
+  it("a Lifts row whose e1RM is its 12-month best, from the last 7 days, says best after the kg in ink2; otherwise nothing", () => {
+    const hist = [rec(13, { weight: 100 }), rec(7, { weight: 100 }), rec(2, { weight: 120 })];
+    render(<TrainerClientView client={client} view={view(hist)}/>);
+    const row = () => /** @type {HTMLElement} */ (tab("Lifts").querySelector('[data-lift="Barbell Back Squat"] > button'));
+    const mark = /** @type {HTMLElement} */ (row().querySelector("[data-best]"));
+    expect(row().textContent).toMatch(/^Barbell Back Squat[\d.]+ kg best$/);
+    expect([mark.style.color, mark.style.fontFamily]).toEqual(["var(--ink-2)", T.text]);
+    cleanup();
+    // The same best, ten days ago: noticed then, not now.
+    render(<TrainerClientView client={client} view={view([rec(20, { weight: 100 }), rec(15, { weight: 100 }), rec(10, { weight: 120 })])}/>);
+    expect(row().querySelector("[data-best]")).toBeNull();
+    cleanup();
+    // Not above an earlier one: no mark.
+    render(<TrainerClientView client={client} view={view([rec(13, { weight: 120 }), rec(2, { weight: 120 })])}/>);
+    expect(row().querySelector("[data-best]")).toBeNull();
+    // One point alone is no best to notice.
+    expect(isNewBest([{ date: today, est1RM: 100 }], { date: today, est1RM: 100 }, today)).toBe(false);
+    expect(isNewBest([{ date: ago(3), est1RM: 90 }, { date: today, est1RM: 100 }], { date: today, est1RM: 100 }, today)).toBe(true);
+    expect(isNewBest([{ date: ago(3), est1RM: 90 }, { date: today, est1RM: 100 }], { date: ago(3), est1RM: 90 }, today)).toBe(false);
   });
 
   it("never imports sessionCount or the device store", () => {
@@ -442,11 +457,15 @@ async function review() {
 }
 
 describe("TrainerClientView: the plan", () => {
-  it("says what the trainer can do: change the plan, or ask for changes in Profile", () => {
+  it("says what the trainer can do: change the plan (in the Sharing sheet), or ask for changes in Profile", () => {
     render(<TrainerClientView client={client} view={planView()}/>);
-    expect(screen.getByText("You can change their plan. They see every change and can undo it.")).toBeTruthy();
+    // Changes on: no lead line on the page; the consent copy lives in the Sharing sheet.
+    expect(screen.queryByText("You can change their plan. They see every change and can undo it.")).toBeNull();
+    expect(document.querySelector("[data-lead]")).toBeNull();
     expect(tab("Plan").querySelector('[data-section="plan"]')).toBeTruthy();
-    expect(within(sharing()).getByText("Sam can stop sharing any time.")).toBeTruthy();
+    const sheet = sharing();
+    expect(within(sheet).getByText("You can change their plan. They see every change and can undo it.")).toBeTruthy();
+    expect(within(sheet).getByText("Sam can stop sharing any time.")).toBeTruthy();
     cleanup();
     // No plan on the view: read only, and the way to change that.
     render(<TrainerClientView client={client} view={view()}/>);
@@ -486,17 +505,18 @@ describe("TrainerClientView: the plan", () => {
     expect(within(sharing()).getByText("Sam can stop sharing any time.")).toBeTruthy();
     cleanup();
     render(<TrainerClientView client={client} view={planView()}/>);
-    expect(document.querySelector("p").textContent).toBe(`You can change their plan. They see every change and can undo it.${tail}`);
+    expect(document.querySelector("[data-lead]")).toBeNull();
+    expect(within(sharing()).getByText(leadLine("on", "Sam"))).toBeTruthy();
   });
 
-  it("the Plan tab: the tray first, then rows by session: last, next, and a waiting change", () => {
+  it("the Plan tab: no tray until a draft, then rows by session: last, next, and a waiting change", () => {
     const rows = [{ id: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa.0", set: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa", kind: "weight", target: "Barbell Back Squat",
       before: 102.5, after: 105, from: null, at: Date.now() - 3600e3, appliedAt: null, outcome: null, undoneAt: null }];
     render(<TrainerClientView client={client} view={planView(planData(), { rows })}/>);
     const panel = tab("Plan");
-    const tray = panel.querySelector("[data-tray]");
-    const firstSession = panel.querySelector("[data-plan-session]");
-    expect(tray.compareDocumentPosition(firstSession) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Nothing drafted: no tray, and no dead button.
+    expect(panel.querySelector("[data-tray]")).toBeNull();
+    expect(within(panel).queryByRole("button", { name: /Review|No changes yet/ })).toBeNull();
     // What was sent lists on the Sent tab, not here.
     expect(panel.querySelector('[data-section="changes"], [data-section="coach"]')).toBeNull();
     const squatRow = panel.querySelector('[data-plan-lift="Barbell Back Squat"]');
@@ -504,17 +524,40 @@ describe("TrainerClientView: the plan", () => {
     expect(squatRow.textContent).toBe("Barbell Back SquatMain liftlast 100 × 5 · next 102.5 × 5 · yours 105 (waiting)");
     expect(document.querySelector('[data-plan-lift="Barbell Bench Press"]').textContent).toContain("last 60 × 5 · next 5 reps");
     expect(document.querySelector('[data-plan-lift="45-Degree Hip Extension"]').textContent).toContain("not lifted yet · next 15 reps");
-    // Nothing drafted: nothing to review.
-    expect(within(tab("Plan").querySelector("[data-tray]")).getByRole("button").textContent).toBe("No changes yet");
+  });
+
+  it("each session opens to its main lifts and any lift with a change; the rest sit behind one tap, in order", () => {
+    const rows = [{ id: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa.0", set: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa", kind: "weight", target: "Chest-Supported DB Row",
+      before: 20, after: 22.5, from: null, at: Date.now() - 3600e3, appliedAt: null, outcome: null, undoneAt: null }];
+    const v = planView(planData(), { rows });
+    render(<TrainerClientView client={client} view={v}/>);
+    const panel = tab("Plan");
+    const a = /** @type {HTMLElement} */ (panel.querySelector('[data-plan-session="A"]'));
+    const shown = () => [...a.querySelectorAll("[data-plan-lift]")].filter((r) => !r.closest("[hidden]")).map((r) => r.getAttribute("data-plan-lift"));
+    const all = v.plan.lifts.filter((l) => l.session === "A").map((l) => l.name);
+    // The two main lifts, and the row whose change is waiting.
+    expect(shown()).toEqual(["Barbell Back Squat", "Barbell Bench Press", "Chest-Supported DB Row"]);
+    const more = within(a).getByRole("button", { name: `${all.length - 3} more lifts` });
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(more);
+    expect(shown()).toEqual(all);
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    expect(more.textContent).toBe("Fewer lifts");
+    // A lift drafted while open stays in sight once the session closes again.
+    openLift("Standing Calf Raise"); tap("More reps"); tap("Add to changes");
+    fireEvent.click(more);
+    expect(shown()).toEqual(["Barbell Back Squat", "Barbell Bench Press", "Chest-Supported DB Row", "Standing Calf Raise"]);
+    // Every session past A has its main lifts out and its own tap.
+    expect(panel.querySelectorAll("[data-plan-more]")).toHaveLength(3);
   });
 
   it("steps the weight over the implement's rungs inside the validator's bounds, with Hold, Step, Jump and Ease", () => {
     render(<TrainerClientView client={client} view={planView()}/>);
     openLift("Barbell Back Squat");
     const d = dialog();
-    expect(d.textContent).toContain("Up to 110 kg: last top set 100 kg");
-    expect(d.textContent).toContain("Not below 65 kg");
-    expect(d.textContent).toContain("Step is their app's next weight. Jump is the most this change allows.");
+    // One range line, and no note for the presets: each chip says its kg.
+    expect(d.querySelector("[data-range]").textContent).toBe("65 to 110 kg");
+    expect(d.textContent).not.toMatch(/Not below|last top set 100 kg|Step is their|Jump is the/);
     expect(d.textContent).not.toContain("A one-off");
     const pace = within(d).getByRole("group", { name: "Pace" });
     expect([...pace.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Hold 100 kg", "Step 102.5 kg", "Jump 110 kg", "Ease 95 kg"]);
@@ -585,7 +628,7 @@ describe("TrainerClientView: the plan", () => {
     expect(calf.bounds).toMatchObject({ min: 70, max: 110 });
     render(<TrainerClientView client={client} view={view}/>);
     openLift("Standing Calf Raise");
-    expect(dialog().textContent).toContain("Up to 110 kg: last top set 100 kg");
+    expect(dialog().querySelector("[data-range]").textContent).toBe("70 to 110 kg");
     expect(within(dialog()).getByLabelText("Weight in kg")).toBeTruthy();
   });
 
@@ -634,7 +677,59 @@ describe("TrainerClientView: the plan", () => {
     expect(onChanged).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.querySelector('[data-section="plan"]').textContent).toContain("Sent to Sam.");
-    expect(within(tab("Plan").querySelector("[data-tray]")).getByRole("button").textContent).toBe("No changes yet");
+    expect(tab("Plan").querySelector("[data-tray]")).toBeNull();
+  });
+
+  it("after Send a row's draft reads as yours, waiting, at once, fading in on that span alone; reduced motion swaps it", async () => {
+    const onChanged = vi.fn(async () => true);
+    const { rerender } = render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()} onChanged={onChanged}/>);
+    const row = () => /** @type {HTMLElement} */ (document.querySelector('[data-plan-lift="Barbell Back Squat"]'));
+    openLift("Barbell Back Squat");
+    tap("More weight"); tap("More weight");
+    tap("Add to changes");
+    expect(row().querySelector('[data-row-tail="draft"]')?.textContent).toBe(" · new 105, not sent");
+    await review();
+    await act(async () => { tap("Send to Sam"); });
+    await settle();
+    // Before the reload lands: the words the reloaded plan will say, on a span that fades in.
+    const tail = /** @type {HTMLElement} */ (row().querySelector('[data-row-tail="yours"]'));
+    expect(tail.textContent).toBe(" · yours 105 (waiting)");
+    expect(tail.className).toBe("forge-swap");
+    expect(row().textContent).not.toContain("not sent");
+    expect(document.querySelector('[data-section="plan"]').textContent).toContain("Sent to Sam.");
+    // The reload says the same: the same span stays, with nothing to fade again.
+    const rows = [{ id: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa.0", set: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa", kind: "weight", target: "Barbell Back Squat",
+      before: 102.5, after: 105, from: null, at: Date.now(), appliedAt: null, outcome: null, undoneAt: null }];
+    rerender(<TrainerClientView client={client} view={planView(planData(), { rows })} onChange={fakeRoute()} onChanged={onChanged}/>);
+    expect(row().querySelector('[data-row-tail="yours"]')).toBe(tail);
+    expect(tail.textContent).toBe(" · yours 105 (waiting)");
+    expect(tail.className).toBe("");
+    // 160 ms on opacity alone; none under reduced motion.
+    const css = readFileSync(resolve(root, "app/globals.css"), "utf8");
+    expect(css).toMatch(/\n\.forge-swap \{ animation: fadeIn 160ms [^}]*\}/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.forge-swap \{ animation: none; \}/);
+  });
+
+  it("Review names a change still waiting that the new one replaces", async () => {
+    const rows = [{ id: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa.0", set: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa", kind: "weight", target: "Barbell Back Squat",
+      before: 102.5, after: 107.5, from: null, at: Date.now() - 3600e3, appliedAt: null, outcome: null, undoneAt: null }];
+    render(<TrainerClientView client={client} view={planView(planData(), { rows })} onChange={fakeRoute()}/>);
+    openLift("Barbell Back Squat");
+    tap("More weight");
+    tap("Add to changes");
+    await review();
+    const op = /** @type {HTMLElement} */ (dialog().querySelector('[data-op="0"]'));
+    expect(op.querySelector("[data-replaces]")?.textContent).toBe("107.5 waiting, replaced");
+    expect(/** @type {HTMLElement} */ (op.querySelector("[data-replaces]")).style.color).toBe("var(--ink-2)");
+    tap("Keep editing");
+    cleanup();
+    // Nothing waiting on the lift: nothing to name.
+    render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()}/>);
+    openLift("Barbell Back Squat");
+    tap("More weight");
+    tap("Add to changes");
+    await review();
+    expect(dialog().querySelector("[data-replaces]")).toBeNull();
   });
 
   it("a send whose reload fails keeps the sent line and says the list may be behind", async () => {
@@ -1006,7 +1101,7 @@ describe("TrainerClientView: the plan", () => {
     expect(kg().value).toBe("");
     expect(within(dialog()).getByRole("button", { name: "Less weight" }).disabled).toBe(true);
     tap("Add to changes");
-    expect(within(tab("Plan").querySelector("[data-tray]")).getByRole("button").textContent).toBe("No changes yet");
+    expect(tab("Plan").querySelector("[data-tray]")).toBeNull();
     openLift("Landmine Press");
     fireEvent.change(kg(), { target: { value: "30.6" } });
     fireEvent.blur(kg());
@@ -1282,7 +1377,7 @@ describe("TrainerClientView: sessions you ran", () => {
       const route = fakeRoute();
       render(<TrainerClientView client={client} clientRef={REF} view={ranView()} onChange={route} onRunSession={onRun} unsent={unsentDraft(REF)}/>);
       const row = /** @type {HTMLElement} */ (ranBox().querySelector("[data-unsent]"));
-      expect(row.textContent).toBe("Strength B, today · 2 setsNot sent yet · on this iPad");
+      expect(row.textContent).toBe("Strength B, today · 2 setsNot sent yet · on this device");
       // First: before every sent one.
       const first = ranBox().querySelector("[data-ran]");
       expect(row.compareDocumentPosition(/** @type {Node} */ (first)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -1305,7 +1400,7 @@ describe("TrainerClientView: sessions you ran", () => {
       expect(onRun).toHaveBeenCalledWith("B");
       cleanup();
       render(<TrainerClientView client={client} clientRef={REF} view={projectForTrainer(planData(), { todayIso: today, edits: { rows: [] }, status: "off" })} onRunSession={onRun} unsent={unsentDraft(REF)}/>);
-      expect(ranBox().querySelector("[data-unsent]").textContent).toBe("Strength B, today · 2 setsNot sent yet · on this iPad");
+      expect(ranBox().querySelector("[data-unsent]").textContent).toBe("Strength B, today · 2 setsNot sent yet · on this device");
       fireEvent.click(screen.getByRole("button", { name: "Continue" }));
       expect(onRun).toHaveBeenCalledTimes(2);
       cleanup();
@@ -1827,7 +1922,7 @@ describe("TrainerClientView: the house buttons", () => {
     expect(size(within(/** @type {HTMLElement} */ (tab("Sessions").querySelector('[data-section="sessions"]'))).getByRole("button", { name: "Show earlier sessions" }))).toEqual(QUIET);
   });
 
-  it("an off button keeps its ink and dims to 0.6, as a busy commit does: Run at the cap, Review with nothing drafted or no sends left", () => {
+  it("an off button keeps its ink and dims to 0.6, as a busy commit does: Run at the cap, Review with no sends left", () => {
     const tray = () => /** @type {HTMLButtonElement} */ (tab("Plan").querySelector("[data-tray] button"));
     const run = () => /** @type {HTMLButtonElement} */ (screen.getByRole("button", { name: "Run Strength B with Sam" }));
     const look = (b) => [b.disabled, b.style.color, b.style.opacity];
@@ -1835,8 +1930,7 @@ describe("TrainerClientView: the house buttons", () => {
     render(<TrainerClientView client={client} view={planView(planData(), { sessions: { used: SESSIONS_PER_WEEK, freeAt: null } })}
       onChange={fakeRoute()} onRunSession={vi.fn()}/>);
     expect(look(run())).toEqual([true, "var(--commit-ink)", "0.6"]);
-    expect(tray().textContent).toBe("No changes yet");
-    expect(look(tray())).toEqual([true, "var(--ink)", "0.6"]);
+    expect(tray()).toBeNull();
     draft();
     expect(look(tray())).toEqual([false, "var(--ink)", "1"]);
     cleanup();
@@ -1931,8 +2025,7 @@ describe("TrainerClientView: the house buttons", () => {
     const route = vi.fn(async () => ({ status: 422, body: { refusals: [{ i: 0, code: "per_change" }], error: SERVER_WORDS } }));
     render(<TrainerClientView client={client} view={v} onChange={route}/>);
     openLift(AP);
-    expect(dialog().textContent).toContain("Up to 100 kg of help: last top set 20 kg");
-    expect(dialog().textContent).toContain("Not below 17.5 kg of help");
+    expect(dialog().querySelector("[data-range]").textContent).toBe("17.5 to 100 kg of help");
     tap("Less assistance");
     tap("Add to changes");
     await review();
@@ -1942,71 +2035,79 @@ describe("TrainerClientView: the house buttons", () => {
     cleanup();
     render(<TrainerClientView client={client} view={v}/>);
     openLift("Barbell Back Squat");
-    expect(dialog().textContent).toContain("Up to 110 kg: last top set 100 kg");
+    expect(dialog().querySelector("[data-range]").textContent).toBe("65 to 110 kg");
     expect(dialog().textContent).not.toContain("of help");
   });
 });
 
 describe("TrainerClientView: the summary", () => {
   const SIGNAL = { lastTrainedDaysAgo: 1, weekDone: 2, weekPlanned: 3, rhythmPct: 86, paused: false };
-  const glance = () => /** @type {HTMLElement | null} */ (document.querySelector("[data-glance]"));
+  const kicker = () => /** @type {HTMLElement} */ (document.querySelector("[data-kicker]"));
 
-  it("the glance strip reads the roster signal, numerals in the measured face; paused says so; no signal, no strip", () => {
+  it("the kicker reads the roster signal in place of Shared with you, numerals in the measured face; paused says so; no strip below", () => {
     render(<TrainerClientView client={client} view={view()} signal={SIGNAL}/>);
-    expect([...glance().children].map((c) => c.textContent)).toEqual(["2 of 3 this week", "rhythm 86%", "last trained yesterday"]);
-    expect([...glance().querySelectorAll("span span")].map((n) => [n.textContent, n.style.fontFamily]))
-      .toEqual(["2", "3", "86"].map((d) => [d, T.measured]));
-    expect(glance().closest("[data-summary]")).toBeTruthy();
+    expect(kicker().textContent).toBe("2 of 3 this week · last trained yesterday");
+    expect([...kicker().querySelectorAll("span")].map((n) => [n.textContent, n.style.fontFamily])).toEqual(["2", "3"].map((d) => [d, T.measured]));
+    expect(document.querySelector("[data-glance]")).toBeNull();
+    expect(document.body.textContent).not.toContain("Shared with you");
+    expect(document.body.textContent).not.toContain("rhythm 86%");
     cleanup();
     render(<TrainerClientView client={client} view={view()} signal={{ ...SIGNAL, paused: true, lastTrainedDaysAgo: 9 }}/>);
-    expect([...glance().children].map((c) => c.textContent)).toEqual(["Paused", "last trained 9 days ago"]);
+    expect(kicker().textContent).toBe("Paused · last trained 9 days ago");
     cleanup();
     render(<TrainerClientView client={client} view={view()}/>);
-    expect(glance()).toBeNull();
+    expect(kicker().textContent).toBe("Shared with you");
     expect(document.querySelectorAll("[data-summary-rhythm] li")).toHaveLength(8);
   });
 
-  it("glanceParts: today, never, and a week with no plan", () => {
+  it("glanceParts and kickerText: today, never, and a week with no plan", () => {
     expect(glanceParts(null)).toEqual([]);
-    expect(glanceParts({ ...SIGNAL, lastTrainedDaysAgo: 0 })).toEqual(["2 of 3 this week", "rhythm 86%", "trained today"]);
-    expect(glanceParts({ ...SIGNAL, lastTrainedDaysAgo: null, weekPlanned: 0, rhythmPct: null })).toEqual(["no sessions in the last year"]);
+    expect(kickerText(null)).toBeNull();
+    expect(glanceParts({ ...SIGNAL, lastTrainedDaysAgo: 0 })).toEqual(["2 of 3 this week", "trained today"]);
+    expect(kickerText({ ...SIGNAL, lastTrainedDaysAgo: null, weekPlanned: 0, rhythmPct: null })).toBe("No sessions in the last year");
   });
 
-  it("a row per main lift: name, spark, e1RM and the change against 28 days", () => {
+  it("Run sits right under the name and the eight cells, ahead of anything else in the summary", () => {
+    const at = Date.now();
+    const v = planView(planData());
+    v.plan.changes = [...v.plan.changes, { id: "s1.0", set: "s1", kind: "weight", target: "Barbell Back Squat", before: 100, after: 102.5, from: null, status: "waiting", reason: null, date: null, at, warnings: [] }];
+    render(<TrainerClientView client={client} view={v} signal={SIGNAL} onRunSession={vi.fn()}/>);
+    const cells = /** @type {HTMLElement} */ (document.querySelector("[data-summary-rhythm]"));
+    expect(cells.nextElementSibling?.hasAttribute("data-run")).toBe(true);
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1.compareDocumentPosition(cells) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("no lifts table in the summary: each main lift, its spark and e1RM live on Lifts alone", () => {
     render(<TrainerClientView client={client} view={view()}/>);
-    const rows = [...document.querySelectorAll("[data-summary-lift]")];
-    expect(rows.map((r) => r.getAttribute("data-summary-lift"))).toEqual(["Barbell Back Squat"]);
-    expect(rows[0].querySelector("svg")).toBeTruthy();
-    expect(rows[0].textContent).toMatch(/^Barbell Back Squat[\d.]+ kg(level|[+-][\d.]+ kg)$/);
+    expect(document.querySelector("[data-summary-lifts], [data-summary-lift]")).toBeNull();
+    expect(document.querySelector("[data-summary]").textContent).not.toContain("Barbell Back Squat");
+    const row = /** @type {HTMLElement} */ (tab("Lifts").querySelector('[data-lift="Barbell Back Squat"] > button'));
+    expect(row.querySelector("svg")).toBeTruthy();
+    expect(row.textContent).toMatch(/^Barbell Back Squat[\d.]+ kg$/);
   });
 
-  it("liftDelta: the newest e1RM against the first in the last 28 days", () => {
-    const s = [{ date: "2026-10-01", est1RM: 100 }, { date: "2026-10-20", est1RM: 105 }, { date: "2026-11-10", est1RM: 110 }];
-    expect(liftDelta(s, "2026-11-16")).toEqual({ now: 110, delta: 5, text: "+5" });
-    expect(liftDelta(s.slice(0, 2), "2026-10-25")).toEqual({ now: 105, delta: 5, text: "+5" });
-    expect(liftDelta([{ date: "2026-11-01", est1RM: 100 }, { date: "2026-11-10", est1RM: 97.5 }], "2026-11-16")?.text).toBe("-2.5");
-    expect(liftDelta([{ date: "2026-11-10", est1RM: 100 }], "2026-11-16")?.text).toBe("level");
-    expect(liftDelta([], "2026-11-16")).toBeNull();
-  });
-
-  it("pending marks as tags: changes waiting, sessions on their phone, and the steel under minimum only when flagged", () => {
-    const tags = () => [...document.querySelectorAll("[data-pending] [data-tag]")].map((t) => [t.getAttribute("data-tag"), t.textContent]);
-    // Flagged under minimum, nothing sent: the one steel tag.
+  it("no tags in the summary: what is waiting is a count on the Sent tab, and under minimum stays in Sessions", () => {
+    // Flagged under minimum, nothing sent: no tag, no Sent tab; the steel flag is in Sessions.
     render(<TrainerClientView client={client} view={view()}/>);
-    expect(tags()).toEqual([["under", "Under minimum"]]);
-    const bar = /** @type {HTMLElement} */ (document.querySelector("[data-pending] [data-tag]")?.parentElement?.firstElementChild);
-    expect(bar.style.background).toBe("var(--under)");
+    expect(document.querySelector("[data-pending], [data-tag]")).toBeNull();
+    expect(document.querySelector("[data-summary]").textContent).not.toContain("Under minimum");
+    expect(/** @type {HTMLElement} */ (tab("Sessions").querySelector('[data-section="under"] span')).style.color).toBe("var(--under)");
     cleanup();
     const at = Date.now();
     const hourAgo = new Date(at - 3600e3).toISOString();
     const v = planView(planData(), { rows: [ranRow("seen.00", "B", today, at, { deliveredAt: hourAgo })] });
     v.plan.changes = [...v.plan.changes, { id: "s1.0", set: "s1", kind: "weight", target: "Barbell Back Squat", before: 100, after: 102.5, from: null, status: "waiting", reason: null, date: null, at, warnings: [] }];
     render(<TrainerClientView client={client} view={v}/>);
-    expect(tags().filter(([k]) => k !== "under")).toEqual([["changes", "1 change waiting"], ["phone", "1 session on their phone"]]);
+    expect(document.querySelector("[data-pending], [data-tag]")).toBeNull();
+    // One change waiting and one session on their phone: Sent 2, the figure in the measured face.
+    const sent = screen.getByRole("tab", { name: "Sent, 2 waiting" });
+    const count = /** @type {HTMLElement} */ (sent.querySelector("[data-sent-count]"));
+    expect([count.textContent, count.style.fontFamily, count.getAttribute("aria-hidden")]).toEqual(["2", T.measured, "true"]);
     cleanup();
-    // Nothing waiting and nothing flagged: no tags at all.
-    render(<TrainerClientView client={client} view={view(history().filter((r) => r.date < ago(14)))}/>);
-    expect(document.querySelector("[data-pending]")).toBeNull();
+    // Nothing waiting: the tab is the word alone.
+    render(<TrainerClientView client={client} view={planView()}/>);
+    expect(screen.getByRole("tab", { name: "Sent" }).textContent).toBe("Sent");
   });
 });
 

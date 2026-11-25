@@ -34,7 +34,7 @@ import { rovingIndex } from "@/lib/a11y";
 // Under prefers-reduced-motion the rise is dropped and only the fade runs.
 // Read during render: every consumer mounts client-only (ssr:false shells in
 // components/client-shells.jsx), so no server markup can disagree with it.
-const prefersReducedMotion = () =>
+export const prefersReducedMotion = () =>
   typeof window !== "undefined" && typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -161,7 +161,7 @@ export function Tag({ children, color, style = {} }) {
 export const tabIds = (base, key) => ({ tab: `${base}-tab-${key}`, panel: `${base}-panel-${key}` });
 
 /**
- * @param {{ label: string, idBase: string, tabs: Array<{ key: string, label: string }>, selected: string, onSelect: (key: string) => void, style?: import("react").CSSProperties }} props
+ * @param {{ label: string, idBase: string, tabs: Array<{ key: string, label: import("react").ReactNode }>, selected: string, onSelect: (key: string) => void, style?: import("react").CSSProperties }} props
  */
 export function TabStrip({ label, idBase, tabs, selected, onSelect, style = {} }) {
   /** @param {import("react").KeyboardEvent<HTMLDivElement>} e */

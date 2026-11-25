@@ -28,10 +28,10 @@ import { withNavTransition } from "@/lib/nav-transitions";
 import { pressLiftHandlers } from "@/lib/press-lift";
 import { useInlineModalA11y } from "@/lib/a11y";
 import Glyph from "@/components/Glyph";
-import { BTN, Card } from "@/components/ui";
+import { BTN, Card, Fade, prefersReducedMotion } from "@/components/ui";
 import { authenticatePasskey } from "@/lib/webauthn";
 import { fetchWithTimeout } from "@/lib/net";
-import { todayLocalIso } from "@/lib/dates";
+import { todayLocalIso, localDateStr } from "@/lib/dates";
 import { formatCode, shareUrl } from "@/lib/trainer-code";
 import { TRAINER_TERMS_COPY, TRAINER_TERMS_VERSION } from "@/lib/trainer-terms";
 import {
@@ -149,25 +149,33 @@ const counted = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 /** The rhythm the card's mark prints, or null: none while paused or with no plan to measure against. @param {any} signal */
 export const rosterRhythm = (signal) => (signal && !signal.paused && Number.isFinite(signal.rhythmPct) ? signal.rhythmPct : null);
 
+/** "Strength A" from "A". @param {unknown} letter */
+const keptName = (letter) => (letter === "A" || letter === "B" || letter === "C" ? `Strength ${letter}` : null);
+
 /**
- * A roster card's one line, by priority: paused ("Paused · last trained 9
- * days ago"); then what this trainer has waiting on them ("1 session on
- * their phone · 2 changes waiting · 2 of 3 this week"); then the signal line,
- * without the rhythm when the card's mark prints it.
- * @param {{ signal?: any, since?: number | null, waiting?: { changes?: number, sessions?: number } | null }} client
+ * A roster card's one line, two parts at most, by priority: paused ("Paused ·
+ * last trained 9 days ago"); then what this trainer has waiting on them ("1
+ * session on their phone · 2 changes waiting"), where a session they kept
+ * today ("Alex kept Strength A", stated, on this device's calendar) takes
+ * the sessions' place; then the signal line, without the rhythm when the
+ * card's mark prints it.
+ * @param {{ name?: string | null, signal?: any, since?: number | null, waiting?: { changes?: number, sessions?: number } | null, kept?: { letter?: string, at?: number } | null }} client
+ * @param {string} [todayIso]  this device's date
  */
-export function rosterLine({ signal = null, since = null, waiting = null }) {
+export function rosterLine({ name = null, signal = null, since = null, waiting = null, kept = null }, todayIso = todayLocalIso()) {
   if (signal?.paused) {
     const last = lastText(signal.lastTrainedDaysAgo);
     return `Paused · ${last.charAt(0).toLowerCase()}${last.slice(1)}`;
   }
   const sessions = Number(waiting?.sessions) || 0;
   const changes = Number(waiting?.changes) || 0;
-  if (sessions > 0 || changes > 0) {
+  const keptToday = keptName(kept?.letter) && Number.isFinite(kept?.at) && localDateStr(new Date(/** @type {number} */ (kept?.at))) === todayIso
+    ? `${name || "They"} kept ${keptName(kept?.letter)}` : null;
+  if (sessions > 0 || changes > 0 || keptToday) {
     const parts = [];
-    if (sessions > 0) parts.push(`${counted(sessions, "session", "sessions")} on their phone`);
+    if (keptToday) parts.push(keptToday);
+    else if (sessions > 0) parts.push(`${counted(sessions, "session", "sessions")} on their phone`);
     if (changes > 0) parts.push(`${counted(changes, "change", "changes")} waiting`);
-    if (signal?.weekPlanned > 0) parts.push(`${signal.weekDone} of ${signal.weekPlanned} this week`);
     return parts.join(" · ");
   }
   return signalText(signal, since, { rhythm: rosterRhythm(signal) === null });
@@ -251,6 +259,9 @@ export default function TrainerView() {
   const [me, setMe] = useState(null);
   const [clients, setClients] = useState([]);
   const [loadedAt, setLoadedAt] = useState(0);
+  // The refs on the first roster this visit: a card past them has just
+  // arrived (a code used), and enters once with the house fade.
+  const [known, setKnown] = useState(/** @type {Set<string> | null} */ (null));
   // The open client (or SELF_ROW, i -1): { i, ref, name, lastLooked } and its pane state.
   const [open, setOpen] = useState(null);
   const [pane, setPane] = useState(null); // { ref, state: 'loading' | 'missing' | 'error' } | { ref, state: 'ready', client, view, self }
@@ -269,7 +280,7 @@ export default function TrainerView() {
   const inviteSeq = useRef(0);
 
   const reset = () => {
-    setMe(null); setClients([]); setOpen(null); setPane(null); setInvite(null); setApplyResult(null);
+    setMe(null); setClients([]); setKnown(null); setOpen(null); setPane(null); setInvite(null); setApplyResult(null);
     ceremony.current = null; paneSeq.current += 1; inviteSeq.current += 1; entryRef.current = null;
   };
 
@@ -286,7 +297,9 @@ export default function TrainerView() {
   const applyRoster = (r) => {
     if (r.status === 200) {
       setMe(r.body.me?.name ?? null);
-      setClients(Array.isArray(r.body.clients) ? r.body.clients : []);
+      const list = Array.isArray(r.body.clients) ? r.body.clients : [];
+      setClients(list);
+      setKnown((k) => k ?? new Set(list.map((c) => c?.ref)));
       setLoadedAt(Date.now());
       setPhase("roster");
     } else if (r.status === 401) {
@@ -570,7 +583,8 @@ export default function TrainerView() {
     } catch {
       // Offline before the page loaded: the coach page asks for Face ID by name, and says when it can't.
     }
-    router.push(`/trainer/coach#${new URLSearchParams({ ref, letter })}`);
+    // Untyped: the forward slide, as Home to a session.
+    withNavTransition(() => router.push(`/trainer/coach#${new URLSearchParams({ ref, letter })}`));
   };
 
   // ── The invite ────────────────────────────────────────────────────────────
@@ -687,6 +701,8 @@ export default function TrainerView() {
   }
 
   const selected = open ? clients.findIndex((c) => c.ref === open.ref) : -1;
+  // A kept session reads on the day it was kept, on this device's calendar.
+  const todayIso = todayLocalIso();
   const selfOpen = open?.ref === SELF_REF;
   const shown = open && pane?.ref === open.ref ? pane : null;
   return (
@@ -695,11 +711,7 @@ export default function TrainerView() {
       <div className="forge-wide-back">{profileRow()}</div>
       <div className="forge-wide-roster">
         <div style={kickerStyle}>For trainers</div>
-        <h1 style={h1Style}>Your clients</h1>
-        <button type="button" onClick={issue} className="forge-press forge-tint"
-          style={{ ...BTN.quiet, width: "100%", marginTop: 14, marginBottom: 20 }}>
-          Add a client
-        </button>
+        <h1 style={{ ...h1Style, marginBottom: 20 }}>Your clients</h1>
         {/* Your own training, pinned first; a hairline sets it apart from clients. */}
         <div data-self-row="" style={{ borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}` }}>
           <button type="button" onClick={openSelf} aria-current={selfOpen ? "true" : undefined}
@@ -719,32 +731,42 @@ export default function TrainerView() {
         ) : (
           <ul aria-label="Clients" style={{ listStyle: "none", margin: "16px 0 0", padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             {clients.map((c, i) => {
-              const line = rosterLine(c);
+              const line = rosterLine(c, todayIso);
               const pct = rosterRhythm(c.signal);
               const current = i === selected;
+              const arrived = !!known && !known.has(c.ref);
+              const card = (
+                <Card style={{ overflow: "hidden" }}>
+                  <button type="button" onClick={() => openClient(i)} aria-current={current ? "true" : undefined}
+                    className="forge-press forge-tint" style={cardButton}>
+                    {current && <span aria-hidden="true" style={openMark}/>}
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={cardTitle}>{c.name || "Your client"}</span>
+                      <span className="forge-wide-signal" title={line} style={cardLine}>
+                        <Nums text={line}/>
+                      </span>
+                    </span>
+                    {pct !== null && <RhythmMark pct={pct}/>}
+                    <span className="forge-wide-n-only" style={{ flexShrink: 0, lineHeight: 0 }}>
+                      <Glyph name="arrowRight" size={12} color={T.ink3}/>
+                    </span>
+                  </button>
+                </Card>
+              );
+              // Reduced motion: it appears.
               return (
-                <li key={c.ref}>
-                  <Card style={{ overflow: "hidden" }}>
-                    <button type="button" onClick={() => openClient(i)} aria-current={current ? "true" : undefined}
-                      className="forge-press forge-tint" style={cardButton}>
-                      {current && <span aria-hidden="true" style={openMark}/>}
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={cardTitle}>{c.name || "Your client"}</span>
-                        <span className="forge-wide-signal" title={line} style={cardLine}>
-                          <Nums text={line}/>
-                        </span>
-                      </span>
-                      {pct !== null && <RhythmMark pct={pct}/>}
-                      <span className="forge-wide-n-only" style={{ flexShrink: 0, lineHeight: 0 }}>
-                        <Glyph name="arrowRight" size={12} color={T.ink3}/>
-                      </span>
-                    </button>
-                  </Card>
+                <li key={c.ref} data-arrived={arrived ? "" : undefined}>
+                  {arrived ? <Fade opaque={prefersReducedMotion()}>{card}</Fade> : card}
                 </li>
               );
             })}
           </ul>
         )}
+        {/* A quiet text row under the cards: the clients lead. */}
+        <button type="button" onClick={issue} data-add-client=""
+          style={{ ...BTN.text, color: T.ink2, fontSize: 14, minHeight: 44, marginTop: 8, padding: clients.length ? "0 16px" : 0 }}>
+          <Glyph name="plus" size={12} color={T.ink3}/> Add a client
+        </button>
         <div style={{ marginTop: 28, fontSize: 12, color: T.ink2 }}>
           {me && <div style={{ marginBottom: 4 }}>Signed in as {me}</div>}
           <button type="button" onClick={() => setSignOutOpen(true)} style={{ ...BTN.text, padding: "8px 0" }}>Sign out</button>

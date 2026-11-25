@@ -18,13 +18,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { Fragment, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
-import { T, DISPLAY, heatForRpe, heatMarkHeight } from "@/lib/tokens";
+import { T, DISPLAY } from "@/lib/tokens";
 import { pressLiftHandlers } from "@/lib/press-lift";
 import { useInlineModalA11y } from "@/lib/a11y";
 import Glyph from "@/components/Glyph";
 import { BTN, Tag, TabStrip, TabPanel } from "@/components/ui";
 import { InkSpark, LineChart } from "@/components/LiftCharts";
-import { mainLiftTrend, readinessBreakdown } from "@/lib/analytics";
+import { mainLiftTrend } from "@/lib/analytics";
 import { auditHistoryVolume, AUDIT_MUSCLE_ORDER } from "@/lib/volume-audit";
 import { makeDayContext, weeklyStrength } from "@/lib/day-state";
 import { isResting } from "@/lib/breaks";
@@ -179,7 +179,6 @@ const tabTop = { marginTop: 24 };
 export default function TrainerClientView({ client, view, lastLooked = null, now = 0, onRemove, self = false, onChange, onFaceId, onChanged, clientRef = null, onExport, onRunSession, unsent: unsentProp = null, signal = null, onClose }) {
   const name = client?.name || null;
   const title = self ? "You" : name || "Your client";
-  const they = self ? "you" : "they";
   const todayIso = view?.window?.to;
   const from = view?.window?.from;
   const sessions = useMemo(() => (Array.isArray(view?.sessions) ? view.sessions : []), [view]);
@@ -196,7 +195,6 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   const lifts = Object.keys(all);
   // Each main lift's ledger: every set over 24 weeks, then top sets to 12 months.
   const ledgers = useMemo(() => Object.fromEntries(Object.keys(all).map((l) => [l, ledgerFor(view, l)])), [view, all]);
-  const felt = useMemo(() => readinessBreakdown(sessions), [sessions]);
   const audit = useMemo(() => auditHistoryVolume(sessions, { weeks: 2 }), [sessions]);
   const under = audit && !audit.away
     ? AUDIT_MUSCLE_ORDER.filter((m) => audit.perMuscle?.[m]?.status === "under_mev")
@@ -282,21 +280,30 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
   // keys the pane by client, so another client starts at the default.
   const idBase = useId();
   const hasSent = !!plan || ranRows.length > 0 || !!unsent;
+  // What has not landed yet, counted on the Sent tab: changes waiting and sessions on their phone.
+  const inFlight = waitingChanges + onPhone;
+  const sentLabel = inFlight > 0 ? (
+    <>Sent<span aria-hidden="true" data-sent-count="" style={{ fontFamily: T.measured, marginLeft: 6 }}>{inFlight}</span><span style={SR_ONLY}>, {inFlight} waiting</span></>
+  ) : "Sent";
   const tabs = [
     plan && { key: "plan", label: "Plan" },
-    hasSent && { key: "sent", label: "Sent" },
+    hasSent && { key: "sent", label: sentLabel },
     { key: "lifts", label: "Lifts" },
     { key: "sessions", label: "Sessions" },
   ].filter(Boolean);
   const [picked, setPicked] = useState(/** @type {string | null} */ (null));
   const tab = picked && tabs.some((t) => t.key === picked) ? picked : plan ? "plan" : "sessions";
   const changesWord = edits === "on" || edits === "unavailable" ? "changes on" : "changes off";
+  const glance = kickerText(self ? null : signal);
 
   return (
     <div style={{ fontFamily: T.text, color: T.ink }}>
       {/* 1. Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-        <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.ink2 }}>{self ? "Your training" : "Shared with you"}</div>
+        {/* The kicker carries the roster signal: this week and the last session. */}
+        <div data-kicker="" style={{ flex: 1, minWidth: 0, fontSize: 13, color: T.ink2 }}>
+          {self ? "Your training" : glance ? <Nums text={glance}/> : "Shared with you"}
+        </div>
         {/* From 640 the roster stays beside the pane, so the pane closes itself. */}
         {onClose && (
           <span className="forge-wide-mw-only" style={{ flexShrink: 0 }}>
@@ -308,7 +315,8 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
         )}
       </div>
       <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" }}>{title}</h1>
-      <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>{lead}</p>
+      {/* Only while read only: with changes on, what that means is consent copy, in the Sharing sheet. */}
+      {edits !== "on" && <p data-lead="" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>{lead}</p>}
       {edits === "unavailable" && onChanged && (
         <div data-plan-retry="">
           <button type="button" onClick={onPlanRetry} aria-disabled={planRetrying}
@@ -319,8 +327,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
         </div>
       )}
 
-      <ClientSummary signal={self ? null : signal} weeks={weeks} felt={felt} they={they} lifts={lifts} line={line} all={all}
-        todayIso={todayIso} under={under} waiting={waitingChanges} onPhone={onPhone}
+      <ClientSummary weeks={weeks}
         name={name} run={runState} unsent={unsent} onRunSession={onRunSession}/>
 
       {/* 2. The tabs: depth, one view at a time */}
@@ -358,7 +365,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
             <div style={{ fontSize: 13, color: T.ink2 }}>No main-lift sessions in the last 12 months.</div>
           )}
           {lifts.map((lift) => (
-            <LiftBlock key={lift} lift={lift} line={line[lift] || []} points={all[lift] || []} from={from}
+            <LiftBlock key={lift} lift={lift} line={line[lift] || []} points={all[lift] || []} from={from} todayIso={todayIso}
               ledger={ledgers[lift] || []} open={shownLift === lift} onOpen={() => setOpenLift(lift)}/>
           ))}
         </div>
@@ -463,6 +470,9 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
                   {since && looked ? " · " : null}
                   {looked ? <>You last looked <Nums text={looked}/></> : null}
                 </p>
+                {edits === "on" && (
+                  <p data-sharing-lead="" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "4px 0 0" }}>{leadLine("on", name)}</p>
+                )}
                 <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "4px 0 0" }}>
                   {edits === "on" || edits === "unavailable" ? "" : "Read only. "}{sentenceName} can stop sharing any time.
                 </p>
@@ -528,9 +538,9 @@ function RhythmCell({ week }) {
 // ── The summary: the client at a glance, then the one commit ───────────────
 
 /**
- * The glance strip's parts, from the roster signal: "2 of 3 this week",
- * "rhythm 86%", "last trained yesterday". Paused reads "Paused" and the
- * last session only. None without a signal.
+ * The glance's parts, from the roster signal: "2 of 3 this week" and "last
+ * trained yesterday". Paused reads "Paused" and the last session only. None
+ * without a signal. The rhythm reads off the eight cells under the name.
  * @param {any} signal
  * @returns {string[]}
  */
@@ -544,28 +554,19 @@ export function glanceParts(signal) {
   if (signal.paused) return ["Paused", last];
   const parts = [];
   if (signal.weekPlanned > 0) parts.push(`${signal.weekDone} of ${signal.weekPlanned} this week`);
-  if (signal.rhythmPct != null) parts.push(`rhythm ${signal.rhythmPct}%`);
   parts.push(last);
   return parts;
 }
 
 /**
- * A main lift's e1RM now against the first point in the last 28 days, as
- * the Lab's strength row reads it: "+2.5", "-5" or "level".
- * @param {Array<{ date: string, est1RM: number }>} series
- * @param {string | undefined} todayIso
+ * The pane's kicker for a client: the glance as one line, "2 of 3 this week ·
+ * last trained yesterday", its first letter capitalised. Null without a signal.
+ * @param {any} signal
  */
-export function liftDelta(series, todayIso) {
-  const cur = series[series.length - 1];
-  if (!cur) return null;
-  const cut = todayIso ? addDaysIso(todayIso, -28) : null;
-  const base = (cut && series.find((p) => p.date >= cut)) || series[0];
-  const delta = Math.round((cur.est1RM - base.est1RM) * 10) / 10;
-  return { now: cur.est1RM, delta, text: delta > 0 ? `+${delta}` : delta < 0 ? `${delta}` : "level" };
+export function kickerText(signal) {
+  const text = glanceParts(signal).join(" · ");
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : null;
 }
-
-/** The readiness bands on the effort scale: cool, middle and hot. */
-const FELT_MARKS = /** @type {const} */ ([["fresh", "Fresh", 6], ["normal", "Normal", 8], ["cooked", "Cooked", 10]]);
 
 /** @type {import("react").CSSProperties} */
 const summaryRow = { marginTop: 14 };
@@ -573,77 +574,24 @@ const summaryRow = { marginTop: 14 };
 const RUN_MAX = 440;
 
 /**
- * Above the sections: the glance strip (the roster signal), the latest eight
- * weeks, how they felt as heat marks with their counts, a row per main lift,
- * what is waiting, then the pane's one commit. Every part drops out when it
- * has nothing to say; the commit shows only when a session can run.
+ * Under the name: the latest eight weeks, then the pane's one commit, which
+ * shows only when a session can run. The roster signal is the kicker; what
+ * is waiting is the Sent tab's count; each lift's trend lives on Lifts, and
+ * how each session felt and under minimum on Sessions.
  */
-function ClientSummary({ signal, weeks, felt, they, lifts, line, all, todayIso, under, waiting, onPhone, name, run, unsent, onRunSession }) {
-  const glance = glanceParts(signal);
+function ClientSummary({ weeks, name, run, unsent, onRunSession }) {
   const recent = weeks.slice(-8);
   const [choosing, setChoosing] = useState(false);
   const canContinue = !!onRunSession && !!unsent;
-  const tags = [
-    waiting > 0 && { key: "changes", color: T.ink3, text: `${waiting} change${waiting === 1 ? "" : "s"} waiting` },
-    onPhone > 0 && { key: "phone", color: T.ink3, text: `${onPhone} session${onPhone === 1 ? "" : "s"} on their phone` },
-    under.length > 0 && { key: "under", color: T.under, text: "Under minimum" },
-  ].filter(Boolean);
   const runLabel = (letter) => `Run ${sessionName(letter)}${name ? ` with ${name}` : ""}`;
 
   return (
     <div data-summary="">
-      {glance.length > 0 && (
-        <div data-glance="" style={{ marginTop: 16, borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}`, padding: "10px 0", fontSize: 13, color: T.ink2, display: "flex", gap: "4px 14px", flexWrap: "wrap" }}>
-          {glance.map((g) => <span key={g}><Nums text={g}/></span>)}
-        </div>
-      )}
-
       {recent.length > 0 && (
         <ol data-summary-rhythm="" className="forge-summary-rhythm" aria-label="Weekly sessions against plan, the latest 8 weeks, oldest first"
           style={{ ...summaryRow, display: "grid", gap: 4, listStyle: "none", padding: 0, marginBottom: 0 }}>
           {recent.map((w) => <RhythmCell key={w.mondayIso} week={w}/>)}
         </ol>
-      )}
-
-      {felt.total > 0 && (
-        <div data-felt="" role="group" aria-label={`How ${they} felt, last 24 weeks`}
-          style={{ ...summaryRow, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 18px" }}>
-          {FELT_MARKS.map(([key, word, rpe]) => (
-            <span key={key} data-felt-band={key} style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: T.ink2 }}>
-              <span aria-hidden="true" style={{ width: 24, height: heatMarkHeight(rpe), background: heatForRpe(rpe), borderRadius: T.rMark, flexShrink: 0 }}/>
-              <span>{word} <span style={{ fontFamily: T.measured, color: T.ink }}>{felt[key]}</span></span>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {lifts.length > 0 && (
-        <div data-summary-lifts="" style={summaryRow}>
-          <div style={{ fontSize: 12, color: T.ink2, paddingBottom: 6 }}>Main lifts · e1RM vs <Nums text="28"/> days</div>
-          {lifts.map((lift) => {
-            const series = (line[lift] && line[lift].length ? line[lift] : all[lift]) || [];
-            const d = liftDelta(series, todayIso);
-            if (!d) return null;
-            return (
-              <div key={lift} data-summary-lift={lift} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>
-                <span style={{ flex: 1, minWidth: 0, fontSize: 15, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lift}</span>
-                <InkSpark values={series.slice(-8).map((p) => p.est1RM)}/>
-                <span style={{ fontFamily: T.measured, fontSize: 15, color: T.ink, flexShrink: 0 }}>{d.now}<span style={{ fontFamily: T.text, fontSize: 11, color: T.ink3 }}> kg</span></span>
-                <span style={{ width: 58, textAlign: "right", fontSize: 11, color: T.ink2, flexShrink: 0 }}>
-                  {d.delta !== 0 ? <><span style={{ fontFamily: T.measured }}>{d.text}</span> kg</> : "level"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {tags.length > 0 && (
-        <div data-pending="" style={{ ...summaryRow, display: "flex", flexWrap: "wrap", gap: "6px 16px" }}>
-          {tags.map((t) => (
-            <Tag key={t.key} color={t.color}><span data-tag={t.key}><Nums text={t.text}/></span></Tag>
-          ))}
-        </div>
       )}
 
       {canContinue ? (
@@ -710,20 +658,38 @@ function LetterSheet({ next, name, runLabel, onRun, onClose }) {
   );
 }
 
+/**
+ * Whether the e1RM a Lifts row shows is a new best: the newest point of the
+ * 12 months, above every one before it (cooked days count, as the bests do),
+ * the one shown, and from the last 7 days of todayIso.
+ * @param {Array<{ date: string, est1RM: number }>} points
+ * @param {{ date: string, est1RM: number } | undefined} shown
+ * @param {string | undefined} todayIso
+ */
+export function isNewBest(points, shown, todayIso) {
+  const last = points[points.length - 1];
+  if (!last || !shown || !todayIso || points.length < 2) return false;
+  if (shown.date !== last.date || shown.est1RM !== last.est1RM) return false;
+  if (bestOf(points) !== last) return false;
+  return last.date >= addDaysIso(todayIso, -7) && last.date <= todayIso;
+}
+
 // One main lift: a row with a sparkline that opens its chart, one open at a
 // time as in the Lab, at every width. Its ledger sits under the bests.
-function LiftBlock({ lift, line, points, from, ledger, open, onOpen }) {
+function LiftBlock({ lift, line, points, from, todayIso, ledger, open, onOpen }) {
   const best = bestOf(points);
   const last = points[points.length - 1];
   const recent = from ? points.filter((p) => p.date >= from).length : points.length;
   const latest = (line.length ? line : points)[(line.length ? line : points).length - 1];
+  // Noticed, not cheered: the e1RM shown is its 12-month best, from the last 7 days.
+  const newBest = isNewBest(points, latest, todayIso);
   return (
     <div data-lift={lift} data-open={open ? "" : undefined} style={{ borderTop: `1px solid ${T.ruleFaint}`, padding: "4px 0" }}>
       <button type="button" className="forge-press forge-tint" onClick={onOpen} aria-expanded={open}
         style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 44, padding: "6px 0", background: "none", border: "none", cursor: "pointer", fontFamily: T.text, textAlign: "left", color: T.ink }}>
         <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: open ? 500 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lift}</span>
         <InkSpark values={points.slice(-8).map((p) => p.est1RM)}/>
-        {latest && <span style={{ fontFamily: T.measured, fontSize: 15, flexShrink: 0 }}>{latest.est1RM}<span style={{ fontFamily: T.text, fontSize: 11, color: T.ink3 }}> kg</span></span>}
+        {latest && <span style={{ fontFamily: T.measured, fontSize: 15, flexShrink: 0 }}>{latest.est1RM}<span style={{ fontFamily: T.text, fontSize: 11, color: T.ink3 }}> kg</span>{newBest && <span data-best="" style={{ fontFamily: T.text, fontSize: 12, color: T.ink2 }}> best</span>}</span>}
       </button>
       {/* Hidden, not unmounted: a closed lift's ledger keeps its place. */}
       <div data-lift-detail="" hidden={!open} style={{ padding: "6px 0 10px" }}>
@@ -1034,10 +1000,25 @@ function repsAfterKg(v, timed) {
 }
 
 /**
- * A lift's plan row: "last 100 × 5 · next 102.5 × 5 · yours 105 (waiting)".
+ * A trainer's change waiting on a lift, in its row's words: "yours 105
+ * (waiting)", "yours 105 × 6 (waiting)" or "yours 8 reps (waiting)". Null
+ * with neither a weight nor reps.
+ * @param {{ w?: number | null, reps?: any } | null | undefined} p
+ * @param {boolean} timed
+ */
+function yoursText(p, timed) {
+  if (!p || (p.w == null && p.reps == null)) return null;
+  const yours = p.w != null ? `${p.w}${p.reps != null ? repsAfterKg(p.reps, timed) : ""}` : repsWords(p.reps, timed);
+  return `yours ${yours} (waiting)`;
+}
+
+/**
+ * A lift's plan row in two parts: what the plan says ("last 100 × 5 · next
+ * 102.5 × 5") and the trainer's change waiting on it ("yours 105 (waiting)"),
+ * or null.
  * @param {any} lift  a plan lift
  */
-export function liftLine(lift) {
+export function liftLineParts(lift) {
   const timed = isTimed(lift.name);
   const parts = [];
   const a = lift.anchor;
@@ -1045,12 +1026,16 @@ export function liftLine(lift) {
   else if (a.kg != null) parts.push(`last ${a.kg}${repsAfterKg(a.reps, timed)}`);
   else if (a.reps != null) parts.push(`last ${repsWords(a.reps, timed)}`);
   parts.push(lift.w != null ? `next ${lift.w}${repsAfterKg(lift.reps, timed)}` : `next ${repsWords(lift.reps, timed)}`);
-  const p = lift.pending;
-  if (p && (p.w != null || p.reps != null)) {
-    const yours = p.w != null ? `${p.w}${p.reps != null ? repsAfterKg(p.reps, timed) : ""}` : repsWords(p.reps, timed);
-    parts.push(`yours ${yours} (waiting)`);
-  }
-  return parts.join(" · ");
+  return { base: parts.join(" · "), yours: yoursText(lift.pending, timed) };
+}
+
+/**
+ * A lift's plan row: "last 100 × 5 · next 102.5 × 5 · yours 105 (waiting)".
+ * @param {any} lift  a plan lift
+ */
+export function liftLine(lift) {
+  const { base, yours } = liftLineParts(lift);
+  return yours ? `${base} · ${yours}` : base;
 }
 
 /**
@@ -1379,9 +1364,15 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
     setStatus(`Left out ${indices.length} change${indices.length === 1 ? "" : "s"}. Review again when ready.`);
   };
 
+  // What was just sent, against the plan it was drafted on: its rows read
+  // "yours … (waiting)" at once, and the reloaded plan says the same.
+  const [landing, setLanding] = useState(/** @type {{ plan: any, w: Record<string, number>, r: Record<string, number> } | null} */ (null));
+  const landed = landing && landing.plan === plan ? landing : null;
+
   // A reload that fails is said after the sent line, unless another line replaced it.
   const onSent = async () => {
     const sent = `Sent to ${name || "them"}.`;
+    setLanding({ plan, w: { ...drafts.w }, r: { ...drafts.r } });
     setDrafts(EMPTY_DRAFTS);
     setReviewing(false);
     setStatus(sent);
@@ -1397,6 +1388,15 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
     setStatus(ok === false ? NOT_LATEST : "Showing their latest.");
   };
 
+  // The sessions opened past their main lifts.
+  const [opened, setOpened] = useState(() => /** @type {Set<string>} */ (new Set()));
+  const toggle = (key) => setOpened((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const isMain = (liftName) => mains.some((m) => m.choice === liftName);
+
   const bySession = useMemo(() => {
     /** @type {Map<string, any[]>} */
     const out = new Map();
@@ -1409,17 +1409,18 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
 
   return (
     <div style={tabTop} data-section="plan">
-      <div data-tray="" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button type="button" onClick={() => { setStatus(""); setReviewing(true); }} disabled={count === 0 || outOfSends}
-          className="forge-press forge-tint" style={{ ...BTN.quiet, opacity: count && !outOfSends ? 1 : 0.6, cursor: count && !outOfSends ? "pointer" : "default" }}>
-          {count ? <Nums text={`${count} change${count === 1 ? "" : "s"} · Review`}/> : "No changes yet"}
-        </button>
-        {count > 0 && (
+      {/* The tray shows once a change is drafted: nothing to review, nothing to show. */}
+      {count > 0 && (
+        <div data-tray="" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <button type="button" onClick={() => { setStatus(""); setReviewing(true); }} disabled={outOfSends}
+            className="forge-press forge-tint" style={{ ...BTN.quiet, opacity: outOfSends ? 0.6 : 1, cursor: outOfSends ? "default" : "pointer" }}>
+            <Nums text={`${count} change${count === 1 ? "" : "s"} · Review`}/>
+          </button>
           <button type="button" onClick={() => { setDrafts(EMPTY_DRAFTS); setStatus("Cleared."); }} style={{ ...BTN.text, minHeight: 44, padding: "0 4px" }}>
             Clear
           </button>
-        )}
-      </div>
+        </div>
+      )}
       <div role="status" aria-live="polite" style={{ ...statusLine, marginTop: 8 }}>{status}</div>
       {plan?.deload?.active && (
         <p data-deload="" style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "8px 0 0" }}>
@@ -1428,14 +1429,32 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
       )}
       {/* Two columns of sessions from 1024 (app/globals.css .forge-wide-pane). */}
       <div className="forge-wide-pane">
-        {bySession.map(([letter, rows]) => (
-          <div key={letter || "-"} data-plan-session={letter || undefined}>
-            <div style={subKicker}>{letter ? `Session ${letter}` : "Other lifts"}</div>
-            {rows.map((l) => (
-              <PlanRow key={l.name} lift={l} main={mainFor(l.name)} drafts={drafts} onOpen={() => setSheet(l.name)}/>
-            ))}
-          </div>
-        ))}
+        {bySession.map(([letter, rows]) => {
+          // Each session opens to its main lifts, and any lift with a change
+          // waiting or drafted; the rest sit behind one tap, in their order.
+          const key = letter || "-";
+          const kept = (l) => isMain(l.name) || !!l.pending || draftsTouch(drafts, l.name, mainFor(l.name))
+            || (!!landed && (Object.hasOwn(landed.w, l.name) || Object.hasOwn(landed.r, l.name)));
+          const more = rows.filter((l) => !kept(l)).length;
+          const open = opened.has(key);
+          return (
+            <div key={key} data-plan-session={letter || undefined}>
+              <div style={subKicker}>{letter ? `Session ${letter}` : "Other lifts"}</div>
+              {rows.map((l) => (
+                <div key={l.name} hidden={!open && !kept(l)} data-plan-rest={kept(l) ? undefined : ""}>
+                  <PlanRow lift={l} main={mainFor(l.name)} drafts={drafts} landed={landed} onOpen={() => setSheet(l.name)}/>
+                </div>
+              ))}
+              {more > 0 && (
+                <button type="button" onClick={() => toggle(key)} aria-expanded={open} data-plan-more=""
+                  style={{ ...BTN.text, color: T.ink2, minHeight: 44, padding: 0, gap: 6, borderTop: `1px solid ${T.ruleFaint}`, width: "100%", justifyContent: "flex-start" }}>
+                  <span>{open ? "Fewer lifts" : <Nums text={`${more} more lift${more === 1 ? "" : "s"}`}/>}</span>
+                  <Glyph name={open ? "chevronUp" : "chevronDown"} size={11} color={T.ink3}/>
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {sheetLift && (
@@ -1452,8 +1471,21 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
   );
 }
 
-function PlanRow({ lift, main, drafts, onOpen }) {
+/** Whether a lift has a drafted change: its weight, its reps, or its main-lift slot. */
+function draftsTouch(drafts, liftName, main) {
+  return Object.hasOwn(drafts.w, liftName) || Object.hasOwn(drafts.r, liftName) || (!!main && Object.hasOwn(drafts.m, main.canonical));
+}
+
+/**
+ * One lift's row. Its tail is the draft ("new 105, not sent") or the change
+ * waiting ("yours 105 (waiting)"); a send swaps one for the other with a
+ * short fade on that span alone (.forge-swap, none under reduced motion).
+ */
+function PlanRow({ lift, main, drafts, landed = null, onOpen }) {
   const timed = isTimed(lift.name);
+  const { base, yours } = liftLineParts(lift);
+  const sent = landed && (Object.hasOwn(landed.w, lift.name) || Object.hasOwn(landed.r, lift.name))
+    ? yoursText({ w: landed.w[lift.name] ?? lift.pending?.w ?? null, reps: landed.r[lift.name] ?? lift.pending?.reps ?? null }, timed) : null;
   const dw = Object.hasOwn(drafts.w, lift.name) ? drafts.w[lift.name] : null;
   const dr = Object.hasOwn(drafts.r, lift.name) ? drafts.r[lift.name] : null;
   const dm = main && Object.hasOwn(drafts.m, main.canonical) ? drafts.m[main.canonical] : null;
@@ -1470,8 +1502,9 @@ function PlanRow({ lift, main, drafts, onOpen }) {
           {main && <Tag color={T.ink3} style={{ flexShrink: 0 }}>Main lift</Tag>}
         </span>
         <span style={{ display: "block", fontSize: 13, color: T.ink2, lineHeight: 1.5, marginTop: 2 }}>
-          <Nums text={liftLine(lift)}/>
-          {draft && <span style={{ color: T.ink }}> · <Nums text={draft}/></span>}
+          <Nums text={base}/>
+          {draft ? <span key="draft" data-row-tail="draft" style={{ color: T.ink }}> · <Nums text={draft}/></span>
+            : (sent || yours) && <span key="yours" data-row-tail="yours" className={sent ? "forge-swap" : undefined}> · <Nums text={sent || yours}/></span>}
         </span>
       </span>
       <Glyph name="arrowRight" size={13} color={T.ink3}/>
@@ -1546,13 +1579,9 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
   const switching = !!main && choice !== main.choice;
   const weighable = !!b && !blocked;
 
-  // Pace presets (§5): Hold, Step, Jump and Ease (pacePresets).
+  // Pace presets (§5): Hold, Step, Jump and Ease (pacePresets). Each chip
+  // carries its kg; the last top set is in the line under the name.
   const presets = weighable ? pacePresets({ anchorKg, w: lift.w, bounds: b, lt }) : [];
-  // One caption for the two presets whose names don't say what they are.
-  const presetNote = [
-    presets.some(([l]) => l === "Step") && "Step is their app's next weight.",
-    presets.some(([l]) => l === "Jump") && (lt === "assisted_bodyweight" ? "Jump is the least help this change allows." : "Jump is the most this change allows."),
-  ].filter(Boolean).join(" ");
 
   // An assisted lift's kg is help, so its limits say so.
   const assisted = lt === "assisted_bodyweight";
@@ -1564,8 +1593,9 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
     : blocked.code === "range" ? `Their last top set is over ${MAX_KG} kg, the most their app takes. Change their reps instead.`
     : noHistoryText(0);
   const noWeight = timed ? "A timed hold, so seconds only." : lt === "bodyweight" ? "Bodyweight, so reps only." : "Reps only for this one.";
+  // One range line: "65 to 110 kg". A lift never lifted names its first-weight cap instead.
   const range = !b ? null
-    : anchorKg != null ? `Up to ${b.max} kg${help}: last top set ${anchorKg} kg`
+    : anchorKg != null ? `${minKg} to ${maxKg} kg${help}`
     : noHistoryText(b.max, assisted);
 
   const save = () => onSave({
@@ -1622,11 +1652,7 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
                         onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                         style={{ width: `${Math.max(5, kgText.length + 1)}ch`, maxWidth: "100%", textAlign: "center", fontFamily: T.measured, fontSize: 26, color: T.ink, background: "transparent", border: "none", borderBottom: `1px solid ${T.rule}`, padding: 0 }}/>
                     </Stepper>
-                    <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 8 }}>
-                      <div><Nums text={range}/></div>
-                      <div><Nums text={`Not below ${minKg} kg${help}`}/></div>
-                      {presetNote && <div>{presetNote}</div>}
-                    </div>
+                    <div data-range="" style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 8 }}><Nums text={range}/></div>
                     {b.warnBelow != null && kg != null && kg < b.warnBelow && (
                       <div style={{ fontSize: 13, color: T.ink2, marginTop: 6 }}>{warningText("big_drop")}</div>
                     )}
@@ -1750,9 +1776,13 @@ function ReviewSheet({ name, ops, basis, lifts, mains, budget, onChange, onFaceI
             const i = op.i ?? k;
             const refused = phase === "refused" ? refusedAt.get(i) : null;
             const lift = lifts.find((l) => l.name === op.target);
+            // A change of theirs still waiting on this lift: this one takes its place, so say which.
+            const waitingNow = op.kind === "weight" ? lift?.pending?.w ?? null : op.kind === "reps" ? lift?.pending?.reps ?? null : null;
+            const replaces = waitingNow == null ? null : op.kind === "weight" ? `${waitingNow} waiting, replaced` : `${repsWords(waitingNow, timedOf(op.target))} waiting, replaced`;
             return (
               <li key={`${op.kind}:${op.target}`} data-op={i} style={{ padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>
                 <div style={{ fontSize: 14, color: T.ink }}><Nums text={previewLine(op, timedOf(op.target))}/></div>
+                {replaces && <div data-replaces="" style={{ fontSize: 13, color: T.ink2, marginTop: 2 }}><Nums text={replaces}/></div>}
                 {/* Under minimum is volume data, in the steel of its flag; every other warning is a note. */}
                 {(op.warnings || []).filter((w) => warningText(w)).map((w) => (
                   <div key={w} style={{ fontSize: 13, color: w === "under_mev" ? T.under : T.ink2, marginTop: 2 }}>{warningText(w)}</div>
@@ -1994,7 +2024,7 @@ function SessionsYouRan({ ran, name, budget, todayIso, unsent = null, onChange, 
           <div style={{ fontSize: 14, color: T.ink, overflowWrap: "anywhere" }}>
             <Nums text={sessionRunLine({ after: { letter: unsent.letter, date: unsent.date, sets: unsent.sets } }, todayIso)}/>
           </div>
-          <div style={{ fontSize: 12, color: T.ink2, marginTop: 2 }}>Not sent yet · on this iPad</div>
+          <div style={{ fontSize: 12, color: T.ink2, marginTop: 2 }}>Not sent yet · on this device</div>
         </div>
       )}
       {rows.length === 0 && !unsent && <div style={{ fontSize: 13, color: T.ink2 }}>None sent yet.</div>}

@@ -51,7 +51,7 @@ async function waitingFor(me, grants) {
   try {
     const rows = await dbRosterWaiting(me, refs);
     if (!rows) return null;
-    return new Map(refs.map((ref) => [ref, rows.get(ref) ?? { changes: 0, sessions: 0 }]));
+    return new Map(refs.map((ref) => [ref, rows.get(ref) ?? { changes: 0, sessions: 0, kept: null }]));
   } catch (e) {
     serverError(e, { label: `${LABEL}-waiting` }); // logged; the list still answers
     return null;
@@ -67,6 +67,10 @@ async function waitingFor(me, grants) {
 //                       after the roster look like the signal: the trainer's changes the
 //                       pane lists as waiting and their sessions on the client's phone.
 //                       null for a read-only client, or when either read fails.
+//                       kept: { letter, at } the latest session of this trainer's the
+//                       client kept (from the same read: the row's outcome 'kept', its
+//                       target's letter and applied_at), else null; the roster says
+//                       so on the day it was kept, on the trainer's own calendar.
 //                       Once the signals are read, the clients notice is marked seen
 //                       (dbMarkSeen, an overwrite in place of the trainer's one 'clients' mark).
 //   { remove: ref }  -> { ok }. Ends that grant by UPDATE revoked_at, revoked_by 'trainer'.
@@ -104,9 +108,13 @@ export async function POST(request) {
       }
     }
     const clients = grants
-      .map(({ ref, name, since, lastLooked }) => ({
-        ref, name, since, lastLooked, signal: signals?.get(ref) ?? null, waiting: waiting?.get(ref) ?? null,
-      }))
+      .map(({ ref, name, since, lastLooked }) => {
+        const w = waiting?.get(ref) ?? null;
+        return {
+          ref, name, since, lastLooked, signal: signals?.get(ref) ?? null,
+          waiting: w ? { changes: w.changes, sessions: w.sessions } : null, kept: w?.kept ?? null,
+        };
+      })
       .sort(byName);
     return slid(g, json({ me: { name: publicName(await dbPrimaryHandle(me)) }, clients }));
   } catch (e) {

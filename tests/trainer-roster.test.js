@@ -446,9 +446,9 @@ describe("POST /api/trainer/clients: the roster", () => {
       me: { name: "Tia" },
       clients: [
         { ref: "hwg_abe", name: "Abe", since: 1_790_100_000_000, lastLooked: 1_790_200_000_000,
-          signal: { lastTrainedDaysAgo: 2, weekDone: 2, weekPlanned: 3, rhythmPct: 91, paused: false }, waiting: null },
+          signal: { lastTrainedDaysAgo: 2, weekDone: 2, weekPlanned: 3, rhythmPct: 91, paused: false }, waiting: null, kept: null },
         { ref: "hwg_cara", name: "Cara", since: 1_790_000_000_000, lastLooked: null,
-          signal: { lastTrainedDaysAgo: null, weekDone: 0, weekPlanned: 0, rhythmPct: 0, paused: true }, waiting: null },
+          signal: { lastTrainedDaysAgo: null, weekDone: 0, weekPlanned: 0, rhythmPct: 0, paused: true }, waiting: null, kept: null },
       ],
     });
     for (const id of ["hwg_abe", "hwg_cara"]) {
@@ -503,13 +503,13 @@ describe("POST /api/trainer/clients: the roster", () => {
   const TOKYO_8AM = Date.parse("2026-12-01T23:00:00.000Z"); // 08:00 on 2 December in Tokyo
   const SF_5PM = Date.parse("2026-12-02T01:00:00.000Z"); // 17:00 on 1 December in San Francisco
 
-  for (const [where, at, day] of [["Tokyo at 08:00", TOKYO_8AM, "2026-12-02"], ["San Francisco at 17:00", SF_5PM, "2026-12-01"]]) {
-    it(`a trainer in ${where}: the look is dated and the windows read on their own date`, async () => {
+  for (const [where, at, day, utc] of [["Tokyo at 08:00", TOKYO_8AM, "2026-12-02", "2026-12-01"], ["San Francisco at 17:00", SF_5PM, "2026-12-01", "2026-12-02"]]) {
+    it(`a trainer in ${where}: the windows read on their own date; the look is logged on the server's UTC day`, async () => {
       vi.setSystemTime(at);
       await list(session(T, "cT"), { today: day });
       const log = calls.find((c) => /^\s*UPDATE oauth_grants/.test(c.q));
-      expect([log.v[0], log.v[1], log.v[4]]).toEqual([day, at, day]);
-      expect(G("hwg_abe").looks).toEqual([{ k: "r", d: day, at }]);
+      expect([log.v[0], log.v[1], log.v[4]]).toEqual([utc, at, utc]);
+      expect(G("hwg_abe").looks).toEqual([{ k: "r", d: utc, at }]);
       const read = calls.find((c) => /^\s*SELECT g\.id AS ref,/.test(c.q));
       expect(read.v).toEqual([addDaysIso(day, -35), day, addDaysIso(day, -365), day, ["hwg_abe", "hwg_cara"], T]);
     });
@@ -528,13 +528,23 @@ describe("POST /api/trainer/clients: the roster", () => {
     }
   });
 
-  it("a stored roster entry's day is compared as stored: one already dated the trainer's today adds nothing", async () => {
+  it("a stored roster entry for the server's UTC day adds nothing", async () => {
     vi.setSystemTime(TOKYO_8AM);
-    const older = { k: "r", d: "2026-12-02", at: TOKYO_8AM - 3600_000 };
+    const older = { k: "r", d: "2026-12-01", at: TOKYO_8AM - 3600_000 };
     Object.assign(G("hwg_abe"), { looks: [older], look_count: 1 });
     await list(session(T, "cT"), { today: "2026-12-02" });
     expect(G("hwg_abe").looks).toEqual([older]);
     expect(G("hwg_abe").look_count).toBe(1);
+  });
+
+  it("the date a trainer sends cannot skip the daily log: three UTC days with the same date log three looks", async () => {
+    for (const g of db.grants) Object.assign(g, { looks: [], look_count: 0 });
+    for (const at of [Date.parse("2026-12-01T12:00:00.000Z"), Date.parse("2026-12-02T12:00:00.000Z"), Date.parse("2026-12-03T12:00:00.000Z")]) {
+      vi.setSystemTime(at);
+      await list(session(T, "cT"), { today: "2026-12-02" });
+    }
+    expect(G("hwg_abe").looks.map((e) => e.d)).toEqual(["2026-12-03", "2026-12-02", "2026-12-01"]);
+    expect(G("hwg_abe").look_count).toBe(3);
   });
 
   it("a log that throws: names and dates only, every signal null, nothing read, nothing written", async () => {
@@ -546,8 +556,8 @@ describe("POST /api/trainer/clients: the roster", () => {
     expect(await res.json()).toEqual({
       me: { name: "Tia" },
       clients: [
-        { ref: "hwg_abe", name: "Abe", since: 1_790_100_000_000, lastLooked: 1_790_200_000_000, signal: null, waiting: null },
-        { ref: "hwg_cara", name: "Cara", since: 1_790_000_000_000, lastLooked: null, signal: null, waiting: null },
+        { ref: "hwg_abe", name: "Abe", since: 1_790_100_000_000, lastLooked: 1_790_200_000_000, signal: null, waiting: null, kept: null },
+        { ref: "hwg_cara", name: "Cara", since: 1_790_000_000_000, lastLooked: null, signal: null, waiting: null, kept: null },
       ],
     });
     expect(calls.some((c) => /^\s*SELECT g\.id AS ref,/.test(c.q))).toBe(false);
@@ -588,7 +598,7 @@ describe("POST /api/trainer/clients: the roster", () => {
       const body = JSON.parse(text);
       expect(Object.keys(body).sort()).toEqual(["clients", "me"]);
       for (const c of body.clients) {
-        expect(Object.keys(c).sort(), c.ref).toEqual(["lastLooked", "name", "ref", "signal", "since", "waiting"]);
+        expect(Object.keys(c).sort(), c.ref).toEqual(["kept", "lastLooked", "name", "ref", "signal", "since", "waiting"]);
         expect(Object.keys(c.signal), c.ref).toEqual([...SIGNAL_KEYS]);
       }
       expect(body.clients.map((c) => c.signal)).toEqual([

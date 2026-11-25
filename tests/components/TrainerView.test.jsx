@@ -60,6 +60,12 @@ const { server, auth, panes, nav } = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => nav }));
+// The real transitions, with how deep inside one the page is, so a push can say if it rode one.
+const nt = vi.hoisted(() => ({ depth: 0, types: /** @type {any[]} */ ([]) }));
+vi.mock("@/lib/nav-transitions", async (importOriginal) => {
+  const real = /** @type {any} */ (await importOriginal());
+  return { ...real, withNavTransition: (fn, type) => { nt.types.push(type); nt.depth++; try { real.withNavTransition(fn, type); } finally { nt.depth--; } } };
+});
 
 // The real pane, with the props TrainerView hands it kept for a look.
 vi.mock("@/components/TrainerClientView", async (importOriginal) => {
@@ -409,11 +415,34 @@ describe("TrainerView: the roster", () => {
     await mount();
     const lineOf = (n) => screen.getByText(n, { selector: "span" }).closest("button").querySelector(".forge-wide-signal").textContent;
     expect(lineOf("Pat")).toBe("Paused · last trained 9 days ago");
-    expect(lineOf("Quin")).toBe("1 session on their phone · 2 of 3 this week");
-    expect(lineOf("Ros")).toBe("1 change waiting · 2 of 3 this week");
-    expect(lineOf("Sol")).toBe("2 sessions on their phone · 3 changes waiting · 2 of 3 this week");
+    // Two parts at most: the week count drops while anything is waiting.
+    expect(lineOf("Quin")).toBe("1 session on their phone");
+    expect(lineOf("Ros")).toBe("1 change waiting");
+    expect(lineOf("Sol")).toBe("2 sessions on their phone · 3 changes waiting");
     expect(lineOf("Tam")).toBe("Last trained 2 days ago · 2 of 3 this week");
     expect(lineOf("Una")).toBe("Last trained 2 days ago · 2 of 3 this week");
+  });
+
+  it("the day a client keeps a session, the card says so in place of the session on their phone; another day, it doesn't", async () => {
+    const week = { lastTrainedDaysAgo: 0, weekDone: 2, weekPlanned: 3, rhythmPct: 86, paused: false };
+    const now = Date.now();
+    const yesterday = Date.parse(`${addDaysIso(today, -1)}T12:00:00`);
+    signedIn([
+      { ref: "hwg_k", name: "Kai", since: now, lastLooked: null, signal: week, waiting: { changes: 0, sessions: 1 }, kept: { letter: "A", at: now } },
+      { ref: "hwg_l", name: "Lou", since: now, lastLooked: null, signal: week, waiting: { changes: 2, sessions: 0 }, kept: { letter: "B", at: now } },
+      { ref: "hwg_m", name: "Mo", since: now, lastLooked: null, signal: week, waiting: { changes: 0, sessions: 1 }, kept: { letter: "C", at: yesterday } },
+      { ref: "hwg_n", name: null, since: now, lastLooked: null, signal: week, waiting: { changes: 0, sessions: 0 }, kept: { letter: "A", at: now } },
+    ]);
+    await mount();
+    const lines = [...document.querySelectorAll(".forge-wide-signal")].map((n) => n.textContent);
+    expect(lines).toEqual([
+      "Kai kept Strength A",
+      "Lou kept Strength B · 2 changes waiting",
+      "1 session on their phone",
+      "They kept Strength A",
+    ]);
+    // Stated, never marked: no colour, the line's own ink2.
+    expect([...document.querySelectorAll(".forge-wide-signal")].every((n) => /** @type {HTMLElement} */ (n).style.color === "var(--ink-2)")).toBe(true);
   });
 
   it("its buttons are the house set: commits 56 at 17/500, quiet 46 at 14/500 in ink, links 13 in ink3", async () => {
@@ -425,12 +454,22 @@ describe("TrainerView: the roster", () => {
     cleanup();
     signedIn();
     await mount();
-    expect(size(screen.getByRole("button", { name: "Add a client" }))).toEqual(QUIET);
     const out = screen.getByRole("button", { name: "Sign out" });
     expect([out.style.fontSize, out.style.color, out.style.textDecoration]).toEqual(["13px", "var(--ink-3)", ""]);
   });
 
-  it("the page's quiet buttons press as Add a client does: Try again and Back to clients too", async () => {
+  it("Add a client is a quiet text row under the cards, words in ink2 with a plus in ink3", async () => {
+    signedIn();
+    await mount();
+    const add = screen.getByRole("button", { name: "Add a client" });
+    const list = screen.getByRole("list", { name: "Clients" });
+    expect(list.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).nextElementSibling?.contains(add)).toBe(false);
+    expect([add.className, add.style.fontSize, add.style.color, add.style.borderStyle]).toEqual(["", "14px", "var(--ink-2)", "none"]);
+    expect(add.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("the page's quiet buttons press: Try again and Back to clients", async () => {
     const PRESS = "forge-press forge-tint";
     await mount(); // no roster route: it can't load
     const again = screen.getByRole("button", { name: "Try again" });
@@ -438,7 +477,6 @@ describe("TrainerView: the roster", () => {
     cleanup();
     signedIn([{ ...SIGNALS[0], ref: "hwg_gone" }]);
     await mount();
-    expect(screen.getByRole("button", { name: "Add a client" }).className).toBe(PRESS);
     fireEvent.click(screen.getByText("Alex"));
     await flush();
     const back = screen.getByRole("button", { name: "Back to clients" });
@@ -686,12 +724,18 @@ describe("TrainerView: the invite sheet", () => {
     expect(gets("/api/trainer/invite")).toHaveLength(1);
     expect(within(dialog).getByRole("status").textContent).toBe("Waiting for them…");
 
+    signedIn([...SIGNALS, { ref: "hwg_sam", name: "Sam", since: issuedAt, lastLooked: null, signal: null }]);
     Object.assign(reply, { status: "used", usedBy: "Sam" });
     const before = posts("/api/trainer/clients").length;
     await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
     await flush();
     expect(within(dialog).getByRole("status").textContent).toBe("Sam is in.");
     expect(posts("/api/trainer/clients").length).toBe(before + 1);
+    // The new card enters once with the house fade; the cards already there stay still.
+    const arrived = [...document.querySelectorAll("[data-arrived]")];
+    expect(arrived.map((li) => li.textContent?.slice(0, 3))).toEqual(["Sam"]);
+    expect(/** @type {HTMLElement} */ (arrived[0].firstElementChild).style.transition).toContain("opacity 260ms");
+    expect(document.querySelectorAll('ul[aria-label="Clients"] > li').length).toBe(SIGNALS.length + 1);
     expect(within(dialog).getByText("New code")).toBeTruthy();
     // Polling stopped with the final status, and coming back to the tab
     // does not start it again.
@@ -1138,6 +1182,21 @@ describe("TrainerView: changing a client's plan", () => {
     expect(document.querySelector('[data-section="plan"] > [role="status"]').textContent).toBe("Showing their latest.");
   });
 
+  it("Run a session moves as Home to a session: the push rides an untyped (forward) nav transition", async () => {
+    const pushedInside = [];
+    const push = vi.spyOn(nav, "push").mockImplementation(() => { pushedInside.push(nt.depth > 0); });
+    await openAlex();
+    nt.types = [];
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Run Strength B with Alex" })); });
+    await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+    expect(pushedInside).toEqual([true]);
+    expect(nt.types).toEqual([undefined]);
+    push.mockRestore();
+    // The way back is the next test's; spend it so it doesn't reach another.
+    cleanup();
+    await mount();
+  });
+
   it("Run a session: the signed-in name for the coach page, then /trainer/coach with the ref in the fragment only", async () => {
     const { coachTrainer } = await import("../../lib/session-source.js");
     coachTrainer.set(null);
@@ -1175,7 +1234,7 @@ describe("TrainerView: changing a client's plan", () => {
     try {
       await openAlex();
       await vi.waitFor(() => expect(document.querySelector("[data-unsent]")).toBeTruthy());
-      expect(document.querySelector("[data-unsent]").textContent).toBe("Strength C, today · 1 setNot sent yet · on this iPad");
+      expect(document.querySelector("[data-unsent]").textContent).toBe("Strength C, today · 1 setNot sent yet · on this device");
       expect(panes.props.at(-1).unsent).toEqual({ letter: "C", date: today, sets: 1 });
       expect(screen.queryByRole("radiogroup", { name: "Session to run" })).toBeNull();
       const before = server.calls.length;
@@ -1357,17 +1416,17 @@ describe("TrainerView: one way back at each level", () => {
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 
-  it("the open client's roster signal reaches the pane's glance strip; your own training has none", async () => {
+  it("the open client's roster signal reaches the pane's kicker; your own training has none", async () => {
     signedIn();
     await mount();
     fireEvent.click(screen.getByText("Alex"));
     await flush();
     expect(panes.props.at(-1).signal).toEqual(SIGNALS[0].signal);
-    expect(document.querySelector("[data-glance]").textContent).toBe("2 of 3 this weekrhythm 86%last trained 2 days ago");
+    expect(document.querySelector("[data-kicker]").textContent).toBe("2 of 3 this week · last trained 2 days ago");
     fireEvent.click(screen.getByText("Your training"));
     await flush();
     expect(panes.props.at(-1).signal).toBeNull();
-    expect(document.querySelector("[data-glance]")).toBeNull();
+    expect(document.querySelector("[data-kicker]").textContent).toBe("Your training");
   });
 
   it("the invite sheet closes from Done, Escape and the scrim", async () => {
