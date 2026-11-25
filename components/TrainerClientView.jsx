@@ -310,7 +310,8 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
         )}
       </div>
       <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: "0 0 10px", overflowWrap: "anywhere" }}>{title}</h1>
-      <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>{lead}</p>
+      {/* Only while read only: with changes on, what that means is consent copy, in the Sharing sheet. */}
+      {edits !== "on" && <p data-lead="" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.6, margin: 0 }}>{lead}</p>}
       {edits === "unavailable" && onChanged && (
         <div data-plan-retry="">
           <button type="button" onClick={onPlanRetry} aria-disabled={planRetrying}
@@ -464,6 +465,9 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
                   {since && looked ? " · " : null}
                   {looked ? <>You last looked <Nums text={looked}/></> : null}
                 </p>
+                {edits === "on" && (
+                  <p data-sharing-lead="" style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "4px 0 0" }}>{leadLine("on", name)}</p>
+                )}
                 <p style={{ fontSize: 14, color: T.ink2, lineHeight: 1.55, margin: "4px 0 0" }}>
                   {edits === "on" || edits === "unavailable" ? "" : "Read only. "}{sentenceName} can stop sharing any time.
                 </p>

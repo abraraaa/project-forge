@@ -435,11 +435,15 @@ async function review() {
 }
 
 describe("TrainerClientView: the plan", () => {
-  it("says what the trainer can do: change the plan, or ask for changes in Profile", () => {
+  it("says what the trainer can do: change the plan (in the Sharing sheet), or ask for changes in Profile", () => {
     render(<TrainerClientView client={client} view={planView()}/>);
-    expect(screen.getByText("You can change their plan. They see every change and can undo it.")).toBeTruthy();
+    // Changes on: no lead line on the page; the consent copy lives in the Sharing sheet.
+    expect(screen.queryByText("You can change their plan. They see every change and can undo it.")).toBeNull();
+    expect(document.querySelector("[data-lead]")).toBeNull();
     expect(tab("Plan").querySelector('[data-section="plan"]')).toBeTruthy();
-    expect(within(sharing()).getByText("Sam can stop sharing any time.")).toBeTruthy();
+    const sheet = sharing();
+    expect(within(sheet).getByText("You can change their plan. They see every change and can undo it.")).toBeTruthy();
+    expect(within(sheet).getByText("Sam can stop sharing any time.")).toBeTruthy();
     cleanup();
     // No plan on the view: read only, and the way to change that.
     render(<TrainerClientView client={client} view={view()}/>);
@@ -479,7 +483,8 @@ describe("TrainerClientView: the plan", () => {
     expect(within(sharing()).getByText("Sam can stop sharing any time.")).toBeTruthy();
     cleanup();
     render(<TrainerClientView client={client} view={planView()}/>);
-    expect(document.querySelector("p").textContent).toBe(`You can change their plan. They see every change and can undo it.${tail}`);
+    expect(document.querySelector("[data-lead]")).toBeNull();
+    expect(within(sharing()).getByText(leadLine("on", "Sam"))).toBeTruthy();
   });
 
   it("the Plan tab: the tray first, then rows by session: last, next, and a waiting change", () => {
