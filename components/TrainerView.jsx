@@ -150,9 +150,9 @@ const counted = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 export const rosterRhythm = (signal) => (signal && !signal.paused && Number.isFinite(signal.rhythmPct) ? signal.rhythmPct : null);
 
 /**
- * A roster card's one line, by priority: paused ("Paused · last trained 9
- * days ago"); then what this trainer has waiting on them ("1 session on
- * their phone · 2 changes waiting · 2 of 3 this week"); then the signal line,
+ * A roster card's one line, two parts at most, by priority: paused ("Paused ·
+ * last trained 9 days ago"); then what this trainer has waiting on them ("1
+ * session on their phone · 2 changes waiting"); then the signal line,
  * without the rhythm when the card's mark prints it.
  * @param {{ signal?: any, since?: number | null, waiting?: { changes?: number, sessions?: number } | null }} client
  */
@@ -167,7 +167,6 @@ export function rosterLine({ signal = null, since = null, waiting = null }) {
     const parts = [];
     if (sessions > 0) parts.push(`${counted(sessions, "session", "sessions")} on their phone`);
     if (changes > 0) parts.push(`${counted(changes, "change", "changes")} waiting`);
-    if (signal?.weekPlanned > 0) parts.push(`${signal.weekDone} of ${signal.weekPlanned} this week`);
     return parts.join(" · ");
   }
   return signalText(signal, since, { rhythm: rosterRhythm(signal) === null });
@@ -695,11 +694,7 @@ export default function TrainerView() {
       <div className="forge-wide-back">{profileRow()}</div>
       <div className="forge-wide-roster">
         <div style={kickerStyle}>For trainers</div>
-        <h1 style={h1Style}>Your clients</h1>
-        <button type="button" onClick={issue} className="forge-press forge-tint"
-          style={{ ...BTN.quiet, width: "100%", marginTop: 14, marginBottom: 20 }}>
-          Add a client
-        </button>
+        <h1 style={{ ...h1Style, marginBottom: 20 }}>Your clients</h1>
         {/* Your own training, pinned first; a hairline sets it apart from clients. */}
         <div data-self-row="" style={{ borderTop: `1px solid ${T.rule}`, borderBottom: `1px solid ${T.rule}` }}>
           <button type="button" onClick={openSelf} aria-current={selfOpen ? "true" : undefined}
@@ -745,6 +740,11 @@ export default function TrainerView() {
             })}
           </ul>
         )}
+        {/* A quiet text row under the cards: the clients lead. */}
+        <button type="button" onClick={issue} data-add-client=""
+          style={{ ...BTN.text, color: T.ink2, fontSize: 14, minHeight: 44, marginTop: 8, padding: clients.length ? "0 16px" : 0 }}>
+          <Glyph name="plus" size={12} color={T.ink3}/> Add a client
+        </button>
         <div style={{ marginTop: 28, fontSize: 12, color: T.ink2 }}>
           {me && <div style={{ marginBottom: 4 }}>Signed in as {me}</div>}
           <button type="button" onClick={() => setSignOutOpen(true)} style={{ ...BTN.text, padding: "8px 0" }}>Sign out</button>

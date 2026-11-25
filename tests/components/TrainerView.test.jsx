@@ -409,9 +409,10 @@ describe("TrainerView: the roster", () => {
     await mount();
     const lineOf = (n) => screen.getByText(n, { selector: "span" }).closest("button").querySelector(".forge-wide-signal").textContent;
     expect(lineOf("Pat")).toBe("Paused · last trained 9 days ago");
-    expect(lineOf("Quin")).toBe("1 session on their phone · 2 of 3 this week");
-    expect(lineOf("Ros")).toBe("1 change waiting · 2 of 3 this week");
-    expect(lineOf("Sol")).toBe("2 sessions on their phone · 3 changes waiting · 2 of 3 this week");
+    // Two parts at most: the week count drops while anything is waiting.
+    expect(lineOf("Quin")).toBe("1 session on their phone");
+    expect(lineOf("Ros")).toBe("1 change waiting");
+    expect(lineOf("Sol")).toBe("2 sessions on their phone · 3 changes waiting");
     expect(lineOf("Tam")).toBe("Last trained 2 days ago · 2 of 3 this week");
     expect(lineOf("Una")).toBe("Last trained 2 days ago · 2 of 3 this week");
   });
@@ -425,12 +426,22 @@ describe("TrainerView: the roster", () => {
     cleanup();
     signedIn();
     await mount();
-    expect(size(screen.getByRole("button", { name: "Add a client" }))).toEqual(QUIET);
     const out = screen.getByRole("button", { name: "Sign out" });
     expect([out.style.fontSize, out.style.color, out.style.textDecoration]).toEqual(["13px", "var(--ink-3)", ""]);
   });
 
-  it("the page's quiet buttons press as Add a client does: Try again and Back to clients too", async () => {
+  it("Add a client is a quiet text row under the cards, words in ink2 with a plus in ink3", async () => {
+    signedIn();
+    await mount();
+    const add = screen.getByRole("button", { name: "Add a client" });
+    const list = screen.getByRole("list", { name: "Clients" });
+    expect(list.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).nextElementSibling?.contains(add)).toBe(false);
+    expect([add.className, add.style.fontSize, add.style.color, add.style.borderStyle]).toEqual(["", "14px", "var(--ink-2)", "none"]);
+    expect(add.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("the page's quiet buttons press: Try again and Back to clients", async () => {
     const PRESS = "forge-press forge-tint";
     await mount(); // no roster route: it can't load
     const again = screen.getByRole("button", { name: "Try again" });
@@ -438,7 +449,6 @@ describe("TrainerView: the roster", () => {
     cleanup();
     signedIn([{ ...SIGNALS[0], ref: "hwg_gone" }]);
     await mount();
-    expect(screen.getByRole("button", { name: "Add a client" }).className).toBe(PRESS);
     fireEvent.click(screen.getByText("Alex"));
     await flush();
     const back = screen.getByRole("button", { name: "Back to clients" });
