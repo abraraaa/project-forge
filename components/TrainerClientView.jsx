@@ -365,7 +365,7 @@ export default function TrainerClientView({ client, view, lastLooked = null, now
             <div style={{ fontSize: 13, color: T.ink2 }}>No main-lift sessions in the last 12 months.</div>
           )}
           {lifts.map((lift) => (
-            <LiftBlock key={lift} lift={lift} line={line[lift] || []} points={all[lift] || []} from={from}
+            <LiftBlock key={lift} lift={lift} line={line[lift] || []} points={all[lift] || []} from={from} todayIso={todayIso}
               ledger={ledgers[lift] || []} open={shownLift === lift} onOpen={() => setOpenLift(lift)}/>
           ))}
         </div>
@@ -658,20 +658,38 @@ function LetterSheet({ next, name, runLabel, onRun, onClose }) {
   );
 }
 
+/**
+ * Whether the e1RM a Lifts row shows is a new best: the newest point of the
+ * 12 months, above every one before it (cooked days count, as the bests do),
+ * the one shown, and from the last 7 days of todayIso.
+ * @param {Array<{ date: string, est1RM: number }>} points
+ * @param {{ date: string, est1RM: number } | undefined} shown
+ * @param {string | undefined} todayIso
+ */
+export function isNewBest(points, shown, todayIso) {
+  const last = points[points.length - 1];
+  if (!last || !shown || !todayIso || points.length < 2) return false;
+  if (shown.date !== last.date || shown.est1RM !== last.est1RM) return false;
+  if (bestOf(points) !== last) return false;
+  return last.date >= addDaysIso(todayIso, -7) && last.date <= todayIso;
+}
+
 // One main lift: a row with a sparkline that opens its chart, one open at a
 // time as in the Lab, at every width. Its ledger sits under the bests.
-function LiftBlock({ lift, line, points, from, ledger, open, onOpen }) {
+function LiftBlock({ lift, line, points, from, todayIso, ledger, open, onOpen }) {
   const best = bestOf(points);
   const last = points[points.length - 1];
   const recent = from ? points.filter((p) => p.date >= from).length : points.length;
   const latest = (line.length ? line : points)[(line.length ? line : points).length - 1];
+  // Noticed, not cheered: the e1RM shown is its 12-month best, from the last 7 days.
+  const newBest = isNewBest(points, latest, todayIso);
   return (
     <div data-lift={lift} data-open={open ? "" : undefined} style={{ borderTop: `1px solid ${T.ruleFaint}`, padding: "4px 0" }}>
       <button type="button" className="forge-press forge-tint" onClick={onOpen} aria-expanded={open}
         style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 44, padding: "6px 0", background: "none", border: "none", cursor: "pointer", fontFamily: T.text, textAlign: "left", color: T.ink }}>
         <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: open ? 500 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lift}</span>
         <InkSpark values={points.slice(-8).map((p) => p.est1RM)}/>
-        {latest && <span style={{ fontFamily: T.measured, fontSize: 15, flexShrink: 0 }}>{latest.est1RM}<span style={{ fontFamily: T.text, fontSize: 11, color: T.ink3 }}> kg</span></span>}
+        {latest && <span style={{ fontFamily: T.measured, fontSize: 15, flexShrink: 0 }}>{latest.est1RM}<span style={{ fontFamily: T.text, fontSize: 11, color: T.ink3 }}> kg</span>{newBest && <span data-best="" style={{ fontFamily: T.text, fontSize: 12, color: T.ink2 }}> best</span>}</span>}
       </button>
       {/* Hidden, not unmounted: a closed lift's ledger keeps its place. */}
       <div data-lift-detail="" hidden={!open} style={{ padding: "6px 0 10px" }}>

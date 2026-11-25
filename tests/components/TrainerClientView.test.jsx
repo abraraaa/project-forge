@@ -57,7 +57,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import TrainerClientView, {
   setsLine, rhythmCellText, refusalText, noHistoryText, leadLine, warningText, sessionStatusText, sessionRunLine, trainerStatusText,
-  glanceParts, kickerText,
+  glanceParts, kickerText, isNewBest,
 } from "../../components/TrainerClientView.jsx";
 import Glyph from "../../components/Glyph.jsx";
 import { T } from "../../lib/tokens.js";
@@ -375,6 +375,27 @@ describe("TrainerClientView", () => {
     // The training itself shows as for any client: no plan, so no Plan or Sent tab.
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Lifts", "Sessions"]);
     expect(tab("Sessions").querySelectorAll("[data-session]").length).toBe(10);
+  });
+
+  it("a Lifts row whose e1RM is its 12-month best, from the last 7 days, says best after the kg in ink2; otherwise nothing", () => {
+    const hist = [rec(13, { weight: 100 }), rec(7, { weight: 100 }), rec(2, { weight: 120 })];
+    render(<TrainerClientView client={client} view={view(hist)}/>);
+    const row = () => /** @type {HTMLElement} */ (tab("Lifts").querySelector('[data-lift="Barbell Back Squat"] > button'));
+    const mark = /** @type {HTMLElement} */ (row().querySelector("[data-best]"));
+    expect(row().textContent).toMatch(/^Barbell Back Squat[\d.]+ kg best$/);
+    expect([mark.style.color, mark.style.fontFamily]).toEqual(["var(--ink-2)", T.text]);
+    cleanup();
+    // The same best, ten days ago: noticed then, not now.
+    render(<TrainerClientView client={client} view={view([rec(20, { weight: 100 }), rec(15, { weight: 100 }), rec(10, { weight: 120 })])}/>);
+    expect(row().querySelector("[data-best]")).toBeNull();
+    cleanup();
+    // Not above an earlier one: no mark.
+    render(<TrainerClientView client={client} view={view([rec(13, { weight: 120 }), rec(2, { weight: 120 })])}/>);
+    expect(row().querySelector("[data-best]")).toBeNull();
+    // One point alone is no best to notice.
+    expect(isNewBest([{ date: today, est1RM: 100 }], { date: today, est1RM: 100 }, today)).toBe(false);
+    expect(isNewBest([{ date: ago(3), est1RM: 90 }, { date: today, est1RM: 100 }], { date: today, est1RM: 100 }, today)).toBe(true);
+    expect(isNewBest([{ date: ago(3), est1RM: 90 }, { date: today, est1RM: 100 }], { date: ago(3), est1RM: 90 }, today)).toBe(false);
   });
 
   it("never imports sessionCount or the device store", () => {
