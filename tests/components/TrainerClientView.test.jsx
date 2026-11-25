@@ -659,6 +659,28 @@ describe("TrainerClientView: the plan", () => {
     expect(tab("Plan").querySelector("[data-tray]")).toBeNull();
   });
 
+  it("Review names a change still waiting that the new one replaces", async () => {
+    const rows = [{ id: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa.0", set: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa", kind: "weight", target: "Barbell Back Squat",
+      before: 102.5, after: 107.5, from: null, at: Date.now() - 3600e3, appliedAt: null, outcome: null, undoneAt: null }];
+    render(<TrainerClientView client={client} view={planView(planData(), { rows })} onChange={fakeRoute()}/>);
+    openLift("Barbell Back Squat");
+    tap("More weight");
+    tap("Add to changes");
+    await review();
+    const op = /** @type {HTMLElement} */ (dialog().querySelector('[data-op="0"]'));
+    expect(op.querySelector("[data-replaces]")?.textContent).toBe("107.5 waiting, replaced");
+    expect(/** @type {HTMLElement} */ (op.querySelector("[data-replaces]")).style.color).toBe("var(--ink-2)");
+    tap("Keep editing");
+    cleanup();
+    // Nothing waiting on the lift: nothing to name.
+    render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()}/>);
+    openLift("Barbell Back Squat");
+    tap("More weight");
+    tap("Add to changes");
+    await review();
+    expect(dialog().querySelector("[data-replaces]")).toBeNull();
+  });
+
   it("a send whose reload fails keeps the sent line and says the list may be behind", async () => {
     const onChanged = vi.fn(async () => false);
     render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()} onChanged={onChanged}/>);
@@ -1304,7 +1326,7 @@ describe("TrainerClientView: sessions you ran", () => {
       const route = fakeRoute();
       render(<TrainerClientView client={client} clientRef={REF} view={ranView()} onChange={route} onRunSession={onRun} unsent={unsentDraft(REF)}/>);
       const row = /** @type {HTMLElement} */ (ranBox().querySelector("[data-unsent]"));
-      expect(row.textContent).toBe("Strength B, today · 2 setsNot sent yet · on this iPad");
+      expect(row.textContent).toBe("Strength B, today · 2 setsNot sent yet · on this device");
       // First: before every sent one.
       const first = ranBox().querySelector("[data-ran]");
       expect(row.compareDocumentPosition(/** @type {Node} */ (first)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -1327,7 +1349,7 @@ describe("TrainerClientView: sessions you ran", () => {
       expect(onRun).toHaveBeenCalledWith("B");
       cleanup();
       render(<TrainerClientView client={client} clientRef={REF} view={projectForTrainer(planData(), { todayIso: today, edits: { rows: [] }, status: "off" })} onRunSession={onRun} unsent={unsentDraft(REF)}/>);
-      expect(ranBox().querySelector("[data-unsent]").textContent).toBe("Strength B, today · 2 setsNot sent yet · on this iPad");
+      expect(ranBox().querySelector("[data-unsent]").textContent).toBe("Strength B, today · 2 setsNot sent yet · on this device");
       fireEvent.click(screen.getByRole("button", { name: "Continue" }));
       expect(onRun).toHaveBeenCalledTimes(2);
       cleanup();

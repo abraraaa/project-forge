@@ -1185,7 +1185,7 @@ describe("TrainerView: changing a client's plan", () => {
     try {
       await openAlex();
       await vi.waitFor(() => expect(document.querySelector("[data-unsent]")).toBeTruthy());
-      expect(document.querySelector("[data-unsent]").textContent).toBe("Strength C, today · 1 setNot sent yet · on this iPad");
+      expect(document.querySelector("[data-unsent]").textContent).toBe("Strength C, today · 1 setNot sent yet · on this device");
       expect(panes.props.at(-1).unsent).toEqual({ letter: "C", date: today, sets: 1 });
       expect(screen.queryByRole("radiogroup", { name: "Session to run" })).toBeNull();
       const before = server.calls.length;

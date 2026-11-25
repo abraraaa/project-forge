@@ -1723,9 +1723,13 @@ function ReviewSheet({ name, ops, basis, lifts, mains, budget, onChange, onFaceI
             const i = op.i ?? k;
             const refused = phase === "refused" ? refusedAt.get(i) : null;
             const lift = lifts.find((l) => l.name === op.target);
+            // A change of theirs still waiting on this lift: this one takes its place, so say which.
+            const waitingNow = op.kind === "weight" ? lift?.pending?.w ?? null : op.kind === "reps" ? lift?.pending?.reps ?? null : null;
+            const replaces = waitingNow == null ? null : op.kind === "weight" ? `${waitingNow} waiting, replaced` : `${repsWords(waitingNow, timedOf(op.target))} waiting, replaced`;
             return (
               <li key={`${op.kind}:${op.target}`} data-op={i} style={{ padding: "8px 0", borderTop: `1px solid ${T.ruleFaint}` }}>
                 <div style={{ fontSize: 14, color: T.ink }}><Nums text={previewLine(op, timedOf(op.target))}/></div>
+                {replaces && <div data-replaces="" style={{ fontSize: 13, color: T.ink2, marginTop: 2 }}><Nums text={replaces}/></div>}
                 {/* Under minimum is volume data, in the steel of its flag; every other warning is a note. */}
                 {(op.warnings || []).filter((w) => warningText(w)).map((w) => (
                   <div key={w} style={{ fontSize: 13, color: w === "under_mev" ? T.under : T.ink2, marginTop: 2 }}>{warningText(w)}</div>
@@ -1967,7 +1971,7 @@ function SessionsYouRan({ ran, name, budget, todayIso, unsent = null, onChange, 
           <div style={{ fontSize: 14, color: T.ink, overflowWrap: "anywhere" }}>
             <Nums text={sessionRunLine({ after: { letter: unsent.letter, date: unsent.date, sets: unsent.sets } }, todayIso)}/>
           </div>
-          <div style={{ fontSize: 12, color: T.ink2, marginTop: 2 }}>Not sent yet · on this iPad</div>
+          <div style={{ fontSize: 12, color: T.ink2, marginTop: 2 }}>Not sent yet · on this device</div>
         </div>
       )}
       {rows.length === 0 && !unsent && <div style={{ fontSize: 13, color: T.ink2 }}>None sent yet.</div>}
