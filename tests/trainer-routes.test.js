@@ -115,7 +115,7 @@ vi.mock("@neondatabase/serverless", () => ({
     }
     // The roster's waiting counts (dbRosterWaiting), by hand from its SQL.
     if (/^\s*SELECT c\.grant_id AS ref,\s+count\(\*\) FILTER/.test(q)) {
-      const [refs, t, author, kinds] = v;
+      const [refs, t, author, kinds, keptSince] = v;
       expect(author).toBe(t);
       const out = new Map();
       for (const c of db.changes) {
@@ -123,10 +123,16 @@ vi.mock("@neondatabase/serverless", () => ({
         if (!refs.includes(c.grant_id) || !g || g.kind !== "trainer" || g.trainer_account_id !== t || g.revoked_at != null) continue;
         if (g.edits_at == null || !(g.edits_off_at == null || g.edits_off_at < g.edits_at)) continue;
         if (c.author_account_id !== t || c.source !== "trainer" || c.status !== "sent" || !kinds.includes(c.kind)) continue;
-        if (c.outcome != null || c.undone_at != null) continue;
-        const row = out.get(c.grant_id) ?? { ref: c.grant_id, changes: 0, sessions: 0 };
-        if (c.kind !== "session" && c.created_at > g.edits_at) row.changes++;
-        if (c.kind === "session" && c.delivered_at != null) row.sessions++;
+        if (c.undone_at != null) continue;
+        const kept = c.outcome === "kept" && c.kind === "session" && c.applied_at != null && c.created_at > keptSince;
+        if (c.outcome != null && !kept) continue;
+        const row = out.get(c.grant_id) ?? { ref: c.grant_id, changes: 0, sessions: 0, kept_target: null, kept_at: null };
+        if (kept) {
+          if (row.kept_at == null || c.applied_at > row.kept_at) Object.assign(row, { kept_target: c.target, kept_at: c.applied_at });
+        } else {
+          if (c.kind !== "session" && c.created_at > g.edits_at) row.changes++;
+          if (c.kind === "session" && c.delivered_at != null) row.sessions++;
+        }
         out.set(c.grant_id, row);
       }
       return [...out.values()];
@@ -796,8 +802,8 @@ describe("POST /api/trainer/clients: list", () => {
     expect(body).toEqual({
       me: { name: "Tia" },
       clients: [
-        { ref: "hwg_abe", name: "Abe", since: 1_790_100_000_000, lastLooked: 1_790_200_000_000, signal: null, waiting: null },
-        { ref: "hwg_cara", name: "Cara", since: 1_790_000_000_000, lastLooked: null, signal: null, waiting: null },
+        { ref: "hwg_abe", name: "Abe", since: 1_790_100_000_000, lastLooked: 1_790_200_000_000, signal: null, waiting: null, kept: null },
+        { ref: "hwg_cara", name: "Cara", since: 1_790_000_000_000, lastLooked: null, signal: null, waiting: null, kept: null },
       ],
     });
     expect(writes()).toEqual([]);
@@ -926,6 +932,28 @@ describe("POST /api/trainer/clients: what is waiting on each client", () => {
       changes: plan.changes.filter((c) => c.kind !== "session" && c.status === "waiting").length,
       sessions: plan.changes.filter((c) => c.kind === "session" && c.status === "seen").length,
     });
+  });
+
+  it("the latest session the client kept rides the roster as its letter and when, from the row's outcome and time; read only", async () => {
+    editsOn("hwg_cara");
+    const earlier = new Date(Date.now() - DAY).toISOString();
+    db.changes = [
+      ...everyStatus(),
+      sessionRow({ delivered_at: delivered, outcome: "kept", applied_at: earlier, target: `${day}:A` }),
+      sessionRow({ delivered_at: delivered, outcome: "kept", applied_at: new Date().toISOString(), created_at: Date.now() - 30 * DAY, target: `${day}:C` }), // sent too long ago
+    ];
+    logged();
+    const body = await (await list(session(T, "cT"))).json();
+    const cara = body.clients.find((c) => c.ref === "hwg_cara");
+    // everyStatus kept Strength B half a day ago: the newest kept, inside the window.
+    expect(cara.kept).toEqual({ letter: "B", at: Date.parse(at) });
+    expect(cara.waiting).toEqual({ changes: 2, sessions: 2 });
+    expect(body.clients.find((c) => c.ref === "hwg_abe").kept).toBeNull();
+    expect(writes().map((w) => w.q.trim().split(/\s+/).slice(0, 3).join(" "))).toEqual(["INSERT INTO notice_marks"]);
+    // Nothing kept: null.
+    db.changes = everyStatus().filter((c) => c.outcome !== "kept");
+    logged();
+    expect((await (await list(session(T, "cT"))).json()).clients.find((c) => c.ref === "hwg_cara").kept).toBeNull();
   });
 
   it("a client with changes on and nothing waiting reads zeros, one read for every such client", async () => {

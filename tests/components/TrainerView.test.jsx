@@ -423,6 +423,28 @@ describe("TrainerView: the roster", () => {
     expect(lineOf("Una")).toBe("Last trained 2 days ago · 2 of 3 this week");
   });
 
+  it("the day a client keeps a session, the card says so in place of the session on their phone; another day, it doesn't", async () => {
+    const week = { lastTrainedDaysAgo: 0, weekDone: 2, weekPlanned: 3, rhythmPct: 86, paused: false };
+    const now = Date.now();
+    const yesterday = Date.parse(`${addDaysIso(today, -1)}T12:00:00`);
+    signedIn([
+      { ref: "hwg_k", name: "Kai", since: now, lastLooked: null, signal: week, waiting: { changes: 0, sessions: 1 }, kept: { letter: "A", at: now } },
+      { ref: "hwg_l", name: "Lou", since: now, lastLooked: null, signal: week, waiting: { changes: 2, sessions: 0 }, kept: { letter: "B", at: now } },
+      { ref: "hwg_m", name: "Mo", since: now, lastLooked: null, signal: week, waiting: { changes: 0, sessions: 1 }, kept: { letter: "C", at: yesterday } },
+      { ref: "hwg_n", name: null, since: now, lastLooked: null, signal: week, waiting: { changes: 0, sessions: 0 }, kept: { letter: "A", at: now } },
+    ]);
+    await mount();
+    const lines = [...document.querySelectorAll(".forge-wide-signal")].map((n) => n.textContent);
+    expect(lines).toEqual([
+      "Kai kept Strength A",
+      "Lou kept Strength B · 2 changes waiting",
+      "1 session on their phone",
+      "They kept Strength A",
+    ]);
+    // Stated, never marked: no colour, the line's own ink2.
+    expect([...document.querySelectorAll(".forge-wide-signal")].every((n) => /** @type {HTMLElement} */ (n).style.color === "var(--ink-2)")).toBe(true);
+  });
+
   it("its buttons are the house set: commits 56 at 17/500, quiet 46 at 14/500 in ink, links 13 in ink3", async () => {
     server.routes["POST /api/trainer/clients"] = { status: 401, body: {} };
     await mount();

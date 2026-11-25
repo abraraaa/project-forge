@@ -446,9 +446,9 @@ describe("POST /api/trainer/clients: the roster", () => {
       me: { name: "Tia" },
       clients: [
         { ref: "hwg_abe", name: "Abe", since: 1_790_100_000_000, lastLooked: 1_790_200_000_000,
-          signal: { lastTrainedDaysAgo: 2, weekDone: 2, weekPlanned: 3, rhythmPct: 91, paused: false }, waiting: null },
+          signal: { lastTrainedDaysAgo: 2, weekDone: 2, weekPlanned: 3, rhythmPct: 91, paused: false }, waiting: null, kept: null },
         { ref: "hwg_cara", name: "Cara", since: 1_790_000_000_000, lastLooked: null,
-          signal: { lastTrainedDaysAgo: null, weekDone: 0, weekPlanned: 0, rhythmPct: 0, paused: true }, waiting: null },
+          signal: { lastTrainedDaysAgo: null, weekDone: 0, weekPlanned: 0, rhythmPct: 0, paused: true }, waiting: null, kept: null },
       ],
     });
     for (const id of ["hwg_abe", "hwg_cara"]) {
@@ -556,8 +556,8 @@ describe("POST /api/trainer/clients: the roster", () => {
     expect(await res.json()).toEqual({
       me: { name: "Tia" },
       clients: [
-        { ref: "hwg_abe", name: "Abe", since: 1_790_100_000_000, lastLooked: 1_790_200_000_000, signal: null, waiting: null },
-        { ref: "hwg_cara", name: "Cara", since: 1_790_000_000_000, lastLooked: null, signal: null, waiting: null },
+        { ref: "hwg_abe", name: "Abe", since: 1_790_100_000_000, lastLooked: 1_790_200_000_000, signal: null, waiting: null, kept: null },
+        { ref: "hwg_cara", name: "Cara", since: 1_790_000_000_000, lastLooked: null, signal: null, waiting: null, kept: null },
       ],
     });
     expect(calls.some((c) => /^\s*SELECT g\.id AS ref,/.test(c.q))).toBe(false);
@@ -598,7 +598,7 @@ describe("POST /api/trainer/clients: the roster", () => {
       const body = JSON.parse(text);
       expect(Object.keys(body).sort()).toEqual(["clients", "me"]);
       for (const c of body.clients) {
-        expect(Object.keys(c).sort(), c.ref).toEqual(["lastLooked", "name", "ref", "signal", "since", "waiting"]);
+        expect(Object.keys(c).sort(), c.ref).toEqual(["kept", "lastLooked", "name", "ref", "signal", "since", "waiting"]);
         expect(Object.keys(c.signal), c.ref).toEqual([...SIGNAL_KEYS]);
       }
       expect(body.clients.map((c) => c.signal)).toEqual([

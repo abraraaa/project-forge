@@ -31,7 +31,7 @@ import Glyph from "@/components/Glyph";
 import { BTN, Card, Fade, prefersReducedMotion } from "@/components/ui";
 import { authenticatePasskey } from "@/lib/webauthn";
 import { fetchWithTimeout } from "@/lib/net";
-import { todayLocalIso } from "@/lib/dates";
+import { todayLocalIso, localDateStr } from "@/lib/dates";
 import { formatCode, shareUrl } from "@/lib/trainer-code";
 import { TRAINER_TERMS_COPY, TRAINER_TERMS_VERSION } from "@/lib/trainer-terms";
 import {
@@ -149,23 +149,32 @@ const counted = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 /** The rhythm the card's mark prints, or null: none while paused or with no plan to measure against. @param {any} signal */
 export const rosterRhythm = (signal) => (signal && !signal.paused && Number.isFinite(signal.rhythmPct) ? signal.rhythmPct : null);
 
+/** "Strength A" from "A". @param {unknown} letter */
+const keptName = (letter) => (letter === "A" || letter === "B" || letter === "C" ? `Strength ${letter}` : null);
+
 /**
  * A roster card's one line, two parts at most, by priority: paused ("Paused ·
  * last trained 9 days ago"); then what this trainer has waiting on them ("1
- * session on their phone · 2 changes waiting"); then the signal line,
- * without the rhythm when the card's mark prints it.
- * @param {{ signal?: any, since?: number | null, waiting?: { changes?: number, sessions?: number } | null }} client
+ * session on their phone · 2 changes waiting"), where a session they kept
+ * today ("Alex kept Strength A", stated, on this device's calendar) takes
+ * the sessions' place; then the signal line, without the rhythm when the
+ * card's mark prints it.
+ * @param {{ name?: string | null, signal?: any, since?: number | null, waiting?: { changes?: number, sessions?: number } | null, kept?: { letter?: string, at?: number } | null }} client
+ * @param {string} [todayIso]  this device's date
  */
-export function rosterLine({ signal = null, since = null, waiting = null }) {
+export function rosterLine({ name = null, signal = null, since = null, waiting = null, kept = null }, todayIso = todayLocalIso()) {
   if (signal?.paused) {
     const last = lastText(signal.lastTrainedDaysAgo);
     return `Paused · ${last.charAt(0).toLowerCase()}${last.slice(1)}`;
   }
   const sessions = Number(waiting?.sessions) || 0;
   const changes = Number(waiting?.changes) || 0;
-  if (sessions > 0 || changes > 0) {
+  const keptToday = keptName(kept?.letter) && Number.isFinite(kept?.at) && localDateStr(new Date(/** @type {number} */ (kept?.at))) === todayIso
+    ? `${name || "They"} kept ${keptName(kept?.letter)}` : null;
+  if (sessions > 0 || changes > 0 || keptToday) {
     const parts = [];
-    if (sessions > 0) parts.push(`${counted(sessions, "session", "sessions")} on their phone`);
+    if (keptToday) parts.push(keptToday);
+    else if (sessions > 0) parts.push(`${counted(sessions, "session", "sessions")} on their phone`);
     if (changes > 0) parts.push(`${counted(changes, "change", "changes")} waiting`);
     return parts.join(" · ");
   }
@@ -692,6 +701,8 @@ export default function TrainerView() {
   }
 
   const selected = open ? clients.findIndex((c) => c.ref === open.ref) : -1;
+  // A kept session reads on the day it was kept, on this device's calendar.
+  const todayIso = todayLocalIso();
   const selfOpen = open?.ref === SELF_REF;
   const shown = open && pane?.ref === open.ref ? pane : null;
   return (
@@ -720,7 +731,7 @@ export default function TrainerView() {
         ) : (
           <ul aria-label="Clients" style={{ listStyle: "none", margin: "16px 0 0", padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             {clients.map((c, i) => {
-              const line = rosterLine(c);
+              const line = rosterLine(c, todayIso);
               const pct = rosterRhythm(c.signal);
               const current = i === selected;
               const arrived = !!known && !known.has(c.ref);
