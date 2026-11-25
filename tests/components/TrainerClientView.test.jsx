@@ -659,6 +659,36 @@ describe("TrainerClientView: the plan", () => {
     expect(tab("Plan").querySelector("[data-tray]")).toBeNull();
   });
 
+  it("after Send a row's draft reads as yours, waiting, at once, fading in on that span alone; reduced motion swaps it", async () => {
+    const onChanged = vi.fn(async () => true);
+    const { rerender } = render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()} onChanged={onChanged}/>);
+    const row = () => /** @type {HTMLElement} */ (document.querySelector('[data-plan-lift="Barbell Back Squat"]'));
+    openLift("Barbell Back Squat");
+    tap("More weight"); tap("More weight");
+    tap("Add to changes");
+    expect(row().querySelector('[data-row-tail="draft"]')?.textContent).toBe(" · new 105, not sent");
+    await review();
+    await act(async () => { tap("Send to Sam"); });
+    await settle();
+    // Before the reload lands: the words the reloaded plan will say, on a span that fades in.
+    const tail = /** @type {HTMLElement} */ (row().querySelector('[data-row-tail="yours"]'));
+    expect(tail.textContent).toBe(" · yours 105 (waiting)");
+    expect(tail.className).toBe("forge-swap");
+    expect(row().textContent).not.toContain("not sent");
+    expect(document.querySelector('[data-section="plan"]').textContent).toContain("Sent to Sam.");
+    // The reload says the same: the same span stays, with nothing to fade again.
+    const rows = [{ id: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa.0", set: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa", kind: "weight", target: "Barbell Back Squat",
+      before: 102.5, after: 105, from: null, at: Date.now(), appliedAt: null, outcome: null, undoneAt: null }];
+    rerender(<TrainerClientView client={client} view={planView(planData(), { rows })} onChange={fakeRoute()} onChanged={onChanged}/>);
+    expect(row().querySelector('[data-row-tail="yours"]')).toBe(tail);
+    expect(tail.textContent).toBe(" · yours 105 (waiting)");
+    expect(tail.className).toBe("");
+    // 160 ms on opacity alone; none under reduced motion.
+    const css = readFileSync(resolve(root, "app/globals.css"), "utf8");
+    expect(css).toMatch(/\n\.forge-swap \{ animation: fadeIn 160ms [^}]*\}/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.forge-swap \{ animation: none; \}/);
+  });
+
   it("Review names a change still waiting that the new one replaces", async () => {
     const rows = [{ id: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa.0", set: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa", kind: "weight", target: "Barbell Back Squat",
       before: 102.5, after: 107.5, from: null, at: Date.now() - 3600e3, appliedAt: null, outcome: null, undoneAt: null }];

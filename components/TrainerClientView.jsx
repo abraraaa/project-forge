@@ -982,10 +982,25 @@ function repsAfterKg(v, timed) {
 }
 
 /**
- * A lift's plan row: "last 100 × 5 · next 102.5 × 5 · yours 105 (waiting)".
+ * A trainer's change waiting on a lift, in its row's words: "yours 105
+ * (waiting)", "yours 105 × 6 (waiting)" or "yours 8 reps (waiting)". Null
+ * with neither a weight nor reps.
+ * @param {{ w?: number | null, reps?: any } | null | undefined} p
+ * @param {boolean} timed
+ */
+function yoursText(p, timed) {
+  if (!p || (p.w == null && p.reps == null)) return null;
+  const yours = p.w != null ? `${p.w}${p.reps != null ? repsAfterKg(p.reps, timed) : ""}` : repsWords(p.reps, timed);
+  return `yours ${yours} (waiting)`;
+}
+
+/**
+ * A lift's plan row in two parts: what the plan says ("last 100 × 5 · next
+ * 102.5 × 5") and the trainer's change waiting on it ("yours 105 (waiting)"),
+ * or null.
  * @param {any} lift  a plan lift
  */
-export function liftLine(lift) {
+export function liftLineParts(lift) {
   const timed = isTimed(lift.name);
   const parts = [];
   const a = lift.anchor;
@@ -993,12 +1008,16 @@ export function liftLine(lift) {
   else if (a.kg != null) parts.push(`last ${a.kg}${repsAfterKg(a.reps, timed)}`);
   else if (a.reps != null) parts.push(`last ${repsWords(a.reps, timed)}`);
   parts.push(lift.w != null ? `next ${lift.w}${repsAfterKg(lift.reps, timed)}` : `next ${repsWords(lift.reps, timed)}`);
-  const p = lift.pending;
-  if (p && (p.w != null || p.reps != null)) {
-    const yours = p.w != null ? `${p.w}${p.reps != null ? repsAfterKg(p.reps, timed) : ""}` : repsWords(p.reps, timed);
-    parts.push(`yours ${yours} (waiting)`);
-  }
-  return parts.join(" · ");
+  return { base: parts.join(" · "), yours: yoursText(lift.pending, timed) };
+}
+
+/**
+ * A lift's plan row: "last 100 × 5 · next 102.5 × 5 · yours 105 (waiting)".
+ * @param {any} lift  a plan lift
+ */
+export function liftLine(lift) {
+  const { base, yours } = liftLineParts(lift);
+  return yours ? `${base} · ${yours}` : base;
 }
 
 /**
@@ -1327,9 +1346,15 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
     setStatus(`Left out ${indices.length} change${indices.length === 1 ? "" : "s"}. Review again when ready.`);
   };
 
+  // What was just sent, against the plan it was drafted on: its rows read
+  // "yours … (waiting)" at once, and the reloaded plan says the same.
+  const [landing, setLanding] = useState(/** @type {{ plan: any, w: Record<string, number>, r: Record<string, number> } | null} */ (null));
+  const landed = landing && landing.plan === plan ? landing : null;
+
   // A reload that fails is said after the sent line, unless another line replaced it.
   const onSent = async () => {
     const sent = `Sent to ${name || "them"}.`;
+    setLanding({ plan, w: { ...drafts.w }, r: { ...drafts.r } });
     setDrafts(EMPTY_DRAFTS);
     setReviewing(false);
     setStatus(sent);
@@ -1390,7 +1415,8 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
           // Each session opens to its main lifts, and any lift with a change
           // waiting or drafted; the rest sit behind one tap, in their order.
           const key = letter || "-";
-          const kept = (l) => isMain(l.name) || !!l.pending || draftsTouch(drafts, l.name, mainFor(l.name));
+          const kept = (l) => isMain(l.name) || !!l.pending || draftsTouch(drafts, l.name, mainFor(l.name))
+            || (!!landed && (Object.hasOwn(landed.w, l.name) || Object.hasOwn(landed.r, l.name)));
           const more = rows.filter((l) => !kept(l)).length;
           const open = opened.has(key);
           return (
@@ -1398,7 +1424,7 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
               <div style={subKicker}>{letter ? `Session ${letter}` : "Other lifts"}</div>
               {rows.map((l) => (
                 <div key={l.name} hidden={!open && !kept(l)} data-plan-rest={kept(l) ? undefined : ""}>
-                  <PlanRow lift={l} main={mainFor(l.name)} drafts={drafts} onOpen={() => setSheet(l.name)}/>
+                  <PlanRow lift={l} main={mainFor(l.name)} drafts={drafts} landed={landed} onOpen={() => setSheet(l.name)}/>
                 </div>
               ))}
               {more > 0 && (
@@ -1432,8 +1458,16 @@ function draftsTouch(drafts, liftName, main) {
   return Object.hasOwn(drafts.w, liftName) || Object.hasOwn(drafts.r, liftName) || (!!main && Object.hasOwn(drafts.m, main.canonical));
 }
 
-function PlanRow({ lift, main, drafts, onOpen }) {
+/**
+ * One lift's row. Its tail is the draft ("new 105, not sent") or the change
+ * waiting ("yours 105 (waiting)"); a send swaps one for the other with a
+ * short fade on that span alone (.forge-swap, none under reduced motion).
+ */
+function PlanRow({ lift, main, drafts, landed = null, onOpen }) {
   const timed = isTimed(lift.name);
+  const { base, yours } = liftLineParts(lift);
+  const sent = landed && (Object.hasOwn(landed.w, lift.name) || Object.hasOwn(landed.r, lift.name))
+    ? yoursText({ w: landed.w[lift.name] ?? lift.pending?.w ?? null, reps: landed.r[lift.name] ?? lift.pending?.reps ?? null }, timed) : null;
   const dw = Object.hasOwn(drafts.w, lift.name) ? drafts.w[lift.name] : null;
   const dr = Object.hasOwn(drafts.r, lift.name) ? drafts.r[lift.name] : null;
   const dm = main && Object.hasOwn(drafts.m, main.canonical) ? drafts.m[main.canonical] : null;
@@ -1450,8 +1484,9 @@ function PlanRow({ lift, main, drafts, onOpen }) {
           {main && <Tag color={T.ink3} style={{ flexShrink: 0 }}>Main lift</Tag>}
         </span>
         <span style={{ display: "block", fontSize: 13, color: T.ink2, lineHeight: 1.5, marginTop: 2 }}>
-          <Nums text={liftLine(lift)}/>
-          {draft && <span style={{ color: T.ink }}> · <Nums text={draft}/></span>}
+          <Nums text={base}/>
+          {draft ? <span key="draft" data-row-tail="draft" style={{ color: T.ink }}> · <Nums text={draft}/></span>
+            : (sent || yours) && <span key="yours" data-row-tail="yours" className={sent ? "forge-swap" : undefined}> · <Nums text={sent || yours}/></span>}
         </span>
       </span>
       <Glyph name="arrowRight" size={13} color={T.ink3}/>
