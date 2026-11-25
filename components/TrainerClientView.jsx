@@ -1345,6 +1345,15 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
     setStatus(ok === false ? NOT_LATEST : "Showing their latest.");
   };
 
+  // The sessions opened past their main lifts.
+  const [opened, setOpened] = useState(() => /** @type {Set<string>} */ (new Set()));
+  const toggle = (key) => setOpened((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const isMain = (liftName) => mains.some((m) => m.choice === liftName);
+
   const bySession = useMemo(() => {
     /** @type {Map<string, any[]>} */
     const out = new Map();
@@ -1357,17 +1366,18 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
 
   return (
     <div style={tabTop} data-section="plan">
-      <div data-tray="" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button type="button" onClick={() => { setStatus(""); setReviewing(true); }} disabled={count === 0 || outOfSends}
-          className="forge-press forge-tint" style={{ ...BTN.quiet, opacity: count && !outOfSends ? 1 : 0.6, cursor: count && !outOfSends ? "pointer" : "default" }}>
-          {count ? <Nums text={`${count} change${count === 1 ? "" : "s"} · Review`}/> : "No changes yet"}
-        </button>
-        {count > 0 && (
+      {/* The tray shows once a change is drafted: nothing to review, nothing to show. */}
+      {count > 0 && (
+        <div data-tray="" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <button type="button" onClick={() => { setStatus(""); setReviewing(true); }} disabled={outOfSends}
+            className="forge-press forge-tint" style={{ ...BTN.quiet, opacity: outOfSends ? 0.6 : 1, cursor: outOfSends ? "default" : "pointer" }}>
+            <Nums text={`${count} change${count === 1 ? "" : "s"} · Review`}/>
+          </button>
           <button type="button" onClick={() => { setDrafts(EMPTY_DRAFTS); setStatus("Cleared."); }} style={{ ...BTN.text, minHeight: 44, padding: "0 4px" }}>
             Clear
           </button>
-        )}
-      </div>
+        </div>
+      )}
       <div role="status" aria-live="polite" style={{ ...statusLine, marginTop: 8 }}>{status}</div>
       {plan?.deload?.active && (
         <p data-deload="" style={{ fontSize: 13, color: T.ink2, lineHeight: 1.5, margin: "8px 0 0" }}>
@@ -1376,14 +1386,31 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
       )}
       {/* Two columns of sessions from 1024 (app/globals.css .forge-wide-pane). */}
       <div className="forge-wide-pane">
-        {bySession.map(([letter, rows]) => (
-          <div key={letter || "-"} data-plan-session={letter || undefined}>
-            <div style={subKicker}>{letter ? `Session ${letter}` : "Other lifts"}</div>
-            {rows.map((l) => (
-              <PlanRow key={l.name} lift={l} main={mainFor(l.name)} drafts={drafts} onOpen={() => setSheet(l.name)}/>
-            ))}
-          </div>
-        ))}
+        {bySession.map(([letter, rows]) => {
+          // Each session opens to its main lifts, and any lift with a change
+          // waiting or drafted; the rest sit behind one tap, in their order.
+          const key = letter || "-";
+          const kept = (l) => isMain(l.name) || !!l.pending || draftsTouch(drafts, l.name, mainFor(l.name));
+          const more = rows.filter((l) => !kept(l)).length;
+          const open = opened.has(key);
+          return (
+            <div key={key} data-plan-session={letter || undefined}>
+              <div style={subKicker}>{letter ? `Session ${letter}` : "Other lifts"}</div>
+              {rows.map((l) => (
+                <div key={l.name} hidden={!open && !kept(l)} data-plan-rest={kept(l) ? undefined : ""}>
+                  <PlanRow lift={l} main={mainFor(l.name)} drafts={drafts} onOpen={() => setSheet(l.name)}/>
+                </div>
+              ))}
+              {more > 0 && (
+                <button type="button" onClick={() => toggle(key)} aria-expanded={open} data-plan-more=""
+                  style={{ ...BTN.text, color: T.ink2, minHeight: 44, padding: 0, gap: 6, borderTop: `1px solid ${T.ruleFaint}`, width: "100%", justifyContent: "flex-start" }}>
+                  <span>{open ? "Fewer lifts" : <Nums text={`${more} more lift${more === 1 ? "" : "s"}`}/>}</span>
+                  <Glyph name={open ? "chevronUp" : "chevronDown"} size={11} color={T.ink3}/>
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {sheetLift && (
@@ -1398,6 +1425,11 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
       )}
     </div>
   );
+}
+
+/** Whether a lift has a drafted change: its weight, its reps, or its main-lift slot. */
+function draftsTouch(drafts, liftName, main) {
+  return Object.hasOwn(drafts.w, liftName) || Object.hasOwn(drafts.r, liftName) || (!!main && Object.hasOwn(drafts.m, main.canonical));
 }
 
 function PlanRow({ lift, main, drafts, onOpen }) {
