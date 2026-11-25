@@ -534,9 +534,9 @@ describe("TrainerClientView: the plan", () => {
     render(<TrainerClientView client={client} view={planView()}/>);
     openLift("Barbell Back Squat");
     const d = dialog();
-    expect(d.textContent).toContain("Up to 110 kg: last top set 100 kg");
-    expect(d.textContent).toContain("Not below 65 kg");
-    expect(d.textContent).toContain("Step is their app's next weight. Jump is the most this change allows.");
+    // One range line, and no note for the presets: each chip says its kg.
+    expect(d.querySelector("[data-range]").textContent).toBe("65 to 110 kg");
+    expect(d.textContent).not.toMatch(/Not below|last top set 100 kg|Step is their|Jump is the/);
     expect(d.textContent).not.toContain("A one-off");
     const pace = within(d).getByRole("group", { name: "Pace" });
     expect([...pace.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Hold 100 kg", "Step 102.5 kg", "Jump 110 kg", "Ease 95 kg"]);
@@ -607,7 +607,7 @@ describe("TrainerClientView: the plan", () => {
     expect(calf.bounds).toMatchObject({ min: 70, max: 110 });
     render(<TrainerClientView client={client} view={view}/>);
     openLift("Standing Calf Raise");
-    expect(dialog().textContent).toContain("Up to 110 kg: last top set 100 kg");
+    expect(dialog().querySelector("[data-range]").textContent).toBe("70 to 110 kg");
     expect(within(dialog()).getByLabelText("Weight in kg")).toBeTruthy();
   });
 
@@ -1952,8 +1952,7 @@ describe("TrainerClientView: the house buttons", () => {
     const route = vi.fn(async () => ({ status: 422, body: { refusals: [{ i: 0, code: "per_change" }], error: SERVER_WORDS } }));
     render(<TrainerClientView client={client} view={v} onChange={route}/>);
     openLift(AP);
-    expect(dialog().textContent).toContain("Up to 100 kg of help: last top set 20 kg");
-    expect(dialog().textContent).toContain("Not below 17.5 kg of help");
+    expect(dialog().querySelector("[data-range]").textContent).toBe("17.5 to 100 kg of help");
     tap("Less assistance");
     tap("Add to changes");
     await review();
@@ -1963,7 +1962,7 @@ describe("TrainerClientView: the house buttons", () => {
     cleanup();
     render(<TrainerClientView client={client} view={v}/>);
     openLift("Barbell Back Squat");
-    expect(dialog().textContent).toContain("Up to 110 kg: last top set 100 kg");
+    expect(dialog().querySelector("[data-range]").textContent).toBe("65 to 110 kg");
     expect(dialog().textContent).not.toContain("of help");
   });
 });

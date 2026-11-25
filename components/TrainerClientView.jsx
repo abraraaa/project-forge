@@ -1526,13 +1526,9 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
   const switching = !!main && choice !== main.choice;
   const weighable = !!b && !blocked;
 
-  // Pace presets (§5): Hold, Step, Jump and Ease (pacePresets).
+  // Pace presets (§5): Hold, Step, Jump and Ease (pacePresets). Each chip
+  // carries its kg; the last top set is in the line under the name.
   const presets = weighable ? pacePresets({ anchorKg, w: lift.w, bounds: b, lt }) : [];
-  // One caption for the two presets whose names don't say what they are.
-  const presetNote = [
-    presets.some(([l]) => l === "Step") && "Step is their app's next weight.",
-    presets.some(([l]) => l === "Jump") && (lt === "assisted_bodyweight" ? "Jump is the least help this change allows." : "Jump is the most this change allows."),
-  ].filter(Boolean).join(" ");
 
   // An assisted lift's kg is help, so its limits say so.
   const assisted = lt === "assisted_bodyweight";
@@ -1544,8 +1540,9 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
     : blocked.code === "range" ? `Their last top set is over ${MAX_KG} kg, the most their app takes. Change their reps instead.`
     : noHistoryText(0);
   const noWeight = timed ? "A timed hold, so seconds only." : lt === "bodyweight" ? "Bodyweight, so reps only." : "Reps only for this one.";
+  // One range line: "65 to 110 kg". A lift never lifted names its first-weight cap instead.
   const range = !b ? null
-    : anchorKg != null ? `Up to ${b.max} kg${help}: last top set ${anchorKg} kg`
+    : anchorKg != null ? `${minKg} to ${maxKg} kg${help}`
     : noHistoryText(b.max, assisted);
 
   const save = () => onSave({
@@ -1602,11 +1599,7 @@ function LiftSheet({ lift, main, drafts, onSave, onClose }) {
                         onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                         style={{ width: `${Math.max(5, kgText.length + 1)}ch`, maxWidth: "100%", textAlign: "center", fontFamily: T.measured, fontSize: 26, color: T.ink, background: "transparent", border: "none", borderBottom: `1px solid ${T.rule}`, padding: 0 }}/>
                     </Stepper>
-                    <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 8 }}>
-                      <div><Nums text={range}/></div>
-                      <div><Nums text={`Not below ${minKg} kg${help}`}/></div>
-                      {presetNote && <div>{presetNote}</div>}
-                    </div>
+                    <div data-range="" style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginTop: 8 }}><Nums text={range}/></div>
                     {b.warnBelow != null && kg != null && kg < b.warnBelow && (
                       <div style={{ fontSize: 13, color: T.ink2, marginTop: 6 }}>{warningText("big_drop")}</div>
                     )}
