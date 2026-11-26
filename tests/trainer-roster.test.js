@@ -81,11 +81,13 @@ function run(q, v) {
   }
   if (/^\s*UPDATE oauth_grants SET\s+looks = jsonb_path_query_array\(/.test(q)) {
     // The roster ring statement, by hand: prepend { k:'r', d, at } unless the
-    // ring already holds that day's roster entry; keep the newest 20.
-    const [day, now, refs, t, guardDay] = v;
+    // ring already holds that day's roster entry (d matches and at falls in
+    // [from, to), that UTC day); keep the newest 20.
+    const [day, now, refs, t, guardDay, from, to] = v;
     expect(guardDay).toBe(day);
+    expect([from, to]).toEqual([Date.parse(`${day}T00:00:00.000Z`), Date.parse(`${day}T00:00:00.000Z`) + DAY]);
     const hit = db.grants.filter((g) => refs.includes(g.id) && g.kind === "trainer" && g.trainer_account_id === t && g.revoked_at == null
-      && !(g.looks ?? []).some((e) => e?.k === "r" && e.d === day));
+      && !(g.looks ?? []).some((e) => e?.k === "r" && e.d === day && typeof e.at === "number" && e.at >= from && e.at < to));
     for (const g of hit) {
       g.looks = [{ k: "r", d: day, at: now }, ...(g.looks ?? [])].slice(0, 20);
       g.look_count = (g.look_count ?? 0) + 1;
@@ -537,6 +539,28 @@ describe("POST /api/trainer/clients: the roster", () => {
     expect(G("hwg_abe").look_count).toBe(1);
   });
 
+  it("a legacy entry whose local-date d names the day but whose at falls the day before does not stand in for the check-in", async () => {
+    // Written before the UTC-day change: a Tokyo trainer at 08:00 on 2 December stored their own date.
+    const legacy = { k: "r", d: "2026-12-02", at: TOKYO_8AM };
+    const later = Date.parse("2026-12-02T10:00:00.000Z");
+    Object.assign(G("hwg_abe"), { looks: [legacy], look_count: 1 });
+    vi.setSystemTime(later);
+    await list(session(T, "cT"), { today: "2026-12-02" });
+    expect(G("hwg_abe").looks).toEqual([{ k: "r", d: "2026-12-02", at: later }, legacy]);
+    expect(G("hwg_abe").look_count).toBe(2);
+    expect(nextLooks([legacy], { k: "r", d: "2026-12-02" }, later)).toEqual({ looks: G("hwg_abe").looks, added: 1 });
+  });
+
+  it("an entry whose d and at are both on the UTC day still holds the check-in", async () => {
+    const held = { k: "r", d: "2026-12-02", at: Date.parse("2026-12-02T00:30:00.000Z") };
+    Object.assign(G("hwg_abe"), { looks: [held], look_count: 1 });
+    vi.setSystemTime(Date.parse("2026-12-02T10:00:00.000Z"));
+    await list(session(T, "cT"), { today: "2026-12-02" });
+    expect(G("hwg_abe").looks).toEqual([held]);
+    expect(G("hwg_abe").look_count).toBe(1);
+    expect(nextLooks([held], { k: "r", d: "2026-12-02" }, Date.parse("2026-12-02T10:00:00.000Z")).added).toBe(0);
+  });
+
   it("the date a trainer sends cannot skip the daily log: three UTC days with the same date log three looks", async () => {
     for (const g of db.grants) Object.assign(g, { looks: [], look_count: 0 });
     for (const at of [Date.parse("2026-12-01T12:00:00.000Z"), Date.parse("2026-12-02T12:00:00.000Z"), Date.parse("2026-12-03T12:00:00.000Z")]) {
@@ -625,7 +649,7 @@ describe("POST /api/trainer/clients: the roster", () => {
 describe("SQL pins", () => {
   const norm = (s) => s.replace(/\s+/g, " ").trim();
 
-  it("the roster ring statement: once per day by the @> guard, ring of 20, this trainer's live listed grants only", async () => {
+  it("the roster ring statement: once per UTC day by the d-and-at guard, ring of 20, this trainer's live listed grants only", async () => {
     await dbRosterSignals(T, ["hwg_abe"], { today: TODAY, now: NOW });
     const c = calls.find((x) => /^\s*UPDATE oauth_grants/.test(x.q));
     expect(norm(c.q)).toBe(norm(`UPDATE oauth_grants SET
@@ -634,8 +658,10 @@ describe("SQL pins", () => {
         '$[0 to 19]'),
       look_count = COALESCE(look_count, 0) + 1
     WHERE id = ANY(?) AND kind = 'trainer' AND trainer_account_id = ? AND revoked_at IS NULL
-      AND NOT COALESCE(looks @> jsonb_build_array(jsonb_build_object('k', 'r', 'd', ?::text)), false)`));
-    expect(c.v).toEqual([TODAY, NOW, ["hwg_abe"], T, TODAY]);
+      AND NOT COALESCE(jsonb_path_exists(looks, '$[*] ? (@.k == "r" && @.d == $d && @.at >= $from && @.at < $to)',
+        jsonb_build_object('d', ?::text, 'from', ?::bigint, 'to', ?::bigint)), false)`));
+    const from = Date.parse(`${TODAY}T00:00:00.000Z`);
+    expect(c.v).toEqual([TODAY, NOW, ["hwg_abe"], T, TODAY, from, from + DAY]);
     expect(c.q).not.toMatch(/last_used_at|revoked_at =|DELETE/);
   });
 
