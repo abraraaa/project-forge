@@ -1372,7 +1372,10 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
   // A reload that fails is said after the sent line, unless another line replaced it.
   const onSent = async () => {
     const sent = `Sent to ${name || "them"}.`;
-    setLanding({ plan, w: { ...drafts.w }, r: { ...drafts.r } });
+    // A second send before the reload lands joins the first: same plan, both batches wait.
+    setLanding((prev) => (prev && prev.plan === plan
+      ? { plan, w: { ...prev.w, ...drafts.w }, r: { ...prev.r, ...drafts.r } }
+      : { plan, w: { ...drafts.w }, r: { ...drafts.r } }));
     setDrafts(EMPTY_DRAFTS);
     setReviewing(false);
     setStatus(sent);

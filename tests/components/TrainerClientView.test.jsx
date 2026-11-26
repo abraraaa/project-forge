@@ -710,6 +710,28 @@ describe("TrainerClientView: the plan", () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.forge-swap \{ animation: none; \}/);
   });
 
+  for (const [how, reload] of [["has not returned", () => new Promise(() => {})], ["returned false", async () => false]]) {
+    it(`a second send while the first's reload ${how} keeps both batches reading waiting`, async () => {
+      const onChanged = vi.fn(reload);
+      render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()} onChanged={onChanged}/>);
+      const tail = (lift) => document.querySelector(`[data-plan-lift="${lift}"] [data-row-tail="yours"]`)?.textContent;
+      openLift("Barbell Back Squat");
+      tap("More weight"); tap("More weight");
+      tap("Add to changes");
+      await review();
+      await act(async () => { tap("Send to Sam"); });
+      await settle();
+      expect(tail("Barbell Back Squat")).toBe(" · yours 105 (waiting)");
+      openLift("Standing Calf Raise"); tap("More reps"); tap("Add to changes");
+      await review();
+      await act(async () => { tap("Send to Sam"); });
+      await settle();
+      expect(onChanged).toHaveBeenCalledTimes(2);
+      expect(tail("Barbell Back Squat")).toBe(" · yours 105 (waiting)");
+      expect(tail("Standing Calf Raise")).toBe(" · yours 16 reps (waiting)");
+    });
+  }
+
   it("Review names a change still waiting that the new one replaces", async () => {
     const rows = [{ id: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa.0", set: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa", kind: "weight", target: "Barbell Back Squat",
       before: 102.5, after: 107.5, from: null, at: Date.now() - 3600e3, appliedAt: null, outcome: null, undoneAt: null }];
