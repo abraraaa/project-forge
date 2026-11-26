@@ -855,13 +855,7 @@ export default function ForgeApp(){
     // HomeScreen) — falling back to tap-time today only if absent. Same
     // midnight-straddle guard as handleMarkDayDone: an app open across
     // midnight must mark the day the user is looking at.
-    const today = (typeof renderedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(renderedDate)) ? renderedDate : (() => {
-      const d = new Date();
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return `${y}-${m}-${day}`;
-    })();
+    const today = (typeof renderedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(renderedDate)) ? renderedDate : todayLocalIso();
     // recordCompletion stamps scheduledType even for bonus-only entries.
     // Without it they'd land with null scheduledType — indistinguishable
     // from the buggy null/null Mark ✓ writes, forcing the repair migration

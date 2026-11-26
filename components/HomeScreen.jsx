@@ -32,6 +32,7 @@ import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
 import { SO_FAR, splitWeekSoFar } from "@/lib/chart-style";
 import { fetchWithTimeout } from "@/lib/net";
 import { resetConfigFor } from "@/lib/profile-actions";
+import { useTodayAnchor } from "@/lib/use-today-iso";
 
 // Human-readable "X ago" — tuned for < 12h windows (draft expiry cutoff).
 function formatAgo(ms) {
@@ -169,21 +170,12 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
     }
   };
 
-  // Anchor "now" once at mount so render stays pure (no clock read mid-render)
-  // and the day-of-week / viewed-date maths derive from a single consistent point.
-  // The anchor re-arms only when the CALENDAR DAY changes (foreground/focus/
-  // minute tick) — same-day events keep the anchor, so renders stay stable.
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const reanchor = () => setNowMs((prev) => {
-      const now = Date.now();
-      return new Date(prev).toDateString() === new Date(now).toDateString() ? prev : now;
-    });
-    document.addEventListener("visibilitychange", reanchor);
-    window.addEventListener("focus", reanchor);
-    const id = setInterval(reanchor, 60_000);
-    return () => { document.removeEventListener("visibilitychange", reanchor); window.removeEventListener("focus", reanchor); clearInterval(id); };
-  }, []);
+  // One anchor for "now" so render stays pure (no clock read mid-render) and
+  // the day-of-week / viewed-date maths derive from a single consistent point.
+  // It moves only when the CALENDAR DAY changes (useTodayAnchor), so same-day
+  // events keep it and renders stay stable. nowMs stays for the trainer
+  // card's time of day.
+  const { todayIso, nowMs } = useTodayAnchor();
   const todayIdx = mondayIndex(new Date(nowMs)); // 0=Mon..6=Sun, the WEEK convention
 
   // Notices: polled on mount and whenever the app returns to the foreground,
@@ -268,9 +260,8 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const viewCoveredBy = dayStates[viewIdx]?.status === "covered" ? dayStates[viewIdx].coveredBy : null;
   // Coming back: today's strength day after RETURN_GAP_DAYS or more since
   // the last strength session says how long it has been.
-  const todayIsoStr = addDaysIso(new Date(nowMs), 0);
-  const lastStrength = history.reduce((m, r) => (r?.date && r.date < todayIsoStr && isStrengthRecord(r) && (!m || r.date > m) ? r.date : m), null);
-  const returnGap = lastStrength ? daysBetween(lastStrength, todayIsoStr) : null;
+  const lastStrength = history.reduce((m, r) => (r?.date && r.date < todayIso && isStrengthRecord(r) && (!m || r.date > m) ? r.date : m), null);
+  const returnGap = lastStrength ? daysBetween(lastStrength, todayIso) : null;
   const welcomeBack = viewIdx === todayIdx && returnGap !== null && returnGap >= RETURN_GAP_DAYS && !weekDone[viewIdx];
   const subText = viewCoveredBy
     ? `Made up on ${DAY_NAMES[mondayIndex(viewCoveredBy)].slice(0, 3)}.`
@@ -696,7 +687,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           One card at a time, oldest first (ForgeApp orders them). */}
       {trainerSessions.length > 0 && onOpenTrainerSession && (
         <TrainerSessionCard card={trainerSessions[0]} more={trainerSessions.length - 1}
-          todayIso={addDaysIso(new Date(nowMs), 0)} nowMs={nowMs} onReview={onOpenTrainerSession}/>
+          todayIso={todayIso} nowMs={nowMs} onReview={onOpenTrainerSession}/>
       )}
 
       {/* Lifetime-tonnage milestone — surfaces ONCE per crossed threshold.
