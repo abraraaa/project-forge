@@ -7,6 +7,7 @@ import { durationMs, trainerDay } from "@/lib/server-time";
 import { trainerGate, json, noStore, setTrainerCookie } from "@/lib/trainer-session";
 import { dbMarkSeen } from "@/lib/notices";
 import { serverError } from "@/lib/api-errors";
+import { shareCovers } from "@/lib/trainer-terms";
 
 // Run beside Neon and Blob (London); see tests/regions.test.js.
 export const preferredRegion = "lhr1";
@@ -40,13 +41,15 @@ async function roster(me, refs, rawToday, now = Date.now()) {
 }
 
 /**
- * What is waiting on each client with changes on (dbRosterWaiting), zeros
- * included; null when the read fails. Clients without changes on are absent.
+ * What is waiting on each client with changes on or a consent that covers
+ * coached sessions (dbRosterWaiting), zeros included; null when the read
+ * fails. Other clients are absent. A session stays on the client's phone
+ * after changes stop, and their pane still shows it, so the count does too.
  * @param {string} me
- * @param {{ ref: string, edits: boolean }[]} grants
+ * @param {{ ref: string, edits: boolean, consentVersion: string | null }[]} grants
  */
 async function waitingFor(me, grants) {
-  const refs = grants.filter((x) => x.edits === true).map((x) => x.ref);
+  const refs = grants.filter((x) => x.edits === true || shareCovers(x.consentVersion, "session")).map((x) => x.ref);
   if (!refs.length) return new Map();
   try {
     const rows = await dbRosterWaiting(me, refs);
@@ -63,10 +66,11 @@ async function waitingFor(me, grants) {
 //                       signal is the roster line (rosterSignal). It is read only after a
 //                       roster look is logged on every listed grant; if that log can't be
 //                       written, every signal is null and the list is names and dates only.
-//                       waiting: { changes, sessions } for a client with changes on, read
-//                       after the roster look like the signal: the trainer's changes the
-//                       pane lists as waiting and their sessions on the client's phone.
-//                       null for a read-only client, or when either read fails.
+//                       waiting: { changes, sessions } for a client with changes on or a
+//                       consent that covers coached sessions, read after the roster look
+//                       like the signal: the trainer's changes the pane lists as waiting
+//                       (none while changes are off) and their sessions on the client's
+//                       phone. null for any other client, or when either read fails.
 //                       kept: { letter, at } the latest session of this trainer's the
 //                       client kept (from the same read: the row's outcome 'kept', its
 //                       target's letter and applied_at), else null; the roster says

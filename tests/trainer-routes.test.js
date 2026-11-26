@@ -72,7 +72,7 @@ vi.mock("@neondatabase/serverless", () => ({
           const h = db.handles.find((x) => x.account_id === g.account_id && x.released_at == null);
           return { id: g.id, profile: g.profile, scope: g.scope, created_at: String(g.created_at),
             last_used_at: g.last_used_at == null ? null : String(g.last_used_at),
-            edits_at: g.edits_at == null ? null : String(g.edits_at), edits_off_at: g.edits_off_at == null ? null : String(g.edits_off_at),
+            edits_at: g.edits_at == null ? null : String(g.edits_at), edits_off_at: g.edits_off_at == null ? null : String(g.edits_off_at), consent_version: g.consent_version ?? null,
             handle: h?.handle ?? null, display: h?.display ?? null };
         });
     }
@@ -121,7 +121,7 @@ vi.mock("@neondatabase/serverless", () => ({
       for (const c of db.changes) {
         const g = db.grants.find((x) => x.id === c.grant_id);
         if (!refs.includes(c.grant_id) || !g || g.kind !== "trainer" || g.trainer_account_id !== t || g.revoked_at != null) continue;
-        if (g.edits_at == null || !(g.edits_off_at == null || g.edits_off_at < g.edits_at)) continue;
+        const on = g.edits_at != null && (g.edits_off_at == null || g.edits_off_at < g.edits_at);
         if (c.author_account_id !== t || c.source !== "trainer" || c.status !== "sent" || !kinds.includes(c.kind)) continue;
         if (c.undone_at != null) continue;
         const kept = c.outcome === "kept" && c.kind === "session" && c.applied_at != null && c.created_at > keptSince;
@@ -130,7 +130,7 @@ vi.mock("@neondatabase/serverless", () => ({
         if (kept) {
           if (row.kept_at == null || c.applied_at > row.kept_at) Object.assign(row, { kept_target: c.target, kept_at: c.applied_at });
         } else {
-          if (c.kind !== "session" && c.created_at > g.edits_at) row.changes++;
+          if (c.kind !== "session" && on && c.created_at > g.edits_at) row.changes++;
           if (c.kind === "session" && c.delivered_at != null) row.sessions++;
         }
         out.set(c.grant_id, row);
@@ -166,7 +166,7 @@ vi.mock("@/lib/trainer-terms", async (importOriginal) => {
 const { POST: clientPOST } = await import("@/app/api/trainer/client/route");
 const { POST: clientsPOST } = await import("@/app/api/trainer/clients/route");
 const { TRAINER_COOKIE } = await import("@/lib/trainer-session");
-const { TRAINER_TERMS_VERSION } = await import("@/lib/trainer-terms");
+const { TRAINER_TERMS_VERSION, SHARE_CONSENT_VERSION } = await import("@/lib/trainer-terms");
 const { dbLogFullLook, dbRosterSignals } = await import("@/lib/trainer-store");
 const { rateLimit, rateLimitShared } = await import("@/lib/rate-limit");
 const { PLAN_KEYS } = await import("@/lib/trainer-plan");
@@ -966,13 +966,29 @@ describe("POST /api/trainer/clients: what is waiting on each client", () => {
     expect([...waitingReads()[0].v[0]].sort()).toEqual(["hwg_abe", "hwg_cara"]);
   });
 
-  it("read-only grants (never on, or turned off) report no waiting and run no read", async () => {
-    Object.assign(db.grants.find((g) => g.id === "hwg_cara"), { edits_at: EDITS_AT, edits_off_at: EDITS_AT + 1 });
+  it("read-only grants whose consent predates sessions (never on, or turned off) report no waiting and run no read", async () => {
+    Object.assign(db.grants.find((g) => g.id === "hwg_cara"), { edits_at: EDITS_AT, edits_off_at: EDITS_AT + 1, consent_version: "2026-10-05b" });
     db.changes = everyStatus();
     logged();
     const body = await (await list(session(T, "cT"))).json();
     expect(body.clients.map((c) => c.waiting)).toEqual([null, null]);
     expect(waitingReads()).toEqual([]);
+  });
+
+  it("a read-only grant whose consent covers sessions counts its sessions on their phone, as its pane shows them, and no changes", async () => {
+    Object.assign(db.grants.find((g) => g.id === "hwg_cara"), { edits_at: EDITS_AT, edits_off_at: EDITS_AT + 1, consent_version: SHARE_CONSENT_VERSION });
+    db.changes = everyStatus();
+    logged();
+    const t = session(T, "cT");
+    const body = await (await list(t)).json();
+    const cara = body.clients.find((c) => c.ref === "hwg_cara");
+    expect(writes().map((w) => w.q.trim().split(/\s+/).slice(0, 3).join(" "))).toEqual(["INSERT INTO notice_marks"]);
+    expect(waitingReads().map((r) => r.v[0])).toEqual([["hwg_cara"]]);
+    const { ran } = (await (await view(t, { ref: "hwg_cara", today: TODAY })).json()).view;
+    expect(cara.waiting).toEqual({ changes: 0, sessions: ran.changes.filter((c) => c.status === "seen").length });
+    expect(cara.waiting.sessions).toBe(2);
+    expect(cara.kept).toEqual({ letter: "B", at: Date.parse(at) });
+    expect(body.clients.find((c) => c.ref === "hwg_abe").waiting).toBeNull(); // no consent that names sessions
   });
 
   it("nothing waiting is read before the roster look is logged, and a failed read never fails the list", async () => {
