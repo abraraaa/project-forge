@@ -7,7 +7,8 @@ import {
   SESSIONS, EXERCISE_POOLS, SWAP_DB, RETIRED_EXERCISES, RETIRED_LOAD_TYPES, FORMER_LOAD_TYPES, ROTATION_REVISED,
   applyRotationToSession, readRotationConfig,
 } from "../lib/programme.js";
-import { getLiftProfile, inferLoadType, swapLoadType, __test__ } from "../lib/lift-translations.js";
+import { getLiftProfile, inferLoadType, swapLoadType, coldStartCapKg, __test__ } from "../lib/lift-translations.js";
+import { projectForTrainer } from "../lib/trainer-plan.js";
 import { loadTypeOfName } from "../lib/programme-resolve.js";
 import { EXERCISE_ANATOMY, getAnatomy, PATTERN_DEFAULTS } from "../lib/exercise-anatomy.js";
 import { getTempo } from "../lib/exercise-tempo.js";
@@ -53,6 +54,36 @@ describe("load types", () => {
       expect(s.eq, s.host).toBe("Bodyweight");
       expect(swapLoadType(s), s.host).toBe("bodyweight");
     }
+  });
+});
+
+describe("Single-Leg Curl is the low cable curl its footage shows", () => {
+  it("a cable lift (load type total) at 15 kg in its pool, by name too", () => {
+    expect(poolEntry("bss2-B", "Single-Leg Curl")).toMatchObject({ loadType: "total", weight: 15, vid: "Y1dQUd6OKHk" });
+    expect(everyPool("Single-Leg Curl")).toEqual(["bss2-B"]);
+    expect(loadTypeOfName("Single-Leg Curl")).toBe("total");
+  });
+
+  it("its profile is a cable isolation lift: accessory isolation, off the machine ceiling, its template under the cap", () => {
+    const profile = getLiftProfile("Single-Leg Curl");
+    expect(profile).toMatchObject({ primaryMuscle: "Hamstrings", category: "accessory_isolation", progressesByLoad: true });
+    expect(profile.machine).not.toBe(true);
+    expect(coldStartCapKg(profile)).toBe(25);
+    expect(coldStartCapKg(profile)).toBeGreaterThanOrEqual(poolEntry("bss2-B", "Single-Leg Curl").weight);
+  });
+
+  it("its anatomy is untouched", () => {
+    expect(EXERCISE_ANATOMY["Single-Leg Curl"]).toEqual({ primary: "Hamstrings", secondary: { Calves: 0.1 } });
+  });
+
+  it("sets logged under per_db keep reading per dumbbell, at the weight logged", () => {
+    const sets = [{ weight: 22, reps: 10, rpe: 8, loadType: "per_db" }, { weight: 22, reps: 9, rpe: 8.5, loadType: "per_db" }];
+    const history = [{ v: 2, id: "2026-11-02T07:00:00.000Z", date: "2026-11-02", session: "strength-b", scheduledLetter: "B",
+      blocks: [{ id: "acc", type: "accessory", exercises: [{ name: "Single-Leg Curl", loadType: "per_db", sets }] }] }];
+    const view = projectForTrainer({ meta: {}, history }, { todayIso: "2026-11-09" });
+    const ex = view.sessions.flatMap((r) => r.blocks.flatMap((b) => b.exercises)).find((e) => e.name === "Single-Leg Curl");
+    expect(ex.loadType).toBe("per_db");
+    expect(ex.sets.map((x) => [x.weight, x.loadType])).toEqual([[22, "per_db"], [22, "per_db"]]);
   });
 });
 
@@ -191,6 +222,7 @@ describe("stored rotation picks", () => {
   for (const [key, old, want] of /** @type {const} */ ([
     ["ass2-A", { name: "Single-Leg Hip Thrust", reps: 10, weight: 45, muscle: "Glutes", vid: "4ilXaDauMnE", loadType: "barbell", loadProfile: "moderate_mid_rep" }, { loadType: "bodyweight", weight: null }],
     ["ass1-B", { name: "Landmine Press", reps: 10, weight: 28, muscle: "Upper chest", vid: "gH7PDepHNck", loadType: "barbell", loadProfile: "moderate_mid_rep" }, { loadType: "barbell", weight: 20 }],
+    ["bss2-B", { name: "Single-Leg Curl", reps: 10, weight: 22, muscle: "Hamstrings", vid: "Y1dQUd6OKHk", loadType: "per_db", loadProfile: "moderate_mid_rep" }, { loadType: "total", weight: 15 }],
   ])) {
     it(`a stored ${old.name} pick takes the pool's current load type and template`, () => {
       const { session, field } = /** @type {any} */ (slotOf(key));
