@@ -1430,8 +1430,8 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
           On a deload{plan.deload.until ? <> until about <Nums text={isoDayMonth(plan.deload.until)}/></> : null}. Weights can change once it ends.
         </p>
       )}
-      {/* Two columns of sessions from 1024 (app/globals.css .forge-wide-pane). */}
-      <div className="forge-wide-pane">
+      {/* The sessions in one column at every width, as the other tabs run. */}
+      <div>
         {bySession.map(([letter, rows]) => {
           // Each session opens to its main lifts, and any lift with a change
           // waiting or drafted; the rest sit behind one tap, in their order.

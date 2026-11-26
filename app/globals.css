@@ -319,7 +319,7 @@ html[data-mode="dark"] .forge-page {
    It sets no height and no top inset, and nothing in it is sticky: the page
    scrolls as one document at every width.
    < 640 stacked, centred at 560 · 640-1023 roster 248 + pane ·
-   1024+ roster 304 + pane, whose .forge-wide-pane runs two columns. */
+   1024+ roster 304 + pane. The pane is one column at every width. */
 .forge-wide {
   display: grid;
   gap: 32px;
@@ -335,11 +335,6 @@ html[data-mode="dark"] .forge-page {
 }
 @media (min-width: 1024px) {
   .forge-wide { grid-template-columns: 304px minmax(0, 1fr); max-width: 1360px; }
-  .forge-wide-pane {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 32px;
-  }
 }
 
 /* What the wide shape folds at each tier. Under 640 one column shows at a

@@ -173,18 +173,16 @@ describe("globals.css — the wide shape", () => {
     expect(at("@media (min-width: 640px)", ".forge-wide-roster")).toMatch(/border-right:\s*1px solid var\(--rule\)/);
   });
 
-  it("1024+: a 304px roster, the pane in two columns, capped at 1360", () => {
+  it("1024+: a 304px roster beside the pane, capped at 1360", () => {
     const w = at("@media (min-width: 1024px)", ".forge-wide");
     expect(w).toMatch(/grid-template-columns:\s*304px minmax\(0,\s*1fr\)/);
     expect(w).toMatch(/max-width:\s*1360px/);
-    expect(at("@media (min-width: 1024px)", ".forge-wide-pane")).toMatch(
-      /grid-template-columns:\s*minmax\(0,\s*1fr\) minmax\(0,\s*1fr\)/,
-    );
   });
 
-  it("the pane runs two columns only at 1024+", () => {
-    const pane = wide.filter((r) => r.sel.includes(".forge-wide-pane"));
-    expect(pane.map((r) => r.media)).toEqual(["@media (min-width: 1024px)"]);
+  // Two columns of three sessions left Session C alone beside a gap; the
+  // plan's sessions run in one column at every width, as the other tabs do.
+  it("the pane lays out no columns of its own at any width", () => {
+    expect(wide.filter((r) => r.sel.includes(".forge-wide-pane"))).toEqual([]);
   });
 
   it("sets no height, no top inset, and nothing sticky or fixed", () => {
