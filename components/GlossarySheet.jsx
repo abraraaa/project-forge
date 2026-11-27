@@ -48,7 +48,7 @@ const TERMS = [
     subtitle: "Estimated one-rep max",
     body: (
       <>
-        <p>The most weight you could move once with good form. Heatwayve estimates it from your logged sets using the Epley formula (weight × (1 + reps / 30)), which is reliable in the 1–10 rep range and gets lossy above 12.</p>
+        <p>The most weight you could move once with good form. Heatwayve estimates it from your logged sets using the Epley formula (weight × (1 + reps / 30)). A good estimate at low reps. It gets less precise as reps climb, and varies by exercise and person.</p>
         <p style={{marginTop:8}}>Used as the trend line for each main lift — strength gains show as a rising estimated 1RM over time.</p>
       </>
     ),
@@ -114,7 +114,7 @@ const TERMS = [
     subtitle: "Total weight moved",
     body: (
       <>
-        <p>Sum of (weight × reps) across every set. Dumbbell sets count both arms (per-DB weight × 2). It&apos;s a vanity metric — useful for milestone moments, not for programming decisions (use sets/week vs MEV/MAV/MRV for that).</p>
+        <p>Sum of (weight × reps) across every set. Dumbbell sets count both arms (per-DB weight × 2). Useful for milestones. Research rarely measures it, so Heatwayve programmes from weekly sets against MEV/MAV/MRV.</p>
       </>
     ),
   },

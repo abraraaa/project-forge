@@ -55,7 +55,7 @@ const TERMS = [
   {
     abbr: "MRV",
     name: "Maximum Recoverable Volume",
-    body: "The ceiling. Past it the sets still happen, the fatigue still accumulates, and the adaptation does not follow — you are paying for work you cannot recover from. Going over occasionally is a training decision. Living over it is a slow injury.",
+    body: "The ceiling. Past it, extra sets add little and cost recovery. Going over occasionally is a training decision. Living over it mostly buys fatigue.",
   },
 ];
 
@@ -108,8 +108,8 @@ export default function VolumeLandmarksPage() {
         <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: 0 }}>How much is enough</h1>
         <p style={{ fontSize: 16, color: T.ink2, marginTop: 14, lineHeight: 1.6 }}>
           Almost every programme tells you how many sets to do today. Very few
-          tell you how many your <em>chest</em> got this week, which is the
-          number that decides whether it grows.
+          tell you how many your <em>chest</em> got this week, which has the
+          most say in how much it grows.
         </p>
       </div>
 
@@ -228,8 +228,8 @@ export default function VolumeLandmarksPage() {
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65 }}>
           They are not a measurement of you. Volume tolerance moves with
           training age, sleep, stress, how much food you are eating and what
-          else is in the week. Two people with identical numbers can sit fifty
-          per cent apart on what they can actually recover from.
+          else is in the week. Two people with identical numbers can differ
+          widely on what they can actually recover from.
         </p>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginTop: 12 }}>
           Treat them as a well-reasoned starting point and let your own

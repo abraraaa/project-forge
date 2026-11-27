@@ -4,7 +4,7 @@
 
 **Unveil the best you.** Evidence-based, autoregulated strength training — cast your frame, move with intent. Next.js PWA, live at [heatwayve.app](https://heatwayve.app).
 
-A 3-day-a-week strength programme (A/B/C — Squat & Push, Hinge & Pull, Power & Volume) with a progression engine that responds to how hard the work felt, per-muscle volume held against evidence-based landmarks (MEV/MAV/MRV), an accessory rotation engine that changes the accessories for interest and coverage without you thinking about it, and the Locker Room — where the work stops being numbers and starts being a body.
+A 3-day-a-week strength programme (A/B/C — Squat & Push, Hinge & Pull, Power & Volume) with a progression engine that responds to how hard the work felt, per-muscle volume held against landmarks built on the weekly-sets evidence, with practitioner per-muscle numbers (MEV/MAV/MRV), an accessory rotation engine that changes the accessories for interest and coverage without you thinking about it, and the Locker Room — where the work stops being numbers and starts being a body.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -44,7 +44,7 @@ Each accessory slot has a pre-vetted pool of alternatives rotation can substitut
 
 ## Volume vs landmarks (MEV/MAV/MRV)
 
-Two surfaces hold actual volume against evidence-based landmarks. `npm run audit:volume` prints what the default programme delivers per muscle — the static audit. In the app, the Performance Lab audits the trailing four weeks of logged sessions and flags muscles below MEV (less still counts, it just builds more slowly) or above MRV (junk volume, recovery cost) with the specific shortfall.
+Two surfaces hold actual volume against the landmarks (weekly-sets evidence, practitioner per-muscle numbers). `npm run audit:volume` prints what the default programme delivers per muscle — the static audit. In the app, the Performance Lab audits the trailing four weeks of logged sessions and flags muscles below MEV (less still counts, it just builds more slowly) or above MRV (extra sets add little and cost recovery) with the specific shortfall.
 
 Both operate at the **granular muscle level** — 16 tracked muscles, each delt head and each arm muscle distinct — because "Rear Delts under MEV" is actionable and "Shoulders under MEV" is not. Traps, Erectors and Core carry `mev: 0`: fatigue ceilings that flag excess without ever nagging a shortfall nobody should chase.
 

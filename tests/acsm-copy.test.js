@@ -116,3 +116,38 @@ describe("the README's stall rules match the engine", () => {
     expect(r).toMatch(/Power lifts never climb/);
   });
 });
+
+describe("claims the position stand doesn't support are softened", () => {
+  it("MRV: returns diminish, not stop; no slow injury; no junk volume", () => {
+    expect(src("app/volume-landmarks/page.jsx")).not.toMatch(/adaptation does not follow|slow injury/);
+    expect(src("app/volume-landmarks/page.jsx")).toMatch(/extra sets add little and cost recovery/);
+    for (const f of ["README.md", "lib/volume-audit.js"]) expect(src(f), f).not.toMatch(/junk volume/);
+  });
+  it("weekly sets have the most say, not the deciding one; no unsourced fifty per cent", () => {
+    const p = src("app/volume-landmarks/page.jsx");
+    expect(p).not.toMatch(/number that decides whether it grows/);
+    expect(p).not.toMatch(/fifty\s+per cent/);
+  });
+  it("the glossary: tonnage isn't a vanity metric; Epley's precision isn't overstated", () => {
+    const g = src("components/GlossarySheet.jsx");
+    expect(g).not.toMatch(/vanity metric/);
+    expect(g).not.toMatch(/reliable in the 1/);
+  });
+  it("isolation adds direct sets; compounds aren't said to fall short", () => {
+    expect(src("lib/library.js")).not.toMatch(/compounds alone don't cover it/);
+    expect(src("app/library/[slug]/page.jsx")).not.toMatch(/not a replacement for direct work/);
+  });
+  it("landmarks and start multipliers are not called evidence-based", () => {
+    expect(src("README.md")).not.toMatch(/evidence-based landmarks/);
+    expect(src("lib/volume-audit.js")).not.toMatch(/evidence-based volume landmarks/);
+    expect(src("lib/programme-resolve.js")).not.toMatch(/evidence-based intermediate-novice/);
+  });
+  it("deload cards promise no comeback", () => {
+    expect(src("lib/progression.js")).not.toMatch(/come back stronger|stronger weeks ahead/);
+  });
+  it("a hold's page doesn't claim a direct measurement, and its placeholder source isn't structured data", () => {
+    const p = src("app/library/[slug]/page.jsx");
+    expect(p).toMatch(/Holds are set by time and bracing, not rep tempo\./);
+    expect(p).toMatch(/\.filter\(\(src\) => src && src\.url\)/);
+  });
+});
