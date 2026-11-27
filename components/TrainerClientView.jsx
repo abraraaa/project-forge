@@ -1372,7 +1372,10 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
   // A reload that fails is said after the sent line, unless another line replaced it.
   const onSent = async () => {
     const sent = `Sent to ${name || "them"}.`;
-    setLanding({ plan, w: { ...drafts.w }, r: { ...drafts.r } });
+    // A second send before the reload lands joins the first: same plan, both batches wait.
+    setLanding((prev) => (prev && prev.plan === plan
+      ? { plan, w: { ...prev.w, ...drafts.w }, r: { ...prev.r, ...drafts.r } }
+      : { plan, w: { ...drafts.w }, r: { ...drafts.r } }));
     setDrafts(EMPTY_DRAFTS);
     setReviewing(false);
     setStatus(sent);
@@ -1427,8 +1430,8 @@ function PlanSection({ plan, name, onChange, onFaceId, onChanged }) {
           On a deload{plan.deload.until ? <> until about <Nums text={isoDayMonth(plan.deload.until)}/></> : null}. Weights can change once it ends.
         </p>
       )}
-      {/* Two columns of sessions from 1024 (app/globals.css .forge-wide-pane). */}
-      <div className="forge-wide-pane">
+      {/* The sessions in one column at every width, as the other tabs run. */}
+      <div>
         {bySession.map(([letter, rows]) => {
           // Each session opens to its main lifts, and any lift with a change
           // waiting or drafted; the rest sit behind one tap, in their order.

@@ -259,10 +259,11 @@ export default function PerformanceLab({ history, onBack, resting = false, break
                 {plateaus.length > 0
                   ? <>Your {plateaus[0].lift} has held at <span style={{fontFamily:T.measured}}>{plateaus[0].weight}</span> kg for <span style={{fontFamily:T.measured}}>{plateaus[0].sessions}</span> sessions. A deload or a rep-range shift breaks the pattern.</>
                   : underMuscles.length > 0
-                  /* The masthead already names the shortfall. This says HOW —
-                     and spreading beats stacking (Schoenfeld 2016 frequency
-                     meta, cited on /volume-landmarks). */
-                  ? <>Add the {underMuscles[0].toLowerCase()} work to days you already train — a set on each of two days beats both on one.</>
+                  /* The masthead already names the shortfall. This says HOW.
+                     Weekly sets are the growth dose; how they are spread
+                     matters little once the total is equal (ACSM 2026, cited
+                     on /volume-landmarks). */
+                  ? <>Add the {underMuscles[0].toLowerCase()} work to days you already train. Weekly sets are what count.</>
                   : <>Volume is landing where it grows. The programme holds.</>}
               </span>
             </div>

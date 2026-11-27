@@ -177,17 +177,33 @@ describe("what the session says about how the engine read the lift", () => {
     expect(screen.queryByText(/reps, not 5/)).toBeNull();
   });
 
-  it("after a session to failure, the first set asks to finish at 9.5, and the line goes once it is logged", () => {
+  it("after a session to failure, the card promises no weight for finishing at 9.5", () => {
     start({ lifts: { [SQUAT]: liftState({ history: [{ date: "2026-09-22", decision: "HOLD", rationale: ["last_performance=PERFORMED_FULL", "decision_reason=performed_full_rir0_grinder"] }] }) } });
-    const line = "Last time went to failure. Finish at 9.5 or lower today and the weight goes up next time.";
-    expect(screen.getByText(line)).toBeTruthy();
-    logSetAt();
-    expect(screen.queryByText(line)).toBeNull();
+    expect(screen.queryByText(/went to failure|goes up next time/)).toBeNull();
   });
 
   it("a cooked day promises no weight after a session to failure", () => {
     start({ readiness: "Cooked", lifts: { [SQUAT]: liftState({ history: [{ date: "2026-09-22", decision: "HOLD", rationale: ["last_performance=PERFORMED_FULL", "decision_reason=performed_full_rir0_grinder"] }] }) } });
     expect(screen.queryByText(/went to failure/)).toBeNull();
+  });
+
+  it("a cooked day opens 15% lighter, can be dialled back up, and leaves W alone", () => {
+    start({ readiness: "Cooked" });
+    logSetAt();
+    expect(loggedSquat().sets[0].weight).toBe(85);
+    expect(loggedSquat().prescribed.weight).toBe(100);
+    fireEvent.click(screen.getByLabelText("Add 1.25 kg"));
+    logSetAt();
+    expect(loggedSquat().sets[1].weight).toBe(86.25);
+    expect(P.getWeights(WHO)).toEqual({ [SQUAT]: 100 });
+  });
+
+  it("the cooked option says what it does", () => {
+    P.setActive(WHO);
+    SessionIntent.stash(WHO, { sessionIdx: 0 });
+    render(<SessionHost />);
+    expect(screen.getByText("Lighter weights, same session. Nothing today moves your numbers.")).toBeTruthy();
+    expect(screen.queryByText(/trimmed volume/)).toBeNull();
   });
 
   it("says nothing on an ordinary lift", () => {

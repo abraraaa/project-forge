@@ -117,14 +117,14 @@ function resultFor(app) {
   return null;
 }
 
-/** "Last trained 2 days ago", or the same for today, yesterday and none in a year. @param {number | null | undefined} d */
+/** "Trained 2 days ago", or the same for today, yesterday and none in a year. @param {number | null | undefined} d */
 const lastText = (d) => (d == null ? "No sessions in the last year"
   : d === 0 ? "Trained today"
-  : d === 1 ? "Last trained yesterday"
-  : `Last trained ${d} days ago`);
+  : d === 1 ? "Trained yesterday"
+  : `Trained ${d} days ago`);
 
 /**
- * A roster line: "Last trained 2 days ago · 2 of 3 this week · rhythm 86%".
+ * A roster line: "Trained 2 days ago · 2 of 3 this week · rhythm 86%".
  * Paused clients show no week count or rhythm. With no signal (the roster
  * look could not be logged) only the sharing date shows. rhythm: false
  * leaves the rhythm out, for a card whose mark prints it.
@@ -154,15 +154,16 @@ const keptName = (letter) => (letter === "A" || letter === "B" || letter === "C"
 
 /**
  * A roster card's one line, two parts at most, by priority: paused ("Paused ·
- * last trained 9 days ago"); then what this trainer has waiting on them ("1
- * session on their phone · 2 changes waiting"), where a session they kept
- * today ("Alex kept Strength A", stated, on this device's calendar) takes
- * the sessions' place; then the signal line, without the rhythm when the
- * card's mark prints it.
- * @param {{ name?: string | null, signal?: any, since?: number | null, waiting?: { changes?: number, sessions?: number } | null, kept?: { letter?: string, at?: number } | null }} client
+ * trained 9 days ago"); then what this trainer has waiting on them ("1
+ * session waiting · 2 changes waiting": sessions on their phone, changes not
+ * landed), where a session they kept today ("Kept Strength A today", stated,
+ * on this device's calendar; "Kept Strength A" beside changes) takes the
+ * sessions' place; then the signal line, without the rhythm when the card's
+ * mark prints it. Worded to fit one line beside the mark at 390.
+ * @param {{ signal?: any, since?: number | null, waiting?: { changes?: number, sessions?: number } | null, kept?: { letter?: string, at?: number } | null }} client
  * @param {string} [todayIso]  this device's date
  */
-export function rosterLine({ name = null, signal = null, since = null, waiting = null, kept = null }, todayIso = todayLocalIso()) {
+export function rosterLine({ signal = null, since = null, waiting = null, kept = null }, todayIso = todayLocalIso()) {
   if (signal?.paused) {
     const last = lastText(signal.lastTrainedDaysAgo);
     return `Paused · ${last.charAt(0).toLowerCase()}${last.slice(1)}`;
@@ -170,11 +171,11 @@ export function rosterLine({ name = null, signal = null, since = null, waiting =
   const sessions = Number(waiting?.sessions) || 0;
   const changes = Number(waiting?.changes) || 0;
   const keptToday = keptName(kept?.letter) && Number.isFinite(kept?.at) && localDateStr(new Date(/** @type {number} */ (kept?.at))) === todayIso
-    ? `${name || "They"} kept ${keptName(kept?.letter)}` : null;
+    ? `Kept ${keptName(kept?.letter)}` : null;
   if (sessions > 0 || changes > 0 || keptToday) {
     const parts = [];
-    if (keptToday) parts.push(keptToday);
-    else if (sessions > 0) parts.push(`${counted(sessions, "session", "sessions")} on their phone`);
+    if (keptToday) parts.push(changes > 0 ? keptToday : `${keptToday} today`);
+    else if (sessions > 0) parts.push(`${counted(sessions, "session", "sessions")} waiting`);
     if (changes > 0) parts.push(`${counted(changes, "change", "changes")} waiting`);
     return parts.join(" · ");
   }

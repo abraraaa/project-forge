@@ -147,7 +147,7 @@ describe("DaysStep", () => {
     expect(lettersShown()).toBe("ABCA");
     fireEvent.click(day("Saturday"));
     fireEvent.click(day("Friday"));
-    expect(screen.getByRole("status").textContent).toMatch(/^Two days: a full A, B, C round takes a week and a half/);
+    expect(screen.getByRole("status").textContent).toMatch(/^Two days meets the guideline of training at least twice a week\. A full A, B, C round takes a week and a half/);
     expect(screen.getByRole("button", { name: "Keep 2 days" })).toBeTruthy();
     fireEvent.click(day("Wednesday"));
     expect(screen.getByRole("status").textContent).toBe("One day: a full round takes three weeks. Progress will be slow.");

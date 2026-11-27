@@ -135,7 +135,7 @@ describe("this change's library entries", () => {
     expect(getLiftProfile("Single-Arm High Cable Row")).toEqual(getLiftProfile("Single-Arm Cable Row"));
     expect(getAnatomy("Single-Arm High Cable Row")?.primary).toBe("Upper Back");
     expect(Object.keys(getAnatomy("Single-Arm High Cable Row")?.secondary ?? {})).toEqual(expect.arrayContaining(["Rear Delts", "Lats", "Biceps"]));
-    expect(getTempo("Single-Arm High Cable Row")).toMatchObject({ tempo: "3-1-2-0", evidence: "derived", sources: ["schoenfeld2015"] });
+    expect(getTempo("Single-Arm High Cable Row")).toMatchObject({ tempo: "3-1-2-0", evidence: "derived", sources: ["schoenfeld2015", "acsm2026"] });
     expect(SWAP_DB["Single-Arm High Cable Row"].map((o) => o.name)).toEqual(["Single-Arm Cable Row", "Half-Kneeling Cable Row"]);
   });
 

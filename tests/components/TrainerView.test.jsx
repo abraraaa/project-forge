@@ -284,16 +284,16 @@ describe("TrainerView: the roster", () => {
     await mount();
     const rows = [...screen.getByRole("list", { name: "Clients" }).querySelectorAll("li")].map((li) => li.textContent);
     expect(rows).toEqual([
-      "AlexLast trained 2 days ago · 2 of 3 this weekrhythm 86%",
+      "AlexTrained 2 days ago · 2 of 3 this weekrhythm 86%",
       "BeaTrained today · 1 of 3 this weekrhythm 100%",
-      "CalLast trained yesterday · 1 of 3 this weekrhythm 50%",
-      "DeePaused · last trained 9 days ago",
+      "CalTrained yesterday · 1 of 3 this weekrhythm 50%",
+      "DeePaused · trained 9 days ago",
       "EveNo sessions in the last yearrhythm 0%",
-      "FinLast trained 4 days ago · 1 of 2 this week",
+      "FinTrained 4 days ago · 1 of 2 this week",
       "GusSharing since 3 Oct",
-      "Your clientLast trained 3 days ago · 2 of 3 this weekrhythm 75%",
+      "Your clientTrained 3 days ago · 2 of 3 this weekrhythm 75%",
     ]);
-    const line = screen.getByTitle("Last trained 2 days ago · 2 of 3 this week");
+    const line = screen.getByTitle("Trained 2 days ago · 2 of 3 this week");
     expect(line.className).toBe("forge-wide-signal");
     expect([...line.querySelectorAll("span")].map((s) => s.textContent)).toEqual(["2", "2", "3"]);
     expect(screen.getByText("Signed in as Coach Kim")).toBeTruthy();
@@ -414,16 +414,17 @@ describe("TrainerView: the roster", () => {
     ]);
     await mount();
     const lineOf = (n) => screen.getByText(n, { selector: "span" }).closest("button").querySelector(".forge-wide-signal").textContent;
-    expect(lineOf("Pat")).toBe("Paused · last trained 9 days ago");
+    expect(lineOf("Pat")).toBe("Paused · trained 9 days ago");
     // Two parts at most: the week count drops while anything is waiting.
-    expect(lineOf("Quin")).toBe("1 session on their phone");
+    // Short enough for one line beside the rhythm mark at 390.
+    expect(lineOf("Quin")).toBe("1 session waiting");
     expect(lineOf("Ros")).toBe("1 change waiting");
-    expect(lineOf("Sol")).toBe("2 sessions on their phone · 3 changes waiting");
-    expect(lineOf("Tam")).toBe("Last trained 2 days ago · 2 of 3 this week");
-    expect(lineOf("Una")).toBe("Last trained 2 days ago · 2 of 3 this week");
+    expect(lineOf("Sol")).toBe("2 sessions waiting · 3 changes waiting");
+    expect(lineOf("Tam")).toBe("Trained 2 days ago · 2 of 3 this week");
+    expect(lineOf("Una")).toBe("Trained 2 days ago · 2 of 3 this week");
   });
 
-  it("the day a client keeps a session, the card says so in place of the session on their phone; another day, it doesn't", async () => {
+  it("the day a client keeps a session, the card says so in place of the sessions waiting; another day, it doesn't", async () => {
     const week = { lastTrainedDaysAgo: 0, weekDone: 2, weekPlanned: 3, rhythmPct: 86, paused: false };
     const now = Date.now();
     const yesterday = Date.parse(`${addDaysIso(today, -1)}T12:00:00`);
@@ -436,10 +437,10 @@ describe("TrainerView: the roster", () => {
     await mount();
     const lines = [...document.querySelectorAll(".forge-wide-signal")].map((n) => n.textContent);
     expect(lines).toEqual([
-      "Kai kept Strength A",
-      "Lou kept Strength B · 2 changes waiting",
-      "1 session on their phone",
-      "They kept Strength A",
+      "Kept Strength A today",
+      "Kept Strength B · 2 changes waiting",
+      "1 session waiting",
+      "Kept Strength A today",
     ]);
     // Stated, never marked: no colour, the line's own ink2.
     expect([...document.querySelectorAll(".forge-wide-signal")].every((n) => /** @type {HTMLElement} */ (n).style.color === "var(--ink-2)")).toBe(true);

@@ -27,11 +27,12 @@ import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
 import { deloadCardCopy, deloadDayOf, liveDeload, repTargetRepairs } from "@/lib/progression";
 import { planStartWeight, isWorkingWeight, scheduledPlan, deloadSessionSets } from "@/lib/programme-resolve";
-import { getLoadType, parseTimedReps, usesOptionalChrome } from "@/lib/lift-translations";
+import { getLoadType, parseTimedReps, usesOptionalChrome, plannedRpe } from "@/lib/lift-translations";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
 import { SO_FAR, splitWeekSoFar } from "@/lib/chart-style";
 import { fetchWithTimeout } from "@/lib/net";
 import { resetConfigFor } from "@/lib/profile-actions";
+import { useTodayAnchor } from "@/lib/use-today-iso";
 
 // Human-readable "X ago" — tuned for < 12h windows (draft expiry cutoff).
 function formatAgo(ms) {
@@ -45,11 +46,9 @@ function formatAgo(ms) {
   return "a while ago";
 }
 
-// The planned proximity-to-failure per block type — main lifts and
-// accessories are prescribed around rpe 8, finishers run closer to the
-// ceiling. Drives the heat mark on the session preview rows (colour +
-// height + the printed number: the redundancy law).
-const BLOCK_RPE = { main: 8, superset: 8, finisher: 9 };
+// The planned proximity-to-failure per row (plannedRpe) drives the heat mark
+// on the session preview rows (colour + height + the printed number: the
+// redundancy law).
 
 // A row's numbers as the session will open them: the live rep target, and
 // the weight the session plans (W, else the planned start). `working` says
@@ -169,21 +168,12 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
     }
   };
 
-  // Anchor "now" once at mount so render stays pure (no clock read mid-render)
-  // and the day-of-week / viewed-date maths derive from a single consistent point.
-  // The anchor re-arms only when the CALENDAR DAY changes (foreground/focus/
-  // minute tick) — same-day events keep the anchor, so renders stay stable.
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const reanchor = () => setNowMs((prev) => {
-      const now = Date.now();
-      return new Date(prev).toDateString() === new Date(now).toDateString() ? prev : now;
-    });
-    document.addEventListener("visibilitychange", reanchor);
-    window.addEventListener("focus", reanchor);
-    const id = setInterval(reanchor, 60_000);
-    return () => { document.removeEventListener("visibilitychange", reanchor); window.removeEventListener("focus", reanchor); clearInterval(id); };
-  }, []);
+  // One anchor for "now" so render stays pure (no clock read mid-render) and
+  // the day-of-week / viewed-date maths derive from a single consistent point.
+  // It moves only when the CALENDAR DAY changes (useTodayAnchor), so same-day
+  // events keep it and renders stay stable. nowMs stays for the trainer
+  // card's time of day.
+  const { todayIso, nowMs } = useTodayAnchor();
   const todayIdx = mondayIndex(new Date(nowMs)); // 0=Mon..6=Sun, the WEEK convention
 
   // Notices: polled on mount and whenever the app returns to the foreground,
@@ -268,9 +258,8 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
   const viewCoveredBy = dayStates[viewIdx]?.status === "covered" ? dayStates[viewIdx].coveredBy : null;
   // Coming back: today's strength day after RETURN_GAP_DAYS or more since
   // the last strength session says how long it has been.
-  const todayIsoStr = addDaysIso(new Date(nowMs), 0);
-  const lastStrength = history.reduce((m, r) => (r?.date && r.date < todayIsoStr && isStrengthRecord(r) && (!m || r.date > m) ? r.date : m), null);
-  const returnGap = lastStrength ? daysBetween(lastStrength, todayIsoStr) : null;
+  const lastStrength = history.reduce((m, r) => (r?.date && r.date < todayIso && isStrengthRecord(r) && (!m || r.date > m) ? r.date : m), null);
+  const returnGap = lastStrength ? daysBetween(lastStrength, todayIso) : null;
   const welcomeBack = viewIdx === todayIdx && returnGap !== null && returnGap >= RETURN_GAP_DAYS && !weekDone[viewIdx];
   const subText = viewCoveredBy
     ? `Made up on ${DAY_NAMES[mondayIndex(viewCoveredBy)].slice(0, 3)}.`
@@ -509,7 +498,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 number is always printed. */}
             <div style={{padding:"2px 24px 0"}}>
               {shownSession.blocks.map((b)=>{
-                const rpe   = BLOCK_RPE[b.type] ?? 8;
+                const rpe   = plannedRpe(b.type, b.type==="main" ? b.ex?.name : (b.exA||b.ex)?.name);
                 const name  = b.type==="main"
                   ? b.ex.name
                   : `${(b.exA||b.ex).name} ↔ ${(b.exB||b.ex).name}`;
@@ -696,7 +685,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
           One card at a time, oldest first (ForgeApp orders them). */}
       {trainerSessions.length > 0 && onOpenTrainerSession && (
         <TrainerSessionCard card={trainerSessions[0]} more={trainerSessions.length - 1}
-          todayIso={addDaysIso(new Date(nowMs), 0)} nowMs={nowMs} onReview={onOpenTrainerSession}/>
+          todayIso={todayIso} nowMs={nowMs} onReview={onOpenTrainerSession}/>
       )}
 
       {/* Lifetime-tonnage milestone — surfaces ONCE per crossed threshold.
@@ -856,7 +845,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>
                   {offerRotationChoice
                     ? "You've earned a re-think. Refresh exercises, or change your focus altogether."
-                    : "Your body has adapted. New exercises, same muscle targets."}
+                    : "New exercises for variety, same muscle targets."}
                 </div>
               </div>
               <button className="forge-press forge-tint" onClick={handleRotateTap} style={{flexShrink:0,marginTop:2,height:42,padding:"0 14px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"inline-flex",alignItems:"center",gap:6}}>
@@ -957,7 +946,7 @@ function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFo
         <button onClick={onRefresh}
           style={{padding:"15px 16px",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,cursor:"pointer",textAlign:"left",marginBottom:10,fontFamily:T.text}}>
           <div style={{fontSize:15,fontWeight:500,color:T.ink,marginBottom:4}}>Refresh exercises</div>
-          <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>New picks within your current focus. Same muscle targets, fresh stimulus.</div>
+          <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>New picks within your current focus, for variety. Same muscle targets.</div>
         </button>
 
         <button onClick={onChangeFocus}

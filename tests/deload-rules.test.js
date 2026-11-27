@@ -462,9 +462,9 @@ describe("a weekend acceptance still gets a real deload", () => {
       vi.setSystemTime(new Date(2026, 10, 22, 9, 0));
       const ts = startDeload({ mesocycle: {}, lifts: {} }, { type: "stall_convergence", lifts: ["Barbell Back Squat"] });
       expect(ts.mesocycle.activeDeload.plannedDays).toBe(8);
-      expect(deloadCardCopy({ type: "other" }).body).toBe("Lighter loads and reduced volume until a week on Monday. You'll come back stronger.");
+      expect(deloadCardCopy({ type: "other" }).body).toBe("Lighter loads and reduced volume until a week on Monday. A short deload lets the fatigue clear before you push again.");
       vi.setSystemTime(new Date(2026, 10, 19, 9, 0));
-      expect(deloadCardCopy({ type: "other" }).body).toBe("Lighter loads and reduced volume until Monday. You'll come back stronger.");
+      expect(deloadCardCopy({ type: "other" }).body).toBe("Lighter loads and reduced volume until Monday. A short deload lets the fatigue clear before you push again.");
     } finally { vi.useRealTimers(); }
   });
 });

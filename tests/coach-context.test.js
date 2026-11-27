@@ -29,6 +29,16 @@ describe("buildCoachContext", () => {
     expect(text).toMatch(/Consistency beats novelty/);
     expect(text).toMatch(/MEV/);
   });
+  it("says holding a weight is a legitimate choice", () => {
+    expect(text).toMatch(/Progression is a personal choice, not an obligation/);
+  });
+  it("carries the goal levers, failure-not-needed and safety", () => {
+    expect(text).toMatch(/Goals differ\. Strength responds to heavy loads/);
+    expect(text).toMatch(/Size responds to weekly sets/);
+    expect(text).toMatch(/power lift is low reps moved fast/);
+    expect(text).toMatch(/Failure isn't needed/);
+    expect(text).toMatch(/safe for healthy adults of all ages, and any training beats none/);
+  });
   it("a snapshot that leaves a later session out does not carry the current stall signal", () => {
     const capped = buildCoachContext({
       history: [rec("2026-09-14", 100), rec("2026-09-17", 102.5), rec("2026-09-21", 105)],

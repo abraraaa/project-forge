@@ -46,10 +46,10 @@ import {
   CD, coachTrainer, letterIndex, letterOf, sessionNameOf, COACH_MAX_SETS,
 } from "@/lib/session-source";
 import { changeStatus, sessionDayWords } from "@/lib/trainer-change";
-import { catalogueTemplateWeight, scheduledPlan, deloadSessionSets } from "@/lib/programme-resolve";
+import { catalogueTemplateWeight, scheduledPlan, deloadSessionSets, cookedWeights } from "@/lib/programme-resolve";
 import {
   SESSIONS, EXERCISE_POOLS,
-  applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
+  applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession, applyRestToSession,
   WEEK, nextStrengthIdx,
 } from "@/lib/programme";
 import { deloadDayOf, deloadBaseWeight, liveDeload, isFinalSetMiss, lastSessionNote, ADOPT_AFTER_SESSIONS, repTargetRepairs } from "@/lib/progression";
@@ -371,8 +371,8 @@ export default function SessionHost({ mode = null } = {}) {
   const mainSession    = applyMainLiftsToSession(rotatedSession, mainLifts);
   const swappedSession = applySwapsToSession(mainSession, sessionSwaps);
   const focusedSession = applyFocusToSession(swappedSession, userFocus, programmeBlock?.config, mainLifts);
-  // Travel converts what focus finished choosing, and readiness still trims
-  // on top — a cooked day drops its finisher whether or not you're in a hotel.
+  // Travel converts what focus finished choosing. A cooked day keeps the
+  // whole session, in a hotel or not; only its card weights lighten.
   const travelledSession = travel ? deriveTravelSession(focusedSession) : focusedSession;
   // The prescription the session shows: R, with any target left below its
   // lift's base read as the base (repTargetRepairs). Templates come from the
@@ -406,10 +406,17 @@ export default function SessionHost({ mode = null } = {}) {
   // The deload as today's card reads it: none once time off has done its work.
   const deloadNow = useMemo(() => liveDeload(activeDeload, history, todayIso), [activeDeload, history, todayIso]);
   // A deload day's set counts (deloadSessionSets).
-  const activeSession  = deloadSessionSets(scaleForReadiness(travelledSession, readiness), scheduled.sets);
+  // Rest follows the lift each main block carries (applyRestToSession).
+  const activeSession  = deloadSessionSets(scaleForReadiness(applyRestToSession(travelledSession), readiness), scheduled.sets);
   const prescribedWeights = scheduled.weights;
   const prescribedReps = scheduled.reps;
-  const planWeights = useMemo(() => ({ ...prescribedWeights, ...sessionWeights }), [prescribedWeights, sessionWeights]);
+  // A cooked day opens each load-progressed lift 15% lighter (cookedWeights):
+  // a plan layer under the drum's edits, so it can be dialled back up and
+  // never reaches W or the record's `prescribed`. A deload's weight wins.
+  const startWeights = useMemo(() => (readiness === "cooked"
+    ? cookedWeights(prescribedWeights, { working: workingWeights, deload: !!deloadNow })
+    : prescribedWeights), [readiness, prescribedWeights, workingWeights, deloadNow]);
+  const planWeights = useMemo(() => ({ ...startWeights, ...sessionWeights }), [startWeights, sessionWeights]);
   const planReps = useMemo(() => ({ ...prescribedReps, ...sessionReps }), [prescribedReps, sessionReps]);
   const block   = activeSession.blocks[blockIdx];
   const isSS    = block.type === "superset" || block.type === "finisher";
@@ -540,17 +547,17 @@ export default function SessionHost({ mode = null } = {}) {
 
   // One line on the card about how the engine read this lift last time: a
   // target adopted from the lifter's own repeated choice, a rep target raised
-  // to break a stall, a session taken to failure, or a last set that came up
-  // short on an otherwise full session.
+  // to break a stall, or a last set that came up short on an otherwise full
+  // session. A session taken to failure gets no line: the weight holds until
+  // the lift is moved with reps in reserve.
   const lastNote = activeEx?.name ? lastSessionNote(liftStates[activeEx.name]) : null;
-  // The climb and failure lines explain today's first set, so they go once
+  // The climb line explains today's first set, so it goes once
   // it is logged. Not on a deload day, whose target is the deload's, nor a
   // cooked day, which never moves the weight.
   const firstSetOpen = !deloadNow && readiness !== "cooked" && !(draftView?.blocks?.[block.id]?.exercises?.[activeEx?.name]?.sets?.length > 0);
   const todayReps = activeEx?.name ? Number.parseInt(String(prescribedReps[activeEx.name] ?? activeEx.reps), 10) : null;
   const coachLine = lastNote?.kind === "adopted" ? SESSION_COPY.adoptedTarget(lastNote.reps, ADOPT_AFTER_SESSIONS)
     : lastNote?.kind === "rep_climb" ? (firstSetOpen && todayReps === lastNote.reps ? SESSION_COPY.repClimb(lastNote) : null)
-    : lastNote?.kind === "failure" ? (firstSetOpen ? SESSION_COPY.afterFailure : null)
     : lastNote?.kind === "final_set_miss" ? SESSION_COPY.ownAllSets(block.sets)
     : null;
   // A quieter line under it when a trainer set today's number.

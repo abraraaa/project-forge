@@ -299,7 +299,13 @@ describe("loaded rep climb reaches the session", () => {
     expect(lastSessionNote(lift())).toEqual({ kind: "failure" });
     apply(squat(165, 5, 0.5));
     expect(lastSessionNote(lift())).toBe(null);
-    expect(lift().nextPrescribed).toBe(167.5);
+    expect(lift().nextPrescribed).toBe(165);
+  });
+
+  it("a climb after failure promises no weight for 9.5 short of its ceiling", () => {
+    const state = { currentRepRange: { reps: 6, sets: 3, baseReps: 5 }, consecutiveHolds: 4,
+      history: [{ date: "2026-10-30", decision: "HOLD", rationale: ["last_performance=PERFORMED_FULL", "decision_reason=performed_full_rir0_grinder"] }] };
+    expect(lastSessionNote(state)).toMatchObject({ kind: "rep_climb", reps: 6, banks: false });
   });
 
   it("7 at RPE 10 holds 162.5 x 7", () => {
@@ -326,18 +332,18 @@ describe("loaded rep climb reaches the session", () => {
     expect(lastSessionNote(lift())).toBe(null);
   });
 
-  it("a cooked day after failure keeps the failure note and the add after it", () => {
+  it("a cooked day after failure keeps the failure note; RPE 9.5 after it holds", () => {
     seed({ currentWeight: 165 });
     apply(squat(165, 5, 0));
     apply(squat(165, 5, 1, "cooked"));
     expect(lastSessionNote(lift())).toEqual({ kind: "failure" });
     apply(squat(165, 5, 0.5));
-    expect(lift().nextPrescribed).toBe(167.5);
+    expect(lift().nextPrescribed).toBe(165);
   });
 
   // Lift histories stored before cooked days became history only carry the
   // cooked day's entry; it still reads past to the failure before it.
-  it("a stored cooked entry after failure keeps the failure note and the add after it", () => {
+  it("a stored cooked entry after failure keeps the failure note; RPE 9.5 after it holds", () => {
     seed({ currentWeight: 165 });
     apply(squat(165, 5, 0));
     const stored = lift();
@@ -347,7 +353,7 @@ describe("loaded rep climb reaches the session", () => {
     }] });
     expect(lastSessionNote(lift())).toEqual({ kind: "failure" });
     apply(squat(165, 5, 0.5));
-    expect(lift().nextPrescribed).toBe(167.5);
+    expect(lift().nextPrescribed).toBe(165);
   });
 
   it("a cooked day mid-climb keeps the climbed target and its base", () => {

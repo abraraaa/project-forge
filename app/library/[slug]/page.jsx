@@ -91,7 +91,9 @@ function TempoSection({ name }) {
       <div style={{ marginTop: 12 }}>
         <p style={{ fontSize: 12, color: T.ink2, lineHeight: 1.6, margin: 0 }}>
           {t.evidence === "derived"
-            ? "Derived from tempo research on this movement class."
+            ? "Tempo chosen for control. Rep speed makes little difference to growth or strength."
+            : t.evidence === "none"
+            ? "Holds are set by time and bracing, not rep tempo."
             : "Measured directly for this movement."}
         </p>
         <ul style={{ listStyle: "none", padding: 0, margin: "6px 0 0" }}>
@@ -156,8 +158,10 @@ export default async function ExercisePage({ params }) {
     // CreativeWork, so `citation` is the correct property — it lets a
     // retrieval system see that the claim on this page is sourced, and to
     // what, without parsing the footnote.
-    ...(tempo?.sources?.length ? {
-      citation: tempo.sources.map((s) => TEMPO_SOURCES[s]).filter(Boolean).map((src) => ({
+    // A source with no URL (the isometric placeholder) is a stated
+    // principle, not a paper: it stays in the prose, out of the data.
+    ...(tempo?.sources?.some((s) => TEMPO_SOURCES[s]?.url) ? {
+      citation: tempo.sources.map((s) => TEMPO_SOURCES[s]).filter((src) => src && src.url).map((src) => ({
         "@type": "ScholarlyArticle",
         name: src.cite,
         ...(src.url ? { url: src.url } : {}),
@@ -198,7 +202,7 @@ export default async function ExercisePage({ params }) {
         <p style={{ fontSize: 13, color: T.ink2, marginTop: 12, lineHeight: 1.6 }}>
           These are the weights Heatwayve&rsquo;s volume audit actually computes with — deliberately
           conservative, so compounds don&rsquo;t masquerade as full coverage. A <span style={{ fontFamily: T.measured }}>0.5</span> means a set
-          counts as half a set for that muscle: meaningful help, not a replacement for direct work.
+          counts as half a set for that muscle. Isolation adds direct sets where compounds credit only a share.
         </p>
       </section>
 

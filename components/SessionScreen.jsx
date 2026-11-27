@@ -26,13 +26,13 @@ import { savedKgFor } from "@/lib/session-kg";
 import { daysBetween, mondayIndex } from "@/lib/dates";
 import { useTodayIso } from "@/lib/use-today-iso";
 import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
-import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
+import { recommendedReps, repTone } from "@/lib/rep-band";
 import { WEEK, swapOptionsFor } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise, sessionSummaryLine, liftBests } from "@/lib/analytics";
 import BestSet from "@/components/BestSet";
 import { isCountedSet } from "@/lib/counted-set";
-import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, usesOptionalChrome, addedLoadFor, loggedAddedKg, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
+import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, usesOptionalChrome, addedLoadFor, loggedAddedKg, ADDED_LOAD_MAX_KG, plannedRpe } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 import { resolveVid } from "@/lib/exercise-videos";
 
@@ -135,9 +135,10 @@ function RpeTrack({ rpe, onChange }) {
 // ─── Effort panel — the commit moment ────────────────────────────────────────
 // Appears when a set needs rating. The big value blooms along the ramp
 // (900ms colour travel, never a switch); the commit button warms to match,
-// its ink reading the per-stop alias for its bloom stop (§13).
-function EffortPanel({ label = "How hard was that?", onCommit }) {
-  const [rpe, setRpe] = useState(8);
+// its ink reading the per-stop alias for its bloom stop (§13). It opens at the
+// slot's planned target (plannedRpe).
+function EffortPanel({ label = "How hard was that?", onCommit, target = 8 }) {
+  const [rpe, setRpe] = useState(target);
   return (
     <div style={{margin:"14px 20px 0",animation:`fadeSlide 240ms ${T.ease}`}}>
       <div style={{fontSize:13,color:T.ink2,marginBottom:10}}>{label}</div>
@@ -348,7 +349,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
   const opts=[
     {id:"fresh", rpe:6, label:"Fresh", sub:"Full programme, and a shot at more on your main lift."},
     {id:"normal",rpe:8, label:"Normal",sub:"The work, as written."},
-    {id:"cooked",rpe:10,label:"Cooked",sub:"Deload weights, trimmed volume."},
+    {id:"cooked",rpe:10,label:"Cooked",sub:"Lighter weights, same session. Nothing today moves your numbers."},
   ];
   // Short, enum-only reasons. Fed into the session record so patterns can
   // surface. Only shown when readiness is "cooked".
@@ -592,6 +593,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   // decoded prescription. Digits are measured values → mono.
   const [tempoOpen,setTempoOpen]=useState(false);
   const tempoEntry=useMemo(()=>getTempo(activeEx?.name),[activeEx?.name]);
+  // The effort panel opens at the slot's planned target (plannedRpe).
+  const effortStart=plannedRpe(block?.type,activeEx?.name);
   const [tempoFor,setTempoFor]=useState(activeEx?.name);
   if(tempoFor!==activeEx?.name){ setTempoFor(activeEx?.name); setTempoOpen(false); }
   const tempoPhrase=tempoEntry?.tempo
@@ -948,8 +951,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
       <div style={{flex:1,minHeight:12}}/>
 
       {/* Effort — the commit moment. Drag the track; the button warms. */}
-      {awaitRpe&&<EffortPanel onCommit={onCommit}/>}
-      {ssRoundDone&&<EffortPanel onCommit={onCommit} label="How hard was that round?"/>}
+      {awaitRpe&&<EffortPanel onCommit={onCommit} target={effortStart}/>}
+      {ssRoundDone&&<EffortPanel onCommit={onCommit} target={effortStart} label="How hard was that round?"/>}
 
       {!blocking&&(
         <>
@@ -1240,10 +1243,8 @@ function DrumEditOverlay({target,planWeights,setPlanWeights,planReps,setPlanReps
   // fixed-stack increments.
   const lt = getLoadType(ex);
   const weightStep = weightStepForLoadType(lt);
-  // The prescription gets a dot; counts outside the effective band dim.
+  // The prescription gets a dot; only counts past the band's top dim.
   const rec = recommendedReps(prescribedReps[target.exName] ?? ex?.reps);
-  const repTone = (v) => (rec && v >= rec.min && v <= rec.max) ? "rec"
-    : (v < EFFECTIVE_REP_BAND.min || v > EFFECTIVE_REP_BAND.max) ? "out" : null;
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"24px 24px 32px",width:"100%",animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
@@ -1254,7 +1255,7 @@ function DrumEditOverlay({target,planWeights,setPlanWeights,planReps,setPlanReps
         <div style={{display:"flex",gap:16,justifyContent:(hasWeight||optionalChrome)?"space-between":"center"}}>
           {hasWeight&&!optionalChrome&&<SplitWeightDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
           {optionalChrome&&<ScrollDrum value={kg} onChange={setKg} step={weightStep} min={0} max={Math.max(ADDED_LOAD_MAX_KG,initKg)} label="+ kg, optional" zeroLabel="none"/>}
-          <ScrollDrum value={reps} onChange={(v)=>{setRepsTouched(true);setReps(v);}} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined} tone={target.timed?null:repTone}/>
+          <ScrollDrum value={reps} onChange={(v)=>{setRepsTouched(true);setReps(v);}} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined} tone={target.timed?null:(v)=>repTone(v,rec)}/>
         </div>
         {/* House pattern: Cancel/Confirm on the bottom row, no corner ✕.
             Drum edits are LOCAL state — Cancel is a true discard. Confirm

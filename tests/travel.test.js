@@ -266,3 +266,21 @@ describe("movement pattern decides where muscle alone is ambiguous", () => {
     expect(travelTwin({ name: "Seated Cable Row" })).toBe(TRAVEL_TWINS["Seated Cable Row"]);
   });
 });
+
+describe("power work survives travel", () => {
+  it("every power-category lift becomes a Broad Jump", () => {
+    for (const name of ["Power Clean", "Hang Power Clean", "Hang Clean"]) {
+      expect(travelTwin({ name }), name).toBe("Broad Jump");
+    }
+  });
+});
+
+describe("travelTwin: a power lift travels as an explosive move", () => {
+  it("takes the jump first, another jump once it is claimed, never an anatomy twin", () => {
+    expect(travelTwin({ name: "Power Clean" })).toBe("Broad Jump");
+    expect(travelTwin({ name: "Hang Power Clean" })).toBe("Broad Jump");
+    expect(travelTwin({ name: "Hang Power Clean" }, new Set(["Broad Jump"]))).toBe("Jump Squat");
+    expect(travelTwin({ name: "Power Clean" }, new Set(["Broad Jump"]))).toBe("Jump Squat");
+    expect(travelTwin({ name: "Hang Power Clean" }, new Set(["Broad Jump", "Jump Squat"]))).toBe("Broad Jump");
+  });
+});

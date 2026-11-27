@@ -93,6 +93,28 @@ describe("the day-maths helpers are used, not re-derived", () => {
       expect(src).toMatch(/from "\.\/dates\.js"/);
     });
   }
+
+  it("no module outside lib/dates.js hand-rolls y/m/d", () => {
+    const offenders = [];
+    for (const f of sourceFiles()) {
+      if (f === join("lib", "dates.js")) continue;
+      const src = code(readFileSync(resolve(root, f), "utf8"));
+      if (HAND_ROLLED_FORMAT.test(src)) offenders.push(f);
+    }
+    expect(offenders, `use localDateStr() from lib/dates.js instead:\n${offenders.join("\n")}`).toEqual([]);
+  });
+
+  // "Is it still the same day?" reads one clock: useTodayIso's local day, not
+  // a private toDateString compare.
+  it("no module outside lib/dates.js compares days with toDateString", () => {
+    const offenders = [];
+    for (const f of sourceFiles()) {
+      if (f === join("lib", "dates.js")) continue;
+      const src = code(readFileSync(resolve(root, f), "utf8"));
+      if (/\.toDateString\(\)/.test(src)) offenders.push(f);
+    }
+    expect(offenders, `read the day from useTodayIso / localDateStr instead:\n${offenders.join("\n")}`).toEqual([]);
+  });
 });
 
 describe("raw day-mutation methods live only in lib/dates.js", () => {

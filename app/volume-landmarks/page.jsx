@@ -22,7 +22,7 @@ const URL = "https://heatwayve.app/volume-landmarks";
 export const metadata = {
   title: "MEV, MAV and MRV — how much volume each muscle wants",
   description:
-    "The three weekly volume landmarks, in weighted sets per muscle: the least that grows you, the window where most growth happens, and the ceiling past which sets cost more than they earn.",
+    "The three weekly volume landmarks, in weighted sets per muscle: the least we plan for steady growth, the window where most growth happens, and the ceiling past which sets cost more than they earn.",
   alternates: { canonical: URL },
   openGraph: {
     title: "MEV, MAV and MRV — volume landmarks explained",
@@ -45,7 +45,7 @@ const TERMS = [
   {
     abbr: "MEV",
     name: "Minimum Effective Volume",
-    body: "The least work that still moves the needle. Below it you are maintaining at best — the sessions happen, the muscle stays where it is. This is the number worth caring about most, because almost everyone who is stuck is stuck under it on something.",
+    body: "The least weekly work we plan for steady growth. Less still counts, it just builds more slowly: one set beats none, and two beat one. This is the number worth caring about most, because almost everyone who is stuck is stuck under it on something.",
   },
   {
     abbr: "MAV",
@@ -55,7 +55,7 @@ const TERMS = [
   {
     abbr: "MRV",
     name: "Maximum Recoverable Volume",
-    body: "The ceiling. Past it the sets still happen, the fatigue still accumulates, and the adaptation does not follow — you are paying for work you cannot recover from. Going over occasionally is a training decision. Living over it is a slow injury.",
+    body: "The ceiling. Past it, extra sets add little and cost recovery. Going over occasionally is a training decision. Living over it mostly buys fatigue.",
   },
 ];
 
@@ -108,8 +108,8 @@ export default function VolumeLandmarksPage() {
         <h1 style={{ ...DISPLAY, fontSize: 38, color: T.ink, margin: 0 }}>How much is enough</h1>
         <p style={{ fontSize: 16, color: T.ink2, marginTop: 14, lineHeight: 1.6 }}>
           Almost every programme tells you how many sets to do today. Very few
-          tell you how many your <em>chest</em> got this week, which is the
-          number that decides whether it grows.
+          tell you how many your <em>chest</em> got this week, which has the
+          most say in how much it grows.
         </p>
       </div>
 
@@ -159,22 +159,20 @@ export default function VolumeLandmarksPage() {
 
       <section style={{ marginTop: 36 }}>
         <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
-          Weekly, but not all at once
+          The dose is weekly
         </h2>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65 }}>
-          The dose is weekly. How you spread it still matters, just less than
-          people think. The meta-analytic answer is that major muscle groups
-          respond best trained{" "}
-          <strong style={{ color: T.ink, fontWeight: 500 }}>at least twice a week</strong>{" "}
-          — and that whether three beats two is, on the current evidence,
-          undetermined.
+          For growth, the dose is{" "}
+          <strong style={{ color: T.ink, fontWeight: 500 }}>weekly sets</strong>.
+          Once the weekly total is the same, how you spread it makes little
+          difference to muscle size. Where frequency does help is strength,
+          which responds to training at least twice a week.
         </p>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginTop: 12 }}>
-          Which is the useful version of the finding: hit your weekly number
-          across two or more sessions and the frequency question is answered.
-          Twelve sets of chest in one heroic Monday is not the same twelve. The
-          three-day A/B/C rotation exists for this reason — each muscle comes
-          around more than once, without anyone having to plan it.
+          So hit your weekly number in whatever spread suits your week. The
+          three-day A/B/C rotation is there for strength and for session
+          length: each muscle comes around more than once, and no single
+          session has to carry the whole week.
         </p>
       </section>
 
@@ -230,8 +228,8 @@ export default function VolumeLandmarksPage() {
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65 }}>
           They are not a measurement of you. Volume tolerance moves with
           training age, sleep, stress, how much food you are eating and what
-          else is in the week. Two people with identical numbers can sit fifty
-          per cent apart on what they can actually recover from.
+          else is in the week. Two people with identical numbers can differ
+          widely on what they can actually recover from.
         </p>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginTop: 12 }}>
           Treat them as a well-reasoned starting point and let your own

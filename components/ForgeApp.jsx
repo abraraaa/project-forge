@@ -855,13 +855,7 @@ export default function ForgeApp(){
     // HomeScreen) — falling back to tap-time today only if absent. Same
     // midnight-straddle guard as handleMarkDayDone: an app open across
     // midnight must mark the day the user is looking at.
-    const today = (typeof renderedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(renderedDate)) ? renderedDate : (() => {
-      const d = new Date();
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return `${y}-${m}-${day}`;
-    })();
+    const today = (typeof renderedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(renderedDate)) ? renderedDate : todayLocalIso();
     // recordCompletion stamps scheduledType even for bonus-only entries.
     // Without it they'd land with null scheduledType — indistinguishable
     // from the buggy null/null Mark ✓ writes, forcing the repair migration
@@ -1729,7 +1723,7 @@ export function RotationSummaryModal({summary,onContinue}){
             ? `${count} ${count===1?"accessory":"accessories"} swapped to match your focus. Main lifts stay the same.`
             : summary.reason === "reset"
             ? `${count} ${count===1?"accessory":"accessories"} swapped from the defaults so every muscle stays in its range with your main lifts.`
-            : `${count} ${count===1?"accessory":"accessories"} swapped to keep the stimulus fresh. Main lifts stay the same — progressive overload continues.`}
+            : `${count} ${count===1?"accessory":"accessories"} swapped for variety. Main lifts stay the same, so progressive overload continues.`}
         </p>
         {solvedLine && (
           <div style={{fontSize:13,color:T.ink2,marginBottom:14,lineHeight:1.5}}>

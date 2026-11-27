@@ -29,11 +29,11 @@ const TERMS = [
       <>
         <p>Measured in <em>weighted sets per week</em>, per muscle.</p>
         <ul style={{margin:"8px 0 0",padding:"0 0 0 18px",lineHeight:1.6}}>
-          <li><strong>MEV</strong> — Minimum Effective Volume. The floor below which a muscle doesn&apos;t accumulate stimulus to grow.</li>
+          <li><strong>MEV</strong> — Minimum Effective Volume. The least weekly work we plan for steady growth. Less still counts, it just builds more slowly.</li>
           <li><strong>MAV</strong> — Maximum Adaptive Volume. The productive window — most growth happens between MEV and MAV.</li>
           <li><strong>MRV</strong> — Maximum Recoverable Volume. The ceiling above which extra sets cost more recovery than they earn.</li>
         </ul>
-        <p style={{marginTop:8}}>Heatwayve uses Israetel/Helms-derived landmarks, tuned per muscle and per delt head.</p>
+        <p style={{marginTop:8}}>Heatwayve uses Israetel-derived landmarks, tuned per muscle and per delt head, on the weekly-sets dose in the ACSM 2026 position stand.</p>
         <p style={{marginTop:8}}>
           <a href="/volume-landmarks" style={{color:"var(--ink)",textDecoration:"underline",textUnderlineOffset:3}}>
             The full numbers, and how a set gets split
@@ -48,7 +48,7 @@ const TERMS = [
     subtitle: "Estimated one-rep max",
     body: (
       <>
-        <p>The most weight you could move once with good form. Heatwayve estimates it from your logged sets using the Epley formula (weight × (1 + reps / 30)), which is reliable in the 1–10 rep range and gets lossy above 12.</p>
+        <p>The most weight you could move once with good form. Heatwayve estimates it from your logged sets using the Epley formula (weight × (1 + reps / 30)). A good estimate at low reps. It gets less precise as reps climb, and varies by exercise and person.</p>
         <p style={{marginTop:8}}>Used as the trend line for each main lift — strength gains show as a rising estimated 1RM over time.</p>
       </>
     ),
@@ -84,7 +84,7 @@ const TERMS = [
     subtitle: "A phase of training",
     body: (
       <>
-        <p>A stretch of weeks (typically 6–8) where your accessory exercises stay the same so you can build progression on them. At the end of a block, Heatwayve offers to rotate accessories — fresh stimulus, mainlift progression continues uninterrupted.</p>
+        <p>A stretch of weeks (typically 6–8) where your accessory exercises stay the same so you can build progression on them. At the end of a block, Heatwayve offers to rotate accessories for variety and coverage, while main-lift progression continues uninterrupted.</p>
       </>
     ),
   },
@@ -114,7 +114,7 @@ const TERMS = [
     subtitle: "Total weight moved",
     body: (
       <>
-        <p>Sum of (weight × reps) across every set. Dumbbell sets count both arms (per-DB weight × 2). It&apos;s a vanity metric — useful for milestone moments, not for programming decisions (use sets/week vs MEV/MAV/MRV for that).</p>
+        <p>Sum of (weight × reps) across every set. Dumbbell sets count both arms (per-DB weight × 2). Useful for milestones. Research rarely measures it, so Heatwayve programmes from weekly sets against MEV/MAV/MRV.</p>
       </>
     ),
   },

@@ -710,6 +710,28 @@ describe("TrainerClientView: the plan", () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.forge-swap \{ animation: none; \}/);
   });
 
+  for (const [how, reload] of [["has not returned", () => new Promise(() => {})], ["returned false", async () => false]]) {
+    it(`a second send while the first's reload ${how} keeps both batches reading waiting`, async () => {
+      const onChanged = vi.fn(reload);
+      render(<TrainerClientView client={client} view={planView()} onChange={fakeRoute()} onChanged={onChanged}/>);
+      const tail = (lift) => document.querySelector(`[data-plan-lift="${lift}"] [data-row-tail="yours"]`)?.textContent;
+      openLift("Barbell Back Squat");
+      tap("More weight"); tap("More weight");
+      tap("Add to changes");
+      await review();
+      await act(async () => { tap("Send to Sam"); });
+      await settle();
+      expect(tail("Barbell Back Squat")).toBe(" · yours 105 (waiting)");
+      openLift("Standing Calf Raise"); tap("More reps"); tap("Add to changes");
+      await review();
+      await act(async () => { tap("Send to Sam"); });
+      await settle();
+      expect(onChanged).toHaveBeenCalledTimes(2);
+      expect(tail("Barbell Back Squat")).toBe(" · yours 105 (waiting)");
+      expect(tail("Standing Calf Raise")).toBe(" · yours 16 reps (waiting)");
+    });
+  }
+
   it("Review names a change still waiting that the new one replaces", async () => {
     const rows = [{ id: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa.0", set: "hws_aaaaaaaaaaaaaaaaaaaaaaaaaa", kind: "weight", target: "Barbell Back Squat",
       before: 102.5, after: 107.5, from: null, at: Date.now() - 3600e3, appliedAt: null, outcome: null, undoneAt: null }];
@@ -807,9 +829,9 @@ describe("TrainerClientView: the plan", () => {
 
   it("the big-drop and rep-band warnings read their constants", () => {
     expect(BIG_DROP_FRACTION).toBe(0.85);
-    expect(EFFECTIVE_REP_BAND.min).toBe(6);
+    expect(EFFECTIVE_REP_BAND.min).toBe(3);
     expect(warningText("big_drop")).toBe("More than 15% under their last top set.");
-    expect(warningText("below_rep_band")).toBe("Under 6 reps: heavier work than the programme's band.");
+    expect(warningText("below_rep_band")).toBe("Under 3 reps: heavier work than the programme's band.");
     const src = readFileSync(resolve(root, "components/TrainerClientView.jsx"), "utf8");
     const body = (code) => src.slice(src.indexOf(`case "${code}":`), src.indexOf("case ", src.indexOf(`case "${code}":`) + 6));
     expect(body("big_drop")).toContain("BIG_DROP_FRACTION");

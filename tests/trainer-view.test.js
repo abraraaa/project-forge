@@ -514,7 +514,8 @@ describe("nextLooks: the ring's JS mirror", () => {
         const look = r() < 0.6 ? { k: "v" } : { k: "r", d: londonDay(now) };
         const wouldCoalesce = look.k === "v"
           ? prev?.k === "v" && prev.at > now - 15 * MIN
-          : looks.some((e) => e.k === "r" && e.d === look.d);
+          : looks.some((e) => e.k === "r" && e.d === look.d
+            && e.at >= Date.parse(`${look.d}T00:00:00.000Z`) && e.at < Date.parse(`${look.d}T00:00:00.000Z`) + 86_400_000);
         const s = nextLooks(looks, look, now);
         expect(s.added).toBe(wouldCoalesce ? 0 : 1);
         if (!wouldCoalesce) expected += 1;

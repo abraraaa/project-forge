@@ -769,8 +769,9 @@ describe("reps", () => {
     expect(check({ kind: "reps", lift: BENCH, reps: 5 }).ok).toBe(true);
   });
   it("R3: warns outside the programme's range or the effective band, never refuses", () => {
-    expect(check({ kind: "reps", lift: SQUAT, reps: 5 }).warnings).toEqual(["below_rep_band"]);
-    expect(check({ kind: "reps", lift: SQUAT, reps: 4 }).warnings).toEqual(["off_programme_reps", "below_rep_band"]);
+    expect(check({ kind: "reps", lift: SQUAT, reps: 5 }).warnings).toEqual([]);
+    expect(check({ kind: "reps", lift: SQUAT, reps: 4 }).warnings).toEqual(["off_programme_reps"]);
+    expect(check({ kind: "reps", lift: SQUAT, reps: 3 }).warnings).toEqual(["off_programme_reps"]);
     expect(check({ kind: "reps", lift: "Chest-Supported DB Row", reps: 10 }).warnings).toEqual([]);
     expect(check({ kind: "reps", lift: "Chest-Supported DB Row", reps: 12 }).warnings).toEqual(["off_programme_reps"]);
   });
@@ -1676,19 +1677,24 @@ describe("coached session: validateSessionSet, S1-S14", () => {
     expect(vs(edit(record, (r) => { r.blocks[0].exercises[0].prescribed.weight = SESSIONS[0].blocks[0].ex.weight; }))).toBe("ok");
     const swapped = liveRecord(S_META, 0, { swaps: (main) => ({ a1: swapPick(main.blocks[0].ex, "Hack Squat") }) });
     expect(vs(edit(swapped, (r) => { Object.assign(exOf(r, "Hack Squat").prescribed, { reps: 12, weight: 140, sets: 5 }); }))).toBe("ok");
-    // A cooked day trims a superset's sets: fewer pass, more do not.
+    // A cooked day keeps its full sets; a record from when it trimmed a
+    // superset's sets still passes. More than the block's sets do not.
     const cooked = liveRecord(S_META, 0, { readiness: "cooked" });
-    expect(cooked.blocks.find((b) => b.id === "ass1").exercises[0].prescribed.sets).toBe(2);
-    expect(vs(edit(cooked, (r) => { r.blocks.find((b) => b.id === "ass1").exercises[0].prescribed.sets = 4; }))).toBe("stale");
+    const full = SESSIONS[0].blocks.find((b) => b.id === "ass1").sets;
+    expect(cooked.blocks.find((b) => b.id === "ass1").exercises[0].prescribed.sets).toBe(full);
+    expect(vs(cooked)).toBe("ok");
+    expect(vs(edit(cooked, (r) => { r.blocks.find((b) => b.id === "ass1").exercises[0].prescribed.sets = full - 1; }))).toBe("ok");
+    expect(vs(edit(cooked, (r) => { r.blocks.find((b) => b.id === "ass1").exercises[0].prescribed.sets = full + 1; }))).toBe("stale");
   });
-  it("S12: with no W on a cooked day, a main lift's prescribed weight is the template or lighter", () => {
+  it("S12: with no W on a cooked day, a main lift prescribes its template; an older record's lighter one still passes", () => {
     const meta = { ...S_META, weights: {} };
     const tmpl = SESSIONS[0].blocks[0].ex.weight;
     const cooked = liveRecord(meta, 0, { readiness: "cooked" });
-    expect(exOf(cooked, SQUAT).prescribed.weight).toBeLessThan(tmpl);
+    expect(exOf(cooked, SQUAT).prescribed.weight).toBe(tmpl);
     expect(vs(cooked, { meta })).toBe("ok");
     const w = (kg) => vs(edit(cooked, (r) => { exOf(r, SQUAT).prescribed.weight = kg; }), { meta });
     expect(w(tmpl)).toBe("ok");
+    expect(w(tmpl * 0.85)).toBe("ok");
     expect(w(tmpl + 0.25)).toBe("stale");
     expect(w(MAX_KG)).toBe("stale");
   });

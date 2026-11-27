@@ -614,8 +614,9 @@ describe("resolvedProgramme behind describeProgramme (E8)", () => {
   // Re-captured 2026-11-03: the pool edits of that day moved the solved weeks.
   // Re-captured 2026-11-16 for library data only (factors, templates, the
   // Triceps reference, template starts and the machine isolation ceiling),
-  // and again for that day's pool edits and load types.
-  const BEFORE = { undefined: "3cb1f70048934ff3", Forged: "1f1ed1f00d78b35b", Strong: "808c7f291ffe98fc", Sculpt: "b19e5e99b4ffd0be" };
+  // and again for that day's pool edits and load types. Re-captured for
+  // Single-Leg Curl's retype to a cable lift: only its lines moved.
+  const BEFORE = { undefined: "96ef32d00cd28934", Forged: "7ba4f2c65faa080b", Strong: "d41c3401ff28c2e5", Sculpt: "35ac5def0fa48fac" };
   const fixtures = e8Fixtures();
   // The day line came later; the rest of each text is pinned as it was.
   const undated = (text) => text.split("\n").filter((l) => !l.startsWith("Read on ")).join("\n");
