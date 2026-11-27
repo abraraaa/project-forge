@@ -40,3 +40,22 @@ describe("frequency copy: weekly sets are the growth dose", () => {
     expect(VOLUME_SOURCES.acsm2026.url).toBe("https://doi.org/10.1249/MSS.0000000000003897");
   });
 });
+
+describe("tempo principles credit control, not time under tension", () => {
+  // The digits are the prescription and stay exactly as they were.
+  const TEMPOS = {
+    "45-Degree Hip Extension": "3-1-2-0", "Barbell Back Squat": "3-1-1-0",
+    "Close-Grip Push-Up": "3-0-2-0", "Donkey Calf Raise": "4-1-2-0",
+    "Good Morning": "4-0-1-0", "Romanian Deadlift": "4-0-1-0",
+    "Tricep Dips": "3-0-2-0", "Deficit Push-Up": "3-1-1-0",
+  };
+  it.each(Object.keys(TEMPOS))("%s", async (name) => {
+    const { EXERCISE_TEMPO } = await import(join(ROOT, "lib/exercise-tempo.js"));
+    const t = EXERCISE_TEMPO[name];
+    expect(t.tempo).toBe(TEMPOS[name]);
+    expect(t.principle).not.toMatch(/working longer|build(s)? muscle|grow|more to work against/i);
+    expect(t.principle).toMatch(/control|bounce|full range|repeatable|same every time/i);
+    expect(t.principle).not.toMatch(/[;—]/);
+    expect(t.principle).toMatch(/^[A-Z].*\.$/);
+  });
+});

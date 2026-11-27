@@ -207,7 +207,7 @@ describe("one lift, one place", () => {
 describe("revision stamps", () => {
   it("the pools and the library carry this change's date", () => {
     expect(ROTATION_REVISED).toBe("2026-11-16");
-    expect(LIBRARY_REVISED).toBe("2026-11-16");
+    expect(LIBRARY_REVISED).toBe("2026-11-27");
   });
 });
 
