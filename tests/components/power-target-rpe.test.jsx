@@ -49,6 +49,24 @@ describe("Home prints a power lift's target at RPE 7", () => {
   });
 });
 
+describe("finishers are planned at RPE 8, where the engine adds", () => {
+  it("every finisher row on Home reads rpe 8", () => {
+    homeOn(0);
+    for (const day of ["Monday", "Wednesday", "Friday"]) {
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${day}`) }));
+      const rows = screen.queryAllByText((_, el) => !!el && el.tagName === "DIV" && / ↔ /.test(el.textContent) && el.children.length === 0);
+      const finisher = SESSIONS.flatMap((x) => x.blocks).filter((b) => b.type === "finisher")
+        .map((b) => `${b.exA.name} ↔ ${b.exB.name}`).find((n) => rows.some((r) => r.textContent === n));
+      expect(finisher, day).toBeTruthy();
+      expect(rowOf(finisher), day).toMatch(/rpe 8$/);
+    }
+  });
+  it("plannedRpe says 8 for a finisher", async () => {
+    const { plannedRpe } = await import("../../lib/lift-translations.js");
+    expect(plannedRpe("finisher", "Face Pull")).toBe(8);
+  });
+});
+
 describe("the session's effort panel opens at the target", () => {
   const base = (ex) => {
     const block = { id: "main", type: "main", label: "Main lift", sets: 4, rest: 120, ex };

@@ -593,8 +593,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   // decoded prescription. Digits are measured values → mono.
   const [tempoOpen,setTempoOpen]=useState(false);
   const tempoEntry=useMemo(()=>getTempo(activeEx?.name),[activeEx?.name]);
-  // The effort panel opens at RPE 8, or at a power lift's planned 7.
-  const effortStart=Math.min(8,plannedRpe(block?.type,activeEx?.name));
+  // The effort panel opens at the slot's planned target (plannedRpe).
+  const effortStart=plannedRpe(block?.type,activeEx?.name);
   const [tempoFor,setTempoFor]=useState(activeEx?.name);
   if(tempoFor!==activeEx?.name){ setTempoFor(activeEx?.name); setTempoOpen(false); }
   const tempoPhrase=tempoEntry?.tempo
