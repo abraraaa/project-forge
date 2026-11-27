@@ -274,3 +274,13 @@ describe("power work survives travel", () => {
     }
   });
 });
+
+describe("travelTwin: a power lift travels as an explosive move", () => {
+  it("takes the jump first, another jump once it is claimed, never an anatomy twin", () => {
+    expect(travelTwin({ name: "Power Clean" })).toBe("Broad Jump");
+    expect(travelTwin({ name: "Hang Power Clean" })).toBe("Broad Jump");
+    expect(travelTwin({ name: "Hang Power Clean" }, new Set(["Broad Jump"]))).toBe("Jump Squat");
+    expect(travelTwin({ name: "Power Clean" }, new Set(["Broad Jump"]))).toBe("Jump Squat");
+    expect(travelTwin({ name: "Hang Power Clean" }, new Set(["Broad Jump", "Jump Squat"]))).toBe("Broad Jump");
+  });
+});
