@@ -266,3 +266,11 @@ describe("movement pattern decides where muscle alone is ambiguous", () => {
     expect(travelTwin({ name: "Seated Cable Row" })).toBe(TRAVEL_TWINS["Seated Cable Row"]);
   });
 });
+
+describe("power work survives travel", () => {
+  it("every power-category lift becomes a Broad Jump", () => {
+    for (const name of ["Power Clean", "Hang Power Clean", "Hang Clean"]) {
+      expect(travelTwin({ name }), name).toBe("Broad Jump");
+    }
+  });
+});
