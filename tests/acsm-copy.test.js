@@ -82,3 +82,11 @@ describe("bodyweight progression copy matches the engine", () => {
     expect(lib).toMatch(/pick a harder variation/);
   });
 });
+
+describe("the README's stall rules match the engine", () => {
+  it("no add for RPE 9.5 after a failure session; power lifts never climb", () => {
+    const r = src("README.md");
+    expect(r).not.toMatch(/finishing the next at RPE 9\.5 or easier adds weight/);
+    expect(r).toMatch(/Power lifts never climb/);
+  });
+});
