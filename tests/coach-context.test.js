@@ -29,6 +29,9 @@ describe("buildCoachContext", () => {
     expect(text).toMatch(/Consistency beats novelty/);
     expect(text).toMatch(/MEV/);
   });
+  it("says holding a weight is a legitimate choice", () => {
+    expect(text).toMatch(/Progression is a personal choice, not an obligation/);
+  });
   it("carries the goal levers, failure-not-needed and safety", () => {
     expect(text).toMatch(/Goals differ\. Strength responds to heavy loads/);
     expect(text).toMatch(/Size responds to weekly sets/);
