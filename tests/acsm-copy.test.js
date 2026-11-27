@@ -58,6 +58,32 @@ describe("tempo principles credit control, not time under tension", () => {
     expect(t.principle).not.toMatch(/[;—]/);
     expect(t.principle).toMatch(/^[A-Z].*\.$/);
   });
+
+  // The audit's further twenty, and the Nordic's unsourced research claim.
+  // No sentence that names the tempo, a pause or a slow lowering also claims
+  // growth or strength for it: the gain belongs to the exercise.
+  const MORE = {
+    "Assisted Pull-Up": "3-1-1-0", "Cable Row": "3-1-2-0", "Face-Away Cable Row": "3-1-2-0",
+    "Incline DB Row": "3-1-2-0", "Lat Pulldown": "3-1-2-0", "Meadows Row": "3-1-2-0",
+    "Neutral-Grip Pull-Up": "3-1-1-0", "Nordic Curl": "5-0-X-0", "Pike Push-Up": "3-0-2-0",
+    "Pull-Up": "3-1-1-0", "Resistance Band Pull-Through": "3-0-1-0", "Resistance Band Row": "3-1-2-0",
+    "Reverse Crunch": "3-0-2-0", "Seal Row": "3-1-2-0", "Single-Arm DB Row": "3-1-2-0",
+    "Single-Leg RDL": "4-0-1-0", "Slider Leg Curl": "3-0-2-0", "Split Squat": "3-1-1-0",
+    "Standing Cable Hip Extension": "3-1-2-1", "TRX Row": "3-1-2-0", "Wide-Grip Pull-Up": "3-1-1-0",
+  };
+  const TEMPO_WORDS = /tempo|paus|slow|seconds|controlled pace|lowering/i;
+  const GAIN_WORDS = /\bbuild|\bgrow|\bsize\b|strength|thicker|wider|harder|muscle/i;
+  it.each(Object.keys({ ...TEMPOS, ...MORE }))("%s: the gain is the exercise's, the tempo is for control", async (name) => {
+    const { EXERCISE_TEMPO } = await import(join(ROOT, "lib/exercise-tempo.js"));
+    const t = EXERCISE_TEMPO[name];
+    expect(t.tempo).toBe({ ...TEMPOS, ...MORE }[name]);
+    for (const sentence of t.principle.split(/(?<=\.)\s+/)) {
+      if (TEMPO_WORDS.test(sentence)) expect(sentence).not.toMatch(GAIN_WORDS);
+    }
+    expect(t.principle).not.toMatch(/for both size and strength|own research/i);
+    expect(t.principle).not.toMatch(/[;—]/);
+    expect(t.principle).toMatch(/^[A-Z].*\.$/);
+  });
 });
 
 describe("rotation copy: variety for interest and coverage, not adaptation", () => {
