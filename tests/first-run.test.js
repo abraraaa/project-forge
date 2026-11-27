@@ -69,7 +69,7 @@ describe("strengthDayCount and dayNote", () => {
 
   it("says what one, two and four days do to the round", () => {
     expect(dayNote(1)).toBe("One day: a full round takes three weeks. Progress will be slow.");
-    expect(dayNote(2)).toBe("Two days: a full A, B, C round takes a week and a half, so each muscle gets about two-thirds of its weekly work.");
+    expect(dayNote(2)).toBe("Two days meets the guideline of training at least twice a week. A full A, B, C round takes a week and a half, so each muscle gets about two-thirds of the three-day plan's work.");
     expect(dayNote(4)).toBe("Four days: the round comes back within the week. About a third more work, so watch recovery.");
   });
 
