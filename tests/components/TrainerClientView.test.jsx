@@ -829,9 +829,9 @@ describe("TrainerClientView: the plan", () => {
 
   it("the big-drop and rep-band warnings read their constants", () => {
     expect(BIG_DROP_FRACTION).toBe(0.85);
-    expect(EFFECTIVE_REP_BAND.min).toBe(6);
+    expect(EFFECTIVE_REP_BAND.min).toBe(3);
     expect(warningText("big_drop")).toBe("More than 15% under their last top set.");
-    expect(warningText("below_rep_band")).toBe("Under 6 reps: heavier work than the programme's band.");
+    expect(warningText("below_rep_band")).toBe("Under 3 reps: heavier work than the programme's band.");
     const src = readFileSync(resolve(root, "components/TrainerClientView.jsx"), "utf8");
     const body = (code) => src.slice(src.indexOf(`case "${code}":`), src.indexOf("case ", src.indexOf(`case "${code}":`) + 6));
     expect(body("big_drop")).toContain("BIG_DROP_FRACTION");

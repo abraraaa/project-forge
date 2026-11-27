@@ -769,8 +769,9 @@ describe("reps", () => {
     expect(check({ kind: "reps", lift: BENCH, reps: 5 }).ok).toBe(true);
   });
   it("R3: warns outside the programme's range or the effective band, never refuses", () => {
-    expect(check({ kind: "reps", lift: SQUAT, reps: 5 }).warnings).toEqual(["below_rep_band"]);
-    expect(check({ kind: "reps", lift: SQUAT, reps: 4 }).warnings).toEqual(["off_programme_reps", "below_rep_band"]);
+    expect(check({ kind: "reps", lift: SQUAT, reps: 5 }).warnings).toEqual([]);
+    expect(check({ kind: "reps", lift: SQUAT, reps: 4 }).warnings).toEqual(["off_programme_reps"]);
+    expect(check({ kind: "reps", lift: SQUAT, reps: 3 }).warnings).toEqual(["off_programme_reps"]);
     expect(check({ kind: "reps", lift: "Chest-Supported DB Row", reps: 10 }).warnings).toEqual([]);
     expect(check({ kind: "reps", lift: "Chest-Supported DB Row", reps: 12 }).warnings).toEqual(["off_programme_reps"]);
   });

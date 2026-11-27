@@ -60,8 +60,16 @@ describe("recommended range", () => {
     expect(recommendedReps("20s")).toBe(null);
     expect(recommendedReps(undefined)).toBe(null);
   });
-  it("the effective band is 6–30", () => {
-    expect(EFFECTIVE_REP_BAND).toEqual({ min: 6, max: 30 });
+  it("the effective band is 3–30", () => {
+    expect(EFFECTIVE_REP_BAND).toEqual({ min: 3, max: 30 });
+  });
+  it("the drum dims nothing below the band's top: a short set looks like a set", async () => {
+    const { repTone } = await import("../lib/rep-band.js");
+    const rec = recommendedReps(5);
+    expect(repTone(5, rec)).toBe("rec");
+    for (const v of [1, 2, 3, 4, 6, 12, 30]) expect(repTone(v, rec), String(v)).toBe(null);
+    expect(repTone(31, rec)).toBe("out");
+    expect(repTone(4, null)).toBe(null);
   });
 });
 
@@ -73,7 +81,7 @@ describe("wiring", () => {
     }
   });
   it("the reps drum carries the tone", () => {
-    expect(read("components/SessionScreen.jsx")).toContain("tone={target.timed?null:repTone}");
+    expect(read("components/SessionScreen.jsx")).toContain("tone={target.timed?null:(v)=>repTone(v,rec)}");
   });
   it("the press lift is P3 where supported", () => {
     expect(read("app/globals.css")).toMatch(/@supports \(color: color\(display-p3 1 1 1\)\) \{\s*:root \{ --press-lift: color\(display-p3/);

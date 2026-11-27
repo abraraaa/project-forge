@@ -26,7 +26,7 @@ import { savedKgFor } from "@/lib/session-kg";
 import { daysBetween, mondayIndex } from "@/lib/dates";
 import { useTodayIso } from "@/lib/use-today-iso";
 import ScrollDrum, { SplitWeightDrum } from "@/components/ScrollDrum";
-import { EFFECTIVE_REP_BAND, recommendedReps } from "@/lib/rep-band";
+import { recommendedReps, repTone } from "@/lib/rep-band";
 import { WEEK, swapOptionsFor } from "@/lib/programme";
 import { SyncStatus } from "@/lib/storage";
 import { recentForExercise, sessionSummaryLine, liftBests } from "@/lib/analytics";
@@ -1243,10 +1243,8 @@ function DrumEditOverlay({target,planWeights,setPlanWeights,planReps,setPlanReps
   // fixed-stack increments.
   const lt = getLoadType(ex);
   const weightStep = weightStepForLoadType(lt);
-  // The prescription gets a dot; counts outside the effective band dim.
+  // The prescription gets a dot; only counts past the band's top dim.
   const rec = recommendedReps(prescribedReps[target.exName] ?? ex?.reps);
-  const repTone = (v) => (rec && v >= rec.min && v <= rec.max) ? "rec"
-    : (v < EFFECTIVE_REP_BAND.min || v > EFFECTIVE_REP_BAND.max) ? "out" : null;
   return (
     <div onKeyDown={onKeyDown} onClick={onClose} className="forge-scrim" style={{overscrollBehavior:"contain",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div ref={containerRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()} className="forge-sheet-ground forge-vellum" style={{padding:"24px 24px 32px",width:"100%",animation:`slideUp 260ms ${T.ease}`,outline:"none"}}>
@@ -1257,7 +1255,7 @@ function DrumEditOverlay({target,planWeights,setPlanWeights,planReps,setPlanReps
         <div style={{display:"flex",gap:16,justifyContent:(hasWeight||optionalChrome)?"space-between":"center"}}>
           {hasWeight&&!optionalChrome&&<SplitWeightDrum value={kg} onChange={setKg} step={weightStep} min={0} max={400} label={lt==="per_db"?"kg / db":"kg"}/>}
           {optionalChrome&&<ScrollDrum value={kg} onChange={setKg} step={weightStep} min={0} max={Math.max(ADDED_LOAD_MAX_KG,initKg)} label="+ kg, optional" zeroLabel="none"/>}
-          <ScrollDrum value={reps} onChange={(v)=>{setRepsTouched(true);setReps(v);}} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined} tone={target.timed?null:repTone}/>
+          <ScrollDrum value={reps} onChange={(v)=>{setRepsTouched(true);setReps(v);}} step={target.timed?5:1} min={target.timed?5:1} max={target.timed?180:30} integer label={target.timed?"sec":"reps"} unit={target.timed?"sec":undefined} tone={target.timed?null:(v)=>repTone(v,rec)}/>
         </div>
         {/* House pattern: Cancel/Confirm on the bottom row, no corner ✕.
             Drum edits are LOCAL state — Cancel is a true discard. Confirm
