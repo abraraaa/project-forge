@@ -187,6 +187,25 @@ describe("what the session says about how the engine read the lift", () => {
     expect(screen.queryByText(/went to failure/)).toBeNull();
   });
 
+  it("a cooked day opens 15% lighter, can be dialled back up, and leaves W alone", () => {
+    start({ readiness: "Cooked" });
+    logSetAt();
+    expect(loggedSquat().sets[0].weight).toBe(85);
+    expect(loggedSquat().prescribed.weight).toBe(100);
+    fireEvent.click(screen.getByLabelText("Add 1.25 kg"));
+    logSetAt();
+    expect(loggedSquat().sets[1].weight).toBe(86.25);
+    expect(P.getWeights(WHO)).toEqual({ [SQUAT]: 100 });
+  });
+
+  it("the cooked option says what it does", () => {
+    P.setActive(WHO);
+    SessionIntent.stash(WHO, { sessionIdx: 0 });
+    render(<SessionHost />);
+    expect(screen.getByText("Lighter weights, same session. Nothing today moves your numbers.")).toBeTruthy();
+    expect(screen.queryByText(/trimmed volume/)).toBeNull();
+  });
+
   it("says nothing on an ordinary lift", () => {
     start({ lifts: { [SQUAT]: liftState({ history: [{ date: "2026-09-22", decision: "ADD", rationale: ["decision_reason=performed_full_with_rir"] }] }) } });
     expect(screen.queryByText(/Own all/)).toBeNull();

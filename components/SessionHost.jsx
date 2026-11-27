@@ -46,7 +46,7 @@ import {
   CD, coachTrainer, letterIndex, letterOf, sessionNameOf, COACH_MAX_SETS,
 } from "@/lib/session-source";
 import { changeStatus, sessionDayWords } from "@/lib/trainer-change";
-import { catalogueTemplateWeight, scheduledPlan, deloadSessionSets } from "@/lib/programme-resolve";
+import { catalogueTemplateWeight, scheduledPlan, deloadSessionSets, cookedWeights } from "@/lib/programme-resolve";
 import {
   SESSIONS, EXERCISE_POOLS,
   applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
@@ -371,8 +371,8 @@ export default function SessionHost({ mode = null } = {}) {
   const mainSession    = applyMainLiftsToSession(rotatedSession, mainLifts);
   const swappedSession = applySwapsToSession(mainSession, sessionSwaps);
   const focusedSession = applyFocusToSession(swappedSession, userFocus, programmeBlock?.config, mainLifts);
-  // Travel converts what focus finished choosing, and readiness still trims
-  // on top — a cooked day drops its finisher whether or not you're in a hotel.
+  // Travel converts what focus finished choosing. A cooked day keeps the
+  // whole session, in a hotel or not; only its card weights lighten.
   const travelledSession = travel ? deriveTravelSession(focusedSession) : focusedSession;
   // The prescription the session shows: R, with any target left below its
   // lift's base read as the base (repTargetRepairs). Templates come from the
@@ -409,7 +409,13 @@ export default function SessionHost({ mode = null } = {}) {
   const activeSession  = deloadSessionSets(scaleForReadiness(travelledSession, readiness), scheduled.sets);
   const prescribedWeights = scheduled.weights;
   const prescribedReps = scheduled.reps;
-  const planWeights = useMemo(() => ({ ...prescribedWeights, ...sessionWeights }), [prescribedWeights, sessionWeights]);
+  // A cooked day opens each load-progressed lift 15% lighter (cookedWeights):
+  // a plan layer under the drum's edits, so it can be dialled back up and
+  // never reaches W or the record's `prescribed`. A deload's weight wins.
+  const startWeights = useMemo(() => (readiness === "cooked"
+    ? cookedWeights(prescribedWeights, { working: workingWeights, deload: !!deloadNow })
+    : prescribedWeights), [readiness, prescribedWeights, workingWeights, deloadNow]);
+  const planWeights = useMemo(() => ({ ...startWeights, ...sessionWeights }), [startWeights, sessionWeights]);
   const planReps = useMemo(() => ({ ...prescribedReps, ...sessionReps }), [prescribedReps, sessionReps]);
   const block   = activeSession.blocks[blockIdx];
   const isSS    = block.type === "superset" || block.type === "finisher";

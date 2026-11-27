@@ -349,7 +349,7 @@ export function ReadinessScreen({readiness,setReadiness,reason,setReason,onStart
   const opts=[
     {id:"fresh", rpe:6, label:"Fresh", sub:"Full programme, and a shot at more on your main lift."},
     {id:"normal",rpe:8, label:"Normal",sub:"The work, as written."},
-    {id:"cooked",rpe:10,label:"Cooked",sub:"Deload weights, trimmed volume."},
+    {id:"cooked",rpe:10,label:"Cooked",sub:"Lighter weights, same session. Nothing today moves your numbers."},
   ];
   // Short, enum-only reasons. Fed into the session record so patterns can
   // surface. Only shown when readiness is "cooked".
