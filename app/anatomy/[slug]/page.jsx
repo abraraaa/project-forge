@@ -163,7 +163,7 @@ export default async function MusclePage({ params }) {
             ))}
           </div>
           <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65 }}>
-            Weighted sets per week: the least that grows it, the productive
+            Weighted sets per week: the least we plan for steady growth, the productive
             window, and the ceiling. Add the shares above until you land inside
             the band —{" "}
             <Link href="/volume-landmarks" style={{ color: T.ink, textDecoration: "underline", textUnderlineOffset: 3 }}>

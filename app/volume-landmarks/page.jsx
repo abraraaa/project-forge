@@ -22,7 +22,7 @@ const URL = "https://heatwayve.app/volume-landmarks";
 export const metadata = {
   title: "MEV, MAV and MRV — how much volume each muscle wants",
   description:
-    "The three weekly volume landmarks, in weighted sets per muscle: the least that grows you, the window where most growth happens, and the ceiling past which sets cost more than they earn.",
+    "The three weekly volume landmarks, in weighted sets per muscle: the least we plan for steady growth, the window where most growth happens, and the ceiling past which sets cost more than they earn.",
   alternates: { canonical: URL },
   openGraph: {
     title: "MEV, MAV and MRV — volume landmarks explained",
@@ -45,7 +45,7 @@ const TERMS = [
   {
     abbr: "MEV",
     name: "Minimum Effective Volume",
-    body: "The least work that still moves the needle. Below it you are maintaining at best — the sessions happen, the muscle stays where it is. This is the number worth caring about most, because almost everyone who is stuck is stuck under it on something.",
+    body: "The least weekly work we plan for steady growth. Less still counts, it just builds more slowly: one set beats none, and two beat one. This is the number worth caring about most, because almost everyone who is stuck is stuck under it on something.",
   },
   {
     abbr: "MAV",

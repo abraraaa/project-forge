@@ -44,7 +44,7 @@ Each accessory slot has a pre-vetted pool of alternatives rotation can substitut
 
 ## Volume vs landmarks (MEV/MAV/MRV)
 
-Two surfaces hold actual volume against evidence-based landmarks. `npm run audit:volume` prints what the default programme delivers per muscle — the static audit. In the app, the Performance Lab audits the trailing four weeks of logged sessions and flags muscles below MEV (won't drive growth) or above MRV (junk volume, recovery cost) with the specific shortfall.
+Two surfaces hold actual volume against evidence-based landmarks. `npm run audit:volume` prints what the default programme delivers per muscle — the static audit. In the app, the Performance Lab audits the trailing four weeks of logged sessions and flags muscles below MEV (less still counts, it just builds more slowly) or above MRV (junk volume, recovery cost) with the specific shortfall.
 
 Both operate at the **granular muscle level** — 16 tracked muscles, each delt head and each arm muscle distinct — because "Rear Delts under MEV" is actionable and "Shoulders under MEV" is not. Traps, Erectors and Core carry `mev: 0`: fatigue ceilings that flag excess without ever nagging a shortfall nobody should chase.
 

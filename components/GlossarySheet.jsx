@@ -29,7 +29,7 @@ const TERMS = [
       <>
         <p>Measured in <em>weighted sets per week</em>, per muscle.</p>
         <ul style={{margin:"8px 0 0",padding:"0 0 0 18px",lineHeight:1.6}}>
-          <li><strong>MEV</strong> — Minimum Effective Volume. The floor below which a muscle doesn&apos;t accumulate stimulus to grow.</li>
+          <li><strong>MEV</strong> — Minimum Effective Volume. The least weekly work we plan for steady growth. Less still counts, it just builds more slowly.</li>
           <li><strong>MAV</strong> — Maximum Adaptive Volume. The productive window — most growth happens between MEV and MAV.</li>
           <li><strong>MRV</strong> — Maximum Recoverable Volume. The ceiling above which extra sets cost more recovery than they earn.</li>
         </ul>
