@@ -151,3 +151,30 @@ describe("claims the position stand doesn't support are softened", () => {
     expect(p).toMatch(/\.filter\(\(src\) => src && src\.url\)/);
   });
 });
+
+describe("citations carry the ACSM 2026 position stand", () => {
+  it("TEMPO_SOURCES has it, and every derived tempo cites it", async () => {
+    const { TEMPO_SOURCES, EXERCISE_TEMPO } = await import(join(ROOT, "lib/exercise-tempo.js"));
+    expect(TEMPO_SOURCES.acsm2026.url).toBe("https://doi.org/10.1249/MSS.0000000000003897");
+    for (const [name, t] of Object.entries(EXERCISE_TEMPO)) {
+      if (t.evidence === "derived") expect(t.sources, name).toContain("acsm2026");
+    }
+    expect(src("lib/exercise-tempo.js")).not.toMatch(/Evidence-based lifting tempo/);
+  });
+  it("the library's tempo line credits control, not tempo research", () => {
+    const p = src("app/library/[slug]/page.jsx");
+    expect(p).not.toMatch(/Derived from tempo research/);
+    expect(p).toMatch(/Tempo chosen for control\. Rep speed makes little difference to growth or strength\./);
+  });
+  it("the README cites it on failure and on the landmarks", () => {
+    const r = src("README.md");
+    expect(r).toMatch(/Pareja-Blanco et al\. 2017; ACSM 2026/);
+    expect(r).toMatch(/Israetel \/ Nuckols \/ Helms; ACSM 2026/);
+  });
+  it("the glossary credits it; volume-targets names only sources VOLUME_SOURCES cites", () => {
+    expect(src("components/GlossarySheet.jsx")).toMatch(/ACSM 2026/);
+    const vt = src("lib/volume-targets.js");
+    expect(vt).not.toMatch(/Nuckols|Helms/);
+    expect(vt).toMatch(/VOLUME_SOURCES/);
+  });
+});

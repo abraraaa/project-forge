@@ -33,7 +33,7 @@ const TERMS = [
           <li><strong>MAV</strong> — Maximum Adaptive Volume. The productive window — most growth happens between MEV and MAV.</li>
           <li><strong>MRV</strong> — Maximum Recoverable Volume. The ceiling above which extra sets cost more recovery than they earn.</li>
         </ul>
-        <p style={{marginTop:8}}>Heatwayve uses Israetel/Helms-derived landmarks, tuned per muscle and per delt head.</p>
+        <p style={{marginTop:8}}>Heatwayve uses Israetel-derived landmarks, tuned per muscle and per delt head, on the weekly-sets dose in the ACSM 2026 position stand.</p>
         <p style={{marginTop:8}}>
           <a href="/volume-landmarks" style={{color:"var(--ink)",textDecoration:"underline",textUnderlineOffset:3}}>
             The full numbers, and how a set gets split

@@ -91,7 +91,7 @@ function TempoSection({ name }) {
       <div style={{ marginTop: 12 }}>
         <p style={{ fontSize: 12, color: T.ink2, lineHeight: 1.6, margin: 0 }}>
           {t.evidence === "derived"
-            ? "Derived from tempo research on this movement class."
+            ? "Tempo chosen for control. Rep speed makes little difference to growth or strength."
             : t.evidence === "none"
             ? "Holds are set by time and bracing, not rep tempo."
             : "Measured directly for this movement."}
