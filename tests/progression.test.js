@@ -711,6 +711,25 @@ describe("the loaded rep climb", () => {
     expect(r.state.currentRepRange).toMatchObject({ reps: 7, baseReps: 5 });
   });
 
+  it("a power lift never climbs: Power Clean stays at 3 reps through a stall", () => {
+    const CLEAN = "Power Clean";
+    let state = { currentWeight: 60, sessionsCount: 8, consecutiveAdds: 0, consecutiveLightMisses: 0,
+      consecutiveHolds: 3, stallSignal: "stall", currentRepRange: { reps: 3, sets: 4, baseReps: 3 }, history: [] };
+    for (let i = 0; i < 4; i++) {
+      day += 1;
+      const date = `2026-11-${String(day).padStart(2, "0")}`;
+      const rec = buildSession({ id: `${date}T10:00:00.000Z`, date, exercises: [buildExercise({
+        name: CLEAN, muscle: "Power", prescribed: { sets: 4, reps: 3, weight: 60 },
+        sets: [1, 2, 3, 4].map(() => buildSet({ weight: 60, reps: 3, rir: 1 })),
+      })] });
+      const p = computeNextPrescription({ liftName: CLEAN, history: [rec], liftState: state, context: { readiness: "normal", loadType: "barbell" } });
+      expect(p.decision, `session ${i}`).toBe("HOLD");
+      expect(p.reps, `session ${i}`).toBe(3);
+      expect(p.rationale.some((r) => r.startsWith("rep_climb_to=")), `session ${i}`).toBe(false);
+      state = updateLiftStateFromSession(state, rec, rec.blocks[0].exercises[0], p);
+    }
+  });
+
   it("RPE 9.5 counts as a little in the tank: it climbs too", () => {
     const { p } = run(stalled(), { rir: 0.5 });
     expect(p.decisionReason).toBe("performed_full_subthreshold_rir");

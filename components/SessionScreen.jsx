@@ -32,7 +32,7 @@ import { SyncStatus } from "@/lib/storage";
 import { recentForExercise, sessionSummaryLine, liftBests } from "@/lib/analytics";
 import BestSet from "@/components/BestSet";
 import { isCountedSet } from "@/lib/counted-set";
-import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, usesOptionalChrome, addedLoadFor, loggedAddedKg, ADDED_LOAD_MAX_KG } from "@/lib/lift-translations";
+import { getLoadType, swapLoadType, weightStepForLoadType, parseTimedReps, WEIGHT_CAPTIONS, nextRung, acceptsAddedWeight, isBodyweightMovement, acceptsOptionalWeight, usesOptionalChrome, addedLoadFor, loggedAddedKg, ADDED_LOAD_MAX_KG, plannedRpe } from "@/lib/lift-translations";
 import { getTempo, decodeTempo } from "@/lib/exercise-tempo";
 import { resolveVid } from "@/lib/exercise-videos";
 
@@ -135,9 +135,10 @@ function RpeTrack({ rpe, onChange }) {
 // ─── Effort panel — the commit moment ────────────────────────────────────────
 // Appears when a set needs rating. The big value blooms along the ramp
 // (900ms colour travel, never a switch); the commit button warms to match,
-// its ink reading the per-stop alias for its bloom stop (§13).
-function EffortPanel({ label = "How hard was that?", onCommit }) {
-  const [rpe, setRpe] = useState(8);
+// its ink reading the per-stop alias for its bloom stop (§13). It opens at the
+// slot's planned target (plannedRpe).
+function EffortPanel({ label = "How hard was that?", onCommit, target = 8 }) {
+  const [rpe, setRpe] = useState(target);
   return (
     <div style={{margin:"14px 20px 0",animation:`fadeSlide 240ms ${T.ease}`}}>
       <div style={{fontSize:13,color:T.ink2,marginBottom:10}}>{label}</div>
@@ -592,6 +593,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
   // decoded prescription. Digits are measured values → mono.
   const [tempoOpen,setTempoOpen]=useState(false);
   const tempoEntry=useMemo(()=>getTempo(activeEx?.name),[activeEx?.name]);
+  // The effort panel opens at RPE 8, or at a power lift's planned 7.
+  const effortStart=Math.min(8,plannedRpe(block?.type,activeEx?.name));
   const [tempoFor,setTempoFor]=useState(activeEx?.name);
   if(tempoFor!==activeEx?.name){ setTempoFor(activeEx?.name); setTempoOpen(false); }
   const tempoPhrase=tempoEntry?.tempo
@@ -948,8 +951,8 @@ export function SessionScreen({session,block,blockIdx,totalBlocks,setNum,phase,i
       <div style={{flex:1,minHeight:12}}/>
 
       {/* Effort — the commit moment. Drag the track; the button warms. */}
-      {awaitRpe&&<EffortPanel onCommit={onCommit}/>}
-      {ssRoundDone&&<EffortPanel onCommit={onCommit} label="How hard was that round?"/>}
+      {awaitRpe&&<EffortPanel onCommit={onCommit} target={effortStart}/>}
+      {ssRoundDone&&<EffortPanel onCommit={onCommit} target={effortStart} label="How hard was that round?"/>}
 
       {!blocking&&(
         <>

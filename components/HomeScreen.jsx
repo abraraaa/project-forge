@@ -27,7 +27,7 @@ import { useModalA11y } from "@/lib/a11y";
 import { DAY_CONFIG, DAY_NAMES, bonusForDay, ROTATION_AUTO, ROTATION_OPTIONAL, SESSIONS, applyFocusToSession, applyRotationToSession, applyMainLiftsToSession } from "@/lib/programme";
 import { deloadCardCopy, deloadDayOf, liveDeload, repTargetRepairs } from "@/lib/progression";
 import { planStartWeight, isWorkingWeight, scheduledPlan, deloadSessionSets } from "@/lib/programme-resolve";
-import { getLoadType, parseTimedReps, usesOptionalChrome } from "@/lib/lift-translations";
+import { getLoadType, parseTimedReps, usesOptionalChrome, plannedRpe } from "@/lib/lift-translations";
 import { formatTonnage, weeklyTonnage } from "@/lib/analytics";
 import { SO_FAR, splitWeekSoFar } from "@/lib/chart-style";
 import { fetchWithTimeout } from "@/lib/net";
@@ -46,11 +46,9 @@ function formatAgo(ms) {
   return "a while ago";
 }
 
-// The planned proximity-to-failure per block type — main lifts and
-// accessories are prescribed around rpe 8, finishers run closer to the
-// ceiling. Drives the heat mark on the session preview rows (colour +
-// height + the printed number: the redundancy law).
-const BLOCK_RPE = { main: 8, superset: 8, finisher: 9 };
+// The planned proximity-to-failure per row (plannedRpe) drives the heat mark
+// on the session preview rows (colour + height + the printed number: the
+// redundancy law).
 
 // A row's numbers as the session will open them: the live rep target, and
 // the weight the session plans (W, else the planned start). `working` says
@@ -500,7 +498,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 number is always printed. */}
             <div style={{padding:"2px 24px 0"}}>
               {shownSession.blocks.map((b)=>{
-                const rpe   = BLOCK_RPE[b.type] ?? 8;
+                const rpe   = plannedRpe(b.type, b.type==="main" ? b.ex?.name : (b.exA||b.ex)?.name);
                 const name  = b.type==="main"
                   ? b.ex.name
                   : `${(b.exA||b.ex).name} ↔ ${(b.exB||b.ex).name}`;
