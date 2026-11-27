@@ -73,3 +73,12 @@ describe("rotation copy: variety for interest and coverage, not adaptation", () 
     expect(src("components/GlossarySheet.jsx")).toMatch(/for variety and coverage/);
   });
 });
+
+describe("bodyweight progression copy matches the engine", () => {
+  it("promises a rep climb to a ceiling, then a harder variation; never longer holds", async () => {
+    const lib = src("lib/library.js");
+    expect(lib).not.toMatch(/longer holds/);
+    expect(lib).toMatch(/up to three above where you started/);
+    expect(lib).toMatch(/pick a harder variation/);
+  });
+});
