@@ -59,3 +59,17 @@ describe("tempo principles credit control, not time under tension", () => {
     expect(t.principle).toMatch(/^[A-Z].*\.$/);
   });
 });
+
+describe("rotation copy: variety for interest and coverage, not adaptation", () => {
+  const files = [
+    "README.md", "components/GlossarySheet.jsx", "components/HomeScreen.jsx",
+    "components/ForgeApp.jsx", "components/PerformanceLab.jsx",
+  ];
+  it.each(files)("%s", (f) => {
+    expect(src(f)).not.toMatch(/body has adapted|fresh stimulus|stimulus fresh|beats both on one/i);
+  });
+  it("the rotation offer and the block glossary say what rotation is for", () => {
+    expect(src("components/HomeScreen.jsx")).toMatch(/New exercises for variety, same muscle targets\./);
+    expect(src("components/GlossarySheet.jsx")).toMatch(/for variety and coverage/);
+  });
+});

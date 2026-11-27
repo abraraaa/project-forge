@@ -84,7 +84,7 @@ const TERMS = [
     subtitle: "A phase of training",
     body: (
       <>
-        <p>A stretch of weeks (typically 6–8) where your accessory exercises stay the same so you can build progression on them. At the end of a block, Heatwayve offers to rotate accessories — fresh stimulus, mainlift progression continues uninterrupted.</p>
+        <p>A stretch of weeks (typically 6–8) where your accessory exercises stay the same so you can build progression on them. At the end of a block, Heatwayve offers to rotate accessories for variety and coverage, while main-lift progression continues uninterrupted.</p>
       </>
     ),
   },

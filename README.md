@@ -4,7 +4,7 @@
 
 **Unveil the best you.** Evidence-based, autoregulated strength training — cast your frame, move with intent. Next.js PWA, live at [heatwayve.app](https://heatwayve.app).
 
-A 3-day-a-week strength programme (A/B/C — Squat & Push, Hinge & Pull, Power & Volume) with a progression engine that responds to how hard the work felt, per-muscle volume held against evidence-based landmarks (MEV/MAV/MRV), an accessory rotation engine that keeps the stimulus fresh without you thinking about it, and the Locker Room — where the work stops being numbers and starts being a body.
+A 3-day-a-week strength programme (A/B/C — Squat & Push, Hinge & Pull, Power & Volume) with a progression engine that responds to how hard the work felt, per-muscle volume held against evidence-based landmarks (MEV/MAV/MRV), an accessory rotation engine that changes the accessories for interest and coverage without you thinking about it, and the Locker Room — where the work stops being numbers and starts being a body.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

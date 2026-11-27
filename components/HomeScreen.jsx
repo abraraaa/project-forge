@@ -847,7 +847,7 @@ function HomeScreen({rhythm,profileName,userWeek,strengthDaySessions,onEditWeek,
                 <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>
                   {offerRotationChoice
                     ? "You've earned a re-think. Refresh exercises, or change your focus altogether."
-                    : "Your body has adapted. New exercises, same muscle targets."}
+                    : "New exercises for variety, same muscle targets."}
                 </div>
               </div>
               <button className="forge-press forge-tint" onClick={handleRotateTap} style={{flexShrink:0,marginTop:2,height:42,padding:"0 14px",background:T.ground,border:`1px solid ${T.rule}`,borderRadius:T.r,cursor:"pointer",fontFamily:T.text,fontSize:14,fontWeight:500,color:T.ink,display:"inline-flex",alignItems:"center",gap:6}}>
@@ -948,7 +948,7 @@ function RotationChoiceModal({ weeksOnBlock, currentFocus, onRefresh, onChangeFo
         <button onClick={onRefresh}
           style={{padding:"15px 16px",background:T.surface,border:"none",boxShadow:T.elev,borderRadius:T.r,cursor:"pointer",textAlign:"left",marginBottom:10,fontFamily:T.text}}>
           <div style={{fontSize:15,fontWeight:500,color:T.ink,marginBottom:4}}>Refresh exercises</div>
-          <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>New picks within your current focus. Same muscle targets, fresh stimulus.</div>
+          <div style={{fontSize:13,color:T.ink2,lineHeight:1.5}}>New picks within your current focus, for variety. Same muscle targets.</div>
         </button>
 
         <button onClick={onChangeFocus}
