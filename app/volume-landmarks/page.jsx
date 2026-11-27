@@ -159,22 +159,20 @@ export default function VolumeLandmarksPage() {
 
       <section style={{ marginTop: 36 }}>
         <h2 style={{ fontSize: 13, fontWeight: 400, color: T.ink2, margin: "0 0 12px", paddingBottom: 6, borderBottom: `1px solid ${T.rule}` }}>
-          Weekly, but not all at once
+          The dose is weekly
         </h2>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65 }}>
-          The dose is weekly. How you spread it still matters, just less than
-          people think. The meta-analytic answer is that major muscle groups
-          respond best trained{" "}
-          <strong style={{ color: T.ink, fontWeight: 500 }}>at least twice a week</strong>{" "}
-          — and that whether three beats two is, on the current evidence,
-          undetermined.
+          For growth, the dose is{" "}
+          <strong style={{ color: T.ink, fontWeight: 500 }}>weekly sets</strong>.
+          Once the weekly total is the same, how you spread it makes little
+          difference to muscle size. Where frequency does help is strength,
+          which responds to training at least twice a week.
         </p>
         <p style={{ fontSize: 15, color: T.ink2, lineHeight: 1.65, marginTop: 12 }}>
-          Which is the useful version of the finding: hit your weekly number
-          across two or more sessions and the frequency question is answered.
-          Twelve sets of chest in one heroic Monday is not the same twelve. The
-          three-day A/B/C rotation exists for this reason — each muscle comes
-          around more than once, without anyone having to plan it.
+          So hit your weekly number in whatever spread suits your week. The
+          three-day A/B/C rotation is there for strength and for session
+          length: each muscle comes around more than once, and no single
+          session has to carry the whole week.
         </p>
       </section>
 
