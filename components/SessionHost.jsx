@@ -49,7 +49,7 @@ import { changeStatus, sessionDayWords } from "@/lib/trainer-change";
 import { catalogueTemplateWeight, scheduledPlan, deloadSessionSets, cookedWeights } from "@/lib/programme-resolve";
 import {
   SESSIONS, EXERCISE_POOLS,
-  applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession,
+  applyRotationToSession, applySwapsToSession, applyFocusToSession, applyMainLiftsToSession, applyRestToSession,
   WEEK, nextStrengthIdx,
 } from "@/lib/programme";
 import { deloadDayOf, deloadBaseWeight, liveDeload, isFinalSetMiss, lastSessionNote, ADOPT_AFTER_SESSIONS, repTargetRepairs } from "@/lib/progression";
@@ -406,7 +406,8 @@ export default function SessionHost({ mode = null } = {}) {
   // The deload as today's card reads it: none once time off has done its work.
   const deloadNow = useMemo(() => liveDeload(activeDeload, history, todayIso), [activeDeload, history, todayIso]);
   // A deload day's set counts (deloadSessionSets).
-  const activeSession  = deloadSessionSets(scaleForReadiness(travelledSession, readiness), scheduled.sets);
+  // Rest follows the lift each main block carries (applyRestToSession).
+  const activeSession  = deloadSessionSets(scaleForReadiness(applyRestToSession(travelledSession), readiness), scheduled.sets);
   const prescribedWeights = scheduled.weights;
   const prescribedReps = scheduled.reps;
   // A cooked day opens each load-progressed lift 15% lighter (cookedWeights):

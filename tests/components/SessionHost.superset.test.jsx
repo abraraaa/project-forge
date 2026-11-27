@@ -160,8 +160,8 @@ describe("rest on a superset", () => {
 
   it("a shorter carried rest is left as it is", () => {
     start();
-    mainsDone();
-    wait(150);
+    mainsDone();   // the bench's 120 s rest
+    wait(90);
     tap(/^Next: /);
     expect(screen.getByLabelText("Resting, 0:30 left — tap to skip")).toBeTruthy();
   });
