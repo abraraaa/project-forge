@@ -7,6 +7,7 @@ import { put, get, list, del } from "@vercel/blob";
 import { resolveTokenIdentity, readTokenData, mintAuthToken } from "@/lib/auth-server";
 import { hasDb, dbUpsertPhoto, dbListPhotos, dbDeletePhoto, dbGetPhoto, dbHasRetiredPhotos } from "@/lib/db";
 import { isJpegBytes, jpegWithinBounds, PHOTO_MAX_UPLOAD_BYTES } from "@/lib/photos";
+import { stripJpegMetadata } from "@/lib/jpeg-strip";
 import { normaliseProfile } from "@/lib/profile-name";
 import { photoPath, photosPrefix } from "@/lib/storage-keys";
 import { durationMs, durationSeconds, slides } from "@/lib/server-time";
@@ -20,8 +21,9 @@ export const preferredRegion = "lhr1";
 // house law: keys don't ride URLs. Tokens are verified WITHOUT consuming
 // (the wipe path owns consumption). There is no open-read here and must
 // never be: physique photos are the revisit trigger the open-reads decision
-// (#20/#21) named. EXIF never reaches this route — the client re-encode
-// strips it; we still validate magic bytes + size server-side.
+// (#20/#21) named. The client re-encode strips EXIF; this route validates
+// magic bytes, size and dimensions, then strips metadata segments again
+// (lib/jpeg-strip) so a request that skipped the client stores none either.
 //
 //   POST /api/photos?profile=N&date=YYYY-MM-DD   body: image/jpeg
 //        [X-HW-Bodyweight: 76.2] — a header, so it stays out of access logs
@@ -140,12 +142,16 @@ export async function POST(request) {
     if (!jpegWithinBounds(buf)) {
       return NextResponse.json({ error: "Image dimensions not accepted" }, { status: 415 });
     }
+    const clean = stripJpegMetadata(buf);
+    if (!clean) {
+      return NextResponse.json({ error: "Not a JPEG" }, { status: 415 });
+    }
 
     const bwRaw = request.headers.get("x-hw-bodyweight");
     const bodyweightAt = bwRaw !== null && Number.isFinite(Number(bwRaw)) ? Number(bwRaw) : null;
 
     const path = photoPath(g.profile, g.date);
-    await put(path, Buffer.from(buf.buffer, buf.byteOffset, buf.byteLength), {
+    await put(path, Buffer.from(clean.buffer, clean.byteOffset, clean.byteLength), {
       access: "private",
       contentType: "image/jpeg",
       allowOverwrite: true,
