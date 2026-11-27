@@ -177,12 +177,9 @@ describe("what the session says about how the engine read the lift", () => {
     expect(screen.queryByText(/reps, not 5/)).toBeNull();
   });
 
-  it("after a session to failure, the first set asks to finish at 9.5, and the line goes once it is logged", () => {
+  it("after a session to failure, the card promises no weight for finishing at 9.5", () => {
     start({ lifts: { [SQUAT]: liftState({ history: [{ date: "2026-09-22", decision: "HOLD", rationale: ["last_performance=PERFORMED_FULL", "decision_reason=performed_full_rir0_grinder"] }] }) } });
-    const line = "Last time went to failure. Finish at 9.5 or lower today and the weight goes up next time.";
-    expect(screen.getByText(line)).toBeTruthy();
-    logSetAt();
-    expect(screen.queryByText(line)).toBeNull();
+    expect(screen.queryByText(/went to failure|goes up next time/)).toBeNull();
   });
 
   it("a cooked day promises no weight after a session to failure", () => {

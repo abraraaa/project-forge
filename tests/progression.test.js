@@ -749,13 +749,16 @@ describe("the loaded rep climb", () => {
     expect(p.reps).toBe(7);
   });
 
-  it("after a session to failure, finishing at RPE 9.5 adds one rung; RPE 10 again holds", () => {
+  it("after a session to failure, RPE 9.5 holds: the weight waits for the add threshold; RPE 10 again holds", () => {
     const failed = run(stalled({ consecutiveHolds: 0, stallSignal: null }), { rir: 0 }).state;
     const ok = run(failed, { rir: 0.5 }).p;
-    expect(ok.decision).toBe("ADD");
-    expect(ok.decisionReason).toBe("performed_full_after_failure");
-    expect(ok.weight).toBe(165);
+    expect(ok.decision).toBe("HOLD");
+    expect(ok.decisionReason).not.toBe("performed_full_after_failure");
+    expect(ok.weight).toBe(162.5);
     expect(ok.reps).toBe(5);
+    const easy = run(failed, { rir: 2 }).p;
+    expect(easy.decision).toBe("ADD");
+    expect(easy.weight).toBe(165);
     const again = run(failed, { rir: 0 }).p;
     expect(again.decision).toBe("HOLD");
     expect(again.weight).toBe(162.5);
